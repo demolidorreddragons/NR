@@ -102,6 +102,7 @@ jobs:
           $baseCopyDir = Join-Path $work "base-artifact/pkg"
           $basePkgForGp4 = Join-Path $baseCopyDir "PS4-Neural-Engine-002-STTYPE.pkg"
           $baseGp4 = Join-Path $work "base-app-sttype.gp4"
+          $baseImage = Join-Path $work "base-image-sttype"
           New-Item -ItemType Directory -Force -Path $work | Out-Null
           New-Item -ItemType Directory -Force -Path $baseCopyDir | Out-Null
           New-Item -ItemType Directory -Force -Path "candidate-output" | Out-Null
@@ -120,9 +121,13 @@ jobs:
 
           $image = Join-Path $extract "Image0"
           "=== BUILD TEMPORARY BASE WITH EXPLICIT STORAGE METADATA ===" | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
-          dotnet "$tool" gp4gen "$image" --out "$baseGp4" 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
+          Copy-Item $image $baseImage -Recurse
+          dotnet "$tool" gp4gen "$baseImage" --out "$baseGp4" 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
           if ($LASTEXITCODE -ne 0) { throw "Temporary base GP4 generation failed." }
-          dotnet "$tool" pkg build "$baseGp4" "$image" --out "$basePkgForGp4" --validate 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
+          # The GP4 captures the SFO metadata. Remove the original Sc0 SFO from the source tree
+          # so AddMissingSc0FromFolder cannot overwrite the freshly generated outer SFO.
+          Remove-Item (Join-Path $baseImage "sce_sys/param.sfo") -Force
+          dotnet "$tool" pkg build "$baseGp4" "$baseImage" --out "$basePkgForGp4" --validate 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
           if ($LASTEXITCODE -ne 0 -or -not (Test-Path $basePkgForGp4)) { throw "Temporary base PKG with storage metadata failed." }
           $tempBaseExtract = Join-Path $work "temp-base-verify"
           dotnet "$tool" extract "$basePkgForGp4" "$tempBaseExtract" 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
