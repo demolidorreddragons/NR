@@ -147,7 +147,7 @@ jobs:
 
           $zeroKey = "00000000000000000000000000000000"
           "=== CREATE ASSOCIATED PATCH GP4 ===" | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
-          & $pubCmd gp4_proj_create --volume_type pkg_ps4_patch --content_id IV0000-PNEU00001_00-PS4NEURALENG0000 --passcode $zeroKey --entitlement_key $zeroKey --storage_type digital25 --app_path (Resolve-Path $basePkg).Path $gp4 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
+          & $pubCmd gp4_proj_create --volume_type pkg_ps4_patch --content_id IV0000-PNEU00001_00-PS4NEURALENG0000 --passcode $zeroKey --entitlement_key $zeroKey --storage_type digital25 --app_path $basePkg $gp4 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
           if ($LASTEXITCODE -ne 0 -or -not (Test-Path $gp4)) { throw "Associated patch GP4 creation failed." }
 
           "=== ADD PATCH PAYLOAD ===" | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
