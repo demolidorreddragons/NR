@@ -142,7 +142,7 @@ static int copy_prx(char* error, size_t error_size) {
 }
 static void trim_line(char* line) {
     size_t n = strlen(line);
-    while (n && (line[n-1] == '\\r' || line[n-1] == '\\n' ||
+    while (n && (line[n-1] == '\r' || line[n-1] == '\n' ||
                  isspace((unsigned char)line[n-1]))) line[--n] = 0;
     char* p = line;
     while (*p && isspace((unsigned char)*p)) p++;
@@ -172,7 +172,7 @@ static int configure_loader(char* error, size_t error_size) {
     size_t pos = 0;
     while (pos < length) {
         size_t start = pos;
-        while (pos < length && input[pos] != '\\n') pos++;
+        while (pos < length && input[pos] != '\n') pos++;
         if (pos < length) pos++;
         size_t line_len = pos - start;
         char line[512];
@@ -192,7 +192,7 @@ static int configure_loader(char* error, size_t error_size) {
     pos = 0;
     while (pos < length) {
         size_t start = pos;
-        while (pos < length && input[pos] != '\\n') pos++;
+        while (pos < length && input[pos] != '\n') pos++;
         if (pos < length) pos++;
         size_t line_len = pos - start;
         char line[512];
@@ -210,8 +210,8 @@ static int configure_loader(char* error, size_t error_size) {
         used += line_len;
 
         if (in_default && strcmp(line, "[default]") == 0) {
-            if (used && output[used-1] != '\\n') output[used++] = '\\n';
-            int n = snprintf(output + used, sizeof(output)-used, "%s\\n", DEST_PRX);
+            if (used && output[used-1] != '\n') output[used++] = '\n';
+            int n = snprintf(output + used, sizeof(output)-used, "%s\n", DEST_PRX);
             if (n < 0 || (size_t)n >= sizeof(output)-used) {
                 snprintf(error, error_size, "ERROR: no room to add Neural Engine to plugins.ini.");
                 return 0;
@@ -221,8 +221,8 @@ static int configure_loader(char* error, size_t error_size) {
     }
 
     if (!found_default) {
-        if (used && output[used-1] != '\\n') output[used++] = '\\n';
-        const char* suffix = "\\n[default]\\n" DEST_PRX "\\n";
+        if (used && output[used-1] != '\n') output[used++] = '\n';
+        const char* suffix = "\n[default]\n" DEST_PRX "\n";
         size_t n = strlen(suffix);
         if (used + n >= sizeof(output)) {
             snprintf(error, error_size, "ERROR: no room to create [default] in plugins.ini.");
