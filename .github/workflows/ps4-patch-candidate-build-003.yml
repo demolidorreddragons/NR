@@ -121,8 +121,9 @@ jobs:
 
           $image = Join-Path $extract "Image0"
           "=== BUILD TEMPORARY BASE WITH EXPLICIT STORAGE METADATA ===" | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
+          $zeroKey = "00000000000000000000000000000000"
           Copy-Item $image $baseImage -Recurse
-          dotnet "$tool" gp4gen "$baseImage" --out "$baseGp4" 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
+          dotnet "$tool" gp4gen "$baseImage" --out "$baseGp4" --title "PS4 Neural Engine Installer" --title-id PNEU00001 --content-id IV0000-PNEU00001_00-PS4NEURALENG0000 --passcode $zeroKey 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
           if ($LASTEXITCODE -ne 0) { throw "Temporary base GP4 generation failed." }
           # The GP4 captures the SFO metadata. Remove the original Sc0 SFO from the source tree
           # so AddMissingSc0FromFolder cannot overwrite the freshly generated outer SFO.
@@ -136,7 +137,7 @@ jobs:
           if (-not (Test-Path $tempBaseSfo)) { throw "Temporary base outer Sc0/param.sfo missing." }
           $tempBaseSfoText = dotnet "$tool" sfo read "$tempBaseSfo" 2>&1
           $tempBaseSfoText | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
-          if (($tempBaseSfoText -join "`n") -notmatch "CATEGORY = gde" -or ($tempBaseSfoText -join "`n") -notmatch "st_type=digital50") { throw "Temporary base outer SFO storage metadata readback failed." }
+          if (($tempBaseSfoText -join "`n") -notmatch "CATEGORY = gde" -or ($tempBaseSfoText -join "`n") -notmatch "st_type=digital50" -or ($tempBaseSfoText -join "`n") -notmatch "TITLE_ID = PNEU00001" -or ($tempBaseSfoText -join "`n") -notmatch "TITLE = PS4 Neural Engine Installer") { throw "Temporary base outer SFO metadata readback failed." }
 
           $sfo = Join-Path $image "sce_sys/param.sfo"
           $eboot = Join-Path $image "eboot.bin"
@@ -152,6 +153,10 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "SFO APP_VER update failed." }
           dotnet "$tool" sfo set "$sfo" VERSION 01.00 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
           if ($LASTEXITCODE -ne 0) { throw "SFO VERSION update failed." }
+          dotnet "$tool" sfo set "$sfo" ATTRIBUTE 0x00800002 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
+          if ($LASTEXITCODE -ne 0) { throw "SFO ATTRIBUTE update failed." }
+          dotnet "$tool" sfo set "$sfo" PUBTOOLINFO "c_date=20261119,img0_l0_size=7,img0_l1_size=0,img0_sc_ksize=512,img0_pc_ksize=832,st_type=digital25" 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
+          if ($LASTEXITCODE -ne 0) { throw "SFO PUBTOOLINFO update failed." }
           dotnet "$tool" sfo read "$sfo" 2>&1 | Tee-Object -FilePath "candidate-output/patch-param-sfo.txt"
           if ($LASTEXITCODE -ne 0) { throw "Patch SFO readback failed." }
 
@@ -162,7 +167,6 @@ jobs:
             '<changeinfo><changes app_ver="01.01"><![CDATA[Neural Engine update 1.01]]></changes></changeinfo>'
           [IO.File]::WriteAllText($changeInfo, $changeXml, [Text.UTF8Encoding]::new($false))
 
-          $zeroKey = "00000000000000000000000000000000"
           "=== CREATE ASSOCIATED PATCH GP4 ===" | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
           & $pubCmd gp4_proj_create --volume_type pkg_ps4_patch --content_id IV0000-PNEU00001_00-PS4NEURALENG0000 --passcode $zeroKey --entitlement_key $zeroKey --storage_type digital25 --app_path $basePkgForGp4 $gp4 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
           if ($LASTEXITCODE -ne 0 -or -not (Test-Path $gp4)) { throw "Associated patch GP4 creation failed." }
