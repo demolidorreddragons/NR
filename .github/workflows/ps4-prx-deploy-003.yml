@@ -1,0 +1,121 @@
+name: PS4 Neural Engine PRX Deployment 003
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/ps4-prx-deploy-003.yml"
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  deploy-prx:
+    runs-on: [self-hosted, Windows, X64, ps4-lan]
+    steps:
+      - name: Download the QA-validated build artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ps4-neural-engine-build
+          path: transfer
+          repository: demolidorreddragons/NR
+          run-id: 44623808730
+          github-token: ${{ github.token }}
+
+      - name: Deploy PRX with backup, registration and remote verification
+        shell: powershell -NoProfile -ExecutionPolicy Bypass -File {0}
+        env:
+          PS4_IP: ${{ vars.PS4_IP }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          if (-not $env:PS4_IP) { throw "PS4_IP variable is missing." }
+          $credentials = New-Object System.Net.NetworkCredential("anonymous", "anonymous@example.com")
+          $outer = Join-Path $env:GITHUB_WORKSPACE "transfer/goldhen/PS4-Neural-Engine-GoldHEN.zip"
+          if (-not (Test-Path -LiteralPath $outer)) { throw "GoldHEN plugin archive missing from build artifact." }
+
+          $extract = Join-Path $env:RUNNER_TEMP "pne-prx-deploy"
+          if (Test-Path $extract) { Remove-Item $extract -Recurse -Force }
+          New-Item -ItemType Directory -Path $extract -Force | Out-Null
+          Expand-Archive -LiteralPath $outer -DestinationPath $extract -Force
+          $prx = Join-Path $extract "ps4_neural_engine.prx"
+          if (-not (Test-Path $prx)) { throw "PRX not found in validated archive." }
+          $localSize = (Get-Item $prx).Length
+          $localHash = (Get-FileHash $prx -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($localSize -ne 206528 -or $localHash -ne "531e41aa3f4535e6004d47900f636d6e2a4b1ce2b2709f165db77ebef7e0a3f0") {
+            throw "PRX does not match the QA-reviewed build. Size=$localSize SHA256=$localHash"
+          }
+
+          function New-FtpRequest([string]$path, [string]$method) {
+            $r = [System.Net.FtpWebRequest]::Create("ftp://$($env:PS4_IP):2121$path")
+            $r.Method = $method
+            $r.Credentials = $credentials
+            $r.UsePassive = $true
+            $r.UseBinary = $true
+            $r.KeepAlive = $false
+            $r.Timeout = 60000
+            $r.ReadWriteTimeout = 60000
+            return $r
+          }
+          function Test-FtpFile([string]$path) {
+            try {
+              $r = New-FtpRequest $path ([System.Net.WebRequestMethods+Ftp]::GetFileSize)
+              $x = $r.GetResponse()
+              try { return $true } finally { $x.Dispose() }
+            } catch { return $false }
+          }
+          function Upload-Ftp([string]$local, [string]$remote) {
+            $r = New-FtpRequest $remote ([System.Net.WebRequestMethods+Ftp]::UploadFile)
+            $sourceStream = [System.IO.File]::OpenRead($local)
+            $output = $null
+            $response = $null
+            try {
+              $r.ContentLength = $sourceStream.Length
+              $output = $r.GetRequestStream()
+              $sourceStream.CopyTo($output)
+              $output.Dispose(); $output = $null
+              $response = $r.GetResponse()
+            } finally {
+              $sourceStream.Dispose()
+              if ($output) { $output.Dispose() }
+              if ($response) { $response.Dispose() }
+            }
+          }
+          function Download-Ftp([string]$remote, [string]$local) {
+            $r = New-FtpRequest $remote ([System.Net.WebRequestMethods+Ftp]::DownloadFile)
+            $response = $r.GetResponse()
+            $stream = $response.GetResponseStream()
+            $output = [System.IO.File]::Create($local)
+            try { $stream.CopyTo($output) } finally { $output.Dispose(); $stream.Dispose(); $response.Dispose() }
+          }
+          function Rename-Ftp([string]$from, [string]$to) {
+            $r = New-FtpRequest $from ([System.Net.WebRequestMethods+Ftp]::Rename)
+            $r.RenameTo = $to
+            $x = $r.GetResponse()
+            $x.Dispose()
+          }
+
+          # Versioned deployment: never rename over or overwrite an existing PRX.
+          $pluginPath = "/data/GoldHEN/plugins/ps4_neural_engine_003.prx"
+          $localVerify = Join-Path $env:RUNNER_TEMP "pne-prx-002-readback.prx"
+          try {
+            $r = New-FtpRequest $pluginPath ([System.Net.WebRequestMethods+Ftp]::GetFileSize)
+            $x = $r.GetResponse(); $x.Dispose()
+            throw "Versioned PRX already exists; refusing to overwrite."
+          } catch {
+            if ($_.Exception.Message -like "*refusing to overwrite*") { throw }
+            if ($_.Exception.Response -and $_.Exception.Response.StatusCode -ne [System.Net.FtpStatusCode]::ActionNotTakenFileUnavailable) { throw }
+          }
+
+          Upload-Ftp $prx $pluginPath
+          Download-Ftp $pluginPath $localVerify
+          $finalSize = (Get-Item $localVerify).Length
+          $finalHash = (Get-FileHash $localVerify -Algorithm SHA256).Hash.ToLowerInvariant()
+          Write-Host "VERSIONED_PRX_READBACK size=$finalSize sha256=$finalHash"
+          if ($finalSize -ne $localSize -or $finalHash -ne $localHash) {
+            throw "Versioned PRX failed byte-for-byte verification; it will NOT be registered."
+          }
+
+          Write-Host "PRX_UPLOAD_RESPONSE_VERIFIED"
+          Write-Host "PRX_003_BYTE_FOR_BYTE_VERIFIED size=$finalSize sha256=$finalHash"
+          Write-Host "Deployment stopped before plugin registration. No existing PRX, plugins.ini, application data, or savedata was modified."
