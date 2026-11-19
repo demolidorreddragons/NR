@@ -22,6 +22,9 @@ Own all transport, FTP, network-path, and remote-file-integrity work for PS4 dep
 - Correct sequence was validated: CWD data -> 250; CWD GoldHEN -> 250; CWD plugins -> 250; RNFR pne_network_009_stage.dat -> 350; RNTO pne_network_009_target.prx -> 250.
 - LIST then showed the renamed target PRX at 206,528 bytes. The target was a unique temporary probe and was deleted successfully.
 - Cleanup also successfully removed the older project-owned probes pne_network_008_stage.dat, pne_payload_probe_006.prx, and pne_payload_probe_006.dat. The 009 stage name was already absent after successful rename.
+- Deployment 005 transferred the build PRX to a unique, previously absent path: /data/GoldHEN/plugins/ps4_neural_engine_005.prx. DAT staging readback matched 206,528 bytes and SHA-256 531e41aa3f4535e6004d47900f636d6e2a4b1ce2b2709f165db77ebef7e0a3f0 before rename. RNFR returned 350, RNTO returned 250, and LIST reported 206,528 bytes.
+- Readback QA 010 confirmed the PRX path is retrievable; GoldHEN returns a decrypted ELF of 296,952 bytes, SHA-256 85732d32ee232bb65a3957ba2768532e2e40652ad2c870ec2de810148fb13f58, ELF magic 7F-45-4C-46, machine 62 (x86-64). This is the expected GoldHEN transfer representation, not a byte-identical encrypted PRX download.
+- The new PRX remains deliberately unregistered. No plugins.ini, canonical PRX, application data, or saves were changed.
 
 ## Deployment gates
 1. Upload source PRX to a unique DAT staging name and verify exact byte count and SHA-256 by RETR.
