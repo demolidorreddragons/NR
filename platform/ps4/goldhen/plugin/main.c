@@ -48,7 +48,8 @@ static void *input_thread(void *arg) {
  sleep(5);
  OrbisUserServiceInitializeParams params = {0};
  params.priority = ORBIS_KERNEL_PRIO_FIFO_LOWEST;
- if (sceUserServiceInitialize(&params) < 0 || scePadInit() < 0) {
+ (void)sceUserServiceInitialize(&params);
+ if (scePadInit() < 0) {
   NotifyStatic(TEX_ICON_SYSTEM, "PNE: controller initialization failed");
   atomic_store(&g_running, false);
   return NULL;
@@ -81,7 +82,7 @@ static void *input_thread(void *arg) {
    was_down = false;
    if (handle > 0) handle = 0;
   }
-  usleep(50000);
+  sceKernelUsleep(50000);
  }
  if (atomic_exchange(&g_recording, false)) pne_telemetry_stop();
  return NULL;
