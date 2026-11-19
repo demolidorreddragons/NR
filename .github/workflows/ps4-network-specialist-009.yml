@@ -1,0 +1,21 @@
+name: PS4 FTP Readonly Probe 009
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/ps4-network-specialist-009.yml"
+permissions:
+  actions: read
+  contents: read
+jobs:
+  probe:
+    runs-on: [self-hosted, Windows, X64, ps4-lan]
+    steps:
+      - name: Read FTP metadata only
+        shell: powershell
+        env:
+          PS4_IP: ${{ vars.PS4_IP }}
+        run: |
+          $ErrorActionPreference = "Continue"
+          curl.exe --verbose --ftp-pasv --user "anonymous:anonymous@example.com" "ftp://$($env:PS4_IP):2121/data/GoldHEN/plugins/" 2>&1
+          Write-Host "READONLY_PROBE_EXIT=$LASTEXITCODE"
