@@ -8,6 +8,7 @@
 #define SOURCE_PRX "/app0/ps4_neural_engine.prx"
 #define DEST_DIR "/data/GoldHEN/plugins"
 #define DEST_PRX DEST_DIR "/ps4_neural_engine.prx"
+#define DEST_TMP DEST_PRX ".tmp"
 #define CONFIG "/data/GoldHEN/plugins.ini"
 #define CONFIG_TMP "/data/GoldHEN/plugins.ini.pne-tmp"
 #define CONFIG_LINE DEST_PRX
@@ -26,7 +27,7 @@ static void notify(const char* message) {
 static int copy_prx(void) {
     FILE* in = fopen(SOURCE_PRX, "rb");
     if (!in) return 0;
-    FILE* out = fopen(DEST_PRX, "wb");
+    FILE* out = fopen(DEST_TMP, "wb");
     if (!out) { fclose(in); return 0; }
     char buffer[16384];
     size_t n;
@@ -37,7 +38,8 @@ static int copy_prx(void) {
     if (ferror(in)) ok = 0;
     if (fclose(in) != 0) ok = 0;
     if (fclose(out) != 0) ok = 0;
-    return ok;
+    if (!ok || rename(DEST_TMP, DEST_PRX) != 0) { remove(DEST_TMP); return 0; }
+    return 1;
 }
 
 static int configure_loader(void) {
