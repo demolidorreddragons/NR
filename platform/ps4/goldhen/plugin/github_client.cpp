@@ -38,11 +38,12 @@ void close_http();\nbool init_http() {
  g_pool=sceNetPoolCreate("pne_github",64*1024,0);
  if(g_pool<0) return false;
  g_ssl=sceSslInit(304*1024);
- if(g_ssl<0) return false;
+ if(g_ssl<0){close_http();return false;}
  g_http=sceHttpInit(g_pool,g_ssl,128*1024);
- if(g_http<0) return false;
+ if(g_http<0){close_http();return false;}
  g_template=sceHttpCreateTemplate(g_http,"PS4-Neural-Engine/1.0",ORBIS_HTTP_VERSION_1_1,0);
- return g_template>=0;
+ if(g_template<0){close_http();return false;}
+ return true;
 }
 void close_http() {
  if(g_template>=0) sceHttpDeleteTemplate(g_template);
