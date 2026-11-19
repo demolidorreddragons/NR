@@ -33,15 +33,16 @@ jobs:
       - name: Inspect generated base PKG and GP4 project
         run: |
           set -euo pipefail
-          mkdir -p base-pkg gp4-inspect
-          unzip -q base-artifact/pkg/PS4-Neural-Engine-002.pkg -d base-pkg
+          test -s base-artifact/pkg/PS4-Neural-Engine-002.pkg
+          mkdir -p gp4-inspect
           PkgTool.Core pkg_validate --verbose base-artifact/pkg/PS4-Neural-Engine-002.pkg
           PkgTool.Core pkg_makegp4 --passcode 00000000000000000000000000000000 base-artifact/pkg/PS4-Neural-Engine-002.pkg gp4-inspect
           echo "===== GENERATED GP4 FILES ====="
-          find gp4-inspect -maxdepth 2 -type f -printf '%p (%s bytes)\\n' | sort
-          for f in gp4-inspect/*.gp4; do
-            echo "===== GP4: $f ====="
-            cat "$f"
-          done
-          echo "===== EXTRACTED SFO ====="
-          find gp4-inspect -name param.sfo -print -exec PkgTool.Core sfo_listentries {} ;
+          find gp4-inspect -maxdepth 4 -type f -printf '%p (%s bytes)\n' | sort
+          echo "===== GP4 CONTENT ====="
+          find gp4-inspect -name '*.gp4' -type f -print -exec cat {} \;
+          echo "===== SFO ENTRIES ====="
+          while IFS= read -r -d '' f; do
+            echo "SFO: $f"
+            PkgTool.Core sfo_listentries "$f"
+          done < <(find gp4-inspect -name param.sfo -type f -print0)
