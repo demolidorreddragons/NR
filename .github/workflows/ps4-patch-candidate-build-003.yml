@@ -84,7 +84,7 @@ jobs:
           "ORBiS_PUB_CMD=$($cmd.FullName)" | Out-File "$env:RUNNER_TEMP\tool-path.txt"
           "ORBiS_PUB_CMD_SHA256=$toolHash" | Out-File "$env:RUNNER_TEMP\tool-path.txt" -Append
 
-      - name: Diagnostic: probe standard game app/patch category compatibility
+      - name: "Diagnostic: probe standard game app/patch category compatibility"
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
