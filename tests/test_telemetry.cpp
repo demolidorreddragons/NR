@@ -15,7 +15,7 @@ int main() {
  assert(writer.append_present({1016,1000,0x43555341,0}));
  std::vector<std::uint8_t> rgba={255,0,0,255,0,255,0,255,0,0,255,255,255,255,255,255};
  auto bmp=(dir/"frame.bmp").string();
- assert(writer.write_rgba8_bmp(bmp,rgba.data(),2,2,8));
+ assert(writer.write_rgba8_bmp(bmp.c_str(),rgba.data(),2,2,8));
  writer.stop(); assert(!writer.active());
  std::ifstream csv(dir/"frametimes.csv"); std::string s((std::istreambuf_iterator<char>(csv)),{});
  assert(s.find("frametime_ms")!=std::string::npos && s.find("16.000000")!=std::string::npos);
