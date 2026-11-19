@@ -20,13 +20,18 @@ clang --target=x86_64-pc-freebsd12-elf -fPIC -funwind-tables \
   -isysroot "$OO_PS4_TOOLCHAIN" -isystem "$OO_PS4_TOOLCHAIN/include" \
   -isystem /usr/include/x86_64-linux-gnu -I"$GOLDHEN_SDK/include" \
   -c "$ROOT/installer/main.c" -o "$STAGE/installer.o"
-ld.lld -m elf_x86_64 -pie --script "$OO_PS4_TOOLCHAIN/link.x" \
+# Follow the official OpenOrbis homebrew link order and make the startup entry explicit.
+ld.lld -m elf_x86_64 -pie --script "$OO_PS4_TOOLCHAIN/link.x" -e _start \
   --eh-frame-hdr -L"$OO_PS4_TOOLCHAIN/lib" "$STAGE/installer.o" \
-  "$OO_PS4_TOOLCHAIN/lib/crt1.o" -o "$STAGE/installer.elf" \
-  -lc -lkernel -lSceSystemService
+  -lc -lkernel -lSceSystemService "$OO_PS4_TOOLCHAIN/lib/crt1.o" \
+  -o "$STAGE/installer.elf"
+test -s "$STAGE/installer.elf"
+readelf -h "$STAGE/installer.elf" | grep -Eq 'Class:[[:space:]]+ELF64'
+readelf -h "$STAGE/installer.elf" | grep -Eq 'Machine:[[:space:]]+Advanced Micro Devices X86-64'
 "$TOOLS/create-fself" -in="$STAGE/installer.elf" \
   -out="$STAGE/installer.oelf" --eboot "$STAGE/eboot.bin" \
   --paid 0x3800000000000011
+test -s "$STAGE/eboot.bin"
 
 "$TOOLS/PkgTool.Core" sfo_new "$STAGE/sce_sys/param.sfo"
 sfo() {
