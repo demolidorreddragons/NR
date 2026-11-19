@@ -6,6 +6,7 @@
 #include <orbis/Sysmodule.h>
 #include <pthread.h>
 #include <unistd.h>
+#include <dirent.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -18,7 +19,7 @@ pthread_mutex_t g_lock=PTHREAD_MUTEX_INITIALIZER;
 std::string g_token;
 bool g_authorized=false;
 constexpr size_t kMaxResponse=65536;
-constexpr size_t kMaxUpload=2*1024*1024;
+constexpr size_t kMaxUpload=16*1024*1024;
 
 bool init_http() {
  if(g_http>=0) return true;
@@ -128,40 +129,48 @@ bool authorize() {
  }
  return false;
 }
-bool upload_log() {
- std::string token;
- pthread_mutex_lock(&g_lock);if(g_authorized)token=g_token;pthread_mutex_unlock(&g_lock);
- if(token.empty())return false;
- const char* local="/data/PS4NeuralEngine/captures/frametimes.csv";
+bool upload_one(const char* local,const char* remote,const std::string& token) {
  FILE* f=fopen(local,"rb");if(!f)return false;
  if(fseek(f,0,SEEK_END)!=0){fclose(f);return false;}
  long n=ftell(f);if(n<=0||n>(long)kMaxUpload){fclose(f);return false;}
  rewind(f);std::vector<unsigned char> data((size_t)n);
  bool read=fread(data.data(),1,data.size(),f)==data.size();fclose(f);if(!read)return false;
  std::string encoded=base64(data);
- std::string json="{\"message\":\"PS4 Neural Engine telemetry upload\",\"content\":\""+encoded+"\"}";
- std::string url="https://api.github.com/repos/";url+=pne::github::kRepository;
- url+="/contents/telemetry/frametimes.csv";
- std::string response;int status=0;
+ std::string url="https://api.github.com/repos/";url+=pne::github::kRepository;url+="/contents/";url+=remote;
+ std::string old;int status=0;std::string sha;
+ if(!request(url.c_str(),"GET",nullptr,token.c_str(),old,status))return false;
+ if(status==200 && !json_string(old,"sha",sha))return false;
+ if(status!=200 && status!=404)return false;
+ std::string json="{\\"message\\":\\"PS4 Neural Engine telemetry upload\\",\\"content\\":\\""+encoded+"\\"";
+ if(!sha.empty())json+=",\\"sha\\":\\""+sha+"\\"";
+ json+="}";
+ std::string response;
  bool ok=request(url.c_str(),"PUT",json.c_str(),token.c_str(),response,status);
- memset(&token[0],0,token.size());
+ memset(&encoded[0],0,encoded.size());
  return ok&&(status==201||status==200);
 }
-void* auth_thread(void*) {
- bool ok=authorize();
- NotifyStatic(TEX_ICON_SYSTEM,ok?"PNE: GitHub autorizado nesta sessao":"PNE: autorizacao GitHub falhou");
- return nullptr;
-}
-}
-extern "C" int pne_github_begin_authorization(void) {
- pthread_t t;
- return pthread_create(&t,nullptr,auth_thread,nullptr)==0 ? (pthread_detach(t),1):0;
-}
-extern "C" int pne_github_upload_confirmed_log(void) {
- // Caller must invoke only after a distinct, deliberate controller confirmation.
- return upload_log()?1:0;
-}
-extern "C" void pne_github_disconnect(void) {
- pthread_mutex_lock(&g_lock);if(!g_token.empty())memset(&g_token[0],0,g_token.size());
- g_token.clear();g_authorized=false;pthread_mutex_unlock(&g_lock);
+bool upload_log() {
+ std::string token;
+ pthread_mutex_lock(&g_lock);if(g_authorized)token=g_token;pthread_mutex_unlock(&g_lock);
+ if(token.empty())return false;
+ bool any=false,ok=true;
+ const char* csv="/data/PS4NeuralEngine/captures/frametimes.csv";
+ if(access(csv,R_OK)==0){any=true;ok=upload_one(csv,"telemetry/frametimes.csv",token)&&ok;}
+ DIR* d=opendir("/data/PS4NeuralEngine/captures");
+ if(d){
+  struct dirent* e;
+  while((e=readdir(d))!=nullptr){
+   const char* name=e->d_name;size_t len=strlen(name);
+   if(len<5 || (strcmp(name+len-4,".bmp")!=0))continue;
+   bool safe=true;for(size_t i=0;i<len;i++){char c=name[i];if(!((c>='a'&&c<='z')||(c>='A'&&c<='Z')||(c>='0'&&c<='9')||c=='_'||c=='-'||c=='.')){safe=false;break;}}
+   if(!safe)continue;
+   char local[512],remote[512];
+   if(snprintf(local,sizeof(local),"/data/PS4NeuralEngine/captures/%s",name)>=(int)sizeof(local))continue;
+   if(snprintf(remote,sizeof(remote),"telemetry/captures/%s",name)>=(int)sizeof(remote))continue;
+   any=true;if(!upload_one(local,remote,token))ok=false;
+  }
+  closedir(d);
+ }
+ if(!token.empty())memset(&token[0],0,token.size());
+ return any&&ok;
 }
