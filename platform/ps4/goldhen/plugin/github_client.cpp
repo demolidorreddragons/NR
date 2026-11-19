@@ -264,6 +264,7 @@ extern "C" int pne_github_upload_confirmed_log(void) {
  }
  g_upload_pending=false;g_upload_active=true;
  if(g_upload_joinable){pthread_t old=g_upload_thread;pthread_mutex_unlock(&g_lock);pthread_join(old,nullptr);pthread_mutex_lock(&g_lock);g_upload_joinable=false;}
+ g_upload_active=true;
  if(pthread_create(&g_upload_thread,nullptr,upload_thread,nullptr)!=0){g_upload_active=false;pthread_mutex_unlock(&g_lock);return 0;}
  g_upload_joinable=true;pthread_mutex_unlock(&g_lock);return 1;
 }
