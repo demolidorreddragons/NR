@@ -61,10 +61,14 @@ cd "$STAGE"
 "$TOOLS/PkgTool.Core" pkg_build package.gp4 "$OUT"
 pkg="$(find "$OUT" -maxdepth 1 -type f -name '*.pkg' -print -quit)"
 test -n "$pkg" && test -s "$pkg"
-"$TOOLS/PkgTool.Core" pkg_validate "$pkg"
+echo "VALIDATION_STAGE: checking PKG hashes and signatures"
+"$TOOLS/PkgTool.Core" pkg_validate --verbose "$pkg"
+echo "VALIDATION_STAGE: PKG hash/signature check passed"
 VERIFY="$STAGE/pkg-verify"
 rm -rf "$VERIFY" && mkdir -p "$VERIFY"
-"$TOOLS/PkgTool.Core" pkg_extract "$pkg" "$VERIFY"
+echo "EXTRACTION_STAGE: extracting PKG payload for file-level verification"
+"$TOOLS/PkgTool.Core" pkg_extract --verbose "$pkg" "$VERIFY"
+echo "EXTRACTION_STAGE: PKG payload extraction completed"
 find "$VERIFY" -type f -name ps4_neural_engine.prx -size +0c | grep -q .
 find "$VERIFY" -type f -name eboot.bin -size +0c | grep -q .
 find "$VERIFY" -type f -path '*/sce_sys/param.sfo' -size +0c | grep -q .
