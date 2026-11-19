@@ -19,6 +19,15 @@ jobs:
       - name: Checkout project
         uses: actions/checkout@v4
 
+      - name: Download known base PKG artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ps4-neural-engine-build
+          path: ${{ runner.temp }}/base-artifact
+          repository: demolidorreddragons/NR
+          run-id: 44623808730
+          github-token: ${{ github.token }}
+
       - name: Download pinned Fake PKG Tools release
         shell: pwsh
         run: |
@@ -74,6 +83,20 @@ jobs:
             if (Test-Path $outFile) { Get-Content $outFile | Tee-Object -FilePath "$env:RUNNER_TEMP\tool-help.txt" -Append }
             if (Test-Path $errFile) { Get-Content $errFile | Tee-Object -FilePath "$env:RUNNER_TEMP\tool-help.txt" -Append }
           }
+          $basePkg = Get-ChildItem -Path (Join-Path $env:RUNNER_TEMP "base-artifact") -Recurse -File -Filter "PS4-Neural-Engine-002.pkg" | Select-Object -First 1
+          if (-not $basePkg) { throw "Known base PKG was not found in downloaded artifact." }
+          $gp4 = Join-Path $env:RUNNER_TEMP "PNEU00001-patch-association-probe.gp4"
+          $zeroKey = "00000000000000000000000000000000"
+          "BASE_PKG=$($basePkg.FullName)" | Tee-Object -FilePath "$env:RUNNER_TEMP\tool-help.txt" -Append
+          $createArgs = @("gp4_proj_create", "--volume_type", "pkg_ps4_patch", "--content_id", "IV0000-PNEU00001_00-PS4NEURALENG0000", "--passcode", $zeroKey, "--entitlement_key", $zeroKey, "--storage_type", "digital25", "--app_path", $basePkg.FullName, $gp4)
+          Invoke-BoundedProbe $cmd.FullName $createArgs "CREATE PATCH GP4 ASSOCIATED WITH REAL BASE PKG"
+          if (Test-Path $gp4) {
+            "GENERATED_GP4_SIZE=$((Get-Item $gp4).Length)" | Tee-Object -FilePath "$env:RUNNER_TEMP\tool-help.txt" -Append
+            Get-Content $gp4 | Select-String -Pattern "volume_type|content_id|app_path|app_type|storage_type|version" | ForEach-Object { $_.Line } | Tee-Object -FilePath "$env:RUNNER_TEMP\tool-help.txt" -Append
+            Copy-Item $gp4 (Join-Path $env:RUNNER_TEMP "association-probe.gp4")
+          } else {
+            "GENERATED_GP4=NO" | Tee-Object -FilePath "$env:RUNNER_TEMP\tool-help.txt" -Append
+          }
           Invoke-BoundedProbe $cmd.FullName @("gp4_proj_create", "--volume_type", "pkg_ps4_patch") "ORBIS-PUB-CMD PATCH PROJECT REQUIRED ARGUMENTS"
           Invoke-BoundedProbe $patch.FullName @("--help") "GENGP4_PATCH HELP SWITCH PROBE"
           Invoke-BoundedProbe $patch.FullName @("/?") "GENGP4_PATCH QUESTION SWITCH PROBE"
@@ -98,5 +121,6 @@ jobs:
             ${{ runner.temp }}/asset-evidence.txt
             ${{ runner.temp }}/tool-evidence.txt
             ${{ runner.temp }}/tool-help.txt
+            ${{ runner.temp }}/association-probe.gp4
           if-no-files-found: warn
           retention-days: 7
