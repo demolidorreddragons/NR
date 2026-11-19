@@ -4,6 +4,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
+#include <fcntl.h>
+#include <sys/types.h>
 #include <errno.h>
 #include <sys/stat.h>
 #include <unistd.h>
@@ -40,66 +42,102 @@ static void write_status(const char* message) {
 
 static int copy_prx(char* error, size_t error_size) {
     struct stat src_stat, dst_stat;
-    if (stat(SOURCE_PRX, &src_stat) != 0) {
-        snprintf(error, error_size, "ERROR: cannot stat %s (errno=%d).", SOURCE_PRX, errno);
+    int in = open(SOURCE_PRX, O_RDONLY);
+    if (in < 0) {
+        snprintf(error, error_size, "ERROR: cannot open source PRX %s (errno=%d).", SOURCE_PRX, errno);
+        return 0;
+    }
+    if (fstat(in, &src_stat) != 0) {
+        int saved_errno = errno;
+        close(in);
+        snprintf(error, error_size, "ERROR: cannot stat open source PRX (errno=%d).", saved_errno);
         return 0;
     }
     if (src_stat.st_size <= 0) {
-        snprintf(error, error_size, "ERROR: source PRX is empty (%s).", SOURCE_PRX);
+        close(in);
+        snprintf(error, error_size, "ERROR: source PRX is empty (size=%lld).", (long long)src_stat.st_size);
         return 0;
     }
 
-    FILE* in = fopen(SOURCE_PRX, "rb");
-    if (!in) {
-        snprintf(error, error_size, "ERROR: cannot open source PRX (errno=%d).", errno);
-        return 0;
-    }
-    FILE* out = fopen(DEST_TMP, "wb");
-    if (!out) {
+    int out = open(DEST_TMP, O_WRONLY | O_CREAT | O_TRUNC, 0666);
+    if (out < 0) {
         int saved_errno = errno;
-        fclose(in);
+        close(in);
         snprintf(error, error_size, "ERROR: cannot create temporary PRX in %s (errno=%d).", DEST_DIR, saved_errno);
         return 0;
     }
 
     char buffer[16384];
-    size_t n;
+    long long copied = 0;
     int ok = 1;
-    while ((n = fread(buffer, 1, sizeof(buffer), in)) > 0) {
-        if (fwrite(buffer, 1, n, out) != n) { ok = 0; break; }
+    int saved_errno = 0;
+    for (;;) {
+        ssize_t n = read(in, buffer, sizeof(buffer));
+        if (n == 0) break;
+        if (n < 0) {
+            if (errno == EINTR) continue;
+            ok = 0;
+            saved_errno = errno;
+            break;
+        }
+        ssize_t offset = 0;
+        while (offset < n) {
+            ssize_t written = write(out, buffer + offset, (size_t)(n - offset));
+            if (written < 0) {
+                if (errno == EINTR) continue;
+                ok = 0;
+                saved_errno = errno;
+                break;
+            }
+            if (written == 0) {
+                ok = 0;
+                saved_errno = EIO;
+                break;
+            }
+            offset += written;
+            copied += written;
+        }
+        if (!ok) break;
     }
-    if (ferror(in)) ok = 0;
-    if (fflush(out) != 0 || fsync(fileno(out)) != 0) ok = 0;
-    if (fclose(in) != 0) ok = 0;
-    if (fclose(out) != 0) ok = 0;
+
+    if (ok && fsync(out) != 0) {
+        ok = 0;
+        saved_errno = errno;
+    }
+    if (fstat(out, &dst_stat) != 0 && ok) {
+        ok = 0;
+        saved_errno = errno;
+    }
+    if (close(in) != 0 && ok) {
+        ok = 0;
+        saved_errno = errno;
+    }
+    if (close(out) != 0 && ok) {
+        ok = 0;
+        saved_errno = errno;
+    }
 
     if (!ok) {
-        int saved_errno = errno;
         remove(DEST_TMP);
-        snprintf(error, error_size, "ERROR: PRX copy/write failed (errno=%d).", saved_errno);
+        snprintf(error, error_size, "ERROR: PRX read/write failed after %lld bytes (errno=%d).",
+                 copied, saved_errno);
         return 0;
     }
-    if (stat(DEST_TMP, &dst_stat) != 0) {
-        int saved_errno = errno;
+    if (dst_stat.st_size != src_stat.st_size || copied != (long long)src_stat.st_size) {
         remove(DEST_TMP);
-        snprintf(error, error_size, "ERROR: cannot verify copied PRX (errno=%d).", saved_errno);
-        return 0;
-    }
-    if (dst_stat.st_size != src_stat.st_size) {
-        remove(DEST_TMP);
-        snprintf(error, error_size, "ERROR: PRX size mismatch (source=%lld copied=%lld).",
-                 (long long)src_stat.st_size, (long long)dst_stat.st_size);
+        snprintf(error, error_size,
+                 "ERROR: PRX size mismatch (source=%lld copied=%lld destination=%lld).",
+                 (long long)src_stat.st_size, copied, (long long)dst_stat.st_size);
         return 0;
     }
     if (rename(DEST_TMP, DEST_PRX) != 0) {
-        int saved_errno = errno;
+        saved_errno = errno;
         remove(DEST_TMP);
         snprintf(error, error_size, "ERROR: cannot activate copied PRX (errno=%d).", saved_errno);
         return 0;
     }
     return 1;
 }
-
 static void trim_line(char* line) {
     size_t n = strlen(line);
     while (n && (line[n-1] == '\\r' || line[n-1] == '\\n' ||
