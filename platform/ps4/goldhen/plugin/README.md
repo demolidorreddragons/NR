@@ -7,7 +7,7 @@ The PRX is currently a diagnostics/capture scaffold, not a neural rendering back
 - OpenOrbis PS4 Toolchain v0.5.4.
 - GoldHEN_Plugins_SDK pinned to `bcea3c7ef01dac6d7f9f49ebf9e90fe66d86f5f7`.
 - Run `make -C platform/ps4/goldhen/plugin` with `OO_PS4_TOOLCHAIN` and `GOLDHEN_SDK` set.
-- The GitHub Actions cross-build has compiled this PRX against the pinned headers; console loading and firmware 14.02 behavior remain unverified.
+- GitHub Actions successfully generated a non-empty PRX against the pinned headers; console loading and firmware 14.02 behavior remain unverified.
 
 ## Runtime behavior
 
