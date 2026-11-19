@@ -123,9 +123,16 @@ jobs:
           dotnet "$tool" sfo read "$sfo" 2>&1 | Tee-Object -FilePath "candidate-output/patch-param-sfo.txt"
           if ($LASTEXITCODE -ne 0) { throw "Patch SFO readback failed." }
 
+          $changeInfoDir = Join-Path $image "sce_sys/changeinfo"
+          New-Item -ItemType Directory -Force -Path $changeInfoDir | Out-Null
+          $changeInfo = Join-Path $changeInfoDir "changeinfo.xml"
+          $changeXml = '<?xml version="1.0" encoding="UTF-8"?>' + "`n" +
+            '<changeinfo><changes app_ver="01.01"><![CDATA[Neural Engine update 1.01]]></changes></changeinfo>'
+          [IO.File]::WriteAllText($changeInfo, $changeXml, [Text.UTF8Encoding]::new($false))
+
           $zeroKey = "00000000000000000000000000000000"
           "=== CREATE ASSOCIATED PATCH GP4 ===" | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
-          & $pubCmd gp4_proj_create --volume_type pkg_ps4_patch --content_id IV0000-PNEU00001_00-PS4NEURALENG0000 --passcode $zeroKey --entitlement_key $zeroKey --storage_type digital25 --app_path $basePkgForGp4 $gp4 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
+          & $pubCmd gp4_proj_create --volume_type pkg_ps4_patch --content_id IV0000-PNEU00001_00-PS4NEURALENG0000 --passcode $zeroKey --entitlement_key $zeroKey --storage_type digital50 --app_path $basePkgForGp4 $gp4 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
           if ($LASTEXITCODE -ne 0 -or -not (Test-Path $gp4)) { throw "Associated patch GP4 creation failed." }
 
           "=== ADD PATCH PAYLOAD ===" | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
@@ -135,13 +142,15 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "Adding PRX to GP4 failed." }
           & $pubCmd gp4_file_add --force --pfs_compression enable $sfo "sce_sys/param.sfo" $gp4 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
           if ($LASTEXITCODE -ne 0) { throw "Adding patch param.sfo to GP4 failed." }
+          & $pubCmd gp4_file_add --force --pfs_compression disable $changeInfo "sce_sys/changeinfo/changeinfo.xml" $gp4 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
+          if ($LASTEXITCODE -ne 0) { throw "Adding changeinfo.xml to GP4 failed." }
 
           [xml]$project = Get-Content $gp4
           $volumeType = $project.psproject.volume.volume_type
           $appPath = $project.psproject.volume.package.app_path
           if ($volumeType -ne "pkg_ps4_patch") { throw "GP4 volume_type is not pkg_ps4_patch." }
           if (-not $appPath) { throw "GP4 has no Application Package association." }
-          if ($project.psproject.files.file.Count -lt 3) { throw "GP4 has fewer than 3 payload entries." }
+          if ($project.psproject.files.file.Count -lt 4) { throw "GP4 has fewer than 3 payload entries." }
           Copy-Item $gp4 "candidate-output/PS4-Neural-Engine-003.gp4"
           "GP4_VOLUME_TYPE=$volumeType" | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
           "GP4_APP_PATH=$appPath" | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
