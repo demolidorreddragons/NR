@@ -124,3 +124,10 @@ Source artifact: build run 44623808730, artifact 14578192913.
 - Engineering commit `c3c1fd2a6f158be3b21c66e3e1c230aa85ca9023` adds a patch-build preflight that rejects a base package whose extracted PUBTOOLINFO has no `st_type`, preventing another pointless `app:unknown` build.
 - Next gate: inspect the new base PKG 002 artifact after run 44641114863. Confirm the extracted SFO contains `st_type=digital50`, and that Sony package validation and independent PKG inspection still pass. Only then update the patch workflow's pinned base-artifact run ID and attempt patch generation again.
 - No existing PS4 installation, saves, application data, canonical PRX, or `plugins.ini` was touched.
+
+
+### Correction: the immediate failure was a stale pinned base artifact
+- The base build run `44641114863` succeeded after commit `2707fd4`. Its build log confirms `PUBTOOLINFO = c_date=20261119,...,st_type=digital50` before package creation, and PKG hash/signature validation passed. Artifact ID: `14585159593`.
+- The first patch attempt after that change still downloaded the older artifact from run `44623808730`. Its extracted SFO correctly lacked `st_type`, so the new preflight failed as designed. The base-generation change itself was present and working; the patch workflow's pinned artifact reference was stale.
+- Commit `41d5b4a4b0172ef7664ab287a759067211c6be4a` updates the patch workflow to download base PKG 002 from run `44641114863`. Its associated patch build is run `44641439173`; inspect its final logs and artifact before making any further metadata changes.
+- Do not infer success from the preflight alone. The required next evidence is that the new base SFO readback contains `st_type=digital50`, then Fake PKG Tools accepts the base/patch storage pairing and Sony `img_create` completes, followed by independent validation and readback.
