@@ -94,8 +94,6 @@ jobs:
           $pubCmd = Get-Content "$env:RUNNER_TEMP\tool-path.txt" | Where-Object { $_ -like "ORBiS_PUB_CMD=*" } | ForEach-Object { $_.Substring(14) }
           if (-not (Test-Path $pubCmd)) { throw "orbis-pub-cmd path invalid." }
           $basePkg = (Resolve-Path $basePkg).Path
-          "BASE_PKG_ABSOLUTE_PATH=$basePkg" | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
-
           $work = Join-Path $env:RUNNER_TEMP "patch-003"
           $extract = Join-Path $work "base-extracted"
           $gp4 = Join-Path $work "PS4-Neural-Engine-003.gp4"
@@ -103,6 +101,7 @@ jobs:
           $verify = Join-Path $work "verify"
           New-Item -ItemType Directory -Force -Path $work | Out-Null
           New-Item -ItemType Directory -Force -Path "candidate-output" | Out-Null
+          "BASE_PKG_ABSOLUTE_PATH=$basePkg" | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
 
           "=== BASE PACKAGE: ORIGINAL VALIDATED PKG 002 ===" | Tee-Object -FilePath "candidate-output/build-report.txt"
           dotnet "$tool" info "$basePkg" 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
