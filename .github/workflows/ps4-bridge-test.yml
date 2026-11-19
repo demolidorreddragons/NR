@@ -240,9 +240,9 @@ jobs:
           PS4_IP: ${{ vars.PS4_IP }}
         run: |
           $ErrorActionPreference = "Stop"
-          $pkgFiles = @(Get-ChildItem -LiteralPath (Join-Path $env:GITHUB_WORKSPACE "transfer/pkg") -Filter "PS4-Neural-Engine-*.pkg" -File)
+          $pkgFiles = @(Get-ChildItem -LiteralPath (Join-Path $env:GITHUB_WORKSPACE "transfer/pkg") -Filter "PS4-Neural-Engine-*.pkg" -File | Where-Object { $_.BaseName -match "^PS4-Neural-Engine-\d{3,}$" })
           if ($pkgFiles.Count -ne 1) {
-            throw "Expected exactly one numbered PKG, found $($pkgFiles.Count)."
+            throw "Expected exactly one strictly numbered PKG, found $($pkgFiles.Count)."
           }
           $pkg = $pkgFiles[0].FullName
           $pkgNumber = [regex]::Match($pkgFiles[0].BaseName, "^PS4-Neural-Engine-(\d{3,})$").Groups[1].Value
