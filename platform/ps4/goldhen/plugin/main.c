@@ -10,6 +10,9 @@
 #include "telemetry_bridge.h"
 
 #define CAPTURE_DIR "/data/PS4NeuralEngine/captures"
+extern int pne_github_begin_authorization(void);
+extern int pne_github_upload_confirmed_log(void);
+extern void pne_github_disconnect(void);
 attr_public const char *g_pluginName = "ps4_neural_engine";
 attr_public const char *g_pluginDesc = "PS4 Neural Engine capture diagnostics";
 attr_public const char *g_pluginAuth = "demolidorreddragons";
@@ -54,7 +57,7 @@ static void *input_thread(void *arg) {
   atomic_store(&g_running, false);
   return NULL;
  }
- bool was_down = false;
+ bool was_down = false, auth_was_down = false, upload_was_down = false;
  int handle = 0;
  while (atomic_load(&g_running)) {
   if (handle <= 0) handle = open_pad();
@@ -75,11 +78,24 @@ static void *input_thread(void *arg) {
     }
    }
    was_down = down;
+   const uint32_t auth_chord = ORBIS_PAD_BUTTON_L3 | ORBIS_PAD_BUTTON_L1 | ORBIS_PAD_BUTTON_CIRCLE;
+   const bool auth_down = (data.buttons & auth_chord) == auth_chord;
+   if (auth_down && !auth_was_down) {
+    if (pne_github_begin_authorization()) NotifyStatic(TEX_ICON_SYSTEM, "PNE: abra a URL e informe o codigo GitHub");
+    else NotifyStatic(TEX_ICON_SYSTEM, "PNE: nao foi possivel iniciar OAuth");
+   }
+   auth_was_down = auth_down;
+   const uint32_t upload_chord = ORBIS_PAD_BUTTON_L3 | ORBIS_PAD_BUTTON_L1 | ORBIS_PAD_BUTTON_CROSS;
+   const bool upload_down = (data.buttons & upload_chord) == upload_chord;
+   if (upload_down && !upload_was_down) {
+    NotifyStatic(TEX_ICON_SYSTEM, pne_github_upload_confirmed_log() ? "PNE: log publicado no GitHub" : "PNE: envio falhou; autorize e grave log");
+   }
+   upload_was_down = upload_down;
    const uint32_t quit = ORBIS_PAD_BUTTON_L3 | ORBIS_PAD_BUTTON_R3 |
     ORBIS_PAD_BUTTON_L1 | ORBIS_PAD_BUTTON_R1 | ORBIS_PAD_BUTTON_SQUARE;
    if ((data.buttons & quit) == quit) atomic_store(&g_running, false);
   } else {
-   was_down = false;
+   was_down = auth_was_down = upload_was_down = false;
    if (handle > 0) handle = 0;
   }
   sceKernelUsleep(50000);
@@ -109,6 +125,7 @@ s32 attr_public plugin_unload(s32 argc, const char *argv[]) {
  atomic_store(&g_running, false);
  scePthreadJoin(g_input_thread, NULL);
  if (atomic_exchange(&g_recording, false)) pne_telemetry_stop();
+ pne_github_disconnect();
  return 0;
 }
 
