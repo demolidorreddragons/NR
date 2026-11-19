@@ -14,7 +14,7 @@ Public source repository for the PS4 Neural Engine project. The currently implem
 ## Build and validation
 
 - Host CMake tests: automated through `.github/workflows/host-tests.yml`.
-- PS4 cross-build: `.github/workflows/ps4-prx.yml`, pinned to OpenOrbis Toolchain v0.5.4 and GoldHEN_Plugins_SDK commit `bcea3c7ef01dac6d7f9f49ebf9e90fe66d86f5f7`.
+- PS4 cross-build and installer PKG: `.github/workflows/ps4-prx.yml`, pinned to OpenOrbis Toolchain v0.5.4 and GoldHEN_Plugins_SDK commit `bcea3c7ef01dac6d7f9f49ebf9e90fe66d86f5f7`; a non-empty PRX and PKG passed the CI build and package validation.
 - Local PRX compilation is not equivalent to loading the plugin on a console. Firmware 14.02 / GoldHEN runtime validation remains outstanding.
 - PKG installer usage: see `docs/PKG_INSTALLER.md`.
 
