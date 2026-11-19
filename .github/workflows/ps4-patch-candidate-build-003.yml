@@ -35,6 +35,15 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
+          $builderPath = "OrbisPkgTool-src/OrbisPkgTool/Pkg/PkgBuilder.cs"
+          $builder = Get-Content $builderPath -Raw
+          $categoryOld = 'project.VolumeType == VolumeType.PkgPs4Patch ? "gp" : "gd"'
+          $categoryNew = 'project.VolumeType == VolumeType.PkgPs4Patch ? "gpe" : "gde"'
+          if (-not $builder.Contains($categoryOld)) { throw "PkgBuilder category mapping anchor not found." }
+          $builder = $builder.Replace($categoryOld, $categoryNew)
+          if (-not $builder.Contains("img0_pc_ksize=832")) { throw "PkgBuilder PUBTOOLINFO anchor not found." }
+          $builder = $builder.Replace("img0_pc_ksize=832", "img0_pc_ksize=832,st_type=digital50")
+          Set-Content -Path $builderPath -Value $builder -NoNewline
           dotnet build OrbisPkgTool-src/OrbisPkgTool/OrbisPkgTool.csproj --configuration Release
           if ($LASTEXITCODE -ne 0) { throw "OrbisPkgTool build failed." }
           $tool = "OrbisPkgTool-src/OrbisPkgTool/bin/Release/net10.0-windows/OrbisPkgTool.dll"
@@ -87,8 +96,20 @@ jobs:
           $pkg = Join-Path $work "PS4-Neural-Engine-003-CANDIDATE.pkg"
           $baseCopyDir = Join-Path $work "base-artifact/pkg"
           New-Item -ItemType Directory -Force -Path $baseCopyDir | Out-Null
-          $basePkgForGp4 = Join-Path $baseCopyDir "PS4-Neural-Engine-002.pkg"
-          Copy-Item $basePkg $basePkgForGp4
+          $basePkgForGp4 = Join-Path $baseCopyDir "PS4-Neural-Engine-002-STTYPE.pkg"
+          $baseGp4 = Join-Path $work "base-app-sttype.gp4"
+          "=== BUILD TEMPORARY BASE WITH EXPLICIT STORAGE METADATA ===" | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
+          dotnet "$tool" gp4gen "$image" --out "$baseGp4" 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
+          if ($LASTEXITCODE -ne 0) { throw "Temporary base GP4 generation failed." }
+          dotnet "$tool" pkg build "$baseGp4" "$image" --out "$basePkgForGp4" --validate 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
+          if ($LASTEXITCODE -ne 0 -or -not (Test-Path $basePkgForGp4)) { throw "Temporary base PKG with storage metadata failed." }
+          $tempBaseExtract = Join-Path $work "temp-base-verify"
+          dotnet "$tool" extract "$basePkgForGp4" "$tempBaseExtract" 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
+          if ($LASTEXITCODE -ne 0) { throw "Temporary base PKG readback failed." }
+          $tempBaseSfo = Get-ChildItem $tempBaseExtract -Recurse -File -Filter "param.sfo" | Select-Object -First 1
+          $tempBaseSfoText = dotnet "$tool" sfo read "$($tempBaseSfo.FullName)" 2>&1
+          $tempBaseSfoText | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
+          if (($tempBaseSfoText -join "`n") -notmatch "CATEGORY = gde" -or ($tempBaseSfoText -join "`n") -notmatch "st_type=digital50") { throw "Temporary base SFO storage metadata readback failed." }
           $verify = Join-Path $work "verify"
           New-Item -ItemType Directory -Force -Path $work | Out-Null
           New-Item -ItemType Directory -Force -Path "candidate-output" | Out-Null
@@ -132,7 +153,7 @@ jobs:
 
           $zeroKey = "00000000000000000000000000000000"
           "=== CREATE ASSOCIATED PATCH GP4 ===" | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
-          & $pubCmd gp4_proj_create --volume_type pkg_ps4_patch --content_id IV0000-PNEU00001_00-PS4NEURALENG0000 --passcode $zeroKey --entitlement_key $zeroKey --storage_type digital50 --app_path $basePkgForGp4 $gp4 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
+          & $pubCmd gp4_proj_create --volume_type pkg_ps4_patch --content_id IV0000-PNEU00001_00-PS4NEURALENG0000 --passcode $zeroKey --entitlement_key $zeroKey --storage_type digital25 --app_path $basePkgForGp4 $gp4 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
           if ($LASTEXITCODE -ne 0 -or -not (Test-Path $gp4)) { throw "Associated patch GP4 creation failed." }
 
           "=== ADD PATCH PAYLOAD ===" | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
