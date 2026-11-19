@@ -80,6 +80,11 @@ sfo TITLE Utf8 128 "PS4 Neural Engine Installer"
 sfo TITLE_ID Utf8 12 "$TITLE_ID"
 sfo VERSION Utf8 8 1.00
 
+# Fake PKG Tools resolves an associated base package's storage type from
+# PARAM.SFO PUBTOOLINFO. Keep it explicit in the base PKG (GP4 storage_type
+# alone is not sufficient for its patch app:unknown lookup).
+sfo PUBTOOLINFO Utf8 512 "c_date=$(date -u +%Y%m%d),img0_l0_size=7,img0_l1_size=0,img0_sc_ksize=512,img0_pc_ksize=832,st_type=digital50"
+
 # Validate all staged files before building. param.sfo and icon0.png are
 # PKG metadata entries; pkg_extract exposes the uroot payload, not those entries.
 for required in "$STAGE/ps4_neural_engine.prx" "$STAGE/eboot.bin" \
