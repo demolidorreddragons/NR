@@ -69,3 +69,13 @@ Source artifact: build run 44623808730, artifact 14578192913.
 - Running `gengp4_patch.exe` with no arguments did not return within 15 seconds and was terminated by the harness. This is not evidence of failure; it may be GUI-driven. The next probe tests help switches and extracts relevant ASCII strings without invoking extra commands.
 - Important: these hashes establish what the hosted runner downloaded and inspected, not independent publisher authenticity. No binaries were copied to the self-hosted bridge or PS4. No package was built or installed.
 - Follow-up probe workflow run: 44633403669.
+
+
+### Real base-package patch association proven (2026-11-19, run 44633531153)
+- Downloaded the actual PKG 002 artifact into a disposable GitHub-hosted Windows runner and ran the pinned `orbis-pub-cmd.exe` against it.
+- Command completed with exit code 0 using `gp4_proj_create --volume_type pkg_ps4_patch --content_id IV0000-PNEU00001_00-PS4NEURALENG0000 --passcode 00000000000000000000000000000000 --entitlement_key 00000000000000000000000000000000 --storage_type digital25 --app_path <actual-base.pkg> <output.gp4>`.
+- Generated GP4 (810 bytes) contains `<volume_type>pkg_ps4_patch</volume_type>` and a package node with `app_path="base-artifact\\pkg\\PS4-Neural-Engine-002.pkg"`, proving the project is explicitly associated with the real base package rather than merely changing the volume type.
+- Evidence artifact ID: `14581593366`; workflow run: `44633531153`.
+- This is a successful association-only GP4, not yet a complete patch project: its `<files img_no="0"/>` and `<rootdir/>` are empty. No PKG was built or installed.
+- PS4 PARAM.SFO reference table explicitly maps `gde` to “Non-Game Mini App” and `gpe` to “Non-Game Mini App Patch”. The next step is to stage the changed payload, set patch SFO metadata, add files to this associated GP4, and audit the complete project before any PKG build.
+- The generator's `gengp4_patch.exe --help` is not a usable CLI help switch (it treats `--help` as a directory); no-argument and `/?` invocations can open/block, so the workflow bounds and terminates them. Use the command-line `orbis-pub-cmd` route for reproducible automation.
