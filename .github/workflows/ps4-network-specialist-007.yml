@@ -1,0 +1,70 @@
+name: PS4 Network Specialist QA 007
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/ps4-network-specialist-007.yml"
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  network-specialist:
+    runs-on: [self-hosted, Windows, X64, ps4-lan]
+    steps:
+      - name: Download reference PRX
+        uses: actions/download-artifact@v4
+        with:
+          name: ps4-neural-engine-build
+          path: transfer
+          repository: demolidorreddragons/NR
+          run-id: 44623808730
+          github-token: ${{ github.token }}
+      - name: DAT staging to PRX rename and byte verification
+        shell: powershell -NoProfile -ExecutionPolicy Bypass -File {0}
+        env:
+          PS4_IP: ${{ vars.PS4_IP }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          $archive = Join-Path $env:GITHUB_WORKSPACE "transfer/goldhen/PS4-Neural-Engine-GoldHEN.zip"
+          $extract = Join-Path $env:RUNNER_TEMP "pne-network-007"
+          New-Item -ItemType Directory -Force -Path $extract | Out-Null
+          Expand-Archive -LiteralPath $archive -DestinationPath $extract -Force
+          $source = Join-Path $extract "ps4_neural_engine.prx"
+          $expectedSize = (Get-Item $source).Length
+          $expectedHash = (Get-FileHash $source -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($expectedSize -ne 206528 -or $expectedHash -ne "531e41aa3f4535e6004d47900f636d6e2e4b1ce2b2709f165db77ebef7e0a3f0") { throw "Reference PRX identity mismatch" }
+          $stage = "pne_network_007_stage.dat"
+          $target = "pne_network_007_renamed.prx"
+          $creds = "anonymous:anonymous@example.com"
+          $base = "ftp://$($env:PS4_IP):2121/data/GoldHEN/plugins/"
+          $stageUrl = $base + $stage
+          $targetUrl = $base + $target
+          $readback = Join-Path $env:RUNNER_TEMP "pne-network-007-readback.prx"
+          try {
+            & curl.exe --fail --silent --show-error --ftp-pasv --user $creds --upload-file $source $stageUrl
+            if ($LASTEXITCODE -ne 0) { throw "DAT staging upload failed: $LASTEXITCODE" }
+            & curl.exe --fail --silent --show-error --ftp-pasv --user $creds --output $readback $stageUrl
+            if ($LASTEXITCODE -ne 0) { throw "DAT staging readback failed: $LASTEXITCODE" }
+            $stageSize = (Get-Item $readback).Length
+            $stageHash = (Get-FileHash $readback -Algorithm SHA256).Hash.ToLowerInvariant()
+            Write-Host "STAGE_DAT bytes=$stageSize sha256=$stageHash"
+            if ($stageSize -ne $expectedSize -or $stageHash -ne $expectedHash) { throw "DAT staging integrity mismatch" }
+            & curl.exe --fail --silent --show-error --ftp-pasv --user $creds --quote ("RNFR " + $stage) --quote ("RNTO " + $target) $base
+            if ($LASTEXITCODE -ne 0) { throw "FTP rename DAT to PRX failed: $LASTEXITCODE" }
+            Remove-Item -LiteralPath $readback -Force -ErrorAction SilentlyContinue
+            & curl.exe --fail --silent --show-error --ftp-pasv --user $creds --output $readback $targetUrl
+            if ($LASTEXITCODE -ne 0) { throw "Renamed PRX readback failed: $LASTEXITCODE" }
+            $finalSize = (Get-Item $readback).Length
+            $finalHash = (Get-FileHash $readback -Algorithm SHA256).Hash.ToLowerInvariant()
+            Write-Host "RENAMED_PRX bytes=$finalSize sha256=$finalHash expected_bytes=$expectedSize expected_sha=$expectedHash"
+            if ($finalSize -ne $expectedSize -or $finalHash -ne $expectedHash) { throw "Renamed PRX readback mismatch" }
+            Write-Host "NETWORK_SPECIALIST_RENAME_TEST_PASSED"
+          } finally {
+            foreach ($probe in @($stage,$target,"pne_payload_probe_006.prx","pne_payload_probe_006.dat")) {
+              & curl.exe --silent --show-error --ftp-pasv --user $creds --quote ("DELE " + $probe) $base 2>$null
+              if ($LASTEXITCODE -eq 0) { Write-Host "OWN_PROBE_CLEANED $probe" } else { Write-Host "OWN_PROBE_NOT_PRESENT_OR_CLEANUP_FAILED $probe exit=$LASTEXITCODE" }
+            }
+          }
