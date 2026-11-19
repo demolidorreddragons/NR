@@ -27,3 +27,12 @@ The PRX is currently a diagnostics/capture scaffold, not a neural rendering back
 ## Remaining validation
 
 A successful cross-compile does not establish that GoldHEN can load the PRX on PS4 Pro firmware 14.02. Hardware loading, controller lifecycle, capture file output, and per-title readback adapters still require console validation. No GNM compute backend, neural inference runtime, temporal reconstruction, or generic game framebuffer interception is implemented yet.
+
+
+## GitHub Device Flow and manual upload controls
+
+- **L3 + L1 + Circle** starts GitHub Device Flow. Enter the displayed one-time code at the verification URL on another device.
+- The access token is held in process memory only and cleared when the plugin unloads.
+- **L3 + L1 + Cross** is a separate, deliberate upload action. The current implementation publishes `frametimes.csv` only; it does not yet upload BMP captures.
+- Uploads go to the fixed repository path `demolidorreddragons/NR/telemetry/frametimes.csv`. The requested classic `public_repo` scope can write to public repositories available to the authorizing account; it is not repository-restricted.
+- HTTPS verification is left enabled. The HTTP/TLS API calls compile against OpenOrbis declarations but still require firmware 14.02 runtime validation. No claim of successful PS4 authorization/upload is made until tested on hardware.
