@@ -3,6 +3,11 @@
 The registered OAuth App uses GitHub Device Flow. The public Client ID is
 compiled into the client configuration; no Client Secret is used or stored.
 
+- Client ID configured: `0v23liEuX7IS6L79I8A6`.
+- The OAuth App registration's Redirect URL is metadata required by GitHub's
+  registration form; Device Flow does not use a browser callback or redirect
+  on the PS4. The console displays the verification URL and user code instead.
+
 ## Protocol
 
 1. The PS4 sends an HTTPS POST to `https://github.com/login/device/code`
@@ -22,8 +27,11 @@ compiled into the client configuration; no Client Secret is used or stored.
 ## Privacy and token handling
 
 - `public_repo` is requested because the destination repository is public.
-  This permits publishing content to public repositories; every committed
-  capture/log becomes publicly accessible.
+  This is a classic OAuth scope and is broader than this one repository: it can
+  permit writes to other public repositories accessible to the authorizing
+  account. The client must hard-code the destination `demolidorreddragons/NR`
+  and must never accept an arbitrary repository/path from runtime input.
+  Every committed capture/log becomes publicly accessible.
 - Require a separate confirmation for each upload batch and show filenames
   and sizes before publishing.
 - Provide disconnect/revoke and local credential deletion.
