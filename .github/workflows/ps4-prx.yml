@@ -21,7 +21,7 @@ jobs:
       - name: Install LLVM
         run: |
           sudo apt-get update
-          sudo apt-get install -y clang-18 lld-18 llvm-18 make
+          sudo apt-get install -y clang-18 lld-18 llvm-18 make libc6-dev
           echo "$(dirname "$(readlink -f "$(command -v clang-18)")")" >> "$GITHUB_PATH"
           sudo ln -sf "$(command -v clang-18)" /usr/local/bin/clang
           sudo ln -sf "$(command -v clang++-18)" /usr/local/bin/clang++
@@ -41,6 +41,7 @@ jobs:
       - name: Build GoldHEN hook library
         run: |
           echo "GOLDHEN_SDK=$GITHUB_WORKSPACE/GoldHEN_Plugins_SDK" >> "$GITHUB_ENV"
+          sed -i 's|-isystem $(TOOLCHAIN)/include|-isystem $(TOOLCHAIN)/include -isystem /usr/include/x86_64-linux-gnu|' GoldHEN_Plugins_SDK/Makefile
           make -C GoldHEN_Plugins_SDK PRINTF=1 DEBUGFLAGS=1
       - name: Build PS4 PRX
         run: make -C platform/ps4/goldhen/plugin
