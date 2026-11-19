@@ -14,3 +14,7 @@ add_executable(test_telemetry tests/test_telemetry.cpp)
 target_link_libraries(test_telemetry PRIVATE pne_telemetry)
 enable_testing()
 add_test(NAME telemetry_writer COMMAND test_telemetry)
+
+add_executable(test_telemetry_bridge tests/test_telemetry_bridge.cpp)
+target_link_libraries(test_telemetry_bridge PRIVATE pne_telemetry)
+add_test(NAME telemetry_bridge COMMAND test_telemetry_bridge)
