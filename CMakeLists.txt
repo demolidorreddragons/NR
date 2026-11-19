@@ -3,8 +3,13 @@ project(ps4_neural_engine_telemetry LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
-add_library(pne_telemetry src/telemetry.cpp)
+find_package(Threads REQUIRED)
+add_library(pne_telemetry
+    src/telemetry.cpp
+    src/telemetry_bridge.cpp
+)
 target_include_directories(pne_telemetry PUBLIC include)
+target_link_libraries(pne_telemetry PUBLIC Threads::Threads)
 add_executable(test_telemetry tests/test_telemetry.cpp)
 target_link_libraries(test_telemetry PRIVATE pne_telemetry)
 enable_testing()
