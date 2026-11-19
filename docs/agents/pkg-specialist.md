@@ -56,3 +56,16 @@ Source artifact: build run 44623808730, artifact 14578192913.
 - A disposable GitHub-hosted Windows workflow was added at `.github/workflows/ps4-isolated-patch-toolchain-probe.yml`. It downloads the pinned CyB1K Fake PKG Tools v7 release asset (6,674,278 bytes), extracts it only on an ephemeral hosted runner, records SHA-256 hashes and tool versions, and probes the CLI/patch-generator usage. It does not run on the self-hosted PS4 bridge and has no PS4 network access or deployment secrets.
 - Probe workflow run: 44633179181. Awaiting completion and evidence review.
 - The release asset is a third-party precompiled archive; a computed hash is provenance evidence for this run, not an independent authenticity guarantee. Do not copy these binaries to the PS4 bridge. Any subsequent PKG build remains an isolated experiment until its patch association, category, version, and structure are independently inspected.
+
+
+### Isolated Fake PKG Tools probe result (2026-11-19, run 44633288784)
+- Hosted Windows runner completed successfully; artifact `ps4-patch-toolchain-probe-evidence` (artifact ID `14583107349`) retained the evidence.
+- Pinned release asset size: 6,674,278 bytes; SHA-256 `206FF9CD1199AE3943944FE61FB9247EC0B398B079AB125543FB1AD115E76ED7`.
+- Extracted tools:
+  - `gengp4_patch.exe` v1.4.2.23, 674,304 bytes, SHA-256 `65042F9982E6DB4C8610E8E735CA296E685518917CB71E7DB42451B5069846E6`.
+  - `orbis-pub-cmd.exe`, 3,274,784 bytes, SHA-256 `9D136A27A0739555329E46B61208B7105D4C5AEA5644CBF8052BFED4250D0E1B`.
+  - `orbis-pub-gen.exe`, 116,768 bytes, SHA-256 `D9A1A80D79188066DE5D0C893F76823C44F34F2C5D2426435BDF76A4DA0D1FA5`.
+- `orbis-pub-cmd gp4_proj_create --help` returns a concrete parser response: the command requires `--volume_type`; the next probe supplies `pkg_ps4_patch` to reveal the remaining required arguments and test the documented `--app_path` association.
+- Running `gengp4_patch.exe` with no arguments did not return within 15 seconds and was terminated by the harness. This is not evidence of failure; it may be GUI-driven. The next probe tests help switches and extracts relevant ASCII strings without invoking extra commands.
+- Important: these hashes establish what the hosted runner downloaded and inspected, not independent publisher authenticity. No binaries were copied to the self-hosted bridge or PS4. No package was built or installed.
+- Follow-up probe workflow run: 44633403669.
