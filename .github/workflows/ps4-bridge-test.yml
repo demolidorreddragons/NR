@@ -225,6 +225,15 @@ jobs:
           } catch { Write-Host "PLUGINS_INI_UNAVAILABLE: $($_.Exception.Message)" }
           Write-Host "DIAGNOSTICS_READ_ONLY_COMPLETE"
 
+      - name: Clean stale artifact workspace on persistent runner
+        shell: powershell -NoProfile -ExecutionPolicy Bypass -Command "& '{0}'"
+        run: |
+          $transfer = Join-Path $env:GITHUB_WORKSPACE "transfer"
+          if (Test-Path -LiteralPath $transfer) {
+            Remove-Item -LiteralPath $transfer -Recurse -Force
+          }
+          New-Item -ItemType Directory -Path $transfer -Force | Out-Null
+
       - name: Download validated PKG artifact from build run
         uses: actions/download-artifact@v4
         with:
