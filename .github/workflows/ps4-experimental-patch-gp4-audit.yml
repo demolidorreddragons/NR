@@ -1,0 +1,57 @@
+name: PS4 Experimental Patch GP4 Audit
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/ps4-experimental-patch-gp4-audit.yml"
+permissions:
+  actions: read
+  contents: read
+jobs:
+  patch-gp4:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout project
+        uses: actions/checkout@v4
+      - name: Checkout experimental OrbisPkgTool
+        uses: actions/checkout@v4
+        with:
+          repository: pearlxcore/OrbisPkgTool
+          ref: master
+          path: OrbisPkgTool-src
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - name: Build OrbisPkgTool CLI
+        run: dotnet build OrbisPkgTool-src/OrbisPkgTool/OrbisPkgTool.csproj --configuration Release
+      - name: Download base package artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ps4-neural-engine-build
+          path: base-artifact
+          repository: demolidorreddragons/NR
+          run-id: 44623808730
+          github-token: ${{ github.token }}
+      - name: Extract and generate patch GP4 for metadata audit only
+        shell: bash
+        run: |
+          set -euo pipefail
+          TOOL="OrbisPkgTool-src/OrbisPkgTool/bin/Release/net10.0/OrbisPkgTool"
+          PKG="base-artifact/pkg/PS4-Neural-Engine-002.pkg"
+          test -s "$PKG"
+          "$TOOL" extract "$PKG" base-extracted --verbose
+          SFO="$(find base-extracted -path '*/sce_sys/param.sfo' -type f | head -n 1)"
+          test -n "$SFO"
+          IMAGE_ROOT="$(dirname "$(dirname "$SFO")")"
+          echo "SFO=$SFO"
+          echo "IMAGE_ROOT=$IMAGE_ROOT"
+          "$TOOL" sfo "$SFO" --help || true
+          "$TOOL" gp4gen "$IMAGE_ROOT" --patch --out experimental-patch.gp4
+          echo "===== PATCH GP4 METADATA ====="
+          grep -E 'volume_type|content_id|storage_type|app_type|version|app_version' experimental-patch.gp4
+          echo "===== PATCH GP4 FILE LIST ====="
+          grep '<file ' experimental-patch.gp4 | head -n 30
+          echo "===== SOURCE SFO ====="
+          "$TOOL" info "$PKG"
+          echo "AUDIT_ONLY_NOT_INSTALLABLE: no base application association has been established"
