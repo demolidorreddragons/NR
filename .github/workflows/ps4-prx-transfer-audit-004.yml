@@ -1,0 +1,50 @@
+name: PS4 PRX Transfer QA Audit 004
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/ps4-prx-transfer-audit-004.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: [self-hosted, Windows, X64, ps4-lan]
+    steps:
+      - name: Compare FTP RETR modes without changing console files
+        shell: powershell -NoProfile -ExecutionPolicy Bypass -File {0}
+        env:
+          PS4_IP: ${{ vars.PS4_IP }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          $base = Join-Path $env:RUNNER_TEMP "pne-curl-modes"
+          New-Item -ItemType Directory -Force -Path $base | Out-Null
+          $names = @("ps4_neural_engine.prx","ps4_neural_engine_002.prx","ps4_neural_engine_003.prx")
+          foreach ($name in $names) {
+            foreach ($mode in @("default","nocwd","singlecwd")) {
+              $dest = Join-Path $base ($name + "." + $mode + ".bin")
+              $url = "ftp://$($env:PS4_IP):2121/data/GoldHEN/plugins/$name"
+              $args = @("--fail","--silent","--show-error","--ftp-pasv","--user","anonymous:anonymous@example.com","--output",$dest)
+              if ($mode -ne "default") { $args += @("--ftp-method",$mode) }
+              & curl.exe @args $url
+              $exit = $LASTEXITCODE
+              if ($exit -eq 0) {
+                $item = Get-Item $dest
+                $hash = (Get-FileHash $dest -Algorithm SHA256).Hash.ToLowerInvariant()
+                Write-Host "MODE_READBACK name=$name mode=$mode exit=$exit bytes=$($item.Length) sha256=$hash"
+              } else {
+                Write-Host "MODE_FAILED name=$name mode=$mode exit=$exit"
+              }
+            }
+          }
+          $active = Join-Path $base "active.prx"
+          $activeUrl = "ftp://$($env:PS4_IP):2121/data/GoldHEN/plugins/ps4_neural_engine_003.prx"
+          & curl.exe --fail --silent --show-error --ftp-port "-" --user "anonymous:anonymous@example.com" --output $active $activeUrl
+          if ($LASTEXITCODE -eq 0) {
+            $item = Get-Item $active
+            $hash = (Get-FileHash $active -Algorithm SHA256).Hash.ToLowerInvariant()
+            Write-Host "ACTIVE_READBACK bytes=$($item.Length) sha256=$hash"
+          } else { Write-Host "ACTIVE_FAILED exit=$LASTEXITCODE" }
+          Write-Host "FTP_MODE_AUDIT_COMPLETE_READ_ONLY"
