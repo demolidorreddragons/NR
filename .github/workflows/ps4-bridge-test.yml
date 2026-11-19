@@ -1,0 +1,32 @@
+name: PS4 Windows Bridge Test
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ps4-connectivity:
+    if: github.ref == 'refs/heads/main'
+    runs-on: [self-hosted, Windows, X64, ps4-lan]
+
+    steps:
+      - name: Identify Windows runner
+        shell: powershell
+        run: |
+          Write-Host "Runner: $env:COMPUTERNAME"
+          Write-Host "User:"
+          whoami
+
+      - name: Check PS4 network connection
+        shell: powershell
+        run: |
+          Write-Host "Testing PS4 TCP port 2121"
+          Write-Host "PS4 IP must be configured as a repository variable named PS4_IP."
+          if (-not $env:PS4_IP) {
+            throw "Repository variable PS4_IP is not configured."
+          }
+          Test-NetConnection -ComputerName $env:PS4_IP -Port 2121
+        env:
+          PS4_IP: ${{ vars.PS4_IP }}
