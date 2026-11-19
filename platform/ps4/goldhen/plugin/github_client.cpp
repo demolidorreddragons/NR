@@ -7,6 +7,7 @@
 #include <pthread.h>
 #include <unistd.h>
 #include <dirent.h>
+#include <sys/stat.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -18,7 +19,7 @@ int g_pool=-1, g_ssl=-1, g_http=-1, g_template=-1;
 pthread_mutex_t g_lock=PTHREAD_MUTEX_INITIALIZER;
 std::string g_token;
 bool g_authorized=false, g_auth_active=false, g_auth_joinable=false;
-bool g_upload_active=false, g_upload_joinable=false, g_cancel_auth=false;
+bool g_upload_active=false, g_upload_joinable=false, g_cancel_auth=false, g_upload_pending=false;\nsize_t g_pending_count=0;\nuint64_t g_pending_bytes=0;
 pthread_t g_auth_thread, g_upload_thread;
 constexpr size_t kMaxResponse=65536;
 constexpr size_t kMaxUpload=16*1024*1024;
@@ -202,6 +203,27 @@ bool upload_log() {
  if(!token.empty())memset(&token[0],0,token.size());
  return any&&ok;
 }
+bool preview_upload_batch(size_t& count,uint64_t& bytes,char* sample,size_t cap) {
+ count=0;bytes=0;if(cap)sample[0]='\\0';
+ auto add=[&](const char* path,const char* name) {
+  struct stat st;if(stat(path,&st)!=0||!S_ISREG(st.st_mode)||st.st_size<=0)return;
+  ++count;bytes+=(uint64_t)st.st_size;
+  if(cap && strlen(sample)<cap-1) {
+   size_t used=strlen(sample);
+   snprintf(sample+used,cap-used,"%s%s",used?", ":"",name);
+  }
+ };
+ add("/data/PS4NeuralEngine/captures/frametimes.csv","frametimes.csv");
+ DIR* d=opendir("/data/PS4NeuralEngine/captures");
+ if(d){struct dirent* e;while((e=readdir(d))!=nullptr){
+  const char* n=e->d_name;size_t len=strlen(n);
+  if(len<5||strcmp(n+len-4,".bmp")!=0)continue;
+  bool safe=true;for(size_t i=0;i<len;i++){char c=n[i];if(!((c>='a'&&c<='z')||(c>='A'&&c<='Z')||(c>='0'&&c<='9')||c=='_'||c=='-'||c=='.')){safe=false;break;}}
+  if(!safe)continue;
+  char path[512];if(snprintf(path,sizeof(path),"/data/PS4NeuralEngine/captures/%s",n)<(int)sizeof(path))add(path,n);
+ }closedir(d);}
+ return count>0;
+}
 void* upload_thread(void*) {
  bool ok=upload_log();
  NotifyStatic(TEX_ICON_SYSTEM,ok?"PNE: lote enviado ao GitHub":"PNE: falha ao enviar lote GitHub");
@@ -226,8 +248,20 @@ extern "C" int pne_github_begin_authorization(void) {
 extern "C" int pne_github_upload_confirmed_log(void) {
  pthread_mutex_lock(&g_lock);
  if(g_upload_active || !g_authorized){pthread_mutex_unlock(&g_lock);return 0;}
+ pthread_mutex_unlock(&g_lock);
+ size_t count=0;uint64_t bytes=0;char names[160];
+ if(!preview_upload_batch(count,bytes,names,sizeof(names)))return 0;
+ pthread_mutex_lock(&g_lock);
+ if(!g_upload_pending || count!=g_pending_count || bytes!=g_pending_bytes) {
+  g_upload_pending=true;g_pending_count=count;g_pending_bytes=bytes;
+  pthread_mutex_unlock(&g_lock);
+  char note[256];snprintf(note,sizeof(note),"Lote: %u arquivos, %.2f MB: %s",
+   (unsigned)count,(double)bytes/(1024.0*1024.0),names);
+  NotifyStatic(TEX_ICON_SYSTEM,note);
+  return 2;
+ }
+ g_upload_pending=false;g_upload_active=true;
  if(g_upload_joinable){pthread_t old=g_upload_thread;pthread_mutex_unlock(&g_lock);pthread_join(old,nullptr);pthread_mutex_lock(&g_lock);g_upload_joinable=false;}
- g_upload_active=true;
  if(pthread_create(&g_upload_thread,nullptr,upload_thread,nullptr)!=0){g_upload_active=false;pthread_mutex_unlock(&g_lock);return 0;}
  g_upload_joinable=true;pthread_mutex_unlock(&g_lock);return 1;
 }
@@ -240,6 +274,6 @@ extern "C" void pne_github_disconnect(void) {
  if(upload_join)pthread_join(ut,nullptr);
  pthread_mutex_lock(&g_lock);g_auth_joinable=false;g_upload_joinable=false;
  if(!g_token.empty())memset(&g_token[0],0,g_token.size());
- g_token.clear();g_authorized=false;pthread_mutex_unlock(&g_lock);
+ g_token.clear();g_authorized=false;g_upload_pending=false;g_pending_count=0;g_pending_bytes=0;pthread_mutex_unlock(&g_lock);
  close_http();
 }
