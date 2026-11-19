@@ -37,7 +37,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          TOOL="OrbisPkgTool-src/OrbisPkgTool/bin/Release/net10.0/OrbisPkgTool.dll"
+          TOOL="OrbisPkgTool-src/OrbisPkgTool/bin/Release/net10.0-windows/OrbisPkgTool.dll"
           PKG="base-artifact/pkg/PS4-Neural-Engine-002.pkg"
           test -s "$PKG"
           dotnet "$TOOL" extract "$PKG" base-extracted --verbose
