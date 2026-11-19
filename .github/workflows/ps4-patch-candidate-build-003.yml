@@ -78,7 +78,7 @@ jobs:
           $basePkg = Join-Path $env:GITHUB_WORKSPACE "base-artifact/pkg/PS4-Neural-Engine-002.pkg"
           if (-not (Test-Path $basePkg)) { throw "Base PKG 002 not found: $basePkg" }
           $tool = "OrbisPkgTool-src/OrbisPkgTool/bin/Release/net10.0-windows/OrbisPkgTool.dll"
-          $pubCmd = Get-Content "$env:RUNNER_TEMP\tool-path.txt" | Where-Object { $_ -like "ORBiS_PUB_CMD=*" } | ForEach-Object { $_.Substring(13) }
+          $pubCmd = Get-Content "$env:RUNNER_TEMP\tool-path.txt" | Where-Object { $_ -like "ORBiS_PUB_CMD=*" } | ForEach-Object { $_.Substring(14) }
           if (-not (Test-Path $pubCmd)) { throw "orbis-pub-cmd path invalid." }
 
           $work = Join-Path $env:RUNNER_TEMP "patch-003"
