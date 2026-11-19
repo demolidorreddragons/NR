@@ -57,7 +57,7 @@ static void *input_thread(void *arg) {
   atomic_store(&g_running, false);
   return NULL;
  }
- bool was_down = false, auth_was_down = false, upload_was_down = false;
+ bool was_down = false, auth_was_down = false, upload_was_down = false, disconnect_was_down = false;
  int handle = 0;
  while (atomic_load(&g_running)) {
   if (handle <= 0) handle = open_pad();
@@ -95,7 +95,7 @@ static void *input_thread(void *arg) {
     ORBIS_PAD_BUTTON_L1 | ORBIS_PAD_BUTTON_R1 | ORBIS_PAD_BUTTON_SQUARE;
    if ((data.buttons & quit) == quit) atomic_store(&g_running, false);
   } else {
-   was_down = auth_was_down = upload_was_down = false;
+   was_down = auth_was_down = upload_was_down = disconnect_was_down = false;
    if (handle > 0) handle = 0;
   }
   sceKernelUsleep(50000);
