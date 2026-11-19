@@ -19,7 +19,9 @@ int g_pool=-1, g_ssl=-1, g_http=-1, g_template=-1;
 pthread_mutex_t g_lock=PTHREAD_MUTEX_INITIALIZER;
 std::string g_token;
 bool g_authorized=false, g_auth_active=false, g_auth_joinable=false;
-bool g_upload_active=false, g_upload_joinable=false, g_cancel_auth=false, g_upload_pending=false;\nsize_t g_pending_count=0;\nuint64_t g_pending_bytes=0;
+bool g_upload_active=false, g_upload_joinable=false, g_cancel_auth=false, g_upload_pending=false;
+size_t g_pending_count=0;
+uint64_t g_pending_bytes=0;
 pthread_t g_auth_thread, g_upload_thread;
 constexpr size_t kMaxResponse=65536;
 constexpr size_t kMaxUpload=16*1024*1024;
@@ -204,7 +206,7 @@ bool upload_log() {
  return any&&ok;
 }
 bool preview_upload_batch(size_t& count,uint64_t& bytes,char* sample,size_t cap) {
- count=0;bytes=0;if(cap)sample[0]='\\0';
+ count=0;bytes=0;if(cap)sample[0]='\0';
  auto add=[&](const char* path,const char* name) {
   struct stat st;if(stat(path,&st)!=0||!S_ISREG(st.st_mode)||st.st_size<=0)return;
   ++count;bytes+=(uint64_t)st.st_size;
