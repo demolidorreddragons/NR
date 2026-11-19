@@ -50,13 +50,11 @@ Source artifact: build run 44623808730, artifact 14578192913.
 - Host tests on the same commit passed (run 44631789523).
 - Supporting references: Fake PKG Tools' documented Patch tab > Application Package and the `orbis-pub-cmd gp4_proj_create --app_path` flow are described in the external references linked in the engineering investigation. The required builder path must expose equivalent functionality.
 
-
 ## Non-game patch metadata and isolated toolchain probe (2026-11-19)
 - PS4DevWiki's PARAM.SFO category table maps `gde` to a non-game mini app and `gpe` to a non-game mini-app patch. This is stronger platform-specific evidence than extrapolating the game-only `gp` category. It remains necessary to verify the generated PARAM.SFO and GP4 against the patch builder output; do not hand-edit metadata and call it validated.
 - A disposable GitHub-hosted Windows workflow was added at `.github/workflows/ps4-isolated-patch-toolchain-probe.yml`. It downloads the pinned CyB1K Fake PKG Tools v7 release asset (6,674,278 bytes), extracts it only on an ephemeral hosted runner, records SHA-256 hashes and tool versions, and probes the CLI/patch-generator usage. It does not run on the self-hosted PS4 bridge and has no PS4 network access or deployment secrets.
 - Probe workflow run: 44633179181. Awaiting completion and evidence review.
 - The release asset is a third-party precompiled archive; a computed hash is provenance evidence for this run, not an independent authenticity guarantee. Do not copy these binaries to the PS4 bridge. Any subsequent PKG build remains an isolated experiment until its patch association, category, version, and structure are independently inspected.
-
 
 ### Isolated Fake PKG Tools probe result (2026-11-19, run 44633288784)
 - Hosted Windows runner completed successfully; artifact `ps4-patch-toolchain-probe-evidence` (artifact ID `14583107349`) retained the evidence.
@@ -70,7 +68,6 @@ Source artifact: build run 44623808730, artifact 14578192913.
 - Important: these hashes establish what the hosted runner downloaded and inspected, not independent publisher authenticity. No binaries were copied to the self-hosted bridge or PS4. No package was built or installed.
 - Follow-up probe workflow run: 44633403669.
 
-
 ### Real base-package patch association proven (2026-11-19, run 44633531153)
 - Downloaded the actual PKG 002 artifact into a disposable GitHub-hosted Windows runner and ran the pinned `orbis-pub-cmd.exe` against it.
 - Command completed with exit code 0 using `gp4_proj_create --volume_type pkg_ps4_patch --content_id IV0000-PNEU00001_00-PS4NEURALENG0000 --passcode 00000000000000000000000000000000 --entitlement_key 00000000000000000000000000000000 --storage_type digital25 --app_path <actual-base.pkg> <output.gp4>`.
@@ -80,14 +77,12 @@ Source artifact: build run 44623808730, artifact 14578192913.
 - PS4 PARAM.SFO reference table explicitly maps `gde` to “Non-Game Mini App” and `gpe` to “Non-Game Mini App Patch”. The next step is to stage the changed payload, set patch SFO metadata, add files to this associated GP4, and audit the complete project before any PKG build.
 - The generator's `gengp4_patch.exe --help` is not a usable CLI help switch (it treats `--help` as a directory); no-argument and `/?` invocations can open/block, so the workflow bounds and terminates them. Use the command-line `orbis-pub-cmd` route for reproducible automation.
 
-
 ### Patch build blocker identified (2026-11-19, run 44634035504)
 - The associated GP4 is valid and contains four planned payload entries (eboot, PRX, PARAM.SFO, changeinfo) after the next workflow revision; the initial package-build attempt reached `img_create` but failed with: `Volume Type/Storage Type ... (app:unknown, patch:digital25)`.
 - The base PKG header is `content_type=0x1A` (PS4 game-data/application base) and its SFO is `CATEGORY=gde`, `APP_VER=01.00`, `CONTENT_ID=IV0000-PNEU00001_00-PS4NEURALENG0000`. The OrbisPkgTool viewer's label `Addon` is not authoritative here: its classifier only recognizes `gd/gp/ac` and falls back to Addon for `gde`; it does not change the header's 0x1A application type.
 - The failure indicates Fake PKG Tools' publisher generator cannot currently resolve the base/patch storage-type pairing from this base package. Its SFO `PUBTOOLINFO` lacks an explicit `st_type` token even though the original GP4 was `storage_type=digital50`. This is the leading hypothesis, not yet proven.
 - The patch format requires `sce_sys/changeinfo/changeinfo.xml`; the initial candidate omitted it and the generator warned that the package would not be importable into GEMS. The follow-up adds a valid changeinfo file and probes `digital50` rather than `digital25`.
 - Follow-up run: 44634453533. Do not install any candidate from these failed builds. No PKG was produced, and the PS4 remains untouched.
-
 
 ### Category-pair diagnostic rejected (2026-11-19, run 44636671853)
 - The isolated hosted Windows run successfully built OrbisPkgTool, downloaded the exact PKG 002 artifact, verified and extracted the pinned Fake PKG Tools v7 archive, and generated an associated patch GP4 with four payload entries.
@@ -97,15 +92,13 @@ Source artifact: build run 44623808730, artifact 14578192913.
 - The workflow also contains a misleading report line that labels the real base path even though the GP4 command in this diagnostic run used the synthetic base path. Do not treat that line as association evidence.
 - Artifact 14584861239 contains only the diagnostic report/SFO evidence; it is not an installable PKG.
 - Host tests passed (run 44636671798). Package build failed (run 44636671853). No package was installed and the PS4 was not contacted.
-- Engineering action: retire this mixed game/non-game diagnostic. The next experiment must use the exact original PKG 002 as --app_path, preserve the base category, use only the hypothesized non-game patch category gpe, and test the publisher metadata as an isolated variable. If the tool rejects the original base SFO, stop and investigate the required official metadata rather than rewriting categories or fabricating a base package.
-
+- Engineering action: retire this mixed game/non-game diagnostic. The next experiment must use the exact original PKG 002 as `--app_path`, preserve the base category, use only the hypothesized non-game patch category gpe, and test the publisher metadata as an isolated variable. If the tool rejects the original base SFO, stop and investigate the required official metadata rather than rewriting categories or fabricating a base package.
 
 ### Engineering correction: use the real base package (2026-11-19)
 - Log review of run 44634453533 showed `orbis-pub-cmd` rejected `--storage_type digital50` as an invalid CLI value. The patch builder's accepted probe value remains `digital25`; do not pass `digital50` to this command.
 - Review of workflow 44636671853 confirmed that the test built and associated a synthetic diagnostic base instead of the real PKG 002. Its `param.sfo` was deliberately removed before building that synthetic base, making the subsequent `param.sfo(in app pkg)` failure a contaminated diagnostic, not proof that the real base is incompatible.
 - Engineering commit `5522336d1440ba6d1492f4a0d738a6f6662b71dc` removes the synthetic-base/game-category experiment. The candidate workflow now uses the exact original PKG 002 as `--app_path`, retains the real base's `gde` metadata untouched, changes only the candidate patch SFO to the hypothesized `gpe` category, and verifies that the GP4 association names `PS4-Neural-Engine-002.pkg`.
 - New build run 44637080299 and host-test run 44637080302 were queued against commit 5522336d. Await their logs and independent QA. This is an engineering correction, not a successful PKG build; no candidate has been approved or installed.
-
 
 ### Exact-base build result and next diagnostic (2026-11-19, run 44637307373)
 - The workflow used the exact original PKG 002 as `--app_path`; its package inspection reported Title ID `PNEU00001`, Content ID `IV0000-PNEU00001_00-PS4NEURALENG0000`, header content type `0x1A`, and SFO category `gde`. The patch SFO readback correctly preserved `TITLE_ID`/Content ID, set `CATEGORY=gpe`, `APP_VER=01.01`, and integer `ATTRIBUTE=0x00800002`.
@@ -115,19 +108,26 @@ Source artifact: build run 44623808730, artifact 14578192913.
 - Leading issue to isolate now: the publisher tool is not resolving the base package's storage type while consuming the GP4's relative `app_path`. Engineering changed the workflow to pass the fully resolved absolute base-PKG path and record it in the report (commit `516769b80a973240471fc21a75c694f52d1e5dbc`). The first run triggered by the intermediate commit is 44637565124; the final absolute-path commit triggers a follow-up run. This is a targeted diagnostic, not a claimed fix.
 - No PKG was installed, no PS4 connection was made, and no saves, app data, canonical PRX, or `plugins.ini` were modified.
 
-
 ### Root cause isolated: base storage type absent from PARAM.SFO (2026-11-19)
 - The exact-base run 44640499534 again reached Sony `img_create` and failed with `(app:unknown, patch:digital25)`. Its report explicitly records the original base SFO's `PUBTOOLINFO` without any `st_type=` token.
-- This is not a generic category-classification problem. The PS4 PARAM.SFO reference documents `st_type` as a PUBTOOLINFO storage-type field, with `digital50` and `digital25` as distinct values. A public PS4 package utility independently determines a package's storage type by searching its PUBTOOLINFO string for those tokens. Therefore the base GP4's `storage_type=digital50` does not guarantee the built PKG carries the metadata needed by Fake PKG Tools' base-package resolver.
+- The PS4 PARAM.SFO reference documents `st_type` as a PUBTOOLINFO storage-type field, with `digital50` and `digital25` as distinct values. A public PS4 package utility independently determines a package's storage type by searching its PUBTOOLINFO string for those tokens. Therefore the base GP4's `storage_type=digital50` does not guarantee the built PKG carries the metadata needed by Fake PKG Tools' base-package resolver.
 - The original `tools/build_pkg.sh` creates CATEGORY `gde` but never explicitly writes PUBTOOLINFO. The built base package consequently lacks `st_type=digital50`, which explains the resolver's `app:unknown` result more directly than the earlier OrbisPkgTool viewer label.
 - Engineering commit `2707fd4affadeb3f1bda0d2310d02f28d68af3ff` adds an explicit 512-byte PUBTOOLINFO value containing `st_type=digital50` to the base SFO generation step. This is a targeted base-package metadata correction, not yet validated.
 - Engineering commit `c3c1fd2a6f158be3b21c66e3e1c230aa85ca9023` adds a patch-build preflight that rejects a base package whose extracted PUBTOOLINFO has no `st_type`, preventing another pointless `app:unknown` build.
 - Next gate: inspect the new base PKG 002 artifact after run 44641114863. Confirm the extracted SFO contains `st_type=digital50`, and that Sony package validation and independent PKG inspection still pass. Only then update the patch workflow's pinned base-artifact run ID and attempt patch generation again.
 - No existing PS4 installation, saves, application data, canonical PRX, or `plugins.ini` was touched.
 
-
 ### Correction: the immediate failure was a stale pinned base artifact
 - The base build run `44641114863` succeeded after commit `2707fd4`. Its build log confirms `PUBTOOLINFO = c_date=20261119,...,st_type=digital50` before package creation, and PKG hash/signature validation passed. Artifact ID: `14585159593`.
 - The first patch attempt after that change still downloaded the older artifact from run `44623808730`. Its extracted SFO correctly lacked `st_type`, so the new preflight failed as designed. The base-generation change itself was present and working; the patch workflow's pinned artifact reference was stale.
 - Commit `41d5b4a4b0172ef7664ab287a759067211c6be4a` updates the patch workflow to download base PKG 002 from run `44641114863`. Its associated patch build is run `44641439173`; inspect its final logs and artifact before making any further metadata changes.
 - Do not infer success from the preflight alone. The required next evidence is that the new base SFO readback contains `st_type=digital50`, then Fake PKG Tools accepts the base/patch storage pairing and Sony `img_create` completes, followed by independent validation and readback.
+
+### Engineering root-cause correction: PkgTool.Core overwrites PUBTOOLINFO during package build (2026-11-19)
+- Patch run `44641439173` completed with failure; host tests run `44641439250` passed.
+- The patch workflow downloaded the rebuilt artifact from run `44641114863` successfully, extracted the exact PKG 002, and read its embedded `Sc0/param.sfo`. The embedded value is `PUBTOOLINFO = c_date=20261119,img0_l0_size=7,img0_l1_size=0,img0_sc_ksize=512,img0_pc_ksize=832` — no `st_type`. The preflight correctly stopped before patch GP4 generation.
+- This disproves the prior claim that the new PKG 002 artifact contained the storage-type field. The base build log only inspected the staged SFO **before** `PkgTool.Core pkg_build`; it did not inspect the final PKG's embedded SFO. The successful PKG hash/signature validation did not validate the intended custom SFO metadata.
+- Source inspection of the LibOrbisPkg `PkgBuilder` implementation shows why: after reading the staged `sce_sys/param.sfo`, the builder unconditionally assigns a new `PUBTOOLINFO` value composed from the date and image-size fields, replacing the entire previous value. Thus `st_type=digital50` is discarded during `pkg_build`. Reference: https://github.com/maxton/LibOrbisPkg/blob/master/LibOrbisPkg/PKG/PkgBuilder.cs
+- Do not patch the SFO before `pkg_build` and assume it survives. The next engineering route must use a builder that preserves the field, or a controlled source-level change to the package builder followed by full rebuild and final-PKG SFO readback. Do not hand-edit the built PKG's SFO without rebuilding all dependent PKG hashes/signatures.
+- The candidate artifact from run `44641439173` is a 1,318-byte diagnostic report only; it contains no PKG. It is not installable.
+- No PKG was installed, the PS4 was not contacted, and PRX activation, plugins.ini, saves, and app data remain untouched.
