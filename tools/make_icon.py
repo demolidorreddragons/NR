@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
-import math, struct, zlib, sys
+import struct, zlib, sys
 W = H = 512
+pts = [(-125,-70),(-30,-130),(75,-95),(135,-5),(65,95),(-55,115),(-135,35),(0,0)]
+edges = [(0,1),(1,2),(2,3),(3,4),(4,5),(5,6),(6,0),(0,7),(1,7),(2,7),(3,7),(4,7),(5,7),(6,7)]
 rows = []
 for y in range(H):
     row = bytearray([0])
@@ -10,12 +12,11 @@ for y in range(H):
         g = int(20 + 12 * y / H)
         b = int(42 + 24 * y / H)
         # A simple original neural-network mark.
-        pts = [(-125,-70),(-30,-130),(75,-95),(135,-5),(65,95),(-55,115),(-135,35),(0,0)]
         lit = False
         for ax, ay in pts:
             if (dx-ax)**2 + (dy-ay)**2 < 17**2:
                 lit = True
-        for i, j in [(0,1),(1,2),(2,3),(3,4),(4,5),(5,6),(6,0),(0,7),(1,7),(2,7),(3,7),(4,7),(5,7),(6,7)]:
+        for i, j in edges:
             x1,y1=pts[i]; x2,y2=pts[j]
             vx,vy=x2-x1,y2-y1
             t=max(0,min(1,((dx-x1)*vx+(dy-y1)*vy)/(vx*vx+vy*vy)))
