@@ -4,7 +4,7 @@ OUTDIR := $(ROOT)/dist/ps4
 TOOLCHAIN := $(OO_PS4_TOOLCHAIN)
 GH_SDK := $(GOLDHEN_SDK)
 PLUGIN := ps4_neural_engine
-# GitHub HTTPS client is compiled into the PRX for opt-in Device Flow uploads.\n# Build validation follows every uploader source change.
+# GitHub HTTPS client is compiled into the PRX for opt-in Device Flow uploads.\n# Build validation follows every uploader source change.\n# Includes explicit local disconnect shortcut support.
 TARGET_ELF := $(OUTDIR)/$(PLUGIN).elf
 TARGET_PRX := $(OUTDIR)/$(PLUGIN).prx
 UNAME_S := $(shell uname -s)
