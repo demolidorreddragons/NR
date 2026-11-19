@@ -8,29 +8,56 @@ permissions:
   actions: read
   contents: read
 jobs:
-  audit:
+  network-specialist:
     runs-on: [self-hosted, Windows, X64, ps4-lan]
     steps:
-      - name: Compare FTP RETR bytes for known plugin files
+      - name: Download reference PRX
+        uses: actions/download-artifact@v4
+        with:
+          name: ps4-neural-engine-build
+          path: transfer
+          repository: demolidorreddragons/NR
+          run-id: 44623808730
+          github-token: ${{ github.token }}
+      - name: Test isolated DAT to PRX rename with server replies
         shell: powershell -NoProfile -ExecutionPolicy Bypass -File {0}
         env:
           PS4_IP: ${{ vars.PS4_IP }}
         run: |
           $ErrorActionPreference = "Continue"
+          $archive = Join-Path $env:GITHUB_WORKSPACE "transfer/goldhen/PS4-Neural-Engine-GoldHEN.zip"
+          $extract = Join-Path $env:RUNNER_TEMP "pne-network-009"
+          New-Item -ItemType Directory -Force -Path $extract | Out-Null
+          Expand-Archive -LiteralPath $archive -DestinationPath $extract -Force
+          $source = Join-Path $extract "ps4_neural_engine.prx"
+          $size = (Get-Item $source).Length
+          $hash = (Get-FileHash $source -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($size -ne 206528 -or $hash -ne "531e41aa3f4535e6004d47900f636d6e2a4b1ce2b2709f165db77ebef7e0a3f0") { throw "Reference identity mismatch" }
           $base = "ftp://$($env:PS4_IP):2121/data/GoldHEN/plugins/"
-          $names = @("ps4_neural_engine.prx","ps4_neural_engine_002.prx","ps4_neural_engine_003.prx","ps4_neural_engine_004.prx","pne_payload_probe_006.prx","pne_payload_probe_006.dat","pne_network_008_stage.dat")
-          $dir = Join-Path $env:RUNNER_TEMP "pne-readback-009"
-          New-Item -ItemType Directory -Force -Path $dir | Out-Null
-          foreach ($name in $names) {
-            $dest = Join-Path $dir ($name + ".bin")
-            $out = & curl.exe --fail --silent --show-error --ftp-pasv --user "anonymous:anonymous@example.com" --output $dest ($base + $name) 2>&1
-            $code = $LASTEXITCODE
-            foreach ($line in $out) { Write-Host ([string]$line) }
-            if ($code -eq 0 -and (Test-Path $dest)) {
-              $size = (Get-Item $dest).Length
-              $hash = (Get-FileHash $dest -Algorithm SHA256).Hash.ToLowerInvariant()
-              Write-Host "RETR name=$name bytes=$size sha256=$hash"
-            } else {
-              Write-Host "RETR name=$name exit=$code"
-            }
+          $creds = "anonymous:anonymous@example.com"
+          $stage = "pne_network_009_stage.dat"
+          $target = "pne_network_009_target.prx"
+          $upload = & curl.exe --fail --silent --show-error --ftp-pasv --user $creds --upload-file $source ($base + $stage) 2>&1
+          $uploadCode = $LASTEXITCODE
+          $upload | ForEach-Object { Write-Host ([string]$_) }
+          Write-Host "STAGE_UPLOAD_EXIT=$uploadCode"
+          if ($uploadCode -ne 0) { throw "STAGE_UPLOAD_FAILED" }
+          $renameLog = Join-Path $env:RUNNER_TEMP "pne-network-009-rename.log"
+          $rename = & curl.exe --verbose --ftp-pasv --user $creds --quote ("RNFR " + $stage) --quote ("RNTO " + $target) $base 2>&1
+          $renameCode = $LASTEXITCODE
+          $rename | ForEach-Object { [string]$_ } | Set-Content -LiteralPath $renameLog
+          Get-Content -LiteralPath $renameLog | ForEach-Object { Write-Host $_ }
+          Write-Host "RENAME_EXIT=$renameCode"
+          $renameText = Get-Content -LiteralPath $renameLog -Raw
+          $replies = [regex]::Matches($renameText, '(?m)<\\s*[0-9]{3}[^\\r\\n]*')
+          foreach ($reply in $replies) { Write-Host ("FTP_SERVER_REPLY " + $reply.Value) }
+          $list = & curl.exe --silent --show-error --ftp-pasv --user $creds $base 2>&1
+          $listCode = $LASTEXITCODE
+          Write-Host "POST_RENAME_LIST_EXIT=$listCode"
+          $list | ForEach-Object { Write-Host ([string]$_) }
+          foreach ($probe in @($stage,$target)) {
+            $cleanup = & curl.exe --silent --show-error --ftp-pasv --user $creds --quote ("DELE " + $probe) $base 2>&1
+            $cleanupCode = $LASTEXITCODE
+            Write-Host "OWN_PROBE_CLEANUP name=$probe exit=$cleanupCode"
+            $cleanup | ForEach-Object { Write-Host ([string]$_) }
           }
