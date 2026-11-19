@@ -1,0 +1,82 @@
+name: PS4 Neural Engine PRX Deployment 005
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/ps4-prx-deploy-005.yml"
+permissions:
+  actions: read
+  contents: read
+jobs:
+  deploy:
+    runs-on: [self-hosted, Windows, X64, ps4-lan]
+    steps:
+      - name: Download verified PRX artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ps4-neural-engine-build
+          path: transfer
+          repository: demolidorreddragons/NR
+          run-id: 44623808730
+          github-token: ${{ github.token }}
+      - name: Deploy to a new non-registered filename
+        shell: powershell -NoProfile -ExecutionPolicy Bypass -File {0}
+        env:
+          PS4_IP: ${{ vars.PS4_IP }}
+        run: |
+          $ErrorActionPreference = "Continue"
+          $archive = Join-Path $env:GITHUB_WORKSPACE "transfer/goldhen/PS4-Neural-Engine-GoldHEN.zip"
+          $extract = Join-Path $env:RUNNER_TEMP "pne-deploy-005"
+          New-Item -ItemType Directory -Force -Path $extract | Out-Null
+          Expand-Archive -LiteralPath $archive -DestinationPath $extract -Force
+          $source = Join-Path $extract "ps4_neural_engine.prx"
+          $expectedSize = (Get-Item $source).Length
+          $expectedHash = (Get-FileHash $source -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($expectedSize -ne 206528 -or $expectedHash -ne "531e41aa3f4535e6004d47900f636d6e2a4b1ce2b2709f165db77ebef7e0a3f0") { throw "SOURCE_IDENTITY_MISMATCH" }
+
+          $base = "ftp://$($env:PS4_IP):2121/"
+          $dirUrl = $base + "data/GoldHEN/plugins/"
+          $creds = "anonymous:anonymous@example.com"
+          $stage = "pne_deploy_005_stage.dat"
+          $target = "ps4_neural_engine_005.prx"
+          $listingPath = Join-Path $env:RUNNER_TEMP "pne-deploy-005-list.txt"
+          $listing = & curl.exe --fail --silent --show-error --ftp-pasv --user $creds $dirUrl 2>&1
+          $listCode = $LASTEXITCODE
+          if ($listCode -ne 0) { throw "INITIAL_LIST_FAILED=$listCode" }
+          $listingText = ($listing | ForEach-Object { [string]$_ }) -join "`n"
+          if ($listingText -match "(?m)\\s$([regex]::Escape($target))$") { throw "TARGET_ALREADY_EXISTS_REFUSING_OVERWRITE" }
+
+          $upload = & curl.exe --fail --silent --show-error --ftp-pasv --user $creds --upload-file $source ($dirUrl + $stage) 2>&1
+          $uploadCode = $LASTEXITCODE
+          $upload | ForEach-Object { Write-Host ([string]$_) }
+          if ($uploadCode -ne 0) { throw "STAGE_UPLOAD_FAILED=$uploadCode" }
+
+          $readback = Join-Path $env:RUNNER_TEMP "pne-deploy-005-stage.bin"
+          $download = & curl.exe --fail --silent --show-error --ftp-pasv --user $creds --output $readback ($dirUrl + $stage) 2>&1
+          $downloadCode = $LASTEXITCODE
+          $download | ForEach-Object { Write-Host ([string]$_) }
+          if ($downloadCode -ne 0) { throw "STAGE_READBACK_FAILED=$downloadCode" }
+          $actualSize = (Get-Item $readback).Length
+          $actualHash = (Get-FileHash $readback -Algorithm SHA256).Hash.ToLowerInvariant()
+          Write-Host "STAGE_VERIFIED bytes=$actualSize sha256=$actualHash"
+          if ($actualSize -ne $expectedSize -or $actualHash -ne $expectedHash) { throw "STAGE_INTEGRITY_MISMATCH" }
+
+          $rename = & curl.exe --verbose --ftp-pasv --user $creds --quote "CWD data" --quote "CWD GoldHEN" --quote "CWD plugins" --quote ("RNFR " + $stage) --quote ("RNTO " + $target) $base 2>&1
+          $renameCode = $LASTEXITCODE
+          $rename | ForEach-Object { Write-Host ([string]$_) }
+          Write-Host "RENAME_EXIT=$renameCode"
+          if ($renameCode -ne 0) { throw "PRX_RENAME_FAILED=$renameCode" }
+
+          $finalListing = & curl.exe --fail --silent --show-error --ftp-pasv --user $creds $dirUrl 2>&1
+          $finalCode = $LASTEXITCODE
+          if ($finalCode -ne 0) { throw "FINAL_LIST_FAILED=$finalCode" }
+          $finalText = ($finalListing | ForEach-Object { [string]$_ }) -join "`n"
+          $match = [regex]::Match($finalText, "(?m)^\\S+\\s+\\d+\\s+\\d+\\s+\\d+\\s+(\\d+)\\s+.*\\s" + [regex]::Escape($target) + "$")
+          if (-not $match.Success) {
+            $finalListing | ForEach-Object { Write-Host ([string]$_) }
+            throw "TARGET_NOT_FOUND_IN_FINAL_LIST"
+          }
+          $remoteSize = [int64]$match.Groups[1].Value
+          Write-Host "DEPLOYED_UNREGISTERED_PRX path=/data/GoldHEN/plugins/$target listed_bytes=$remoteSize expected_bytes=$expectedSize"
+          if ($remoteSize -ne $expectedSize) { throw "FINAL_LIST_SIZE_MISMATCH" }
+          Write-Host "DEPLOYMENT_005_TRANSFER_VERIFIED_NOT_REGISTERED"
