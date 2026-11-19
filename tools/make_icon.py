@@ -33,4 +33,7 @@ png = b"\x89PNG\r\n\x1a\n"
 png += chunk(b"IHDR", struct.pack(">2I5B", W, H, 8, 2, 0, 0, 0))
 png += chunk(b"IDAT", zlib.compress(raw, 9))
 png += chunk(b"IEND", b"")
-output = sys.argv[1] if len(sys.argv) > 1 else "sce_sys/icon0.png"\nimport os\nos.makedirs(os.path.dirname(output) or ".", exist_ok=True)\nopen(output, "wb").write(png)
+output = sys.argv[1] if len(sys.argv) > 1 else "sce_sys/icon0.png"
+import os
+os.makedirs(os.path.dirname(output) or ".", exist_ok=True)
+open(output, "wb").write(png)
