@@ -2,16 +2,19 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <ctype.h>
 #include <sys/stat.h>
+#include <unistd.h>
 #include <orbis/libkernel.h>
 
 #define SOURCE_PRX "/app0/ps4_neural_engine.prx"
 #define DEST_DIR "/data/GoldHEN/plugins"
 #define DEST_PRX DEST_DIR "/ps4_neural_engine.prx"
-#define DEST_TMP DEST_PRX ".tmp"
+#define DEST_TMP DEST_PRX ".pne-tmp"
 #define CONFIG "/data/GoldHEN/plugins.ini"
-#define CONFIG_TMP "/data/GoldHEN/plugins.ini.pne-tmp"
-#define CONFIG_LINE DEST_PRX
+#define CONFIG_TMP CONFIG ".pne-tmp"
+#define STATUS "/data/GoldHEN/ps4_neural_engine_install.log"
+#define MAX_CONFIG 65536
 
 static void notify(const char* message) {
     OrbisNotificationRequest request;
@@ -24,11 +27,24 @@ static void notify(const char* message) {
     sceKernelSendNotificationRequest(0, &request, sizeof(request), 0);
 }
 
+static void write_status(const char* message) {
+    FILE* f = fopen(STATUS, "wb");
+    if (!f) return;
+    fprintf(f, "PS4 Neural Engine installer\n%s\n", message);
+    fflush(f);
+    fsync(fileno(f));
+    fclose(f);
+}
+
 static int copy_prx(void) {
+    struct stat src_stat, dst_stat;
+    if (stat(SOURCE_PRX, &src_stat) != 0 || src_stat.st_size <= 0) return 0;
+
     FILE* in = fopen(SOURCE_PRX, "rb");
     if (!in) return 0;
     FILE* out = fopen(DEST_TMP, "wb");
     if (!out) { fclose(in); return 0; }
+
     char buffer[16384];
     size_t n;
     int ok = 1;
@@ -36,47 +52,87 @@ static int copy_prx(void) {
         if (fwrite(buffer, 1, n, out) != n) { ok = 0; break; }
     }
     if (ferror(in)) ok = 0;
+    if (fflush(out) != 0 || fsync(fileno(out)) != 0) ok = 0;
     if (fclose(in) != 0) ok = 0;
     if (fclose(out) != 0) ok = 0;
-    if (!ok || rename(DEST_TMP, DEST_PRX) != 0) { remove(DEST_TMP); return 0; }
+
+    if (!ok || stat(DEST_TMP, &dst_stat) != 0 ||
+        dst_stat.st_size != src_stat.st_size ||
+        rename(DEST_TMP, DEST_PRX) != 0) {
+        remove(DEST_TMP);
+        return 0;
+    }
     return 1;
 }
 
+static void trim_line(char* line) {
+    size_t n = strlen(line);
+    while (n && (line[n-1] == '\r' || line[n-1] == '\n' ||
+                 isspace((unsigned char)line[n-1]))) line[--n] = 0;
+    char* p = line;
+    while (*p && isspace((unsigned char)*p)) p++;
+    if (p != line) memmove(line, p, strlen(p) + 1);
+}
+
 static int configure_loader(void) {
-    char input[32768];
-    size_t length = 0;
+    char input[MAX_CONFIG];
+    char output[MAX_CONFIG + 256];
+    size_t length = 0, used = 0;
     FILE* in = fopen(CONFIG, "rb");
     if (in) {
         length = fread(input, 1, sizeof(input)-1, in);
         if (ferror(in) || !feof(in)) { fclose(in); return 0; }
         fclose(in);
     }
-    input[length] = '\0';
-    if (strstr(input, CONFIG_LINE)) return 1;
+    input[length] = 0;
+
+    int in_default = 0, found_default = 0, found_entry = 0, inserted = 0;
+    size_t pos = 0;
+    while (pos < length) {
+        size_t start = pos;
+        while (pos < length && input[pos] != '\n') pos++;
+        if (pos < length) pos++;
+        size_t line_len = pos - start;
+        char line[512];
+        size_t copy_len = line_len < sizeof(line)-1 ? line_len : sizeof(line)-1;
+        memcpy(line, input + start, copy_len);
+        line[copy_len] = 0;
+        trim_line(line);
+
+        if (line[0] == '[') {
+            in_default = strcmp(line, "[default]") == 0;
+            if (in_default) found_default = 1;
+        }
+        if (in_default && strcmp(line, DEST_PRX) == 0) found_entry = 1;
+
+        if (used + line_len + 1 >= sizeof(output)) return 0;
+        memcpy(output + used, input + start, line_len);
+        used += line_len;
+
+        if (in_default && !inserted && !found_entry &&
+            strcmp(line, "[default]") == 0) {
+            int n = snprintf(output + used, sizeof(output)-used, "%s\n", DEST_PRX);
+            if (n < 0 || (size_t)n >= sizeof(output)-used) return 0;
+            used += (size_t)n;
+            inserted = 1;
+        }
+    }
+
+    if (found_entry) return 1;
+
+    if (!found_default) {
+        if (used && output[used-1] != '\n') output[used++] = '\n';
+        const char* suffix = "\n[default]\n" DEST_PRX "\n";
+        size_t n = strlen(suffix);
+        if (used + n >= sizeof(output)) return 0;
+        memcpy(output + used, suffix, n);
+        used += n;
+    }
 
     FILE* out = fopen(CONFIG_TMP, "wb");
     if (!out) return 0;
-    char* section = NULL;
-    char* cursor = input;
-    while (*cursor) {
-        char* line_end = strchr(cursor, '\n');
-        size_t line_len = line_end ? (size_t)(line_end - cursor + 1) : strlen(cursor);
-        if ((line_len >= 9 && strncmp(cursor, "[default]", 9) == 0)) {
-            section = cursor + line_len;
-            break;
-        }
-        cursor += line_len;
-    }
-    int ok = 1;
-    if (section) {
-        size_t prefix = (size_t)(section - input);
-        if (fwrite(input, 1, prefix, out) != prefix) ok = 0;
-        if (ok && fprintf(out, CONFIG_LINE "\n") < 0) ok = 0;
-        if (ok && fwrite(section, 1, length - prefix, out) != length - prefix) ok = 0;
-    } else {
-        if (length && input[length-1] != '\n' && fputc('\n', out) == EOF) ok = 0;
-        if (ok && fprintf(out, "\n[default]\n" CONFIG_LINE "\n") < 0) ok = 0;
-    }
+    int ok = fwrite(output, 1, used, out) == used;
+    if (fflush(out) != 0 || fsync(fileno(out)) != 0) ok = 0;
     if (fclose(out) != 0) ok = 0;
     if (!ok || rename(CONFIG_TMP, CONFIG) != 0) {
         remove(CONFIG_TMP);
@@ -88,17 +144,22 @@ static int configure_loader(void) {
 int main(void) {
     mkdir("/data/GoldHEN", 0777);
     mkdir(DEST_DIR, 0777);
+
     if (!copy_prx()) {
-        notify("PNE: failed to copy plugin; check GoldHEN permissions");
-        sceKernelUsleep(2500000);
+        write_status("ERROR: failed to copy/verify PRX from app0.");
+        notify("PNE: falha ao copiar/verificar PRX. Veja install.log via FTP.");
+        sceKernelUsleep(3000000);
         return 1;
     }
     if (!configure_loader()) {
-        notify("PNE: plugin copied; add its path to plugins.ini manually");
+        write_status("ERROR: PRX copied, but plugins.ini could not be created/updated.");
+        notify("PNE: PRX copiado; falha ao configurar plugins.ini. Veja install.log.");
         sceKernelUsleep(3000000);
         return 2;
     }
-    notify("PS4 Neural Engine diagnostics installed. Restart GoldHEN or reboot to load.");
+
+    write_status("OK: PRX copied and size-verified; plugins.ini contains the [default] entry. Restart GoldHEN or reboot to load.");
+    notify("PNE instalado. Reinicie o GoldHEN/PS4 para tentar carregar o plugin.");
     sceKernelUsleep(3000000);
     return 0;
 }
