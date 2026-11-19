@@ -1,0 +1,44 @@
+name: PS4 PRX Deployment Recovery Diagnostics
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/ps4-prx-recovery-diagnostics.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: [self-hosted, Windows, X64, ps4-lan]
+    steps:
+      - name: Read current PRX and backup state without modifying the console
+        shell: powershell -NoProfile -ExecutionPolicy Bypass -File {0}
+        env:
+          PS4_IP: ${{ vars.PS4_IP }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          $credentials = New-Object System.Net.NetworkCredential("anonymous", "anonymous@example.com")
+          function Request([string]$path,[string]$method) {
+            $r=[System.Net.FtpWebRequest]::Create("ftp://$($env:PS4_IP):2121$path")
+            $r.Method=$method; $r.Credentials=$credentials; $r.UsePassive=$true; $r.UseBinary=$true; $r.KeepAlive=$false
+            $r.Timeout=30000; $r.ReadWriteTimeout=30000
+            return $r
+          }
+          function Download([string]$path,[string]$local) {
+            $r=Request $path ([System.Net.WebRequestMethods+Ftp]::DownloadFile)
+            $x=$r.GetResponse(); $s=$x.GetResponseStream(); $o=[IO.File]::Create($local)
+            try {$s.CopyTo($o)} finally {$o.Dispose();$s.Dispose();$x.Dispose()}
+            $f=Get-Item $local
+            $h=(Get-FileHash $local -Algorithm SHA256).Hash.ToLowerInvariant()
+            Write-Host "REMOTE_FILE path=$path size=$($f.Length) sha256=$h"
+          }
+          $dir=Request "/data/GoldHEN/plugins/" ([System.Net.WebRequestMethods+Ftp]::ListDirectory)
+          $resp=$dir.GetResponse();$reader=[IO.StreamReader]::new($resp.GetResponseStream())
+          try {$reader.ReadToEnd() -split "`r?`n" | ForEach-Object {if($_){Write-Host "PLUGIN=$_"}}} finally {$reader.Dispose();$resp.Dispose()}
+          foreach($p in @("/data/GoldHEN/plugins/ps4_neural_engine.prx","/data/GoldHEN/plugins/ps4_neural_engine.prx.predeploy.bak","/data/GoldHEN/plugins/ps4_neural_engine.prx.new","/data/GoldHEN/plugins.ini","/data/GoldHEN/plugins.ini.predeploy.bak")) {
+            $local=Join-Path $env:RUNNER_TEMP ([guid]::NewGuid().ToString()+".bin")
+            try {Download $p $local} catch {Write-Host "REMOTE_MISSING_OR_UNREADABLE path=$p error=$($_.Exception.Message)"}
+          }
+          Write-Host "RECOVERY_DIAGNOSTICS_READ_ONLY_COMPLETE"
