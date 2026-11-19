@@ -5,7 +5,6 @@
 #include <orbis/Net.h>
 #include <orbis/Sysmodule.h>
 #include <pthread.h>
-#include <atomic>
 #include <unistd.h>
 #include <dirent.h>
 #include <stdio.h>
@@ -18,10 +17,18 @@ namespace {
 int g_pool=-1, g_ssl=-1, g_http=-1, g_template=-1;
 pthread_mutex_t g_lock=PTHREAD_MUTEX_INITIALIZER;
 std::string g_token;
-bool g_authorized=false, g_auth_active=false, g_auth_joinable=false;\nstd::atomic<bool> g_cancel_auth(false);\npthread_t g_auth_thread, g_upload_thread;\nbool g_upload_active=false, g_upload_joinable=false;
+bool g_authorized=false, g_auth_active=false, g_auth_joinable=false;
+bool g_upload_active=false, g_upload_joinable=false, g_cancel_auth=false;
+pthread_t g_auth_thread, g_upload_thread;
 constexpr size_t kMaxResponse=65536;
 constexpr size_t kMaxUpload=16*1024*1024;
 
+bool cancelled() {
+ pthread_mutex_lock(&g_lock);
+ bool value=g_cancel_auth;
+ pthread_mutex_unlock(&g_lock);
+ return value;
+}
 bool init_http() {
  if(g_http>=0) return true;
  (void)sceSysmoduleLoadModuleInternal(ORBIS_SYSMODULE_INTERNAL_NET);
@@ -40,9 +47,12 @@ bool init_http() {
 void close_http() {
  if(g_template>=0) sceHttpDeleteTemplate(g_template);
  if(g_http>=0) sceHttpTerm(g_http);
- if(g_ssl>=0) sceSslTerm(g_ssl);
+ if(g_ssl>=0) sceSslTerm();
  if(g_pool>=0) sceNetPoolDestroy(g_pool);
  g_template=g_http=g_ssl=g_pool=-1;
+ (void)sceSysmoduleUnloadModuleInternal(ORBIS_SYSMODULE_INTERNAL_HTTP);
+ (void)sceSysmoduleUnloadModuleInternal(ORBIS_SYSMODULE_INTERNAL_SSL);
+ (void)sceSysmoduleUnloadModuleInternal(ORBIS_SYSMODULE_INTERNAL_NET);
 }
 bool request(const char* url,const char* method,const char* body,
              const char* bearer,std::string& response,int& status) {
@@ -50,6 +60,9 @@ bool request(const char* url,const char* method,const char* body,
  if(!init_http()) return false;
  int conn=sceHttpCreateConnectionWithURL(g_template,url,0);
  if(conn<0) return false;
+ (void)sceHttpSetConnectTimeOut(conn,15000000);
+ (void)sceHttpSetSendTimeOut(conn,30000000);
+ (void)sceHttpSetResolveTimeOut(conn,15000000);
  size_t body_len=body?strlen(body):0;
  int req=sceHttpCreateRequestWithURL2(conn,method,url,body_len);
  if(req<0){sceHttpDeleteConnection(conn);return false;}
@@ -58,9 +71,10 @@ bool request(const char* url,const char* method,const char* body,
    strcmp(method,"PUT")==0 ? "application/json" : "application/x-www-form-urlencoded",0)>=0;
  if(strstr(url,"api.github.com")!=nullptr)
   ok=ok && sceHttpAddRequestHeader(req,"X-GitHub-Api-Version","2022-11-28",0)>=0;
+ std::string auth_header;
  if(bearer && *bearer) {
-  std::string h="Bearer ";h+=bearer;
-  ok=ok && sceHttpAddRequestHeader(req,"Authorization",h.c_str(),0)>=0;
+  auth_header="Bearer ";auth_header+=bearer;
+  ok=ok && sceHttpAddRequestHeader(req,"Authorization",auth_header.c_str(),0)>=0;
  }
  if(ok) ok=sceHttpSendRequest(req,body,body_len)>=0;
  if(ok) ok=sceHttpGetStatusCode(req,&status)>=0;
@@ -69,6 +83,7 @@ bool request(const char* url,const char* method,const char* body,
   for(;;){int n=sceHttpReadData(req,buf,sizeof(buf));if(n<0){ok=false;break;}if(n==0)break;
    if(response.size()+(size_t)n>kMaxResponse){ok=false;break;}response.append(buf,(size_t)n);}
  }
+ if(!auth_header.empty())memset(&auth_header[0],0,auth_header.size());
  sceHttpDeleteRequest(req);sceHttpDeleteConnection(conn);
  return ok;
 }
@@ -110,24 +125,33 @@ bool authorize() {
  if(!json_string(r,"device_code",dc)||!json_string(r,"user_code",uc))return false;
  if(!json_string(r,"verification_uri",uri))uri=pne::github::kVerificationUrl;
  int interval=json_int(r,"interval",5), expires=json_int(r,"expires_in",900);
+ if(!r.empty())memset(&r[0],0,r.size());
  char note[256];snprintf(note,sizeof(note),"GitHub: %s | Acesse %s",uc.c_str(),uri.c_str());
  NotifyStatic(TEX_ICON_SYSTEM,note);
- const int total=expires;
- for(int elapsed=0;elapsed<total;elapsed+=interval){
-  sceKernelUsleep((uint64_t)interval*1000000ULL);
+ for(int elapsed=0;elapsed<expires&&!cancelled();elapsed+=interval){
+  for(int waited=0;waited<interval&&!cancelled();waited++)sceKernelUsleep(1000000ULL);
+  if(cancelled())break;
   std::string poll="client_id="+form_encode(pne::github::kClientId)+
    "&device_code="+form_encode(dc.c_str())+
    "&grant_type="+form_encode(pne::github::kDeviceGrantType);
   if(!request(pne::github::kAccessTokenUrl,"POST",poll.c_str(),nullptr,r,status))return false;
   std::string token;
   if(json_string(r,"access_token",token)){
+   if(!r.empty())memset(&r[0],0,r.size());
    pthread_mutex_lock(&g_lock);g_token=token;g_authorized=true;pthread_mutex_unlock(&g_lock);
+   if(!token.empty())memset(&token[0],0,token.size());
+   if(!dc.empty())memset(&dc[0],0,dc.size());
    return true;
   }
-  if(r.find("authorization_pending")!=std::string::npos)continue;
-  if(r.find("slow_down")!=std::string::npos){interval+=5;continue;}
-  if(r.find("access_denied")!=std::string::npos||r.find("expired_token")!=std::string::npos)return false;
+  bool pending=r.find("authorization_pending")!=std::string::npos;
+  bool slow=r.find("slow_down")!=std::string::npos;
+  bool denied=r.find("access_denied")!=std::string::npos||r.find("expired_token")!=std::string::npos;
+  if(!r.empty())memset(&r[0],0,r.size());
+  if(pending)continue;
+  if(slow){interval+=5;continue;}
+  if(denied)return false;
  }
+ if(!dc.empty())memset(&dc[0],0,dc.size());
  return false;
 }
 bool upload_one(const char* local,const char* remote,const std::string& token) {
@@ -142,12 +166,13 @@ bool upload_one(const char* local,const char* remote,const std::string& token) {
  if(!request(url.c_str(),"GET",nullptr,token.c_str(),old,status))return false;
  if(status==200 && !json_string(old,"sha",sha))return false;
  if(status!=200 && status!=404)return false;
- std::string json="{\\"message\\":\\"PS4 Neural Engine telemetry upload\\",\\"content\\":\\""+encoded+"\\"";
- if(!sha.empty())json+=",\\"sha\\":\\""+sha+"\\"";
+ std::string json="{\"message\":\"PS4 Neural Engine telemetry upload\",\"content\":\""+encoded+"\"";
+ if(!sha.empty())json+=",\"sha\":\""+sha+"\"";
  json+="}";
  std::string response;
  bool ok=request(url.c_str(),"PUT",json.c_str(),token.c_str(),response,status);
- memset(&encoded[0],0,encoded.size());
+ if(!encoded.empty())memset(&encoded[0],0,encoded.size());
+ if(!json.empty())memset(&json[0],0,json.size());
  return ok&&(status==201||status==200);
 }
 bool upload_log() {
@@ -162,7 +187,7 @@ bool upload_log() {
   struct dirent* e;
   while((e=readdir(d))!=nullptr){
    const char* name=e->d_name;size_t len=strlen(name);
-   if(len<5 || (strcmp(name+len-4,".bmp")!=0))continue;
+   if(len<5 || strcmp(name+len-4,".bmp")!=0)continue;
    bool safe=true;for(size_t i=0;i<len;i++){char c=name[i];if(!((c>='a'&&c<='z')||(c>='A'&&c<='Z')||(c>='0'&&c<='9')||c=='_'||c=='-'||c=='.')){safe=false;break;}}
    if(!safe)continue;
    char local[512],remote[512];
@@ -174,4 +199,45 @@ bool upload_log() {
  }
  if(!token.empty())memset(&token[0],0,token.size());
  return any&&ok;
+}
+void* upload_thread(void*) {
+ bool ok=upload_log();
+ NotifyStatic(TEX_ICON_SYSTEM,ok?"PNE: lote enviado ao GitHub":"PNE: falha ao enviar lote GitHub");
+ pthread_mutex_lock(&g_lock);g_upload_active=false;pthread_mutex_unlock(&g_lock);
+ return nullptr;
+}
+void* auth_thread(void*) {
+ bool ok=authorize();
+ NotifyStatic(TEX_ICON_SYSTEM,ok?"PNE: GitHub autorizado nesta sessao":(cancelled()?"PNE: OAuth cancelado":"PNE: autorizacao GitHub falhou"));
+ pthread_mutex_lock(&g_lock);g_auth_active=false;pthread_mutex_unlock(&g_lock);
+ return nullptr;
+}
+}
+extern "C" int pne_github_begin_authorization(void) {
+ pthread_mutex_lock(&g_lock);
+ if(g_auth_active){pthread_mutex_unlock(&g_lock);return 0;}
+ if(g_auth_joinable){pthread_t old=g_auth_thread;pthread_mutex_unlock(&g_lock);pthread_join(old,nullptr);pthread_mutex_lock(&g_lock);g_auth_joinable=false;}
+ g_cancel_auth=false;g_auth_active=true;
+ if(pthread_create(&g_auth_thread,nullptr,auth_thread,nullptr)!=0){g_auth_active=false;pthread_mutex_unlock(&g_lock);return 0;}
+ g_auth_joinable=true;pthread_mutex_unlock(&g_lock);return 1;
+}
+extern "C" int pne_github_upload_confirmed_log(void) {
+ pthread_mutex_lock(&g_lock);
+ if(g_upload_active || !g_authorized){pthread_mutex_unlock(&g_lock);return 0;}
+ if(g_upload_joinable){pthread_t old=g_upload_thread;pthread_mutex_unlock(&g_lock);pthread_join(old,nullptr);pthread_mutex_lock(&g_lock);g_upload_joinable=false;}
+ g_upload_active=true;
+ if(pthread_create(&g_upload_thread,nullptr,upload_thread,nullptr)!=0){g_upload_active=false;pthread_mutex_unlock(&g_lock);return 0;}
+ g_upload_joinable=true;pthread_mutex_unlock(&g_lock);return 1;
+}
+extern "C" void pne_github_disconnect(void) {
+ pthread_mutex_lock(&g_lock);g_cancel_auth=true;
+ bool join=g_auth_joinable, upload_join=g_upload_joinable;
+ pthread_t t=g_auth_thread, ut=g_upload_thread;
+ pthread_mutex_unlock(&g_lock);
+ if(join)pthread_join(t,nullptr);
+ if(upload_join)pthread_join(ut,nullptr);
+ pthread_mutex_lock(&g_lock);g_auth_joinable=false;g_upload_joinable=false;
+ if(!g_token.empty())memset(&g_token[0],0,g_token.size());
+ g_token.clear();g_authorized=false;pthread_mutex_unlock(&g_lock);
+ close_http();
 }
