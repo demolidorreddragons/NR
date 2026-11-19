@@ -29,7 +29,7 @@ bool cancelled() {
  pthread_mutex_unlock(&g_lock);
  return value;
 }
-bool init_http() {
+void close_http();\nbool init_http() {
  if(g_http>=0 && g_template>=0) return true;
  (void)sceSysmoduleLoadModuleInternal(ORBIS_SYSMODULE_INTERNAL_NET);
  (void)sceSysmoduleLoadModuleInternal(ORBIS_SYSMODULE_INTERNAL_SSL);
