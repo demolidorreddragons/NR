@@ -16,16 +16,17 @@ Own all transport, FTP, network-path, and remote-file-integrity work for PS4 dep
 ## Current evidence (2026-11-19)
 - The runner at 192.168.0.16 connects to GoldHEN FTP v2.2 at 192.168.0.17:2121.
 - GoldHEN rejects EPSV with 502; curl falls back to PASV and LIST succeeds.
-- A read-only RETR audit completed for four PRX names, a PRX probe, and two DAT probes.
-- RETR for every .prx name returned exactly 296,952 bytes and SHA-256 85732d32ee232bb65a3957ba2768532e2e40652ad2c870ec2de810148fb13f58.
-- RETR for .dat probes returned 206,528 bytes and SHA-256 531e41aa3f4535e6004d47900f636d6e2a4b1ce2b2709f165db77ebef7e0a3f0.
-- LIST reports the PRX files as 206,528 bytes. This difference is consistent with GoldHEN decrypting executable files during FTP transfer; a community technical report documents this behavior for GoldHEN v2.2. Therefore a PRX RETR hash mismatch is not evidence of a corrupt on-disk PRX.
-- This resolves the earlier false assumption that PRX RETR must be byte-for-byte identical to the uploaded encrypted PRX. Use DAT for opaque byte-for-byte transport tests; use LIST plus independent load/runtime validation for PRX files.
-- Workflow 008's RNFR/RNTO attempt still failed with FTP 550. The exact failing command was not isolated; rename support remains unproven.
+- A read-only RETR audit showed every .prx name returning 296,952 bytes and SHA-256 85732d32ee232bb65a3957ba2768532e2e40652ad2c870ec2de810148fb13f58, while DAT probes return 206,528 bytes and SHA-256 531e41aa3f4535e6004d47900f636d6e2a4b1ce2b2709f165db77ebef7e0a3f0.
+- LIST reports PRX files as 206,528 bytes. The RETR difference is consistent with GoldHEN decrypting executable files during FTP transfer; a community technical report documents this behavior for GoldHEN v2.2. A PRX RETR hash mismatch is not evidence of a corrupt on-disk PRX.
+- Root cause of the earlier rename failure is now confirmed: curl issued RNFR from FTP root (PWD "/"), while the staged file was in /data/GoldHEN/plugins. GoldHEN returned 550 because the command used the wrong working directory.
+- Correct sequence was validated: CWD data -> 250; CWD GoldHEN -> 250; CWD plugins -> 250; RNFR pne_network_009_stage.dat -> 350; RNTO pne_network_009_target.prx -> 250.
+- LIST then showed the renamed target PRX at 206,528 bytes. The target was a unique temporary probe and was deleted successfully.
+- Cleanup also successfully removed the older project-owned probes pne_network_008_stage.dat, pne_payload_probe_006.prx, and pne_payload_probe_006.dat. The 009 stage name was already absent after successful rename.
 
-## Required next investigation
-1. Test RNFR and RNTO separately on unique probe files, logging each server reply.
-2. Ensure cleanup is attempted in a finally block and report whether each unique probe was removed.
-3. Do not use PRX RETR hash equality as the acceptance criterion.
-4. Do not overwrite canonical PRX, modify plugins.ini, or touch saves during network diagnosis.
-5. Report the exact FTP command/reply and a safe deployment sequence. Plugin registration and runtime validation remain separate gates.
+## Deployment gates
+1. Upload source PRX to a unique DAT staging name and verify exact byte count and SHA-256 by RETR.
+2. Change FTP working directory explicitly before RNFR/RNTO.
+3. Rename only to a previously verified-absent unique PRX destination.
+4. Verify final directory listing reports expected 206,528-byte file.
+5. Do not overwrite canonical PRX or edit plugins.ini until separate engineering/QA approval.
+6. Plugin registration, runtime loading, and title-specific rendering validation are separate gates. A successful transfer does not prove runtime compatibility.
