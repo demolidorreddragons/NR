@@ -19,7 +19,7 @@ jobs:
           repository: demolidorreddragons/NR
           run-id: 44623808730
           github-token: ${{ github.token }}
-      - name: Test isolated DAT to PRX rename with server replies
+      - name: Test rename with explicit plugin directory and clean owned probes
         shell: powershell -NoProfile -ExecutionPolicy Bypass -File {0}
         env:
           PS4_IP: ${{ vars.PS4_IP }}
@@ -33,17 +33,17 @@ jobs:
           $size = (Get-Item $source).Length
           $hash = (Get-FileHash $source -Algorithm SHA256).Hash.ToLowerInvariant()
           if ($size -ne 206528 -or $hash -ne "531e41aa3f4535e6004d47900f636d6e2a4b1ce2b2709f165db77ebef7e0a3f0") { throw "Reference identity mismatch" }
-          $base = "ftp://$($env:PS4_IP):2121/data/GoldHEN/plugins/"
+          $base = "ftp://$($env:PS4_IP):2121/"
           $creds = "anonymous:anonymous@example.com"
           $stage = "pne_network_009_stage.dat"
           $target = "pne_network_009_target.prx"
-          $upload = & curl.exe --fail --silent --show-error --ftp-pasv --user $creds --upload-file $source ($base + $stage) 2>&1
+          $upload = & curl.exe --fail --silent --show-error --ftp-pasv --user $creds --upload-file $source ($base + "data/GoldHEN/plugins/" + $stage) 2>&1
           $uploadCode = $LASTEXITCODE
           $upload | ForEach-Object { Write-Host ([string]$_) }
           Write-Host "STAGE_UPLOAD_EXIT=$uploadCode"
           if ($uploadCode -ne 0) { throw "STAGE_UPLOAD_FAILED" }
           $renameLog = Join-Path $env:RUNNER_TEMP "pne-network-009-rename.log"
-          $rename = & curl.exe --verbose --ftp-pasv --user $creds --quote ("RNFR " + $stage) --quote ("RNTO " + $target) $base 2>&1
+          $rename = & curl.exe --verbose --ftp-pasv --user $creds --quote "CWD data" --quote "CWD GoldHEN" --quote "CWD plugins" --quote ("RNFR " + $stage) --quote ("RNTO " + $target) $base 2>&1
           $renameCode = $LASTEXITCODE
           $rename | ForEach-Object { [string]$_ } | Set-Content -LiteralPath $renameLog
           Get-Content -LiteralPath $renameLog | ForEach-Object { Write-Host $_ }
@@ -51,12 +51,12 @@ jobs:
           $renameText = Get-Content -LiteralPath $renameLog -Raw
           $replies = [regex]::Matches($renameText, '(?m)<\\s*[0-9]{3}[^\\r\\n]*')
           foreach ($reply in $replies) { Write-Host ("FTP_SERVER_REPLY " + $reply.Value) }
-          $list = & curl.exe --silent --show-error --ftp-pasv --user $creds $base 2>&1
+          $list = & curl.exe --silent --show-error --ftp-pasv --user $creds ($base + "data/GoldHEN/plugins/") 2>&1
           $listCode = $LASTEXITCODE
           Write-Host "POST_RENAME_LIST_EXIT=$listCode"
           $list | ForEach-Object { Write-Host ([string]$_) }
-          foreach ($probe in @($stage,$target)) {
-            $cleanup = & curl.exe --silent --show-error --ftp-pasv --user $creds --quote ("DELE " + $probe) $base 2>&1
+          foreach ($probe in @($stage,$target,"pne_network_008_stage.dat","pne_payload_probe_006.prx","pne_payload_probe_006.dat")) {
+            $cleanup = & curl.exe --silent --show-error --ftp-pasv --user $creds --quote "CWD data" --quote "CWD GoldHEN" --quote "CWD plugins" --quote ("DELE " + $probe) $base 2>&1
             $cleanupCode = $LASTEXITCODE
             Write-Host "OWN_PROBE_CLEANUP name=$probe exit=$cleanupCode"
             $cleanup | ForEach-Object { Write-Host ([string]$_) }
