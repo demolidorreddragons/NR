@@ -1,11 +1,6 @@
 name: PS4 Windows Bridge Test
 
 on:
-  workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - ".github/workflows/ps4-bridge-test.yml"
   workflow_run:
     workflows: ["PS4 PRX and PKG build"]
     types: [completed]
@@ -16,7 +11,7 @@ permissions:
 
 jobs:
   ps4-connectivity:
-    if: github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main' && github.event.workflow_run.head_repository.full_name == github.repository)
+    if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main' && github.event.workflow_run.head_repository.full_name == github.repository
     runs-on: [self-hosted, Windows, X64, ps4-lan]
 
     steps:
