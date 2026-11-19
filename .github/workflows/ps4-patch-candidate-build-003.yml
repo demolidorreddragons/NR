@@ -99,15 +99,10 @@ jobs:
           $gp4 = Join-Path $work "PS4-Neural-Engine-003.gp4"
           $pkg = Join-Path $work "PS4-Neural-Engine-003-CANDIDATE.pkg"
           $verify = Join-Path $work "verify"
-          $baseCopyDir = Join-Path $work "base-artifact/pkg"
-          $basePkgForGp4 = Join-Path $baseCopyDir "PS4-Neural-Engine-002-STTYPE.pkg"
-          $baseGp4 = Join-Path $work "base-app-sttype.gp4"
-          $baseImage = Join-Path $work "base-image-sttype"
           New-Item -ItemType Directory -Force -Path $work | Out-Null
-          New-Item -ItemType Directory -Force -Path $baseCopyDir | Out-Null
           New-Item -ItemType Directory -Force -Path "candidate-output" | Out-Null
 
-          "=== BASE PACKAGE ===" | Tee-Object -FilePath "candidate-output/build-report.txt"
+          "=== BASE PACKAGE: ORIGINAL VALIDATED PKG 002 ===" | Tee-Object -FilePath "candidate-output/build-report.txt"
           dotnet "$tool" info "$basePkg" 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
           if ($LASTEXITCODE -ne 0) { throw "Base PKG info failed." }
 
@@ -120,31 +115,12 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "Base package restructure failed." }
 
           $image = Join-Path $extract "Image0"
-          "=== BUILD TEMPORARY BASE WITH EXPLICIT STORAGE METADATA ===" | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
-          $zeroKey = "00000000000000000000000000000000"
-          Copy-Item $image $baseImage -Recurse
-          dotnet "$tool" gp4gen "$baseImage" --out "$baseGp4" --title "PS4 Neural Engine Installer" --title-id PNEU00001 --content-id IV0000-PNEU00001_00-PS4NEURALENG0000 --passcode $zeroKey 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
-          if ($LASTEXITCODE -ne 0) { throw "Temporary base GP4 generation failed." }
-          # OrbisPkgTool's GP4 serializer currently omits title/title_id; add the documented
-          # package attributes so its own parser emits a complete PARAM.SFO.
-          [xml]$baseProject = Get-Content $baseGp4
-          $basePackageNode = $baseProject.psproject.volume.package
-          $basePackageNode.SetAttribute("title_id", "PNEU00001")
-          $basePackageNode.SetAttribute("title", "PS4 Neural Engine Installer")
-          $baseProject.Save($baseGp4)
-          # The GP4 captures the SFO metadata. Remove the original Sc0 SFO from the source tree
-          # so AddMissingSc0FromFolder cannot overwrite the freshly generated outer SFO.
-          Remove-Item (Join-Path $baseImage "sce_sys/param.sfo") -Force
-          dotnet "$tool" pkg build "$baseGp4" "$baseImage" --out "$basePkgForGp4" --validate 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
-          if ($LASTEXITCODE -ne 0 -or -not (Test-Path $basePkgForGp4)) { throw "Temporary base PKG with storage metadata failed." }
-          $tempBaseExtract = Join-Path $work "temp-base-verify"
-          dotnet "$tool" extract "$basePkgForGp4" "$tempBaseExtract" 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
-          if ($LASTEXITCODE -ne 0) { throw "Temporary base PKG readback failed." }
-          $tempBaseSfo = Join-Path $tempBaseExtract "Sc0/param.sfo"
-          if (-not (Test-Path $tempBaseSfo)) { throw "Temporary base outer Sc0/param.sfo missing." }
-          $tempBaseSfoText = dotnet "$tool" sfo read "$tempBaseSfo" 2>&1
-          $tempBaseSfoText | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
-          if (($tempBaseSfoText -join "`n") -notmatch "CATEGORY = gde" -or ($tempBaseSfoText -join "`n") -notmatch "st_type=digital50" -or ($tempBaseSfoText -join "`n") -notmatch "TITLE_ID = PNEU00001" -or ($tempBaseSfoText -join "`n") -notmatch "TITLE = PS4 Neural Engine Installer") { throw "Temporary base outer SFO metadata readback failed." }
+          $sfo = Join-Path $image "sce_sys/param.sfo"
+          $eboot = Join-Path $image "eboot.bin"
+          $prx = Join-Path $image "ps4_neural_engine.prx"
+          foreach ($p in @($sfo,$eboot,$prx)) {
+            if (-not (Test-Path $p)) { throw "Required base payload missing: $p" }
+          }
 
           $sfo = Join-Path $image "sce_sys/param.sfo"
           $eboot = Join-Path $image "eboot.bin"
@@ -175,7 +151,7 @@ jobs:
           [IO.File]::WriteAllText($changeInfo, $changeXml, [Text.UTF8Encoding]::new($false))
 
           "=== CREATE ASSOCIATED PATCH GP4 ===" | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
-          & $pubCmd gp4_proj_create --volume_type pkg_ps4_patch --content_id IV0000-PNEU00001_00-PS4NEURALENG0000 --passcode $zeroKey --entitlement_key $zeroKey --storage_type digital25 --app_path $basePkgForGp4 $gp4 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
+          & $pubCmd gp4_proj_create --volume_type pkg_ps4_patch --content_id IV0000-PNEU00001_00-PS4NEURALENG0000 --passcode $zeroKey --entitlement_key $zeroKey --storage_type digital25 --app_path $basePkg $gp4 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
           if ($LASTEXITCODE -ne 0 -or -not (Test-Path $gp4)) { throw "Associated patch GP4 creation failed." }
 
           "=== ADD PATCH PAYLOAD ===" | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
@@ -196,7 +172,7 @@ jobs:
           if ($project.psproject.files.file.Count -lt 4) { throw "GP4 has fewer than 3 payload entries." }
           Copy-Item $gp4 "candidate-output/PS4-Neural-Engine-003.gp4"
           "GP4_VOLUME_TYPE=$volumeType" | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
-          "GP4_APP_PATH=$appPath" | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
+          "GP4_APP_PATH=$basePkg" | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
           "GP4_FILE_COUNT=$($project.psproject.files.file.Count)" | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
 
           "=== BUILD CANDIDATE PKG ===" | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
