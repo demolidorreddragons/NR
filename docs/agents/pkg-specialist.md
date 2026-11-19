@@ -98,3 +98,10 @@ Source artifact: build run 44623808730, artifact 14578192913.
 - Artifact 14584861239 contains only the diagnostic report/SFO evidence; it is not an installable PKG.
 - Host tests passed (run 44636671798). Package build failed (run 44636671853). No package was installed and the PS4 was not contacted.
 - Engineering action: retire this mixed game/non-game diagnostic. The next experiment must use the exact original PKG 002 as --app_path, preserve the base category, use only the hypothesized non-game patch category gpe, and test the publisher metadata as an isolated variable. If the tool rejects the original base SFO, stop and investigate the required official metadata rather than rewriting categories or fabricating a base package.
+
+
+### Engineering correction: use the real base package (2026-11-19)
+- Log review of run 44634453533 showed `orbis-pub-cmd` rejected `--storage_type digital50` as an invalid CLI value. The patch builder's accepted probe value remains `digital25`; do not pass `digital50` to this command.
+- Review of workflow 44636671853 confirmed that the test built and associated a synthetic diagnostic base instead of the real PKG 002. Its `param.sfo` was deliberately removed before building that synthetic base, making the subsequent `param.sfo(in app pkg)` failure a contaminated diagnostic, not proof that the real base is incompatible.
+- Engineering commit `5522336d1440ba6d1492f4a0d738a6f6662b71dc` removes the synthetic-base/game-category experiment. The candidate workflow now uses the exact original PKG 002 as `--app_path`, retains the real base's `gde` metadata untouched, changes only the candidate patch SFO to the hypothesized `gpe` category, and verifies that the GP4 association names `PS4-Neural-Engine-002.pkg`.
+- New build run 44637080299 and host-test run 44637080302 were queued against commit 5522336d. Await their logs and independent QA. This is an engineering correction, not a successful PKG build; no candidate has been approved or installed.
