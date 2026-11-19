@@ -40,6 +40,8 @@ jobs:
             "/data/GoldHEN/plugins/ps4_neural_engine.prx",
             "/data/GoldHEN/plugins/ps4_neural_engine.prx.predeploy.bak",
             "/data/GoldHEN/plugins/ps4_neural_engine.prx.new",
+            "/data/GoldHEN/plugins/ps4_neural_engine_002.prx",
+            "/data/GoldHEN/plugins/ps4_neural_engine_003.prx",
             "/data/GoldHEN/plugins.ini",
             "/data/GoldHEN/plugins.ini.predeploy.bak"
           )) {
@@ -49,4 +51,7 @@ jobs:
           $list=Req "/data/GoldHEN/plugins/" ([System.Net.WebRequestMethods+Ftp]::ListDirectory)
           $resp=$list.GetResponse();$reader=[IO.StreamReader]::new($resp.GetResponseStream())
           try {$reader.ReadToEnd() -split "`r?`n" | Where-Object {$_ -match "neural|plugin"} | ForEach-Object {Write-Host "DIR_ENTRY=$_"}} finally {$reader.Dispose();$resp.Dispose()}
+          $details=Req "/data/GoldHEN/plugins/" ([System.Net.WebRequestMethods+Ftp]::ListDirectoryDetails)
+          $dr=$details.GetResponse();$ds=[IO.StreamReader]::new($dr.GetResponseStream())
+          try {$ds.ReadToEnd() -split "`r?`n" | ForEach-Object {Write-Host "FULL_DIR_ENTRY=$_"}} finally {$ds.Dispose();$dr.Dispose()}
           Write-Host "READ_ONLY_AUDIT_DONE"
