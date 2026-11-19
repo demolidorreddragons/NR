@@ -37,21 +37,21 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          TOOL="OrbisPkgTool-src/OrbisPkgTool/bin/Release/net10.0/OrbisPkgTool"
+          TOOL="OrbisPkgTool-src/OrbisPkgTool/bin/Release/net10.0/OrbisPkgTool.dll"
           PKG="base-artifact/pkg/PS4-Neural-Engine-002.pkg"
           test -s "$PKG"
-          "$TOOL" extract "$PKG" base-extracted --verbose
+          dotnet "$TOOL" extract "$PKG" base-extracted --verbose
           SFO="$(find base-extracted -path '*/sce_sys/param.sfo' -type f | head -n 1)"
           test -n "$SFO"
           IMAGE_ROOT="$(dirname "$(dirname "$SFO")")"
           echo "SFO=$SFO"
           echo "IMAGE_ROOT=$IMAGE_ROOT"
-          "$TOOL" sfo "$SFO" --help || true
-          "$TOOL" gp4gen "$IMAGE_ROOT" --patch --out experimental-patch.gp4
+          dotnet "$TOOL" sfo "$SFO" --help || true
+          dotnet "$TOOL" gp4gen "$IMAGE_ROOT" --patch --out experimental-patch.gp4
           echo "===== PATCH GP4 METADATA ====="
           grep -E 'volume_type|content_id|storage_type|app_type|version|app_version' experimental-patch.gp4
           echo "===== PATCH GP4 FILE LIST ====="
           grep '<file ' experimental-patch.gp4 | head -n 30
           echo "===== SOURCE SFO ====="
-          "$TOOL" info "$PKG"
+          dotnet "$TOOL" info "$PKG"
           echo "AUDIT_ONLY_NOT_INSTALLABLE: no base application association has been established"
