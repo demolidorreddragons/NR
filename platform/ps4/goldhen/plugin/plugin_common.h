@@ -16,6 +16,12 @@
 #define MAX_PATH_ 260
 #define attr_module_hidden __attribute__((weak)) __attribute__((visibility("hidden")))
 #define attr_public __attribute__((visibility("default")))
+#ifdef __cplusplus
+extern "C" {
+#endif
 void NotifyStatic(const char* icon_uri, const char* text);
 void Notify(const char* icon_uri, const char* format, ...);
+#ifdef __cplusplus
+}
+#endif
 #define final_printf(fmt, ...) klog("[PNE] " fmt, ##__VA_ARGS__)
