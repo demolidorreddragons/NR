@@ -125,6 +125,13 @@ jobs:
           Copy-Item $image $baseImage -Recurse
           dotnet "$tool" gp4gen "$baseImage" --out "$baseGp4" --title "PS4 Neural Engine Installer" --title-id PNEU00001 --content-id IV0000-PNEU00001_00-PS4NEURALENG0000 --passcode $zeroKey 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
           if ($LASTEXITCODE -ne 0) { throw "Temporary base GP4 generation failed." }
+          # OrbisPkgTool's GP4 serializer currently omits title/title_id; add the documented
+          # package attributes so its own parser emits a complete PARAM.SFO.
+          [xml]$baseProject = Get-Content $baseGp4
+          $basePackageNode = $baseProject.psproject.volume.package
+          $basePackageNode.SetAttribute("title_id", "PNEU00001")
+          $basePackageNode.SetAttribute("title", "PS4 Neural Engine Installer")
+          $baseProject.Save($baseGp4)
           # The GP4 captures the SFO metadata. Remove the original Sc0 SFO from the source tree
           # so AddMissingSc0FromFolder cannot overwrite the freshly generated outer SFO.
           Remove-Item (Join-Path $baseImage "sce_sys/param.sfo") -Force
