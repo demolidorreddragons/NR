@@ -49,3 +49,10 @@ Source artifact: build run 44623808730, artifact 14578192913.
 - Therefore the audit workflow passing means only that the experimental generator ran; it does **not** mean a patch was generated. Reject this GP4 and do not build or install it.
 - Host tests on the same commit passed (run 44631789523).
 - Supporting references: Fake PKG Tools' documented Patch tab > Application Package and the `orbis-pub-cmd gp4_proj_create --app_path` flow are described in the external references linked in the engineering investigation. The required builder path must expose equivalent functionality.
+
+
+## Non-game patch metadata and isolated toolchain probe (2026-11-19)
+- PS4DevWiki's PARAM.SFO category table maps `gde` to a non-game mini app and `gpe` to a non-game mini-app patch. This is stronger platform-specific evidence than extrapolating the game-only `gp` category. It remains necessary to verify the generated PARAM.SFO and GP4 against the patch builder output; do not hand-edit metadata and call it validated.
+- A disposable GitHub-hosted Windows workflow was added at `.github/workflows/ps4-isolated-patch-toolchain-probe.yml`. It downloads the pinned CyB1K Fake PKG Tools v7 release asset (6,674,278 bytes), extracts it only on an ephemeral hosted runner, records SHA-256 hashes and tool versions, and probes the CLI/patch-generator usage. It does not run on the self-hosted PS4 bridge and has no PS4 network access or deployment secrets.
+- Probe workflow run: 44633179181. Awaiting completion and evidence review.
+- The release asset is a third-party precompiled archive; a computed hash is provenance evidence for this run, not an independent authenticity guarantee. Do not copy these binaries to the PS4 bridge. Any subsequent PKG build remains an isolated experiment until its patch association, category, version, and structure are independently inspected.
