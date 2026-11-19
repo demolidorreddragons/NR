@@ -1,0 +1,81 @@
+name: PS4 Isolated Patch Toolchain Probe
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/ps4-isolated-patch-toolchain-probe.yml"
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  probe:
+    # Disposable GitHub-hosted VM: never use the self-hosted PS4 bridge for third-party binaries.
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout project
+        uses: actions/checkout@v4
+
+      - name: Download pinned Fake PKG Tools release
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $url = "https://github.com/CyB1K/PS4-Fake-PKG-Tools-3.87/releases/download/v7/PS4_Fake_PKG_Tools_3.87_V7.rar"
+          $archive = Join-Path $env:RUNNER_TEMP "fake-pkg-tools-v7.rar"
+          Invoke-WebRequest -Uri $url -OutFile $archive
+          $item = Get-Item $archive
+          if ($item.Length -ne 6674278) { throw "Unexpected release asset size: $($item.Length)" }
+          $hash = (Get-FileHash -Algorithm SHA256 $archive).Hash
+          "ASSET_URL=$url" | Out-File $env:GITHUB_STEP_SUMMARY -Append
+          "ASSET_SIZE=$($item.Length)" | Out-File $env:GITHUB_STEP_SUMMARY -Append
+          "ASSET_SHA256=$hash" | Out-File $env:GITHUB_STEP_SUMMARY -Append
+          "ASSET_SHA256=$hash" | Out-File "$env:RUNNER_TEMP\asset-evidence.txt"
+
+      - name: Extract tools in disposable runner
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $sevenZip = @(
+            "$env:ProgramFiles\7-Zip\7z.exe",
+            "${env:ProgramFiles(x86)}\7-Zip\7z.exe"
+          ) | Where-Object { Test-Path $_ } | Select-Object -First 1
+          if (-not $sevenZip) { throw "7-Zip was not found on the hosted runner." }
+          $dest = Join-Path $env:RUNNER_TEMP "fake-pkg-tools"
+          New-Item -ItemType Directory -Force -Path $dest | Out-Null
+          & $sevenZip x (Join-Path $env:RUNNER_TEMP "fake-pkg-tools-v7.rar") "-o$dest" -y
+          if ($LASTEXITCODE -ne 0) { throw "7-Zip extraction failed: $LASTEXITCODE" }
+          $tools = Get-ChildItem -Path $dest -Recurse -File |
+            Where-Object { $_.Name -in @("orbis-pub-cmd.exe", "gengp4_patch.exe", "orbis-pub-gen.exe") }
+          if (-not $tools) { throw "No expected patch tools were found in the release archive." }
+          $tools | ForEach-Object {
+            "FOUND=$($_.FullName)" | Tee-Object -FilePath "$env:RUNNER_TEMP\tool-evidence.txt" -Append
+            "SIZE=$($_.Length)" | Tee-Object -FilePath "$env:RUNNER_TEMP\tool-evidence.txt" -Append
+            "SHA256=$((Get-FileHash -Algorithm SHA256 $_.FullName).Hash)" | Tee-Object -FilePath "$env:RUNNER_TEMP\tool-evidence.txt" -Append
+            "VERSION=$($_.VersionInfo.FileVersion)" | Tee-Object -FilePath "$env:RUNNER_TEMP\tool-evidence.txt" -Append
+          }
+          $cmd = $tools | Where-Object Name -eq "orbis-pub-cmd.exe" | Select-Object -First 1
+          $patch = $tools | Where-Object Name -eq "gengp4_patch.exe" | Select-Object -First 1
+          if (-not $cmd -or -not $patch) { throw "Both orbis-pub-cmd.exe and gengp4_patch.exe are required." }
+
+          "=== ORBIS-PUB-CMD GP4 PROJECT CREATE HELP ===" | Tee-Object -FilePath "$env:RUNNER_TEMP\tool-help.txt"
+          & $cmd.FullName gp4_proj_create --help 2>&1 | Tee-Object -FilePath "$env:RUNNER_TEMP\tool-help.txt" -Append
+          "EXIT=$LASTEXITCODE" | Tee-Object -FilePath "$env:RUNNER_TEMP\tool-help.txt" -Append
+
+          "=== GENGP4_PATCH USAGE PROBE ===" | Tee-Object -FilePath "$env:RUNNER_TEMP\tool-help.txt" -Append
+          & $patch.FullName 2>&1 | Tee-Object -FilePath "$env:RUNNER_TEMP\tool-help.txt" -Append
+          "EXIT=$LASTEXITCODE" | Tee-Object -FilePath "$env:RUNNER_TEMP\tool-help.txt" -Append
+
+      - name: Publish probe evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ps4-patch-toolchain-probe-evidence
+          path: |
+            ${{ runner.temp }}/asset-evidence.txt
+            ${{ runner.temp }}/tool-evidence.txt
+            ${{ runner.temp }}/tool-help.txt
+          if-no-files-found: warn
+          retention-days: 7
