@@ -5,6 +5,7 @@
 #include <string.h>
 #include <ctype.h>
 /* Runtime installer: POSIX file-copy path with byte-accurate verification. */
+/* Bridge transfer uses the same content-addressed filename as the PS4 destination. */
 #include <fcntl.h>
 #include <sys/types.h>
 #include <errno.h>
