@@ -1,0 +1,55 @@
+name: PS4 PRX build
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "src/**"
+      - "include/**"
+      - "platform/ps4/**"
+      - ".github/workflows/ps4-prx.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  build-prx:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install LLVM
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang-18 lld-18 llvm-18 make
+          echo "$(dirname "$(readlink -f "$(command -v clang-18)")")" >> "$GITHUB_PATH"
+          sudo ln -sf "$(command -v clang-18)" /usr/local/bin/clang
+          sudo ln -sf "$(command -v clang++-18)" /usr/local/bin/clang++
+          sudo ln -sf "$(command -v ld.lld-18)" /usr/local/bin/ld.lld
+      - name: Download pinned OpenOrbis toolchain
+        run: |
+          curl -fL --retry 3 -o /tmp/openorbis.tar.gz https://github.com/OpenOrbis/OpenOrbis-PS4-Toolchain/releases/download/v0.5.4/toolchain-llvm-18.tar.gz
+          echo "3c7cd5bb593ca74fa1c13fd59f3938dc0fc07985167f7275063019e63abe4526  /tmp/openorbis.tar.gz" | sha256sum -c -
+          mkdir -p "$GITHUB_WORKSPACE/OpenOrbis/PS4Toolchain"
+          tar -xzf /tmp/openorbis.tar.gz -C "$GITHUB_WORKSPACE/OpenOrbis/PS4Toolchain"
+          echo "OO_PS4_TOOLCHAIN=$GITHUB_WORKSPACE/OpenOrbis/PS4Toolchain" >> "$GITHUB_ENV"
+      - name: Checkout pinned GoldHEN plugin SDK
+        uses: actions/checkout@v4
+        with:
+          repository: GoldHEN/GoldHEN_Plugins_SDK
+          ref: bcea3c7ef01dac6d7f9f49ebf9e90fe66d86f5f7
+          path: GoldHEN_Plugins_SDK
+      - name: Build GoldHEN hook library
+        run: |
+          echo "GOLDHEN_SDK=$GITHUB_WORKSPACE/GoldHEN_Plugins_SDK" >> "$GITHUB_ENV"
+          make -C GoldHEN_Plugins_SDK PRINTF=1 DEBUGFLAGS=1
+      - name: Build PS4 PRX
+        run: make -C platform/ps4/goldhen/plugin
+      - name: Upload PRX artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ps4-neural-engine-prx
+          path: |
+            dist/ps4/ps4_neural_engine.prx
+            dist/ps4/ps4_neural_engine.elf
+          if-no-files-found: error
