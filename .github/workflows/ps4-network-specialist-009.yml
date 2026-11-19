@@ -12,7 +12,7 @@ jobs:
     runs-on: [self-hosted, Windows, X64, ps4-lan]
     steps:
       - name: Read FTP metadata only
-        shell: powershell
+        shell: powershell -NoProfile -ExecutionPolicy Bypass -File {0}
         env:
           PS4_IP: ${{ vars.PS4_IP }}
         run: |
