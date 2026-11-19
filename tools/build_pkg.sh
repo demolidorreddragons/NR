@@ -10,6 +10,7 @@ TOOLS="$OO_PS4_TOOLCHAIN/bin/linux"
 TITLE_ID="PNEU00001"
 CONTENT_ID="IV0000-PNEU00001_00-PS4NEURALENG0000"
 # Release number is embedded in the user-facing PKG filename and preserved by the PS4 bridge.
+# The bridge clears its persistent workspace before downloading this build's artifact.
 PKG_NUMBER="$(tr -d '[:space:]' < "$ROOT/PKG_BUILD_NUMBER")"
 if [[ ! "$PKG_NUMBER" =~ ^[0-9]{3,}$ ]]; then
   echo "PKG_BUILD_NUMBER must contain at least three digits." >&2
