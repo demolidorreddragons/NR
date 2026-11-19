@@ -86,7 +86,8 @@ static int configure_loader(void) {
     }
     input[length] = 0;
 
-    int in_default = 0, found_default = 0, found_entry = 0, inserted = 0;
+    /* First pass: avoid adding a duplicate if the entry already exists. */
+    int in_default = 0, found_default = 0, found_entry = 0;
     size_t pos = 0;
     while (pos < length) {
         size_t start = pos;
@@ -98,27 +99,39 @@ static int configure_loader(void) {
         memcpy(line, input + start, copy_len);
         line[copy_len] = 0;
         trim_line(line);
-
         if (line[0] == '[') {
             in_default = strcmp(line, "[default]") == 0;
             if (in_default) found_default = 1;
         }
         if (in_default && strcmp(line, DEST_PRX) == 0) found_entry = 1;
+    }
+    if (found_entry) return 1;
 
+    /* Second pass: preserve all existing bytes and insert in the right section. */
+    in_default = 0;
+    pos = 0;
+    while (pos < length) {
+        size_t start = pos;
+        while (pos < length && input[pos] != '\n') pos++;
+        if (pos < length) pos++;
+        size_t line_len = pos - start;
+        char line[512];
+        size_t copy_len = line_len < sizeof(line)-1 ? line_len : sizeof(line)-1;
+        memcpy(line, input + start, copy_len);
+        line[copy_len] = 0;
+        trim_line(line);
+
+        if (line[0] == '[') in_default = strcmp(line, "[default]") == 0;
         if (used + line_len + 1 >= sizeof(output)) return 0;
         memcpy(output + used, input + start, line_len);
         used += line_len;
 
-        if (in_default && !inserted && !found_entry &&
-            strcmp(line, "[default]") == 0) {
+        if (in_default && strcmp(line, "[default]") == 0) {
             int n = snprintf(output + used, sizeof(output)-used, "%s\n", DEST_PRX);
             if (n < 0 || (size_t)n >= sizeof(output)-used) return 0;
             used += (size_t)n;
-            inserted = 1;
         }
     }
-
-    if (found_entry) return 1;
 
     if (!found_default) {
         if (used && output[used-1] != '\n') output[used++] = '\n';
