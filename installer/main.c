@@ -1,3 +1,4 @@
+/* Keep operation-specific errno details in the persistent install log for remote diagnosis. */
 #include <Common.h>
 #include <stdio.h>
 #include <stdlib.h>
