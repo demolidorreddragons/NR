@@ -69,9 +69,30 @@ rm -rf "$VERIFY" && mkdir -p "$VERIFY"
 echo "EXTRACTION_STAGE: extracting PKG payload for file-level verification"
 "$TOOLS/PkgTool.Core" pkg_extract --verbose "$pkg" "$VERIFY"
 echo "EXTRACTION_STAGE: PKG payload extraction completed"
-find "$VERIFY" -type f -name ps4_neural_engine.prx -size +0c | grep -q .
-find "$VERIFY" -type f -name eboot.bin -size +0c | grep -q .
-find "$VERIFY" -type f -path '*/sce_sys/param.sfo' -size +0c | grep -q .
-find "$VERIFY" -type f -path '*/sce_sys/icon0.png' -size +0c | grep -q .
+echo "VERIFY_STAGE: listing extracted PKG files"
+find "$VERIFY" -maxdepth 5 -type f -printf '%p (%s bytes)\\n' | sort
+python3 - "$VERIFY" <<'PY'
+import os
+import sys
+
+root = sys.argv[1]
+required = {
+    "ps4_neural_engine.prx": False,
+    "eboot.bin": False,
+    "param.sfo": False,
+    "icon0.png": False,
+}
+for current, _, files in os.walk(root):
+    for name in files:
+        path = os.path.join(current, name)
+        if name in required and os.path.getsize(path) > 0:
+            required[name] = True
+            print(f"VERIFY_STAGE: found {name} ({os.path.getsize(path)} bytes)")
+missing = [name for name, found in required.items() if not found]
+if missing:
+    print("VERIFY_STAGE: missing or empty: " + ", ".join(missing), file=sys.stderr)
+    raise SystemExit(1)
+print("VERIFY_STAGE: all four required package files are present and non-empty")
+PY
 sha256sum "$pkg"
 echo "PKG generated and validated: $pkg"
