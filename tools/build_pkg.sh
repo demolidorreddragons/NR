@@ -9,6 +9,11 @@ OUT="$ROOT/dist/pkg"
 TOOLS="$OO_PS4_TOOLCHAIN/bin/linux"
 TITLE_ID="PNEU00001"
 CONTENT_ID="IV0000-PNEU00001_00-PS4NEURALENG0000"
+PKG_NUMBER="$(tr -d '[:space:]' < "$ROOT/PKG_BUILD_NUMBER")"
+if [[ ! "$PKG_NUMBER" =~ ^[0-9]{3,}$ ]]; then
+  echo "PKG_BUILD_NUMBER must contain at least three digits." >&2
+  exit 1
+fi
 
 rm -rf "$STAGE"
 mkdir -p "$STAGE/sce_sys/about" "$STAGE/sce_module" "$OUT"
@@ -88,6 +93,10 @@ cd "$STAGE"
 "$TOOLS/PkgTool.Core" pkg_build package.gp4 "$OUT"
 pkg="$(find "$OUT" -maxdepth 1 -type f -name '*.pkg' -print -quit)"
 test -n "$pkg" && test -s "$pkg"
+numbered_pkg="$OUT/PS4-Neural-Engine-${PKG_NUMBER}.pkg"
+cp "$pkg" "$numbered_pkg"
+pkg="$numbered_pkg"
+echo "PKG_NUMBER: $PKG_NUMBER"
 echo "VALIDATION_STAGE: checking PKG hashes and signatures"
 "$TOOLS/PkgTool.Core" pkg_validate --verbose "$pkg"
 echo "VALIDATION_STAGE: PKG hash/signature check passed"
