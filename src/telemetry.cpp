@@ -1,5 +1,4 @@
 #include "pne/telemetry.hpp"
-#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -23,11 +22,11 @@ static bool ensure_directories(const char* path) {
     for (char* p = copy + 1; *p; ++p) {
         if (*p == '/') {
             *p = '\0';
-            if (mkdir(copy, 0777) != 0 && errno != EEXIST) return false;
+            if (mkdir(copy, 0777) != 0) { struct stat st; if (stat(copy, &st) != 0 || !S_ISDIR(st.st_mode)) return false; }
             *p = '/';
         }
     }
-    return mkdir(copy, 0777) == 0 || errno == EEXIST;
+    if (mkdir(copy, 0777) == 0) return true;\n    struct stat st;\n    return stat(copy, &st) == 0 && S_ISDIR(st.st_mode);
 }
 bool Writer::start() {
     if (csv_) return true;
