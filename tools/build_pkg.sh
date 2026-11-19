@@ -50,8 +50,9 @@ readelf -h "$STAGE/installer.elf" | grep -Eq 'Entry point address:[[:space:]]+0x
 # create-fself embeds DT_SCE_FILENAME; use a package-relative input filename.
 (
   cd "$STAGE"
+  AUTHINFO="000000000000000000000000001C004000FF000000000080000000000000000000000000000000000000008000400040000000000000008000000000000000080040FFFF000000F000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
   "$TOOLS/create-fself" -in=installer.elf -out=installer.oelf \
-    --eboot eboot.bin --paid 0x3800000000000011
+    --eboot "eboot.bin" --paid 0x3800000000000035 --authinfo "$AUTHINFO"
 )
 test -s "$STAGE/eboot.bin"
 
@@ -62,11 +63,12 @@ sfo() {
 }
 sfo APP_TYPE Integer 4 1
 sfo APP_VER Utf8 8 1.00
-sfo ATTRIBUTE Integer 4 0
-sfo CATEGORY Utf8 4 gd
+sfo ATTRIBUTE Integer 18 0
+sfo CATEGORY Utf8 4 gde
+sfo FORMAT Utf8 4 obs
 sfo CONTENT_ID Utf8 48 "$CONTENT_ID"
 sfo DOWNLOAD_DATA_SIZE Integer 4 0
-sfo SYSTEM_VER Integer 4 0
+sfo SYSTEM_VER Integer 4 1020
 sfo TITLE Utf8 128 "PS4 Neural Engine Installer"
 sfo TITLE_ID Utf8 12 "$TITLE_ID"
 sfo VERSION Utf8 8 1.00
