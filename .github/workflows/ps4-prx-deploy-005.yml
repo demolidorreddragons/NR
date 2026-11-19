@@ -44,7 +44,15 @@ jobs:
           $listCode = $LASTEXITCODE
           if ($listCode -ne 0) { throw "INITIAL_LIST_FAILED=$listCode" }
           $listingText = ($listing | ForEach-Object { [string]$_ }) -join "`n"
-          if ($listingText -match "(?m)\\s$([regex]::Escape($target))$") { throw "TARGET_ALREADY_EXISTS_REFUSING_OVERWRITE" }
+          $existingLine = @($listing | Where-Object { [string]$_ -match [regex]::Escape($target) }) | Select-Object -First 1
+          if ($null -ne $existingLine) {
+            if ([string]$existingLine -match '\\s(\\d+)\\s+Nov\\s+\\d+\\s+\\d{4}\\s+') {
+              $existingSize = [int64]$Matches[1]
+              Write-Host "TARGET_ALREADY_PRESENT path=/data/GoldHEN/plugins/$target listed_bytes=$existingSize"
+              if ($existingSize -eq $expectedSize) { Write-Host "DEPLOYMENT_005_ALREADY_VERIFIED"; exit 0 }
+            }
+            throw "TARGET_ALREADY_EXISTS_WITH_UNEXPECTED_METADATA_REFUSING_OVERWRITE"
+          }
 
           $upload = & curl.exe --fail --silent --show-error --ftp-pasv --user $creds --upload-file $source ($dirUrl + $stage) 2>&1
           $uploadCode = $LASTEXITCODE
@@ -71,12 +79,12 @@ jobs:
           $finalCode = $LASTEXITCODE
           if ($finalCode -ne 0) { throw "FINAL_LIST_FAILED=$finalCode" }
           $finalText = ($finalListing | ForEach-Object { [string]$_ }) -join "`n"
-          $match = [regex]::Match($finalText, "(?m)^\\S+\\s+\\d+\\s+\\d+\\s+\\d+\\s+(\\d+)\\s+.*\\s" + [regex]::Escape($target) + "$")
-          if (-not $match.Success) {
+          $targetLine = @($finalListing | Where-Object { [string]$_ -match [regex]::Escape($target) }) | Select-Object -First 1
+          if ($null -eq $targetLine -or [string]$targetLine -notmatch '\\s(\\d+)\\s+Nov\\s+\\d+\\s+\\d{4}\\s+') {
             $finalListing | ForEach-Object { Write-Host ([string]$_) }
-            throw "TARGET_NOT_FOUND_IN_FINAL_LIST"
+            throw "TARGET_NOT_FOUND_OR_SIZE_UNREADABLE_IN_FINAL_LIST"
           }
-          $remoteSize = [int64]$match.Groups[1].Value
+          $remoteSize = [int64]$Matches[1]
           Write-Host "DEPLOYED_UNREGISTERED_PRX path=/data/GoldHEN/plugins/$target listed_bytes=$remoteSize expected_bytes=$expectedSize"
           if ($remoteSize -ne $expectedSize) { throw "FINAL_LIST_SIZE_MISMATCH" }
           Write-Host "DEPLOYMENT_005_TRANSFER_VERIFIED_NOT_REGISTERED"
