@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-set -euo pipefail
+set -euo pipefail\nexport DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1
 : "${OO_PS4_TOOLCHAIN:?OO_PS4_TOOLCHAIN is required}"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 PLUGIN_DIR="$ROOT/platform/ps4/goldhen/plugin"
@@ -14,8 +14,8 @@ python3 "$ROOT/tools/make_icon.py"
 cp "$ROOT/sce_sys/icon0.png" "$STAGE/sce_sys/icon0.png"
 mkdir -p "$ROOT/sce_sys"
 cd "$ROOT"
-"$TOOLS/clang" --target=x86_64-pc-freebsd12-elf -fPIC -funwind-tables -isysroot "$OO_PS4_TOOLCHAIN" -isystem "$OO_PS4_TOOLCHAIN/include" -isystem /usr/include/x86_64-linux-gnu -I"$OO_PS4_TOOLCHAIN/include/orbis" -c installer/main.c -o "$STAGE/installer.o"
-"$TOOLS/ld.lld" -m elf_x86_64 -pie --script "$OO_PS4_TOOLCHAIN/link.x" --eh-frame-hdr -L"$OO_PS4_TOOLCHAIN/lib" "$STAGE/installer.o" "$OO_PS4_TOOLCHAIN/lib/crt1.o" -o "$STAGE/installer.elf" -lSceLibcInternal -lkernel -lSceSystemService
+clang --target=x86_64-pc-freebsd12-elf -fPIC -funwind-tables -isysroot "$OO_PS4_TOOLCHAIN" -isystem "$OO_PS4_TOOLCHAIN/include" -isystem /usr/include/x86_64-linux-gnu -I"$GOLDHEN_SDK/include" -c installer/main.c -o "$STAGE/installer.o"
+ld.lld -m elf_x86_64 -pie --script "$OO_PS4_TOOLCHAIN/link.x" --eh-frame-hdr -L"$OO_PS4_TOOLCHAIN/lib" "$STAGE/installer.o" "$OO_PS4_TOOLCHAIN/lib/crt1.o" -o "$STAGE/installer.elf" -lSceLibcInternal -lkernel -lSceSystemService
 "$TOOLS/create-fself" -in="$STAGE/installer.elf" -out="$STAGE/installer.oelf" --eboot "$STAGE/eboot.bin" --paid 0x3800000000000011
 "$TOOLS/PkgTool.Core" sfo_new "$STAGE/sce_sys/param.sfo"
 sfo() { "$TOOLS/PkgTool.Core" sfo_setentry "$STAGE/sce_sys/param.sfo" "$1" --type "$2" --maxsize "$3" --value "$4"; }
