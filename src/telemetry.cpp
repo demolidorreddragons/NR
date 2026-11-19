@@ -26,7 +26,9 @@ static bool ensure_directories(const char* path) {
             *p = '/';
         }
     }
-    if (mkdir(copy, 0777) == 0) return true;\n    struct stat st;\n    return stat(copy, &st) == 0 && S_ISDIR(st.st_mode);
+    if (mkdir(copy, 0777) == 0) return true;
+    struct stat st;
+    return stat(copy, &st) == 0 && S_ISDIR(st.st_mode);
 }
 bool Writer::start() {
     if (csv_) return true;
