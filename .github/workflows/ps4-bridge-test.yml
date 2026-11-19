@@ -40,3 +40,39 @@ jobs:
           }
 
           Write-Host "SUCCESS: PS4 FTP port 2121 is reachable."
+
+      - name: Authenticate and list PS4 FTP root
+        shell: powershell -NoProfile -ExecutionPolicy Bypass -Command "& '{0}'"
+        env:
+          PS4_IP: ${{ vars.PS4_IP }}
+        run: |
+          $uri = "ftp://$($env:PS4_IP):2121/"
+          $request = [System.Net.FtpWebRequest]::Create($uri)
+          $request.Method = [System.Net.WebRequestMethods+Ftp]::ListDirectory
+          $request.Credentials = New-Object System.Net.NetworkCredential("anonymous", "anonymous@example.com")
+          $request.UsePassive = $true
+          $request.UseBinary = $false
+          $request.KeepAlive = $false
+          $request.Timeout = 15000
+          $request.ReadWriteTimeout = 15000
+
+          $response = $null
+          $reader = $null
+          try {
+            $response = [System.Net.FtpWebResponse]$request.GetResponse()
+            $reader = New-Object System.IO.StreamReader($response.GetResponseStream())
+            $entries = @()
+            while (-not $reader.EndOfStream) {
+              $line = $reader.ReadLine()
+              if ($line) { $entries += $line }
+            }
+
+            Write-Host "FTP login and directory listing succeeded."
+            Write-Host "Directory entries returned: $($entries.Count)"
+            $entries | Select-Object -First 10 | ForEach-Object { Write-Host " - $_" }
+            Write-Host "SUCCESS: PS4 FTP authentication and listing completed."
+          }
+          finally {
+            if ($reader) { $reader.Dispose() }
+            if ($response) { $response.Dispose() }
+          }
