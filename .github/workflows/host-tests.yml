@@ -9,6 +9,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Validate installer newline escapes
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          source = Path('installer/main.c').read_text()
+          assert r'\\n' not in source, 'installer contains double-escaped newline sequences'
+          assert r'\\r' not in source, 'installer contains double-escaped carriage-return sequences'
+          print('Installer C escape sequences are valid')
+          PY
       - name: Configure
         run: cmake -S . -B build
       - name: Build
