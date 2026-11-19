@@ -1,0 +1,52 @@
+name: PS4 PRX Payload Path QA 006
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/ps4-prx-payload-006.yml"
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  audit:
+    runs-on: [self-hosted, Windows, X64, ps4-lan]
+    steps:
+      - name: Download QA build
+        uses: actions/download-artifact@v4
+        with:
+          name: ps4-neural-engine-build
+          path: transfer
+          repository: demolidorreddragons/NR
+          run-id: 44623808730
+          github-token: ${{ github.token }}
+      - name: Compare same payload under PRX and DAT names
+        shell: powershell -NoProfile -ExecutionPolicy Bypass -File {0}
+        env:
+          PS4_IP: ${{ vars.PS4_IP }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          $outer = Join-Path $env:GITHUB_WORKSPACE "transfer/goldhen/PS4-Neural-Engine-GoldHEN.zip"
+          $extract = Join-Path $env:RUNNER_TEMP "pne-path-probe"
+          New-Item -ItemType Directory -Force -Path $extract | Out-Null
+          Expand-Archive -LiteralPath $outer -DestinationPath $extract -Force
+          $prx = Join-Path $extract "ps4_neural_engine.prx"
+          $expectedSize = (Get-Item $prx).Length
+          $expectedHash = (Get-FileHash $prx -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($expectedSize -ne 206528 -or $expectedHash -ne "531e41aa3f4535e6004d47900f636d6e2a4b1ce2b2709f165db77ebef7e0a3f0") { throw "Source PRX identity mismatch" }
+          $baseUrl = "ftp://$($env:PS4_IP):2121/data/GoldHEN/plugins/"
+          $names = @("pne_payload_probe_006.prx","pne_payload_probe_006.dat")
+          foreach ($name in $names) {
+            $url = $baseUrl + $name
+            $out = Join-Path $env:RUNNER_TEMP ($name + ".readback")
+            & curl.exe --fail --silent --show-error --ftp-pasv --user "anonymous:anonymous@example.com" --upload-file $prx $url
+            if ($LASTEXITCODE -ne 0) { throw "Upload failed for $name exit=$LASTEXITCODE" }
+            & curl.exe --fail --silent --show-error --ftp-pasv --user "anonymous:anonymous@example.com" --output $out $url
+            if ($LASTEXITCODE -ne 0) { throw "Readback failed for $name exit=$LASTEXITCODE" }
+            $actualSize = (Get-Item $out).Length
+            $actualHash = (Get-FileHash $out -Algorithm SHA256).Hash.ToLowerInvariant()
+            Write-Host "PATH_PROBE name=$name expected_size=$expectedSize actual_size=$actualSize expected_sha=$expectedHash actual_sha=$actualHash"
+          }
+          Write-Host "PATH_PROBE_COMPLETE"
