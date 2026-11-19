@@ -17,6 +17,10 @@ jobs:
           assert r'\\n' not in source, 'installer contains double-escaped newline sequences'
           assert r'\\r' not in source, 'installer contains double-escaped carriage-return sequences'
           print('Installer C escape sequences are valid')
+          installer = Path('installer/main.c').read_text()
+          assert 'fstat(' not in installer, 'installer must not trust PS4 fstat size values'
+          assert 'PRX read-back verification failed' in installer, 'installer must verify copied PRX bytes'
+          print('Installer copy verification checks passed')
           PY
       - name: Configure
         run: cmake -S . -B build
