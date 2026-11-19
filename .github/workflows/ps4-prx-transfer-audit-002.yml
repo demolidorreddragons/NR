@@ -1,0 +1,57 @@
+name: PS4 PRX Transfer QA Audit 002
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/ps4-prx-transfer-audit-002.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: [self-hosted, Windows, X64, ps4-lan]
+    steps:
+      - name: Read back deployed PRX and compare with build artifact
+        shell: powershell -NoProfile -ExecutionPolicy Bypass -File {0}
+        env:
+          PS4_IP: ${{ vars.PS4_IP }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          $cred = New-Object System.Net.NetworkCredential("anonymous","anonymous@example.com")
+          function Req([string]$p,[string]$m) {
+            $r=[System.Net.FtpWebRequest]::Create("ftp://$($env:PS4_IP):2121$p")
+            $r.Method=$m; $r.Credentials=$cred; $r.UsePassive=$true; $r.UseBinary=$true; $r.KeepAlive=$false
+            $r.Timeout=30000; $r.ReadWriteTimeout=30000
+            return $r
+          }
+          function GetRemote([string]$p,[string]$out) {
+            $r=Req $p ([System.Net.WebRequestMethods+Ftp]::DownloadFile)
+            $x=$r.GetResponse(); $s=$x.GetResponseStream(); $f=[IO.File]::Create($out)
+            try {$s.CopyTo($f)} finally {$f.Dispose();$s.Dispose();$x.Dispose()}
+            $item=Get-Item $out
+            $hash=(Get-FileHash $out -Algorithm SHA256).Hash.ToLowerInvariant()
+            Write-Host "READBACK path=$p bytes=$($item.Length) sha256=$hash"
+          }
+          $base=Join-Path $env:RUNNER_TEMP "pne-audit"
+          New-Item -ItemType Directory -Force -Path $base | Out-Null
+          foreach($p in @(
+            "/data/GoldHEN/plugins/ps4_neural_engine.prx",
+            "/data/GoldHEN/plugins/ps4_neural_engine.prx.predeploy.bak",
+            "/data/GoldHEN/plugins/ps4_neural_engine.prx.new",
+            "/data/GoldHEN/plugins/ps4_neural_engine_002.prx",
+            "/data/GoldHEN/plugins/ps4_neural_engine_003.prx",
+            "/data/GoldHEN/plugins.ini",
+            "/data/GoldHEN/plugins.ini.predeploy.bak"
+          )) {
+            $dest=Join-Path $base ([guid]::NewGuid().ToString()+".bin")
+            try {GetRemote $p $dest} catch {Write-Host "NOT_READABLE path=$p status=$($_.Exception.Message)"}
+          }
+          $list=Req "/data/GoldHEN/plugins/" ([System.Net.WebRequestMethods+Ftp]::ListDirectory)
+          $resp=$list.GetResponse();$reader=[IO.StreamReader]::new($resp.GetResponseStream())
+          try {$reader.ReadToEnd() -split "`r?`n" | Where-Object {$_ -match "neural|plugin"} | ForEach-Object {Write-Host "DIR_ENTRY=$_"}} finally {$reader.Dispose();$resp.Dispose()}
+          $details=Req "/data/GoldHEN/plugins/" ([System.Net.WebRequestMethods+Ftp]::ListDirectoryDetails)
+          $dr=$details.GetResponse();$ds=[IO.StreamReader]::new($dr.GetResponseStream())
+          try {$ds.ReadToEnd() -split "`r?`n" | ForEach-Object {Write-Host "FULL_DIR_ENTRY=$_"}} finally {$ds.Dispose();$dr.Dispose()}
+          Write-Host "READ_ONLY_AUDIT_DONE"
