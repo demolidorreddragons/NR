@@ -48,14 +48,26 @@ jobs:
             "$env:SystemDrive\PS4Tools",
             "$env:SystemDrive\FakePKGTools",
             "$env:SystemDrive\tools",
-            "$env:RUNNER_WORKSPACE"
+            "$env:RUNNER_WORKSPACE",
+            "$env:PUBLIC",
+            "$env:USERPROFILE\\Desktop",
+            "$env:USERPROFILE\\Downloads",
+            "$env:USERPROFILE\\Documents"
           ) | Where-Object { $_ -and (Test-Path -LiteralPath $_) } | Select-Object -Unique
+
+          # Also inspect non-system fixed drives; tools are often kept outside C:.
+          Get-CimInstance Win32_LogicalDisk -Filter "DriveType=3" |
+            ForEach-Object {
+              $driveRoot = $_.DeviceID + "\\"
+              if ($driveRoot -ne "$env:SystemDrive\\") { $roots += $driveRoot }
+            }
+          $roots = @($roots | Select-Object -Unique)
 
           foreach ($root in $roots) {
             Write-Host "Scanning: $root"
-            Get-ChildItem -LiteralPath $root -Filter "orbis-pub-cmd.exe" -File -Recurse -ErrorAction SilentlyContinue |
+            Get-ChildItem -LiteralPath $root -Filter "orbis-pub-cmd.exe" -File -Recurse -Depth 6 -ErrorAction SilentlyContinue |
               ForEach-Object { $candidates.Add($_.FullName) }
-            Get-ChildItem -LiteralPath $root -Filter "gengp4_patch.exe" -File -Recurse -ErrorAction SilentlyContinue |
+            Get-ChildItem -LiteralPath $root -Filter "gengp4_patch.exe" -File -Recurse -Depth 6 -ErrorAction SilentlyContinue |
               ForEach-Object { $candidates.Add($_.FullName) }
           }
 
