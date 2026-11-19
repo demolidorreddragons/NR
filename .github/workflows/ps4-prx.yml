@@ -1,4 +1,4 @@
-name: PS4 PRX build
+name: PS4 PRX and PKG build
 
 on:
   workflow_dispatch:
@@ -7,14 +7,17 @@ on:
     paths:
       - "src/**"
       - "include/**"
-      - "platform/ps4/**"\n      - "installer/**"\n      - "tools/**"\n      - "docs/PKG_INSTALLER.md"
+      - "platform/ps4/**"
+      - "installer/**"
+      - "tools/**"
+      - "docs/PKG_INSTALLER.md"
       - ".github/workflows/ps4-prx.yml"
 
 permissions:
   contents: read
 
 jobs:
-  build-prx:
+  build-prx-and-pkg:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
@@ -45,11 +48,14 @@ jobs:
           make -C GoldHEN_Plugins_SDK PRINTF=1 DEBUGFLAGS=1
       - name: Build PS4 PRX
         run: make -C platform/ps4/goldhen/plugin
-      - name: Build installable PKG\n        run: bash tools/build_pkg.sh\n      - name: Upload PRX and PKG artifacts
+      - name: Build installable PKG
+        run: bash tools/build_pkg.sh
+      - name: Upload PRX and PKG artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: ps4-neural-engine-prx
+          name: ps4-neural-engine-build
           path: |
             dist/ps4/ps4_neural_engine.prx
-            dist/ps4/ps4_neural_engine.elf\n            dist/pkg/*.pkg
+            dist/ps4/ps4_neural_engine.elf
+            dist/pkg/*.pkg
           if-no-files-found: error
