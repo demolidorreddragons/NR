@@ -7,7 +7,7 @@ on:
     paths:
       - "src/**"
       - "include/**"
-      - "platform/ps4/**"
+      - "platform/ps4/**"\n      - "installer/**"\n      - "tools/**"\n      - "docs/PKG_INSTALLER.md"
       - ".github/workflows/ps4-prx.yml"
 
 permissions:
