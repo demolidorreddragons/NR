@@ -17,7 +17,7 @@ namespace {
 int g_pool=-1, g_ssl=-1, g_http=-1, g_template=-1;
 pthread_mutex_t g_lock=PTHREAD_MUTEX_INITIALIZER;
 std::string g_token;
-bool g_authorized=false;
+bool g_authorized=false, g_auth_active=false, g_auth_joinable=false, g_cancel_auth=false;\npthread_t g_auth_thread;
 constexpr size_t kMaxResponse=65536;
 constexpr size_t kMaxUpload=16*1024*1024;
 
