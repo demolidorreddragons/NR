@@ -84,7 +84,7 @@ jobs:
           "ORBiS_PUB_CMD=$($cmd.FullName)" | Out-File "$env:RUNNER_TEMP\tool-path.txt"
           "ORBiS_PUB_CMD_SHA256=$toolHash" | Out-File "$env:RUNNER_TEMP\tool-path.txt" -Append
 
-      - name: Generate associated patch GP4 and build candidate
+      - name: Diagnostic: probe standard game app/patch category compatibility
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
@@ -122,6 +122,64 @@ jobs:
             if (-not (Test-Path $p)) { throw "Required base payload missing: $p" }
           }
 
+          # Diagnostic only: test whether Sony's packager supports a standard game
+          # app/patch pair. The installed base PKG 002 is CATEGORY=gde, so this
+          # probe must never be published or installed as its update.
+          $baseImage = Join-Path $work "diagnostic-base-image"
+          $baseGp4 = Join-Path $work "diagnostic-base.gp4"
+          $diagnosticBasePkg = Join-Path $work "diagnostic-base-gd.pkg"
+          $diagnosticBaseExtract = Join-Path $work "diagnostic-base-verify"
+          Copy-Item $image $baseImage -Recurse
+          $diagnosticBaseSfo = Join-Path $baseImage "sce_sys/param.sfo"
+          dotnet "$tool" sfo set "$diagnosticBaseSfo" CATEGORY gd 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
+          if ($LASTEXITCODE -ne 0) { throw "Diagnostic base CATEGORY update failed." }
+          dotnet "$tool" sfo set "$diagnosticBaseSfo" PUBTOOLINFO "c_date=20261119,img0_l0_size=1,img0_l1_size=0,img0_sc_ksize=512,img0_pc_ksize=832,st_type=digital50" 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
+          if ($LASTEXITCODE -ne 0) { throw "Diagnostic base storage metadata update failed." }
+          $zeroKey = "00000000000000000000000000000000"
+          dotnet "$tool" gp4gen "$baseImage" --out "$baseGp4" --title "PS4 Neural Engine Diagnostic Base" --title-id PNEU00001 --content-id IV0000-PNEU00001_00-PS4NEURALENG0000 --passcode $zeroKey 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
+          if ($LASTEXITCODE -ne 0) { throw "Diagnostic base GP4 generation failed." }
+          [xml]$baseProject = Get-Content $baseGp4
+          $baseProject.psproject.volume.package.SetAttribute("title_id", "PNEU00001")
+          $baseProject.psproject.volume.package.SetAttribute("title", "PS4 Neural Engine Diagnostic Base")
+          $baseProject.Save($baseGp4)
+          Remove-Item $diagnosticBaseSfo -Force
+          dotnet "$tool" pkg build "$baseGp4" "$baseImage" --out "$diagnosticBasePkg" --validate 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
+          if ($LASTEXITCODE -ne 0 -or -not (Test-Path $diagnosticBasePkg)) { throw "Diagnostic base PKG build failed." }
+          dotnet "$tool" extract "$diagnosticBasePkg" "$diagnosticBaseExtract" 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
+          if ($LASTEXITCODE -ne 0) { throw "Diagnostic base PKG readback failed." }
+          $diagBaseSfo = Join-Path $diagnosticBaseExtract "Sc0/param.sfo"
+          $diagBaseSfoText = dotnet "$tool" sfo read "$diagBaseSfo" 2>&1
+          $diagBaseSfoText | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
+          if (($diagBaseSfoText -join "`n") -notmatch "CATEGORY = gd") { throw "Diagnostic base readback CATEGORY is not gd." }
+
+          "=== SET DIAGNOSTIC GAME PATCH PARAM.SFO ===" | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
+          dotnet "$tool" sfo set "$sfo" CATEGORY gp 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
+          if ($LASTEXITCODE -ne 0) { throw "Diagnostic patch CATEGORY update failed." }
+          dotnet "$tool" sfo set "$sfo" APP_VER 01.01 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
+          if ($LASTEXITCODE -ne 0) { throw "Patch APP_VER update failed." }
+          dotnet "$tool" sfo set "$sfo" VERSION 01.00 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
+          if ($LASTEXITCODE -ne 0) { throw "Patch VERSION update failed." }
+          dotnet "$tool" sfo set "$sfo" ATTRIBUTE 0x00800002 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
+          if ($LASTEXITCODE -ne 0) { throw "Patch ATTRIBUTE update failed." }
+          dotnet "$tool" sfo set "$sfo" PUBTOOLINFO "c_date=20261119,img0_l0_size=7,img0_l1_size=0,img0_sc_ksize=512,img0_pc_ksize=832,st_type=digital25" 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
+          if ($LASTEXITCODE -ne 0) { throw "Patch PUBTOOLINFO update failed." }
+          dotnet "$tool" sfo read "$sfo" 2>&1 | Tee-Object -FilePath "candidate-output/patch-param-sfo.txt"
+          if ($LASTEXITCODE -ne 0) { throw "Patch SFO readback failed." }
+
+          $changeInfoDir = Join-Path $image "sce_sys/changeinfo"
+          New-Item -ItemType Directory -Force -Path $changeInfoDir | Out-Null
+          $changeInfo = Join-Path $changeInfoDir "changeinfo.xml"
+          $changeXml = '<?xml version="1.0" encoding="UTF-8"?>' + "`n" +
+            '<changeinfo><changes app_ver="01.01"><![CDATA[Neural Engine diagnostic patch probe]]></changes></changeinfo>'
+          [IO.File]::WriteAllText($changeInfo, $changeXml, [Text.UTF8Encoding]::new($false))
+
+          $sfo = Join-Path $image "sce_sys/param.sfo"
+          $eboot = Join-Path $image "eboot.bin"
+          $prx = Join-Path $image "ps4_neural_engine.prx"
+          foreach ($p in @($sfo,$eboot,$prx)) {
+            if (-not (Test-Path $p)) { throw "Required base payload missing: $p" }
+          }
+
           $sfo = Join-Path $image "sce_sys/param.sfo"
           $eboot = Join-Path $image "eboot.bin"
           $prx = Join-Path $image "ps4_neural_engine.prx"
@@ -152,7 +210,7 @@ jobs:
 
           $zeroKey = "00000000000000000000000000000000"
           "=== CREATE ASSOCIATED PATCH GP4 ===" | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
-          & $pubCmd gp4_proj_create --volume_type pkg_ps4_patch --content_id IV0000-PNEU00001_00-PS4NEURALENG0000 --passcode $zeroKey --entitlement_key $zeroKey --storage_type digital25 --app_path $basePkg $gp4 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
+          & $pubCmd gp4_proj_create --volume_type pkg_ps4_patch --content_id IV0000-PNEU00001_00-PS4NEURALENG0000 --passcode $zeroKey --entitlement_key $zeroKey --storage_type digital25 --app_path $diagnosticBasePkg $gp4 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
           if ($LASTEXITCODE -ne 0 -or -not (Test-Path $gp4)) { throw "Associated patch GP4 creation failed." }
 
           "=== ADD PATCH PAYLOAD ===" | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
@@ -171,7 +229,7 @@ jobs:
           if ($volumeType -ne "pkg_ps4_patch") { throw "GP4 volume_type is not pkg_ps4_patch." }
           if (-not $appPath) { throw "GP4 has no Application Package association." }
           if ($project.psproject.files.file.Count -lt 4) { throw "GP4 has fewer than 3 payload entries." }
-          Copy-Item $gp4 "candidate-output/PS4-Neural-Engine-003.gp4"
+          Copy-Item $gp4 "candidate-output/DIAGNOSTIC-game-patch.gp4"
           "GP4_VOLUME_TYPE=$volumeType" | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
           "GP4_APP_PATH=$basePkg" | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
           "GP4_FILE_COUNT=$($project.psproject.files.file.Count)" | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
@@ -194,11 +252,11 @@ jobs:
           $sfoText | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
           if (($sfoText -join "`n") -notmatch "CATEGORY = gpe" -or ($sfoText -join "`n") -notmatch "APP_VER = 01.01") { throw "Candidate patch SFO metadata readback mismatch." }
 
-          Copy-Item $pkg "candidate-output/PS4-Neural-Engine-003-CANDIDATE.pkg"
+          Copy-Item $pkg "candidate-output/DIAGNOSTIC-game-patch.pkg"
           $hash = (Get-FileHash -Algorithm SHA256 "candidate-output/PS4-Neural-Engine-003-CANDIDATE.pkg").Hash
           "CANDIDATE_PKG_SHA256=$hash" | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
           "CANDIDATE_PKG_BYTES=$((Get-Item 'candidate-output/PS4-Neural-Engine-003-CANDIDATE.pkg').Length)" | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
-          "STATUS=PC_BUILD_AND_STRUCTURAL_VALIDATION_PASSED; NOT_HARDWARE_TESTED; DO_NOT_INSTALL_YET" | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
+          "STATUS=DIAGNOSTIC_ONLY; USES_TEMPORARY_CATEGORY_GD_BASE; NOT_COMPATIBLE_WITH_INSTALLED_BASE_002; DO_NOT_INSTALL" | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
 
       - name: Upload patch candidate and audit report
         if: always()
