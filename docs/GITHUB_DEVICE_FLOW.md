@@ -43,9 +43,18 @@ compiled into the client configuration; no Client Secret is used or stored.
 
 ## Implementation status
 
-This file and `include/pne/github_oauth.hpp` register the app configuration
-and specify the protocol. The PS4 PRX does **not yet** contain the HTTPS
-transport, Device Flow polling, token lifecycle, GitHub Contents API uploader,
-or upload-confirmation UI. A Client ID alone cannot perform uploads. These
-parts must be implemented and tested on PS4 hardware before claiming that
-console-to-GitHub upload works.
+The PRX now contains an OpenOrbis `sceHttp`/`sceSsl` HTTPS client, Device Flow
+polling, in-memory-only access-token handling, cancellation on plugin unload,
+and a GitHub Contents API uploader. Controller actions:
+
+- L3 + L1 + Circle: begin Device Flow; authorize using the displayed code.
+- L3 + L1 + Cross: explicitly confirm and start uploading the current batch.
+- The batch includes `frametimes.csv` and BMP files already present in the capture
+  directory; each file is committed separately. Files above 16 MiB are skipped.
+
+The uploader targets only the hard-coded repository and paths. TLS verification
+is not disabled. Host CI and PS4 cross-build must pass, and the HTTP/Device Flow
+behavior still requires runtime validation on a PS4 Pro with firmware 14.02 and
+GoldHEN. A successful cross-build is not proof of live GitHub authentication or
+upload. Capture images also remain dependent on a game-specific adapter that
+provides valid CPU-readable RGBA8 staging data.
