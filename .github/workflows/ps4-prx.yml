@@ -45,11 +45,11 @@ jobs:
           make -C GoldHEN_Plugins_SDK PRINTF=1 DEBUGFLAGS=1
       - name: Build PS4 PRX
         run: make -C platform/ps4/goldhen/plugin
-      - name: Upload PRX artifact
+      - name: Build installable PKG\n        run: bash tools/build_pkg.sh\n      - name: Upload PRX and PKG artifacts
         uses: actions/upload-artifact@v4
         with:
           name: ps4-neural-engine-prx
           path: |
             dist/ps4/ps4_neural_engine.prx
-            dist/ps4/ps4_neural_engine.elf
+            dist/ps4/ps4_neural_engine.elf\n            dist/pkg/*.pkg
           if-no-files-found: error
