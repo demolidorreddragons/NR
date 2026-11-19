@@ -54,6 +54,6 @@ test -n "$pkg" && test -s "$pkg"
 VERIFY="$STAGE/pkg-verify"
 rm -rf "$VERIFY" && mkdir -p "$VERIFY"
 "$TOOLS/PkgTool.Core" pkg_extract "$pkg" "$VERIFY"
-test -s "$VERIFY/ps4_neural_engine.prx"
+find "$VERIFY" -type f -name ps4_neural_engine.prx -size +0c | grep -q .
 sha256sum "$pkg"
 echo "PKG generated and validated: $pkg"
