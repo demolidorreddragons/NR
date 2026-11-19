@@ -1,0 +1,48 @@
+name: PS4 PRX Readback QA 010
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/ps4-prx-readback-010.yml"
+permissions:
+  actions: read
+  contents: read
+jobs:
+  verify:
+    runs-on: [self-hosted, Windows, X64, ps4-lan]
+    steps:
+      - name: Verify deployed PRX through GoldHEN readback semantics
+        shell: powershell -NoProfile -ExecutionPolicy Bypass -File {0}
+        env:
+          PS4_IP: ${{ vars.PS4_IP }}
+        run: |
+          $ErrorActionPreference = "Continue"
+          $base = "ftp://$($env:PS4_IP):2121/"
+          $dir = $base + "data/GoldHEN/plugins/"
+          $creds = "anonymous:anonymous@example.com"
+          $name = "ps4_neural_engine_005.prx"
+          $listing = & curl.exe --fail --silent --show-error --ftp-pasv --user $creds $dir 2>&1
+          $listCode = $LASTEXITCODE
+          if ($listCode -ne 0) { throw "LIST_FAILED=$listCode" }
+          $line = @($listing | Where-Object { [string]$_ -match [regex]::Escape($name) }) | Select-Object -First 1
+          if ($null -eq $line) { throw "DEPLOYED_PRX_MISSING" }
+          $fields = ([string]$line).Split([char[]]@(' '), [System.StringSplitOptions]::RemoveEmptyEntries)
+          if ($fields.Count -lt 5) { throw "LIST_ENTRY_UNREADABLE" }
+          $listedSize = [int64]$fields[4]
+          Write-Host "LIST_PRX name=$name bytes=$listedSize"
+          if ($listedSize -ne 206528) { throw "LIST_SIZE_MISMATCH=$listedSize" }
+
+          $local = Join-Path $env:RUNNER_TEMP "pne-prx-010-decrypted.bin"
+          $retr = & curl.exe --fail --silent --show-error --ftp-pasv --user $creds --output $local ($dir + $name) 2>&1
+          $retrCode = $LASTEXITCODE
+          $retr | ForEach-Object { Write-Host ([string]$_) }
+          if ($retrCode -ne 0) { throw "RETR_FAILED=$retrCode" }
+          $retrSize = (Get-Item $local).Length
+          $retrHash = (Get-FileHash $local -Algorithm SHA256).Hash.ToLowerInvariant()
+          $bytes = [System.IO.File]::ReadAllBytes($local)
+          $magic = [System.BitConverter]::ToString($bytes[0..3])
+          $machine = [System.BitConverter]::ToUInt16($bytes,18)
+          Write-Host "RETR_PRX name=$name bytes=$retrSize sha256=$retrHash magic=$magic machine=$machine"
+          if ($retrSize -ne 296952 -or $retrHash -ne "85732d32ee232bb65a3957ba2768532e2e40652ad2c870ec2de810148fb13f58") { throw "GOLDHEN_READBACK_SIGNATURE_MISMATCH" }
+          if ($magic -ne "7F-45-4C-46" -or $machine -ne 62) { throw "DECRYPTED_ELF_HEADER_INVALID" }
+          Write-Host "PRX_005_READBACK_QA_PASSED; GoldHEN returns decrypted ELF, LIST size confirms stored PRX payload"
