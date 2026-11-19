@@ -127,6 +127,7 @@ static int configure_loader(void) {
         used += line_len;
 
         if (in_default && strcmp(line, "[default]") == 0) {
+            if (used && output[used-1] != '\n') output[used++] = '\n';
             int n = snprintf(output + used, sizeof(output)-used, "%s\n", DEST_PRX);
             if (n < 0 || (size_t)n >= sizeof(output)-used) return 0;
             used += (size_t)n;
