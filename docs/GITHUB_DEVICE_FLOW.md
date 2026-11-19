@@ -48,7 +48,7 @@ polling, in-memory-only access-token handling, cancellation on plugin unload,
 and a GitHub Contents API uploader. Controller actions:
 
 - L3 + L1 + Circle: begin Device Flow; authorize using the displayed code.
-- L3 + L1 + Cross: explicitly confirm and start uploading the current batch.\n- L3 + L1 + R3: clear the local session token and cancel any active authorization. This does not revoke the OAuth grant at GitHub; revoke it separately in GitHub Settings → Applications.
+- L3 + L1 + Cross: explicitly confirm and start uploading the current batch.\n- L3 + L1 + R3 + Circle: clear the local session token and cancel any active authorization. This does not revoke the OAuth grant at GitHub; revoke it separately in GitHub Settings → Applications.
 - The batch includes `frametimes.csv` and BMP files already present in the capture
   directory; each file is committed separately. Files above 16 MiB are skipped.
 
