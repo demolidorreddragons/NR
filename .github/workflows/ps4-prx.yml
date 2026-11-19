@@ -10,6 +10,7 @@ on:
       - "platform/ps4/**"
       - "installer/**"
       - "tools/**"
+      - "PKG_BUILD_NUMBER"
       - "docs/PKG_INSTALLER.md"
       - ".github/workflows/ps4-prx.yml"
 
