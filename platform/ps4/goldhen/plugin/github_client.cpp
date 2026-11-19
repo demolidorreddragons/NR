@@ -30,7 +30,7 @@ bool cancelled() {
  return value;
 }
 bool init_http() {
- if(g_http>=0) return true;
+ if(g_http>=0 && g_template>=0) return true;
  (void)sceSysmoduleLoadModuleInternal(ORBIS_SYSMODULE_INTERNAL_NET);
  (void)sceSysmoduleLoadModuleInternal(ORBIS_SYSMODULE_INTERNAL_SSL);
  (void)sceSysmoduleLoadModuleInternal(ORBIS_SYSMODULE_INTERNAL_HTTP);
