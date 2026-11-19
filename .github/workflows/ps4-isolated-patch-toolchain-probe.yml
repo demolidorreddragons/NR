@@ -74,8 +74,20 @@ jobs:
             if (Test-Path $outFile) { Get-Content $outFile | Tee-Object -FilePath "$env:RUNNER_TEMP\tool-help.txt" -Append }
             if (Test-Path $errFile) { Get-Content $errFile | Tee-Object -FilePath "$env:RUNNER_TEMP\tool-help.txt" -Append }
           }
-          Invoke-BoundedProbe $cmd.FullName @("gp4_proj_create", "--help") "ORBIS-PUB-CMD GP4 PROJECT CREATE HELP"
-          Invoke-BoundedProbe $patch.FullName @() "GENGP4_PATCH USAGE PROBE"
+          Invoke-BoundedProbe $cmd.FullName @("gp4_proj_create", "--volume_type", "pkg_ps4_patch") "ORBIS-PUB-CMD PATCH PROJECT REQUIRED ARGUMENTS"
+          Invoke-BoundedProbe $patch.FullName @("--help") "GENGP4_PATCH HELP SWITCH PROBE"
+          Invoke-BoundedProbe $patch.FullName @("/?") "GENGP4_PATCH QUESTION SWITCH PROBE"
+
+          # Static ASCII string triage only; do not execute additional binaries or alter files.
+          foreach ($tool in @($cmd, $patch)) {
+            $bytes = [IO.File]::ReadAllBytes($tool.FullName)
+            $ascii = [Text.Encoding]::ASCII.GetString($bytes)
+            $matches = [regex]::Matches($ascii, '[ -~]{5,}') | ForEach-Object { $_.Value } |
+              Where-Object { $_ -match '(?i)(app_path|volume_type|content_id|title_id|gp4|patch|usage|param.sfo|output|\.pkg)' } |
+              Select-Object -Unique -First 100
+            "=== STATIC STRINGS: $($tool.Name) ===" | Tee-Object -FilePath "$env:RUNNER_TEMP\tool-help.txt" -Append
+            $matches | Tee-Object -FilePath "$env:RUNNER_TEMP\tool-help.txt" -Append
+          }
 
       - name: Publish probe evidence
         if: always()
