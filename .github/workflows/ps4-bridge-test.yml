@@ -320,7 +320,7 @@ jobs:
         run: |
           $ErrorActionPreference = "Stop"
           $credentials = New-Object System.Net.NetworkCredential("anonymous", "anonymous@example.com")
-          $fileName = "PS4-Neural-Engine-RuntimeFixed.pkg"
+          $fileName = "PS4-Neural-Engine-$($env:PKG_SHA256.Substring(0,12)).pkg"
           $sourcePath = "/data/$fileName"
           $targetDir = "/data/pkg"
           $targetPath = "$targetDir/$fileName"
