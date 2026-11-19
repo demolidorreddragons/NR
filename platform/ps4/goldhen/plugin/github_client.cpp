@@ -22,6 +22,9 @@ constexpr size_t kMaxUpload=2*1024*1024;
 
 bool init_http() {
  if(g_http>=0) return true;
+ (void)sceSysmoduleLoadModuleInternal(ORBIS_SYSMODULE_INTERNAL_NET);
+ (void)sceSysmoduleLoadModuleInternal(ORBIS_SYSMODULE_INTERNAL_SSL);
+ (void)sceSysmoduleLoadModuleInternal(ORBIS_SYSMODULE_INTERNAL_HTTP);
  (void)sceNetInit();
  g_pool=sceNetPoolCreate("pne_github",64*1024,0);
  if(g_pool<0) return false;
@@ -49,7 +52,10 @@ bool request(const char* url,const char* method,const char* body,
  int req=sceHttpCreateRequestWithURL2(conn,method,url,body_len);
  if(req<0){sceHttpDeleteConnection(conn);return false;}
  bool ok=sceHttpAddRequestHeader(req,"Accept","application/json",0)>=0;
- if(body) ok=ok && sceHttpAddRequestHeader(req,"Content-Type","application/x-www-form-urlencoded",0)>=0;
+ if(body) ok=ok && sceHttpAddRequestHeader(req,"Content-Type",
+   strcmp(method,"PUT")==0 ? "application/json" : "application/x-www-form-urlencoded",0)>=0;
+ if(strstr(url,"api.github.com")!=nullptr)
+  ok=ok && sceHttpAddRequestHeader(req,"X-GitHub-Api-Version","2022-11-28",0)>=0;
  if(bearer && *bearer) {
   std::string h="Bearer ";h+=bearer;
   ok=ok && sceHttpAddRequestHeader(req,"Authorization",h.c_str(),0)>=0;
