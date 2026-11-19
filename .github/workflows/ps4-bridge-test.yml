@@ -201,7 +201,7 @@ jobs:
           PS4_IP: ${{ vars.PS4_IP }}
         run: |
           $ErrorActionPreference = "Stop"
-          $pkg = Join-Path $env:GITHUB_WORKSPACE "transfer/pkg/PS4-Neural-Engine-Verified.pkg"
+          $pkg = Join-Path $env:GITHUB_WORKSPACE "transfer/pkg/IV0000-PNEU00001_00-PS4NEURALENG0000.pkg"
           if (-not (Test-Path -LiteralPath $pkg -PathType Leaf)) {
             throw "Validated PKG artifact was not found at expected path."
           }
