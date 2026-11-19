@@ -98,38 +98,10 @@ jobs:
           New-Item -ItemType Directory -Force -Path "candidate-output" | Out-Null
           $zeroKey = "00000000000000000000000000000000"
 
-          # The original PKG 002 was built without PUBTOOLINFO st_type. Sony's
-          # img_create therefore reports its associated app storage as "unknown".
-          # Rebuild the exact extracted app payload with the OrbisPkgTool GP4
-          # generator (default digital50), then associate the patch to that base.
-          $baseSource = Join-Path $work "base-source"
-          $baseRebuildDir = Join-Path $work "base-rebuilt"
-          New-Item -ItemType Directory -Force -Path $baseSource,$baseRebuildDir | Out-Null
-          "=== REBUILD BASE WITH EXPLICIT DIGITAL50 STORAGE METADATA ===" | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
-          & dotnet "$tool" extract "$basePkg" "$baseSource" --verbose 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
-          if ($LASTEXITCODE -ne 0) { throw "Base extraction for metadata rebuild failed." }
-          & dotnet "$tool" restructure "$baseSource" --verbose 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
-          if ($LASTEXITCODE -ne 0) { throw "Base restructure for metadata rebuild failed." }
-          $baseImage = Join-Path $baseSource "Image0"
-          $rebuiltBaseSfo = Join-Path $baseImage "sce_sys/param.sfo"
-          if (-not (Test-Path $rebuiltBaseSfo)) { throw "Rebuilt base source param.sfo missing." }
-          & dotnet "$tool" sfo set "$rebuiltBaseSfo" PUBTOOLINFO "c_date=20261119,img0_l0_size=7,img0_l1_size=0,img0_sc_ksize=512,img0_pc_ksize=832,st_type=digital50" 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
-          if ($LASTEXITCODE -ne 0) { throw "Base PUBTOOLINFO update failed." }
-          $baseGp4 = Join-Path $work "PS4-Neural-Engine-002-base.gp4"
-          & dotnet "$tool" gp4gen "$baseImage" --passcode $zeroKey --out $baseGp4 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
-          if ($LASTEXITCODE -ne 0 -or -not (Test-Path $baseGp4)) { throw "Base GP4 generation failed." }
-          [xml]$baseProject = Get-Content $baseGp4
-          if ($baseProject.psproject.volume.package.storage_type -ne "digital50") { throw "Base GP4 storage_type is not digital50." }
-          $rebuiltBasePkg = Join-Path $baseRebuildDir "PS4-Neural-Engine-002-DIGITAL50.pkg"
-          & dotnet "$tool" pkg build "$baseGp4" "$baseImage" --out $rebuiltBasePkg --content-flags 0x0C000000 --validate 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
-          if ($LASTEXITCODE -ne 0 -or -not (Test-Path $rebuiltBasePkg)) { throw "Rebuilt base PKG build failed." }
-          & dotnet "$tool" validate "$rebuiltBasePkg" 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
-          if ($LASTEXITCODE -ne 0) { throw "Rebuilt base PKG validation failed." }
-          & dotnet "$tool" info "$rebuiltBasePkg" 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
-          if ($LASTEXITCODE -ne 0) { throw "Rebuilt base PKG info inspection failed." }
-          & dotnet "$tool" sfo read "$rebuiltBaseSfo" 2>&1 | Tee-Object -FilePath "candidate-output/rebuilt-base-param-sfo.txt"
-          $basePkg = $rebuiltBasePkg
-          "REBUILT_BASE_PKG=$basePkg" | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
+          # Keep the original, independently validated base PKG byte-for-byte.
+          # Do not rebuild its SFO: Sony img_create rejected the reconstructed
+          # app package param.sfo before patch image creation.
+          "BASE_PKG_MODE=ORIGINAL_VALIDATED_PKG_002_UNMODIFIED" | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
           $extract = Join-Path $work "base-extracted"
           $gp4 = Join-Path $work "PS4-Neural-Engine-003.gp4"
           $pkg = Join-Path $work "PS4-Neural-Engine-003-CANDIDATE.pkg"
@@ -209,7 +181,7 @@ jobs:
           $appPath = $project.psproject.volume.package.app_path
           if ($volumeType -ne "pkg_ps4_patch") { throw "GP4 volume_type is not pkg_ps4_patch." }
           if (-not $appPath) { throw "GP4 has no Application Package association." }
-          if ($appPath -notmatch "PS4-Neural-Engine-002-DIGITAL50[.]pkg$") { throw "GP4 association does not point to the validated rebuilt base derived from PKG 002: $appPath" }
+          if ($appPath -notmatch "PS4-Neural-Engine-002[.]pkg$") { throw "GP4 association does not point to the original validated PKG 002: $appPath" }
           if ($project.psproject.files.file.Count -lt 4) { throw "GP4 has fewer than 3 payload entries." }
           Copy-Item $gp4 "candidate-output/PS4-Neural-Engine-003.gp4"
           "GP4_VOLUME_TYPE=$volumeType" | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
