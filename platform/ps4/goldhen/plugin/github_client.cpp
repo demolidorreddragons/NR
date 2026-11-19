@@ -41,7 +41,7 @@ bool init_http() {
  (void)sceSysmoduleLoadModuleInternal(ORBIS_SYSMODULE_INTERNAL_HTTP);
  (void)sceNetInit();
  g_pool=sceNetPoolCreate("pne_github",64*1024,0);
- if(g_pool<0) return false;
+ if(g_pool<0){close_http();return false;}
  g_ssl=sceSslInit(304*1024);
  if(g_ssl<0){close_http();return false;}
  g_http=sceHttpInit(g_pool,g_ssl,128*1024);
