@@ -84,7 +84,7 @@ jobs:
           "ORBiS_PUB_CMD=$($cmd.FullName)" | Out-File "$env:RUNNER_TEMP\tool-path.txt"
           "ORBiS_PUB_CMD_SHA256=$toolHash" | Out-File "$env:RUNNER_TEMP\tool-path.txt" -Append
 
-      - name: "Diagnostic: probe standard game app/patch category compatibility"
+      - name: "Build and validate associated non-game patch candidate 003"
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
@@ -129,7 +129,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "SFO APP_VER update failed." }
           dotnet "$tool" sfo set "$sfo" VERSION 01.00 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
           if ($LASTEXITCODE -ne 0) { throw "SFO VERSION update failed." }
-          dotnet "$tool" sfo set "$sfo" ATTRIBUTE 0x00800002 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
+          dotnet "$tool" sfo set "$sfo" ATTRIBUTE 8388610 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
           if ($LASTEXITCODE -ne 0) { throw "SFO ATTRIBUTE update failed." }
           dotnet "$tool" sfo set "$sfo" PUBTOOLINFO "c_date=20261119,img0_l0_size=7,img0_l1_size=0,img0_sc_ksize=512,img0_pc_ksize=832,st_type=digital25" 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
           if ($LASTEXITCODE -ne 0) { throw "SFO PUBTOOLINFO update failed." }
@@ -163,7 +163,7 @@ jobs:
           $appPath = $project.psproject.volume.package.app_path
           if ($volumeType -ne "pkg_ps4_patch") { throw "GP4 volume_type is not pkg_ps4_patch." }
           if (-not $appPath) { throw "GP4 has no Application Package association." }
-          if ($appPath -notmatch "PS4-Neural-Engine-002\\.pkg") { throw "GP4 association does not point to the original PKG 002: $appPath" }
+          if ($appPath -notmatch "PS4-Neural-Engine-002[.]pkg$") { throw "GP4 association does not point to the original PKG 002: $appPath" }
           if ($project.psproject.files.file.Count -lt 4) { throw "GP4 has fewer than 3 payload entries." }
           Copy-Item $gp4 "candidate-output/PS4-Neural-Engine-003.gp4"
           "GP4_VOLUME_TYPE=$volumeType" | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
