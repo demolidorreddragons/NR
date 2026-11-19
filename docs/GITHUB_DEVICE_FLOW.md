@@ -21,8 +21,9 @@ compiled into the client configuration; no Client Secret is used or stored.
    `grant_type=urn:ietf:params:oauth:grant-type:device_code`, respecting the
    server-provided `interval`. Handle `authorization_pending`,
    `slow_down`, `access_denied`, and `expired_token`.
-4. After authorization, upload only user-selected files to the repository
-   Contents API over HTTPS. Never upload automatically on capture completion.
+4. After authorization, the PS4 previews the pending telemetry batch. A second
+   explicit controller confirmation publishes that batch through the Contents API.
+   Nothing is uploaded automatically when a capture completes.
 
 ## Privacy and token handling
 
@@ -32,8 +33,8 @@ compiled into the client configuration; no Client Secret is used or stored.
   account. The client must hard-code the destination `demolidorreddragons/NR`
   and must never accept an arbitrary repository/path from runtime input.
   Every committed capture/log becomes publicly accessible.
-- Require a separate confirmation for each upload batch and show filenames
-  and sizes before publishing.
+- Require a two-press confirmation for each batch. The first press previews
+  the file count, total size, and sample filenames; the second press publishes.
 - Local disconnect clears the session token; remote OAuth grant revocation is performed in GitHub Settings → Applications.
 - Never log access/refresh tokens, include them in diagnostics, or commit them.
 - Do not persist tokens in plaintext. Until a verified protected-storage
@@ -48,7 +49,8 @@ polling, in-memory-only access-token handling, cancellation on plugin unload,
 and a GitHub Contents API uploader. Controller actions:
 
 - L3 + L1 + Circle: begin Device Flow; authorize using the displayed code.
-- L3 + L1 + Cross: explicitly confirm and start uploading the current batch.\n- L3 + L1 + R3 + Circle: clear the local session token and cancel any active authorization. This does not revoke the OAuth grant at GitHub; revoke it separately in GitHub Settings → Applications.
+- L3 + L1 + Cross: first press previews the batch; second press confirms upload.
+- L3 + L1 + R3 + Circle: clear the local session token and cancel any active authorization. This does not revoke the OAuth grant at GitHub; revoke it separately in GitHub Settings → Applications.
 - The batch includes `frametimes.csv` and BMP files already present in the capture
   directory; each file is committed separately. Files above 16 MiB are skipped.
 
