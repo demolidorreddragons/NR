@@ -1,4 +1,4 @@
-name: PS4 FTP Readonly Probe 009
+name: PS4 Network Specialist QA 009
 on:
   push:
     branches: [main]
@@ -8,14 +8,29 @@ permissions:
   actions: read
   contents: read
 jobs:
-  probe:
+  audit:
     runs-on: [self-hosted, Windows, X64, ps4-lan]
     steps:
-      - name: Read FTP metadata only
+      - name: Compare FTP RETR bytes for known plugin files
         shell: powershell -NoProfile -ExecutionPolicy Bypass -File {0}
         env:
           PS4_IP: ${{ vars.PS4_IP }}
         run: |
           $ErrorActionPreference = "Continue"
-          curl.exe --verbose --ftp-pasv --user "anonymous:anonymous@example.com" "ftp://$($env:PS4_IP):2121/data/GoldHEN/plugins/" 2>&1
-          Write-Host "READONLY_PROBE_EXIT=$LASTEXITCODE"
+          $base = "ftp://$($env:PS4_IP):2121/data/GoldHEN/plugins/"
+          $names = @("ps4_neural_engine.prx","ps4_neural_engine_002.prx","ps4_neural_engine_003.prx","ps4_neural_engine_004.prx","pne_payload_probe_006.prx","pne_payload_probe_006.dat","pne_network_008_stage.dat")
+          $dir = Join-Path $env:RUNNER_TEMP "pne-readback-009"
+          New-Item -ItemType Directory -Force -Path $dir | Out-Null
+          foreach ($name in $names) {
+            $dest = Join-Path $dir ($name + ".bin")
+            $out = & curl.exe --fail --silent --show-error --ftp-pasv --user "anonymous:anonymous@example.com" --output $dest ($base + $name) 2>&1
+            $code = $LASTEXITCODE
+            foreach ($line in $out) { Write-Host ([string]$line) }
+            if ($code -eq 0 -and (Test-Path $dest)) {
+              $size = (Get-Item $dest).Length
+              $hash = (Get-FileHash $dest -Algorithm SHA256).Hash.ToLowerInvariant()
+              Write-Host "RETR name=$name bytes=$size sha256=$hash"
+            } else {
+              Write-Host "RETR name=$name exit=$code"
+            }
+          }
