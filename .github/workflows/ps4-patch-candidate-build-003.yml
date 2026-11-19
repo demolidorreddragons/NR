@@ -94,24 +94,12 @@ jobs:
           $extract = Join-Path $work "base-extracted"
           $gp4 = Join-Path $work "PS4-Neural-Engine-003.gp4"
           $pkg = Join-Path $work "PS4-Neural-Engine-003-CANDIDATE.pkg"
+          $verify = Join-Path $work "verify"
           $baseCopyDir = Join-Path $work "base-artifact/pkg"
-          New-Item -ItemType Directory -Force -Path $baseCopyDir | Out-Null
           $basePkgForGp4 = Join-Path $baseCopyDir "PS4-Neural-Engine-002-STTYPE.pkg"
           $baseGp4 = Join-Path $work "base-app-sttype.gp4"
-          "=== BUILD TEMPORARY BASE WITH EXPLICIT STORAGE METADATA ===" | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
-          dotnet "$tool" gp4gen "$image" --out "$baseGp4" 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
-          if ($LASTEXITCODE -ne 0) { throw "Temporary base GP4 generation failed." }
-          dotnet "$tool" pkg build "$baseGp4" "$image" --out "$basePkgForGp4" --validate 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
-          if ($LASTEXITCODE -ne 0 -or -not (Test-Path $basePkgForGp4)) { throw "Temporary base PKG with storage metadata failed." }
-          $tempBaseExtract = Join-Path $work "temp-base-verify"
-          dotnet "$tool" extract "$basePkgForGp4" "$tempBaseExtract" 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
-          if ($LASTEXITCODE -ne 0) { throw "Temporary base PKG readback failed." }
-          $tempBaseSfo = Get-ChildItem $tempBaseExtract -Recurse -File -Filter "param.sfo" | Select-Object -First 1
-          $tempBaseSfoText = dotnet "$tool" sfo read "$($tempBaseSfo.FullName)" 2>&1
-          $tempBaseSfoText | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
-          if (($tempBaseSfoText -join "`n") -notmatch "CATEGORY = gde" -or ($tempBaseSfoText -join "`n") -notmatch "st_type=digital50") { throw "Temporary base SFO storage metadata readback failed." }
-          $verify = Join-Path $work "verify"
           New-Item -ItemType Directory -Force -Path $work | Out-Null
+          New-Item -ItemType Directory -Force -Path $baseCopyDir | Out-Null
           New-Item -ItemType Directory -Force -Path "candidate-output" | Out-Null
 
           "=== BASE PACKAGE ===" | Tee-Object -FilePath "candidate-output/build-report.txt"
@@ -127,6 +115,20 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "Base package restructure failed." }
 
           $image = Join-Path $extract "Image0"
+          "=== BUILD TEMPORARY BASE WITH EXPLICIT STORAGE METADATA ===" | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
+          dotnet "$tool" gp4gen "$image" --out "$baseGp4" 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
+          if ($LASTEXITCODE -ne 0) { throw "Temporary base GP4 generation failed." }
+          dotnet "$tool" pkg build "$baseGp4" "$image" --out "$basePkgForGp4" --validate 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
+          if ($LASTEXITCODE -ne 0 -or -not (Test-Path $basePkgForGp4)) { throw "Temporary base PKG with storage metadata failed." }
+          $tempBaseExtract = Join-Path $work "temp-base-verify"
+          dotnet "$tool" extract "$basePkgForGp4" "$tempBaseExtract" 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
+          if ($LASTEXITCODE -ne 0) { throw "Temporary base PKG readback failed." }
+          $tempBaseSfo = Get-ChildItem $tempBaseExtract -Recurse -File -Filter "param.sfo" | Select-Object -First 1
+          if (-not $tempBaseSfo) { throw "Temporary base SFO missing." }
+          $tempBaseSfoText = dotnet "$tool" sfo read "$($tempBaseSfo.FullName)" 2>&1
+          $tempBaseSfoText | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
+          if (($tempBaseSfoText -join "`n") -notmatch "CATEGORY = gde" -or ($tempBaseSfoText -join "`n") -notmatch "st_type=digital50") { throw "Temporary base SFO storage metadata readback failed." }
+
           $sfo = Join-Path $image "sce_sys/param.sfo"
           $eboot = Join-Path $image "eboot.bin"
           $prx = Join-Path $image "ps4_neural_engine.prx"
