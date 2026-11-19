@@ -1,3 +1,4 @@
+
 name: PS4 Windows Bridge Test
 
 on:
@@ -16,17 +17,26 @@ jobs:
         shell: powershell
         run: |
           Write-Host "Runner: $env:COMPUTERNAME"
-          Write-Host "User:"
           whoami
 
-      - name: Check PS4 network connection
+      - name: Check PS4 FTP connection
         shell: powershell
-        run: |
-          Write-Host "Testing PS4 TCP port 2121"
-          Write-Host "PS4 IP must be configured as a repository variable named PS4_IP."
-          if (-not $env:PS4_IP) {
-            throw "Repository variable PS4_IP is not configured."
-          }
-          Test-NetConnection -ComputerName $env:PS4_IP -Port 2121
         env:
           PS4_IP: ${{ vars.PS4_IP }}
+        run: |
+          if (-not $env:PS4_IP) {
+            throw "PS4_IP variable is missing."
+          }
+
+          Write-Host "Testing $env:PS4_IP on TCP port 2121"
+
+          $connected = Test-NetConnection `
+            -ComputerName $env:PS4_IP `
+            -Port 2121 `
+            -InformationLevel Quiet
+
+          if (-not $connected) {
+            throw "PS4 FTP port 2121 is unreachable."
+          }
+
+          Write-Host "SUCCESS: PS4 FTP port 2121 is reachable."
