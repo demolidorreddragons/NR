@@ -33,7 +33,7 @@ jobs:
         run: |
           echo "deb [arch=amd64] https://archive.ubuntu.com/ubuntu focal-updates main" | sudo tee /etc/apt/sources.list.d/focal-updates.list
           sudo apt-get update
-          sudo apt-get install -y libssl1.1=1.1.1f-1ubuntu2.24
+          sudo apt-get install -y libssl1.1=1.1.1f-1ubuntu2.24 libicu66=66.1-2ubuntu2.1
       - name: Download pinned OpenOrbis toolchain
         run: |
           curl -fL --retry 3 -o /tmp/openorbis.tar.gz https://github.com/OpenOrbis/OpenOrbis-PS4-Toolchain/releases/download/v0.5.4/toolchain-llvm-18.tar.gz
