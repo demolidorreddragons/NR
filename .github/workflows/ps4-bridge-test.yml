@@ -2,6 +2,10 @@ name: PS4 Windows Bridge Test
 
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/ps4-bridge-test.yml"
 
 permissions:
   contents: read
@@ -181,3 +185,89 @@ jobs:
           }
 
           Write-Host "SUCCESS: plugin registration inspection completed (read-only)."
+
+      - name: Download validated PKG artifact from build run
+        uses: actions/download-artifact@v4
+        with:
+          name: ps4-neural-engine-build
+          path: transfer
+          repository: demolidorreddragons/NR
+          run-id: 44607927443
+          github-token: ${{ github.token }}
+
+      - name: Transfer PKG to PS4 storage and verify remote copy
+        shell: powershell -NoProfile -ExecutionPolicy Bypass -Command "& '{0}'"
+        env:
+          PS4_IP: ${{ vars.PS4_IP }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          $pkg = Join-Path $env:GITHUB_WORKSPACE "transfer/pkg/IV0000-PNEU00001_00-PS4NEURALENG0000.pkg"
+          if (-not (Test-Path -LiteralPath $pkg -PathType Leaf)) {
+            throw "Validated PKG artifact was not found at expected path."
+          }
+          $localHash = (Get-FileHash -LiteralPath $pkg -Algorithm SHA256).Hash.ToLowerInvariant()
+          $localSize = (Get-Item -LiteralPath $pkg).Length
+          $remotePath = "/data/IV0000-PNEU00001_00-PS4NEURALENG0000.pkg"
+          $uri = "ftp://$($env:PS4_IP):2121$remotePath"
+          $credentials = New-Object System.Net.NetworkCredential("anonymous", "anonymous@example.com")
+
+          $upload = [System.Net.FtpWebRequest]::Create($uri)
+          $upload.Method = [System.Net.WebRequestMethods+Ftp]::UploadFile
+          $upload.Credentials = $credentials
+          $upload.UsePassive = $true
+          $upload.UseBinary = $true
+          $upload.KeepAlive = $false
+          $upload.Timeout = 120000
+          $upload.ReadWriteTimeout = 120000
+          $upload.ContentLength = $localSize
+          $requestStream = $null
+          $response = $null
+          try {
+            $requestStream = $upload.GetRequestStream()
+            $input = [System.IO.File]::OpenRead($pkg)
+            try { $input.CopyTo($requestStream) } finally { $input.Dispose() }
+            $requestStream.Dispose()
+            $requestStream = $null
+            $response = [System.Net.FtpWebResponse]$upload.GetResponse()
+            Write-Host "FTP upload response: $($response.StatusDescription.Trim())"
+          }
+          finally {
+            if ($requestStream) { $requestStream.Dispose() }
+            if ($response) { $response.Dispose() }
+          }
+
+          $download = [System.Net.FtpWebRequest]::Create($uri)
+          $download.Method = [System.Net.WebRequestMethods+Ftp]::DownloadFile
+          $download.Credentials = $credentials
+          $download.UsePassive = $true
+          $download.UseBinary = $true
+          $download.KeepAlive = $false
+          $download.Timeout = 120000
+          $download.ReadWriteTimeout = 120000
+          $response = $null
+          $stream = $null
+          $output = $null
+          $verifyPath = Join-Path $env:RUNNER_TEMP "ps4-pkg-remote-verify.pkg"
+          try {
+            $response = [System.Net.FtpWebResponse]$download.GetResponse()
+            $stream = $response.GetResponseStream()
+            $output = [System.IO.File]::Create($verifyPath)
+            $stream.CopyTo($output)
+            $output.Dispose()
+            $output = $null
+            $remoteSize = (Get-Item -LiteralPath $verifyPath).Length
+            $remoteHash = (Get-FileHash -LiteralPath $verifyPath -Algorithm SHA256).Hash.ToLowerInvariant()
+            if ($remoteSize -ne $localSize -or $remoteHash -ne $localHash) {
+              throw "Remote PKG verification failed. Local=$localSize/$localHash Remote=$remoteSize/$remoteHash"
+            }
+            Write-Host "SUCCESS: PKG transferred to PS4 and SHA256 verified."
+            Write-Host "Remote path: $remotePath"
+            Write-Host "Size: $remoteSize bytes"
+            Write-Host "SHA256: $remoteHash"
+          }
+          finally {
+            if ($output) { $output.Dispose() }
+            if ($stream) { $stream.Dispose() }
+            if ($response) { $response.Dispose() }
+            Remove-Item -LiteralPath $verifyPath -Force -ErrorAction SilentlyContinue
+          }
