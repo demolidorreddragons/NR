@@ -1,0 +1,33 @@
+name: PS4 PRX Transfer QA Audit 003
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/ps4-prx-transfer-audit-003.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: [self-hosted, Windows, X64, ps4-lan]
+    steps:
+      - name: Verify PRX using independent FTP client
+        shell: powershell -NoProfile -ExecutionPolicy Bypass -File {0}
+        env:
+          PS4_IP: ${{ vars.PS4_IP }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          $base = Join-Path $env:RUNNER_TEMP "pne-curl-audit"
+          New-Item -ItemType Directory -Force -Path $base | Out-Null
+          foreach ($name in @("ps4_neural_engine.prx","ps4_neural_engine_002.prx","ps4_neural_engine_003.prx")) {
+            $dest = Join-Path $base ($name + ".bin")
+            $url = "ftp://$($env:PS4_IP):2121/data/GoldHEN/plugins/$name"
+            & curl.exe --fail --silent --show-error --ftp-pasv --user "anonymous:anonymous@example.com" --output $dest $url
+            if ($LASTEXITCODE -ne 0) { Write-Host "CURL_DOWNLOAD_FAILED $name exit=$LASTEXITCODE"; continue }
+            $item = Get-Item $dest
+            $hash = (Get-FileHash $dest -Algorithm SHA256).Hash.ToLowerInvariant()
+            Write-Host "CURL_READBACK name=$name bytes=$($item.Length) sha256=$hash"
+          }
+          Write-Host "INDEPENDENT_FTP_READBACK_DONE"
