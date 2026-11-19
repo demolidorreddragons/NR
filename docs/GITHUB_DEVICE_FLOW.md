@@ -13,7 +13,7 @@ compiled into the client configuration; no Client Secret is used or stored.
 1. The PS4 sends an HTTPS POST to `https://github.com/login/device/code`
    with `client_id`, `scope=public_repo`, and
    `Accept: application/json`.
-2. The UI displays the returned `user_code` and
+2. A PS4 notification displays the returned `user_code` and
    `https://github.com/login/device`. The user approves the app on a separate
    browser/device.
 3. The PS4 polls `https://github.com/login/oauth/access_token` with
