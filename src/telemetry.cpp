@@ -16,10 +16,23 @@ Writer::Writer(const char* directory) : csv_(nullptr), previous_ticks_(0) {
     else { std::strncpy(directory_, directory, sizeof(directory_) - 1); directory_[sizeof(directory_) - 1] = '\0'; }
 }
 Writer::~Writer() { stop(); }
+static bool ensure_directories(const char* path) {
+    char copy[1024];
+    std::strncpy(copy, path, sizeof(copy)-1);
+    copy[sizeof(copy)-1] = '\0';
+    for (char* p = copy + 1; *p; ++p) {
+        if (*p == '/') {
+            *p = '\0';
+            if (mkdir(copy, 0777) != 0 && errno != EEXIST) return false;
+            *p = '/';
+        }
+    }
+    return mkdir(copy, 0777) == 0 || errno == EEXIST;
+}
 bool Writer::start() {
     if (csv_) return true;
     if (!directory_[0]) return false;
-    if (mkdir(directory_, 0777) != 0 && errno != EEXIST) return false;
+    if (!ensure_directories(directory_)) return false;
     char path[1200];
     if (std::snprintf(path, sizeof(path), "%s/%s", directory_, "frametimes.csv") >= static_cast<int>(sizeof(path))) return false;
     csv_ = std::fopen(path, "ab");
