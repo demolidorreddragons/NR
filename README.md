@@ -8,7 +8,7 @@ Public source repository for the PS4 Neural Engine project. The currently implem
 - Explicit capture sessions; capture is OFF by default.
 - CSV frame-time telemetry.
 - BMP export only from CPU-readable RGBA8 staging memory provided by a verified title-specific adapter.
-- OpenOrbis/GoldHEN PRX cross-build workflow and a homebrew PKG installer pipeline.
+- OpenOrbis/GoldHEN PRX cross-build workflow, a homebrew PKG installer pipeline, and a PRX-only ZIP for GoldHEN's local Plugin Source updater.
 - PKG installer app copies the PRX to `/data/GoldHEN/plugins` and registers it in `/data/GoldHEN/plugins.ini`.
 
 ## Build and validation
@@ -17,6 +17,7 @@ Public source repository for the PS4 Neural Engine project. The currently implem
 - PS4 cross-build and installer PKG: `.github/workflows/ps4-prx.yml`, pinned to OpenOrbis Toolchain v0.5.4 and GoldHEN_Plugins_SDK commit `bcea3c7ef01dac6d7f9f49ebf9e90fe66d86f5f7`; a non-empty PRX and PKG passed the CI build and package validation.
 - Local PRX compilation is not equivalent to loading the plugin on a console. Firmware 14.02 / GoldHEN runtime validation remains outstanding.
 - PKG installer usage: see `docs/PKG_INSTALLER.md`.
+- GoldHEN Plugin Source archive usage: see `docs/GOLDHEN_PLUGIN_ARCHIVE.md`. The ZIP contains only the PRX and never overwrites `plugins.ini`.
 
 ## Hardware boundary
 

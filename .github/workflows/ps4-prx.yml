@@ -53,6 +53,8 @@ jobs:
           make -C GoldHEN_Plugins_SDK PRINTF=1 DEBUGFLAGS=1
       - name: Build PS4 PRX
         run: make -C platform/ps4/goldhen/plugin
+      - name: Build GoldHEN Plugin Source archive
+        run: python3 tools/build_goldhen_plugin_archive.py
       - name: Build installable PKG
         run: bash tools/build_pkg.sh
       - name: Upload PRX and PKG artifacts
@@ -63,4 +65,6 @@ jobs:
             dist/ps4/ps4_neural_engine.prx
             dist/ps4/ps4_neural_engine.elf
             dist/pkg/*.pkg
+            dist/goldhen/*.zip
+            dist/goldhen/*.sha256
           if-no-files-found: error
