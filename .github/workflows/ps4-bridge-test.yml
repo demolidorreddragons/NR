@@ -6,13 +6,17 @@ on:
     branches: [main]
     paths:
       - ".github/workflows/ps4-bridge-test.yml"
+  workflow_run:
+    workflows: ["PS4 PRX and PKG build"]
+    types: [completed]
 
 permissions:
   contents: read
+  actions: read
 
 jobs:
   ps4-connectivity:
-    if: github.ref == 'refs/heads/main'
+    if: github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main' && github.event.workflow_run.head_repository.full_name == github.repository)
     runs-on: [self-hosted, Windows, X64, ps4-lan]
 
     steps:
@@ -192,7 +196,7 @@ jobs:
           name: ps4-neural-engine-build
           path: transfer
           repository: demolidorreddragons/NR
-          run-id: 44607927443
+          run-id: ${{ github.event.workflow_run.id }}
           github-token: ${{ github.token }}
 
       - name: Transfer PKG to PS4 storage and verify remote copy
@@ -279,7 +283,7 @@ jobs:
         run: |
           $ErrorActionPreference = "Stop"
           $credentials = New-Object System.Net.NetworkCredential("anonymous", "anonymous@example.com")
-          $fileName = "PS4-Neural-Engine-Verified.pkg"
+          $fileName = "PS4-Neural-Engine-RuntimeFixed.pkg"
           $sourcePath = "/data/$fileName"
           $targetDir = "/data/pkg"
           $targetPath = "$targetDir/$fileName"
@@ -325,7 +329,7 @@ jobs:
           }
 
           if ($targetExists) {
-            if ($targetSize -ne 6619136) { throw "Existing destination has unexpected size $targetSize; refusing to overwrite." }
+            if ($targetSize -ne [long]$env:PKG_SIZE) { throw "Existing destination has unexpected size $targetSize; refusing to overwrite." }
             $r = Invoke-FtpRequest $targetPath ([System.Net.WebRequestMethods+Ftp]::DownloadFile)
             $response = $r.GetResponse()
             $stream = $response.GetResponseStream()
@@ -335,7 +339,7 @@ jobs:
             $output.Dispose(); $stream.Dispose(); $response.Dispose()
             $existingHash = (Get-FileHash -LiteralPath $checkPath -Algorithm SHA256).Hash.ToLowerInvariant()
             Remove-Item -LiteralPath $checkPath -Force
-            if ($existingHash -ne "ab9f88a493f382413323c3196142f2d14e5ba348459091e4c9a3ad874ec513fb") {
+            if ($existingHash -ne $env:PKG_SHA256) {
               throw "Existing destination hash differs; refusing to overwrite."
             }
             $r = Invoke-FtpRequest $sourcePath ([System.Net.WebRequestMethods+Ftp]::DeleteFile)
@@ -364,7 +368,7 @@ jobs:
             $output = $null
             $size = (Get-Item -LiteralPath $verifyPath).Length
             $hash = (Get-FileHash -LiteralPath $verifyPath -Algorithm SHA256).Hash.ToLowerInvariant()
-            if ($size -ne 6619136 -or $hash -ne "ab9f88a493f382413323c3196142f2d14e5ba348459091e4c9a3ad874ec513fb") {
+            if ($size -ne [long]$env:PKG_SIZE -or $hash -ne $env:PKG_SHA256) {
               throw "Destination verification failed: $size bytes, SHA256 $hash"
             }
             Write-Host "SUCCESS: PKG moved and verified at $targetPath"
