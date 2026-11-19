@@ -246,7 +246,7 @@ jobs:
           }
           $localHash = (Get-FileHash -LiteralPath $pkg -Algorithm SHA256).Hash.ToLowerInvariant()
           $localSize = (Get-Item -LiteralPath $pkg).Length
-          $remotePath = "/data/PS4-Neural-Engine-RuntimeFixed.pkg"
+          $remotePath = "/data/PS4-Neural-Engine-$($localHash.Substring(0,12)).pkg"
           $uri = "ftp://$($env:PS4_IP):2121$remotePath"
           $credentials = New-Object System.Net.NetworkCredential("anonymous", "anonymous@example.com")
 
