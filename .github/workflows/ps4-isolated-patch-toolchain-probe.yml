@@ -14,7 +14,7 @@ jobs:
   probe:
     # Disposable GitHub-hosted VM: never use the self-hosted PS4 bridge for third-party binaries.
     runs-on: windows-latest
-    timeout-minutes: 15
+    timeout-minutes: 6
     steps:
       - name: Checkout project
         uses: actions/checkout@v4
@@ -60,13 +60,22 @@ jobs:
           $patch = $tools | Where-Object Name -eq "gengp4_patch.exe" | Select-Object -First 1
           if (-not $cmd -or -not $patch) { throw "Both orbis-pub-cmd.exe and gengp4_patch.exe are required." }
 
-          "=== ORBIS-PUB-CMD GP4 PROJECT CREATE HELP ===" | Tee-Object -FilePath "$env:RUNNER_TEMP\tool-help.txt"
-          & $cmd.FullName gp4_proj_create --help 2>&1 | Tee-Object -FilePath "$env:RUNNER_TEMP\tool-help.txt" -Append
-          "EXIT=$LASTEXITCODE" | Tee-Object -FilePath "$env:RUNNER_TEMP\tool-help.txt" -Append
-
-          "=== GENGP4_PATCH USAGE PROBE ===" | Tee-Object -FilePath "$env:RUNNER_TEMP\tool-help.txt" -Append
-          & $patch.FullName 2>&1 | Tee-Object -FilePath "$env:RUNNER_TEMP\tool-help.txt" -Append
-          "EXIT=$LASTEXITCODE" | Tee-Object -FilePath "$env:RUNNER_TEMP\tool-help.txt" -Append
+          function Invoke-BoundedProbe([string]$exe, [string[]]$arguments, [string]$label) {
+            $outFile = Join-Path $env:RUNNER_TEMP ("probe-" + [guid]::NewGuid().ToString("N") + ".out")
+            $errFile = "$outFile.err"
+            "=== $label ===" | Tee-Object -FilePath "$env:RUNNER_TEMP\tool-help.txt" -Append
+            $p = Start-Process -FilePath $exe -ArgumentList $arguments -PassThru -NoNewWindow -RedirectStandardOutput $outFile -RedirectStandardError $errFile
+            if (-not $p.WaitForExit(15000)) {
+              Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
+              "PROBE_TIMEOUT=15s (process terminated)" | Tee-Object -FilePath "$env:RUNNER_TEMP\tool-help.txt" -Append
+            } else {
+              "EXIT=$($p.ExitCode)" | Tee-Object -FilePath "$env:RUNNER_TEMP\tool-help.txt" -Append
+            }
+            if (Test-Path $outFile) { Get-Content $outFile | Tee-Object -FilePath "$env:RUNNER_TEMP\tool-help.txt" -Append }
+            if (Test-Path $errFile) { Get-Content $errFile | Tee-Object -FilePath "$env:RUNNER_TEMP\tool-help.txt" -Append }
+          }
+          Invoke-BoundedProbe $cmd.FullName @("gp4_proj_create", "--help") "ORBIS-PUB-CMD GP4 PROJECT CREATE HELP"
+          Invoke-BoundedProbe $patch.FullName @() "GENGP4_PATCH USAGE PROBE"
 
       - name: Publish probe evidence
         if: always()
