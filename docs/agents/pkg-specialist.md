@@ -87,3 +87,14 @@ Source artifact: build run 44623808730, artifact 14578192913.
 - The failure indicates Fake PKG Tools' publisher generator cannot currently resolve the base/patch storage-type pairing from this base package. Its SFO `PUBTOOLINFO` lacks an explicit `st_type` token even though the original GP4 was `storage_type=digital50`. This is the leading hypothesis, not yet proven.
 - The patch format requires `sce_sys/changeinfo/changeinfo.xml`; the initial candidate omitted it and the generator warned that the package would not be importable into GEMS. The follow-up adds a valid changeinfo file and probes `digital50` rather than `digital25`.
 - Follow-up run: 44634453533. Do not install any candidate from these failed builds. No PKG was produced, and the PS4 remains untouched.
+
+
+### Category-pair diagnostic rejected (2026-11-19, run 44636671853)
+- The isolated hosted Windows run successfully built OrbisPkgTool, downloaded the exact PKG 002 artifact, verified and extracted the pinned Fake PKG Tools v7 archive, and generated an associated patch GP4 with four payload entries.
+- The run then failed at Sony's img_create with the exact error: `Format of the param file is not valid. (param.sfo(in app pkg))`. No patch PKG was produced.
+- Crucial QA finding: this run is not evidence that the real gde -> gpe pairing works or fails. The workflow attempted to create a synthetic gd diagnostic base, but its locally modified OrbisPkgTool builder maps base-app categories to gde; the read-back of the synthetic base SFO confirms CATEGORY = gde, not gd. The test then attempted a game-style patch SFO (gp) and subsequently rewrote it to gpe. This mixed diagnostic path is invalid and must not be used to infer compatibility.
+- The real base PKG 002 remains CATEGORY=gde, APP_VER=1.00, CONTENT_ID=IV0000-PNEU00001_00-PS4NEURALENG0000. The GP4 association command did accept the real base path in the earlier association-only probe, but a complete package build against that real base has not passed.
+- The workflow also contains a misleading report line that labels the real base path even though the GP4 command in this diagnostic run used the synthetic base path. Do not treat that line as association evidence.
+- Artifact 14584861239 contains only the diagnostic report/SFO evidence; it is not an installable PKG.
+- Host tests passed (run 44636671798). Package build failed (run 44636671853). No package was installed and the PS4 was not contacted.
+- Engineering action: retire this mixed game/non-game diagnostic. The next experiment must use the exact original PKG 002 as --app_path, preserve the base category, use only the hypothesized non-game patch category gpe, and test the publisher metadata as an isolated variable. If the tool rejects the original base SFO, stop and investigate the required official metadata rather than rewriting categories or fabricating a base package.
