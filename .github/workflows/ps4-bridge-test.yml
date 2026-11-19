@@ -206,7 +206,7 @@ jobs:
           }
           $localHash = (Get-FileHash -LiteralPath $pkg -Algorithm SHA256).Hash.ToLowerInvariant()
           $localSize = (Get-Item -LiteralPath $pkg).Length
-          $remotePath = "/data/PS4-Neural-Engine-Verified.pkg"
+          $remotePath = "/data/PS4-Neural-Engine-RuntimeFixed.pkg"
           $uri = "ftp://$($env:PS4_IP):2121$remotePath"
           $credentials = New-Object System.Net.NetworkCredential("anonymous", "anonymous@example.com")
 
@@ -263,6 +263,8 @@ jobs:
             Write-Host "Remote path: $remotePath"
             Write-Host "Size: $remoteSize bytes"
             Write-Host "SHA256: $remoteHash"
+            Add-Content -Path $env:GITHUB_ENV -Value "PKG_SHA256=$localHash"
+            Add-Content -Path $env:GITHUB_ENV -Value "PKG_SIZE=$localSize"
           }
           finally {
             if ($output) { $output.Dispose() }
