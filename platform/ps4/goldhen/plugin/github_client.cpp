@@ -13,6 +13,8 @@
 #include <string.h>
 #include <time.h>
 extern "C" int nanosleep(const struct timespec*, struct timespec*);
+extern "C" int *__error(void);
+extern "C" int *__errno_location(void) { return __error(); }
 #include <string>
 #include <vector>
 
