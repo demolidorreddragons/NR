@@ -33,6 +33,6 @@ A successful cross-compile does not establish that GoldHEN can load the PRX on P
 
 - **L3 + L1 + Circle** starts GitHub Device Flow. Enter the displayed one-time code at the verification URL on another device.
 - The access token is held in process memory only and cleared when the plugin unloads.
-- **L3 + L1 + Cross** is a separate, deliberate upload action. The uploader publishes `frametimes.csv` and `.bmp` files found in the capture directory, one file per GitHub Contents API commit. Files larger than 16 MiB are skipped.
+- **L3 + L1 + Cross** first previews the batch (count, total size, sample filenames); a second press is required to publish. The uploader publishes `frametimes.csv` and `.bmp` files found in the capture directory, one file per GitHub Contents API commit. Files larger than 16 MiB are skipped.
 - Uploads go to the fixed repository path `demolidorreddragons/NR/telemetry/frametimes.csv`. The requested classic `public_repo` scope can write to public repositories available to the authorizing account; it is not repository-restricted.
 - HTTPS verification is left enabled. The HTTP/TLS API calls compile against OpenOrbis declarations but still require firmware 14.02 runtime validation. No claim of successful PS4 authorization/upload is made until tested on hardware.
