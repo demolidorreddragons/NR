@@ -1,0 +1,47 @@
+name: PS4 Patch GP4 Compatibility Audit
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/ps4-patch-gp4-audit.yml"
+permissions:
+  actions: read
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Download existing base PKG artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ps4-neural-engine-build
+          path: base-artifact
+          repository: demolidorreddragons/NR
+          run-id: 44623808730
+          github-token: ${{ github.token }}
+      - name: Install legacy LibOrbisPkg runtime dependency
+        run: |
+          echo "deb [arch=amd64] https://archive.ubuntu.com/ubuntu focal-updates main" | sudo tee /etc/apt/sources.list.d/focal-updates.list
+          sudo apt-get update
+          sudo apt-get install -y libssl1.1=1.1.1f-1ubuntu2.24 libicu66=66.1-2ubuntu2.1
+      - name: Download pinned OpenOrbis toolchain
+        run: |
+          curl -fL --retry 3 -o /tmp/openorbis.tar.gz https://github.com/OpenOrbis/OpenOrbis-PS4-Toolchain/releases/download/v0.5.4/toolchain-llvm-18.tar.gz
+          echo "3c7cd5bb593ca74fa1c13fd59f3938dc0fc07985167f7275063019e63abe4526  /tmp/openorbis.tar.gz" | sha256sum -c -
+          tar -xzf /tmp/openorbis.tar.gz -C "$GITHUB_WORKSPACE"
+          echo "$GITHUB_WORKSPACE/OpenOrbis/PS4Toolchain/bin/linux" >> "$GITHUB_PATH"
+      - name: Inspect generated base PKG and GP4 project
+        run: |
+          set -euo pipefail
+          mkdir -p base-pkg gp4-inspect
+          unzip -q base-artifact/pkg/PS4-Neural-Engine-002.pkg -d base-pkg
+          PkgTool.Core pkg_validate --verbose base-artifact/pkg/PS4-Neural-Engine-002.pkg
+          PkgTool.Core pkg_makegp4 --passcode 00000000000000000000000000000000 base-artifact/pkg/PS4-Neural-Engine-002.pkg gp4-inspect
+          echo "===== GENERATED GP4 FILES ====="
+          find gp4-inspect -maxdepth 2 -type f -printf '%p (%s bytes)\\n' | sort
+          for f in gp4-inspect/*.gp4; do
+            echo "===== GP4: $f ====="
+            cat "$f"
+          done
+          echo "===== EXTRACTED SFO ====="
+          find gp4-inspect -name param.sfo -print -exec PkgTool.Core sfo_listentries {} ;
