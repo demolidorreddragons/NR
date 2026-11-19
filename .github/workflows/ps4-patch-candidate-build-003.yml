@@ -95,12 +95,40 @@ jobs:
           if (-not (Test-Path $pubCmd)) { throw "orbis-pub-cmd path invalid." }
           $basePkg = (Resolve-Path $basePkg).Path
           $work = Join-Path $env:RUNNER_TEMP "patch-003"
+          New-Item -ItemType Directory -Force -Path "candidate-output" | Out-Null
+          $zeroKey = "00000000000000000000000000000000"
+
+          # The original PKG 002 was built without PUBTOOLINFO st_type. Sony's
+          # img_create therefore reports its associated app storage as "unknown".
+          # Rebuild a byte-identical-content base from its own GP4 with explicit
+          # digital50 metadata, then associate the patch to that rebuilt base.
+          $baseGp4Dir = Join-Path $work "base-gp4"
+          $baseRebuildDir = Join-Path $work "base-rebuilt"
+          New-Item -ItemType Directory -Force -Path $baseGp4Dir,$baseRebuildDir | Out-Null
+          "=== REBUILD BASE WITH EXPLICIT DIGITAL50 STORAGE METADATA ===" | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
+          & dotnet "$tool" pkg_makegp4 --passcode $zeroKey $basePkg $baseGp4Dir 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
+          if ($LASTEXITCODE -ne 0) { throw "Base GP4 generation failed." }
+          $baseGp4 = Get-ChildItem $baseGp4Dir -Recurse -File -Filter "*.gp4" | Select-Object -First 1
+          if (-not $baseGp4) { throw "Base GP4 not found after pkg_makegp4." }
+          $rebuiltBaseSfo = Get-ChildItem $baseGp4Dir -Recurse -File -Filter "param.sfo" | Select-Object -First 1
+          if (-not $rebuiltBaseSfo) { throw "Base GP4 param.sfo source missing." }
+          & dotnet "$tool" sfo set "$($rebuiltBaseSfo.FullName)" PUBTOOLINFO "c_date=20261119,img0_l0_size=7,img0_l1_size=0,img0_sc_ksize=512,img0_pc_ksize=832,st_type=digital50" 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
+          if ($LASTEXITCODE -ne 0) { throw "Base PUBTOOLINFO update failed." }
+          & dotnet "$tool" pkg_build "$($baseGp4.FullName)" $baseRebuildDir 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
+          if ($LASTEXITCODE -ne 0) { throw "Rebuilt base PKG build failed." }
+          $rebuiltBasePkg = Get-ChildItem $baseRebuildDir -Recurse -File -Filter "*.pkg" | Select-Object -First 1
+          if (-not $rebuiltBasePkg) { throw "Rebuilt base PKG missing." }
+          & dotnet "$tool" validate "$($rebuiltBasePkg.FullName)" 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
+          if ($LASTEXITCODE -ne 0) { throw "Rebuilt base PKG validation failed." }
+          & dotnet "$tool" info "$($rebuiltBasePkg.FullName)" 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
+          if ($LASTEXITCODE -ne 0) { throw "Rebuilt base PKG info inspection failed." }
+          $basePkg = $rebuiltBasePkg.FullName
+          "REBUILT_BASE_PKG=$basePkg" | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
           $extract = Join-Path $work "base-extracted"
           $gp4 = Join-Path $work "PS4-Neural-Engine-003.gp4"
           $pkg = Join-Path $work "PS4-Neural-Engine-003-CANDIDATE.pkg"
           $verify = Join-Path $work "verify"
           New-Item -ItemType Directory -Force -Path $work | Out-Null
-          New-Item -ItemType Directory -Force -Path "candidate-output" | Out-Null
           "BASE_PKG_ABSOLUTE_PATH=$basePkg" | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
 
           "=== BASE PACKAGE: ORIGINAL VALIDATED PKG 002 ===" | Tee-Object -FilePath "candidate-output/build-report.txt"
@@ -142,7 +170,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "SFO VERSION update failed." }
           dotnet "$tool" sfo set "$sfo" ATTRIBUTE 8388610 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
           if ($LASTEXITCODE -ne 0) { throw "SFO ATTRIBUTE update failed." }
-          dotnet "$tool" sfo set "$sfo" PUBTOOLINFO "c_date=20261119,img0_l0_size=7,img0_l1_size=0,img0_sc_ksize=512,img0_pc_ksize=832,st_type=digital25" 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
+          dotnet "$tool" sfo set "$sfo" PUBTOOLINFO "c_date=20261119,img0_l0_size=7,img0_l1_size=0,img0_sc_ksize=512,img0_pc_ksize=832,st_type=digital50" 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
           if ($LASTEXITCODE -ne 0) { throw "SFO PUBTOOLINFO update failed." }
           dotnet "$tool" sfo read "$sfo" 2>&1 | Tee-Object -FilePath "candidate-output/patch-param-sfo.txt"
           if ($LASTEXITCODE -ne 0) { throw "Patch SFO readback failed." }
@@ -154,10 +182,16 @@ jobs:
             '<changeinfo><changes app_ver="01.01"><![CDATA[Neural Engine update 1.01]]></changes></changeinfo>'
           [IO.File]::WriteAllText($changeInfo, $changeXml, [Text.UTF8Encoding]::new($false))
 
-          $zeroKey = "00000000000000000000000000000000"
           "=== CREATE ASSOCIATED PATCH GP4 ===" | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
           & $pubCmd gp4_proj_create --volume_type pkg_ps4_patch --content_id IV0000-PNEU00001_00-PS4NEURALENG0000 --passcode $zeroKey --entitlement_key $zeroKey --storage_type digital25 --app_path $basePkg $gp4 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
           if ($LASTEXITCODE -ne 0 -or -not (Test-Path $gp4)) { throw "Associated patch GP4 creation failed." }
+          # CLI accepts digital25 only; change the generated GP4 to match the
+          # rebuilt digital50 base and keep SFO PUBTOOLINFO in sync.
+          [xml]$patchProject = Get-Content $gp4
+          $patchProject.psproject.volume.storage_type = "digital50"
+          $patchProject.Save($gp4)
+          [xml]$patchProjectCheck = Get-Content $gp4
+          if ($patchProjectCheck.psproject.volume.storage_type -ne "digital50") { throw "Patch GP4 storage_type was not updated to digital50." }
 
           "=== ADD PATCH PAYLOAD ===" | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
           & $pubCmd gp4_file_add --force --pfs_compression enable $eboot "eboot.bin" $gp4 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
