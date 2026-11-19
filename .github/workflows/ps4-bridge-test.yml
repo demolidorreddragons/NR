@@ -14,13 +14,13 @@ jobs:
 
     steps:
       - name: Identify Windows runner
-        shell: powershell
+        shell: powershell -NoProfile -ExecutionPolicy Bypass -Command "& '{0}'"
         run: |
           Write-Host "Runner: $env:COMPUTERNAME"
           whoami
 
       - name: Check PS4 FTP connection
-        shell: powershell
+        shell: powershell -NoProfile -ExecutionPolicy Bypass -Command "& '{0}'"
         env:
           PS4_IP: ${{ vars.PS4_IP }}
         run: |
