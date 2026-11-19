@@ -1,0 +1,82 @@
+name: PS4 Patch Toolchain Discovery
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/ps4-patch-toolchain-discovery.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  discover-patch-builder:
+    runs-on: [self-hosted, Windows, X64, ps4-lan]
+    timeout-minutes: 8
+    steps:
+      - name: Checkout project
+        uses: actions/checkout@v4
+
+      - name: Locate existing patch-capable tools (read-only)
+        shell: powershell
+        run: |
+          $ErrorActionPreference = "Continue"
+          Write-Host "=== RUNNER CONTEXT ==="
+          Write-Host "Computer: $env:COMPUTERNAME"
+          Write-Host "Identity: $([Security.Principal.WindowsIdentity]::GetCurrent().Name)"
+          Write-Host "PS4_PUB_CMD_PATH configured: $([bool]$env:PS4_PUB_CMD_PATH)"
+          Write-Host "PS4_FAKEPKGTOOLS_DIR configured: $([bool]$env:PS4_FAKEPKGTOOLS_DIR)"
+
+          $candidates = New-Object System.Collections.Generic.List[string]
+          foreach ($name in @("orbis-pub-cmd.exe", "gengp4_patch.exe", "gengp4_app.exe", "orbis-pub-gen.exe")) {
+            $cmd = Get-Command $name -ErrorAction SilentlyContinue
+            if ($cmd -and $cmd.Source) { $candidates.Add($cmd.Source) }
+          }
+          if ($env:PS4_PUB_CMD_PATH -and (Test-Path -LiteralPath $env:PS4_PUB_CMD_PATH)) {
+            $candidates.Add((Resolve-Path -LiteralPath $env:PS4_PUB_CMD_PATH).Path)
+          }
+          if ($env:PS4_FAKEPKGTOOLS_DIR -and (Test-Path -LiteralPath $env:PS4_FAKEPKGTOOLS_DIR)) {
+            Get-ChildItem -LiteralPath $env:PS4_FAKEPKGTOOLS_DIR -File -Recurse -ErrorAction SilentlyContinue |
+              Where-Object { $_.Name -in @("orbis-pub-cmd.exe", "gengp4_patch.exe", "gengp4_app.exe", "orbis-pub-gen.exe") } |
+              ForEach-Object { $candidates.Add($_.FullName) }
+          }
+
+          $roots = @(
+            "$env:ProgramFiles",
+            "${env:ProgramFiles(x86)}",
+            "$env:ProgramData",
+            "$env:SystemDrive\PS4Tools",
+            "$env:SystemDrive\FakePKGTools",
+            "$env:SystemDrive\tools",
+            "$env:RUNNER_WORKSPACE"
+          ) | Where-Object { $_ -and (Test-Path -LiteralPath $_) } | Select-Object -Unique
+
+          foreach ($root in $roots) {
+            Write-Host "Scanning: $root"
+            Get-ChildItem -LiteralPath $root -Filter "orbis-pub-cmd.exe" -File -Recurse -ErrorAction SilentlyContinue |
+              ForEach-Object { $candidates.Add($_.FullName) }
+            Get-ChildItem -LiteralPath $root -Filter "gengp4_patch.exe" -File -Recurse -ErrorAction SilentlyContinue |
+              ForEach-Object { $candidates.Add($_.FullName) }
+          }
+
+          $found = @($candidates | Select-Object -Unique)
+          if ($found.Count -eq 0) {
+            Write-Host "PATCH_BUILDER_NOT_FOUND: no existing orbis-pub-cmd.exe or gengp4_patch.exe found."
+            Write-Host "No software was downloaded or installed; no PS4 files were changed."
+            exit 0
+          }
+
+          foreach ($file in $found) {
+            Write-Host "FOUND_TOOL: $file"
+            $item = Get-Item -LiteralPath $file
+            Write-Host "FILE_VERSION: $($item.VersionInfo.FileVersion)"
+            if ($item.Name -eq "orbis-pub-cmd.exe") {
+              Write-Host "=== gp4_proj_create help ==="
+              & $file gp4_proj_create --help 2>&1 | Select-Object -First 100
+              Write-Host "=== gp4_proj_create help exit: $LASTEXITCODE ==="
+            } else {
+              Write-Host "=== tool help ==="
+              & $file --help 2>&1 | Select-Object -First 60
+              Write-Host "=== tool help exit: $LASTEXITCODE ==="
+            }
+          }
