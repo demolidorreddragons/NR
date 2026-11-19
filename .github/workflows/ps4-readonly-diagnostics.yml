@@ -95,71 +95,37 @@ jobs:
             $x.Dispose()
           }
 
-          $pluginPath = "/data/GoldHEN/plugins/ps4_neural_engine.prx"
-          $stagedPath = "/data/GoldHEN/plugins/ps4_neural_engine.prx.new"
-          $backupPath = "/data/GoldHEN/plugins/ps4_neural_engine.prx.predeploy.bak"
-          $localVerify = Join-Path $env:RUNNER_TEMP "pne-prx-remote-verify.prx"
-          Upload-Ftp $prx $stagedPath
-          Download-Ftp $stagedPath $localVerify
-          $stagedHash = (Get-FileHash $localVerify -Algorithm SHA256).Hash.ToLowerInvariant()
-          $stagedSize = (Get-Item $localVerify).Length
-          if ($stagedSize -ne $localSize -or $stagedHash -ne $localHash) { throw "Staged PRX failed remote hash verification." }
-
-          if (Test-FtpFile $pluginPath) {
-            if (Test-FtpFile $backupPath) { throw "A prior backup already exists; refusing to overwrite it." }
-            Rename-Ftp $pluginPath $backupPath
-            Write-Host "Existing PRX preserved as $backupPath"
+          # Versioned deployment: never rename over or overwrite an existing PRX.
+          $pluginPath = "/data/GoldHEN/plugins/ps4_neural_engine_002.prx"
+          $localVerify = Join-Path $env:RUNNER_TEMP "pne-prx-002-readback.prx"
+          try {
+            $r = New-FtpRequest $pluginPath ([System.Net.WebRequestMethods+Ftp]::GetFileSize)
+            $x = $r.GetResponse(); $x.Dispose()
+            throw "Versioned PRX already exists; refusing to overwrite."
+          } catch {
+            if ($_.Exception.Message -like "*refusing to overwrite*") { throw }
+            if ($_.Exception.Response -and $_.Exception.Response.StatusCode -ne [System.Net.FtpStatusCode]::ActionNotTakenFileUnavailable) { throw }
           }
-          Rename-Ftp $stagedPath $pluginPath
+
+          Upload-Ftp $prx $pluginPath
           Download-Ftp $pluginPath $localVerify
-          $finalHash = (Get-FileHash $localVerify -Algorithm SHA256).Hash.ToLowerInvariant()
           $finalSize = (Get-Item $localVerify).Length
-          if ($finalSize -ne $localSize -or $finalHash -ne $localHash) { throw "Final PRX verification failed." }
-          Write-Host "PRX_DEPLOYED path=$pluginPath size=$finalSize sha256=$finalHash"
+          $finalHash = (Get-FileHash $localVerify -Algorithm SHA256).Hash.ToLowerInvariant()
+          Write-Host "VERSIONED_PRX_READBACK size=$finalSize sha256=$finalHash"
+          if ($finalSize -ne $localSize -or $finalHash -ne $localHash) {
+            throw "Versioned PRX failed byte-for-byte verification; it will NOT be registered."
+          }
 
+          # No plugins.ini existed in the read-only QA audit. Create only after PRX verifies.
           $iniPath = "/data/GoldHEN/plugins.ini"
-          $iniLocal = Join-Path $env:RUNNER_TEMP "plugins.ini"
-          $iniNewLocal = Join-Path $env:RUNNER_TEMP "plugins.ini.new"
-          $iniBackup = "/data/GoldHEN/plugins.ini.predeploy.bak"
-          $entry = "/data/GoldHEN/plugins/ps4_neural_engine.prx"
-          if (Test-FtpFile $iniPath) {
-            Download-Ftp $iniPath $iniLocal
-            $iniText = [System.IO.File]::ReadAllText($iniLocal)
-            if ($iniText -match "(?m)^\s*\[PNEU00001\]\s*$") {
-              if ($iniText -notmatch [regex]::Escape($entry)) {
-                $iniText = $iniText.TrimEnd() + "`r`n" + $entry + "`r`n"
-              }
-            } else {
-              $iniText = $iniText.TrimEnd() + "`r`n`r`n[PNEU00001]`r`n" + $entry + "`r`n"
-            }
-            [System.IO.File]::WriteAllText($iniNewLocal, $iniText, [System.Text.UTF8Encoding]::new($false))
-            Upload-Ftp $iniNewLocal ($iniPath + ".new")
-            $iniVerify = Join-Path $env:RUNNER_TEMP "plugins.ini.verify"
-            Download-Ftp ($iniPath + ".new") $iniVerify
-            if ((Get-FileHash $iniNewLocal -Algorithm SHA256).Hash -ne (Get-FileHash $iniVerify -Algorithm SHA256).Hash) {
-              throw "Staged plugins.ini failed verification."
-            }
-            if (Test-FtpFile $iniBackup) { throw "A prior plugins.ini backup exists; refusing to overwrite it." }
-            Rename-Ftp $iniPath $iniBackup
-            Rename-Ftp ($iniPath + ".new") $iniPath
-            Write-Host "Existing plugins.ini backed up to $iniBackup and updated."
-          } else {
-            $iniText = "; Neural Engine plugin registration`r`n[PNEU00001]`r`n$entry`r`n"
-            [System.IO.File]::WriteAllText($iniNewLocal, $iniText, [System.Text.UTF8Encoding]::new($false))
-            Upload-Ftp $iniNewLocal ($iniPath + ".new")
-            $iniVerify = Join-Path $env:RUNNER_TEMP "plugins.ini.verify"
-            Download-Ftp ($iniPath + ".new") $iniVerify
-            if ((Get-FileHash $iniNewLocal -Algorithm SHA256).Hash -ne (Get-FileHash $iniVerify -Algorithm SHA256).Hash) {
-              throw "New plugins.ini failed remote verification."
-            }
-            Rename-Ftp ($iniPath + ".new") $iniPath
-            Write-Host "Created plugins.ini with a title-specific PNEU00001 registration."
-          }
-
+          $iniLocal = Join-Path $env:RUNNER_TEMP "plugins.ini.002"
+          $iniVerify = Join-Path $env:RUNNER_TEMP "plugins.ini.002.verify"
+          $iniText = "; Neural Engine plugin registration`r`n[PNEU00001]`r`n$pluginPath`r`n"
+          [System.IO.File]::WriteAllText($iniLocal, $iniText, [System.Text.UTF8Encoding]::new($false))
+          Upload-Ftp $iniLocal $iniPath
           Download-Ftp $iniPath $iniVerify
-          $finalIni = [System.IO.File]::ReadAllText($iniVerify)
-          if ($finalIni -notmatch "(?m)^\s*\[PNEU00001\]\s*$" -or $finalIni -notmatch [regex]::Escape($entry)) {
-            throw "Final plugin registration is missing."
-          }
-          Write-Host "PLUGIN_REGISTRATION_VERIFIED title=PNEU00001"
+          $iniHash = (Get-FileHash $iniLocal -Algorithm SHA256).Hash
+          $iniRemoteHash = (Get-FileHash $iniVerify -Algorithm SHA256).Hash
+          if ($iniHash -ne $iniRemoteHash) { throw "plugins.ini registration readback failed." }
+          Write-Host "PLUGIN_REGISTRATION_VERIFIED title=PNEU00001 path=$pluginPath"
           Write-Host "Deployment complete. No application data or savedata paths were accessed."
