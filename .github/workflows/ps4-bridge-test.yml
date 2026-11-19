@@ -201,13 +201,13 @@ jobs:
           PS4_IP: ${{ vars.PS4_IP }}
         run: |
           $ErrorActionPreference = "Stop"
-          $pkg = Join-Path $env:GITHUB_WORKSPACE "transfer/pkg/IV0000-PNEU00001_00-PS4NEURALENG0000.pkg"
+          $pkg = Join-Path $env:GITHUB_WORKSPACE "transfer/pkg/PS4-Neural-Engine-Verified.pkg"
           if (-not (Test-Path -LiteralPath $pkg -PathType Leaf)) {
             throw "Validated PKG artifact was not found at expected path."
           }
           $localHash = (Get-FileHash -LiteralPath $pkg -Algorithm SHA256).Hash.ToLowerInvariant()
           $localSize = (Get-Item -LiteralPath $pkg).Length
-          $remotePath = "/data/IV0000-PNEU00001_00-PS4NEURALENG0000.pkg"
+          $remotePath = "/data/PS4-Neural-Engine-Verified.pkg"
           $uri = "ftp://$($env:PS4_IP):2121$remotePath"
           $credentials = New-Object System.Net.NetworkCredential("anonymous", "anonymous@example.com")
 
@@ -279,7 +279,7 @@ jobs:
         run: |
           $ErrorActionPreference = "Stop"
           $credentials = New-Object System.Net.NetworkCredential("anonymous", "anonymous@example.com")
-          $fileName = "IV0000-PNEU00001_00-PS4NEURALENG0000.pkg"
+          $fileName = "PS4-Neural-Engine-Verified.pkg"
           $sourcePath = "/data/$fileName"
           $targetDir = "/data/pkg"
           $targetPath = "$targetDir/$fileName"
