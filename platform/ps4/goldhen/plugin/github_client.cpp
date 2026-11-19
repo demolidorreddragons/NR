@@ -12,6 +12,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+extern "C" int nanosleep(const struct timespec*, struct timespec*);
 #include <string>
 #include <vector>
 
