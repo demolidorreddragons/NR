@@ -12,7 +12,7 @@ CONTENT_ID="IV0000-PNEU00001_00-PS4NEURALENG0000"
 
 rm -rf "$STAGE"
 mkdir -p "$STAGE/sce_sys" "$OUT"
-cp "$ROOT/dist/ps4/ps4_neural_engine.prx" "$STAGE/ps4_neural_engine.prx"
+test -s "$ROOT/dist/ps4/ps4_neural_engine.prx"\ncp "$ROOT/dist/ps4/ps4_neural_engine.prx" "$STAGE/ps4_neural_engine.prx"
 python3 "$ROOT/tools/make_icon.py" "$STAGE/sce_sys/icon0.png"
 
 clang --target=x86_64-pc-freebsd12-elf -fPIC -funwind-tables \
