@@ -34,7 +34,7 @@ compiled into the client configuration; no Client Secret is used or stored.
   Every committed capture/log becomes publicly accessible.
 - Require a separate confirmation for each upload batch and show filenames
   and sizes before publishing.
-- Provide disconnect/revoke and local credential deletion.
+- Local disconnect clears the session token; remote OAuth grant revocation is performed in GitHub Settings → Applications.
 - Never log access/refresh tokens, include them in diagnostics, or commit them.
 - Do not persist tokens in plaintext. Until a verified protected-storage
   implementation exists on the target firmware, authorization must remain
@@ -48,7 +48,7 @@ polling, in-memory-only access-token handling, cancellation on plugin unload,
 and a GitHub Contents API uploader. Controller actions:
 
 - L3 + L1 + Circle: begin Device Flow; authorize using the displayed code.
-- L3 + L1 + Cross: explicitly confirm and start uploading the current batch.
+- L3 + L1 + Cross: explicitly confirm and start uploading the current batch.\n- L3 + L1 + R3: clear the local session token and cancel any active authorization. This does not revoke the OAuth grant at GitHub; revoke it separately in GitHub Settings → Applications.
 - The batch includes `frametimes.csv` and BMP files already present in the capture
   directory; each file is committed separately. Files above 16 MiB are skipped.
 
