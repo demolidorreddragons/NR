@@ -88,7 +88,7 @@ static void *input_thread(void *arg) {
    const uint32_t upload_chord = ORBIS_PAD_BUTTON_L3 | ORBIS_PAD_BUTTON_L1 | ORBIS_PAD_BUTTON_CROSS;
    const bool upload_down = (data.buttons & upload_chord) == upload_chord;
    if (upload_down && !upload_was_down) {
-    NotifyStatic(TEX_ICON_SYSTEM, pne_github_upload_confirmed_log() ? "PNE: log publicado no GitHub" : "PNE: envio falhou; autorize e grave log");
+    NotifyStatic(TEX_ICON_SYSTEM, pne_github_upload_confirmed_log() ? "PNE: envio iniciado; resultado sera notificado" : "PNE: autorize ou aguarde o envio atual");
    }
    upload_was_down = upload_down;
    const uint32_t quit = ORBIS_PAD_BUTTON_L3 | ORBIS_PAD_BUTTON_R3 |
