@@ -1,4 +1,3 @@
-
 name: PS4 Windows Bridge Test
 
 on:
@@ -71,6 +70,15 @@ jobs:
             Write-Host "Directory entries returned: $($entries.Count)"
             $entries | Select-Object -First 10 | ForEach-Object { Write-Host " - $_" }
             Write-Host "SUCCESS: PS4 FTP authentication and listing completed."
+          }
+          catch {
+            Write-Host "FTP root listing failed: $($_.Exception.Message)"
+            throw
+          }
+          finally {
+            if ($reader) { $reader.Dispose() }
+            if ($response) { $response.Dispose() }
+          }
 
       - name: Inspect GoldHEN installation directory
         shell: powershell -NoProfile -ExecutionPolicy Bypass -Command "& '{0}'"
@@ -106,11 +114,6 @@ jobs:
           catch {
             Write-Host "Could not list /data/GoldHEN/: $($_.Exception.Message)"
             throw
-          }
-          finally {
-            if ($reader) { $reader.Dispose() }
-            if ($response) { $response.Dispose() }
-          }
           }
           finally {
             if ($reader) { $reader.Dispose() }
