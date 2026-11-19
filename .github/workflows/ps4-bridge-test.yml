@@ -119,3 +119,65 @@ jobs:
             if ($reader) { $reader.Dispose() }
             if ($response) { $response.Dispose() }
           }
+
+      - name: Inspect existing plugin registration and files
+        shell: powershell -NoProfile -ExecutionPolicy Bypass -Command "& '{0}'"
+        env:
+          PS4_IP: ${{ vars.PS4_IP }}
+        run: |
+          function Invoke-FtpRead($path, $method) {
+            $uri = "ftp://$($env:PS4_IP):2121$path"
+            $request = [System.Net.FtpWebRequest]::Create($uri)
+            $request.Method = $method
+            $request.Credentials = New-Object System.Net.NetworkCredential("anonymous", "anonymous@example.com")
+            $request.UsePassive = $true
+            $request.UseBinary = $false
+            $request.KeepAlive = $false
+            $request.Timeout = 15000
+            $request.ReadWriteTimeout = 15000
+            return $request
+          }
+
+          $response = $null
+          $reader = $null
+          try {
+            $request = Invoke-FtpRead "/data/GoldHEN/plugins/" ([System.Net.WebRequestMethods+Ftp]::ListDirectory)
+            $response = [System.Net.FtpWebResponse]$request.GetResponse()
+            $reader = New-Object System.IO.StreamReader($response.GetResponseStream())
+            $files = @()
+            while (-not $reader.EndOfStream) {
+              $line = $reader.ReadLine()
+              if ($line) { $files += $line }
+            }
+            Write-Host "GoldHEN plugins directory is accessible."
+            Write-Host "Plugin entries returned: $($files.Count)"
+            $files | Select-Object -First 40 | ForEach-Object { Write-Host " - $_" }
+            if ($files -contains "ps4_neural_engine.prx") {
+              Write-Host "PNE PRX is already present."
+            } else {
+              Write-Host "PNE PRX is not present yet."
+            }
+          }
+          catch {
+            Write-Host "Plugin directory inspection failed: $($_.Exception.Message)"
+            throw
+          }
+          finally {
+            if ($reader) { $reader.Dispose() }
+            if ($response) { $response.Dispose() }
+          }
+
+          $response = $null
+          try {
+            $request = Invoke-FtpRead "/data/GoldHEN/plugins.ini" ([System.Net.WebRequestMethods+Ftp]::GetFileSize)
+            $response = [System.Net.FtpWebResponse]$request.GetResponse()
+            Write-Host "plugins.ini exists; size: $($response.ContentLength) bytes."
+          }
+          catch {
+            Write-Host "plugins.ini size check: file not readable or absent ($($_.Exception.Message))."
+          }
+          finally {
+            if ($response) { $response.Dispose() }
+          }
+
+          Write-Host "SUCCESS: plugin registration inspection completed (read-only)."
