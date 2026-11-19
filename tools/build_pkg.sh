@@ -11,10 +11,26 @@ TITLE_ID="PNEU00001"
 CONTENT_ID="IV0000-PNEU00001_00-PS4NEURALENG0000"
 
 rm -rf "$STAGE"
-mkdir -p "$STAGE/sce_sys" "$OUT"
+mkdir -p "$STAGE/sce_sys/about" "$STAGE/sce_module" "$OUT"
 test -s "$ROOT/dist/ps4/ps4_neural_engine.prx"
 cp "$ROOT/dist/ps4/ps4_neural_engine.prx" "$STAGE/ps4_neural_engine.prx"
 python3 "$ROOT/tools/make_icon.py" "$STAGE/sce_sys/icon0.png"
+
+# OpenOrbis homebrew packages need these runtime support modules in app0.
+# Without them, the PKG can install but the PS4 may report that the app is
+# corrupted when it is launched.
+SAMPLE="$OO_PS4_TOOLCHAIN/samples/piglet"
+for required in "$SAMPLE/sce_module/libc.prx" \
+                "$SAMPLE/sce_module/libSceFios2.prx" \
+                "$SAMPLE/sce_sys/about/right.sprx"; do
+  test -s "$required" || {
+    echo "PKG_STAGE: required OpenOrbis runtime support file missing: $required" >&2
+    exit 1
+  }
+done
+cp "$SAMPLE/sce_module/libc.prx" "$STAGE/sce_module/libc.prx"
+cp "$SAMPLE/sce_module/libSceFios2.prx" "$STAGE/sce_module/libSceFios2.prx"
+cp "$SAMPLE/sce_sys/about/right.sprx" "$STAGE/sce_sys/about/right.sprx"
 
 clang --target=x86_64-pc-freebsd12-elf -fPIC -funwind-tables \
   -isysroot "$OO_PS4_TOOLCHAIN" -isystem "$OO_PS4_TOOLCHAIN/include" \
@@ -58,13 +74,15 @@ sfo VERSION Utf8 8 1.00
 # Validate all staged files before building. param.sfo and icon0.png are
 # PKG metadata entries; pkg_extract exposes the uroot payload, not those entries.
 for required in "$STAGE/ps4_neural_engine.prx" "$STAGE/eboot.bin" \
-                "$STAGE/sce_sys/param.sfo" "$STAGE/sce_sys/icon0.png"; do
+                "$STAGE/sce_sys/param.sfo" "$STAGE/sce_sys/icon0.png" \
+                "$STAGE/sce_sys/about/right.sprx" \
+                "$STAGE/sce_module/libc.prx" "$STAGE/sce_module/libSceFios2.prx"; do
   test -s "$required" || { echo "PKG_STAGE: missing or empty: $required" >&2; exit 1; }
 done
 
 cd "$STAGE"
 "$TOOLS/create-gp4" -out package.gp4 --content-id="$CONTENT_ID" \
-  --files "eboot.bin ps4_neural_engine.prx sce_sys/param.sfo sce_sys/icon0.png"
+  --files "eboot.bin ps4_neural_engine.prx sce_sys/param.sfo sce_sys/icon0.png sce_sys/about/right.sprx sce_module/libc.prx sce_module/libSceFios2.prx"
 "$TOOLS/PkgTool.Core" pkg_build package.gp4 "$OUT"
 pkg="$(find "$OUT" -maxdepth 1 -type f -name '*.pkg' -print -quit)"
 test -n "$pkg" && test -s "$pkg"
@@ -83,7 +101,7 @@ import os
 import sys
 
 root = sys.argv[1]
-required = {"ps4_neural_engine.prx", "eboot.bin", "keystone"}
+required = {"ps4_neural_engine.prx", "eboot.bin", "keystone", "libc.prx", "libSceFios2.prx", "right.sprx"}
 found = set()
 for current, _, files in os.walk(root):
     for name in files:
