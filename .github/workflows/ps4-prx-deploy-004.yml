@@ -1,0 +1,53 @@
+name: PS4 Neural Engine PRX Deployment 004
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/ps4-prx-deploy-004.yml"
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  deploy-prx:
+    runs-on: [self-hosted, Windows, X64, ps4-lan]
+    steps:
+      - name: Download QA-validated build
+        uses: actions/download-artifact@v4
+        with:
+          name: ps4-neural-engine-build
+          path: transfer
+          repository: demolidorreddragons/NR
+          run-id: 44623808730
+          github-token: ${{ github.token }}
+      - name: Upload unique PRX with curl and verify independent readback
+        shell: powershell -NoProfile -ExecutionPolicy Bypass -File {0}
+        env:
+          PS4_IP: ${{ vars.PS4_IP }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          $outer = Join-Path $env:GITHUB_WORKSPACE "transfer/goldhen/PS4-Neural-Engine-GoldHEN.zip"
+          if (-not (Test-Path -LiteralPath $outer)) { throw "GoldHEN archive missing" }
+          $extract = Join-Path $env:RUNNER_TEMP "pne-prx-004"
+          New-Item -ItemType Directory -Force -Path $extract | Out-Null
+          Expand-Archive -LiteralPath $outer -DestinationPath $extract -Force
+          $prx = Join-Path $extract "ps4_neural_engine.prx"
+          if (-not (Test-Path $prx)) { throw "PRX missing" }
+          $size = (Get-Item $prx).Length
+          $hash = (Get-FileHash $prx -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($size -ne 206528 -or $hash -ne "531e41aa3f4535e6004d47900f636d6e2a4b1ce2b2709f165db77ebef7e0a3f0") { throw "Build artifact failed identity check: $size $hash" }
+          $name = "ps4_neural_engine_004.prx"
+          $url = "ftp://$($env:PS4_IP):2121/data/GoldHEN/plugins/$name"
+          $readback = Join-Path $env:RUNNER_TEMP "pne-prx-004-readback.prx"
+          & curl.exe --fail --silent --show-error --ftp-pasv --user "anonymous:anonymous@example.com" --upload-file $prx $url
+          if ($LASTEXITCODE -ne 0) { throw "curl FTP upload failed: $LASTEXITCODE" }
+          & curl.exe --fail --silent --show-error --ftp-pasv --user "anonymous:anonymous@example.com" --output $readback $url
+          if ($LASTEXITCODE -ne 0) { throw "curl FTP readback failed: $LASTEXITCODE" }
+          $actualSize = (Get-Item $readback).Length
+          $actualHash = (Get-FileHash $readback -Algorithm SHA256).Hash.ToLowerInvariant()
+          Write-Host "PRX_004_READBACK expected_bytes=$size actual_bytes=$actualSize expected_sha=$hash actual_sha=$actualHash"
+          if ($actualSize -ne $size -or $actualHash -ne $hash) { throw "PRX_004 failed byte-for-byte readback; plugin not registered" }
+          Write-Host "PRX_004_BYTE_FOR_BYTE_VERIFIED"
+          Write-Host "No plugins.ini changes, no overwrite of existing PRX, no app or savedata changes."
