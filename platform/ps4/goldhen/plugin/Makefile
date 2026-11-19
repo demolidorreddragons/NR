@@ -42,6 +42,7 @@ $(OBJDIR)/telemetry_bridge.o: $(ROOT)/src/telemetry_bridge.cpp $(ROOT)/include/p
 $(TARGET_PRX): $(OBJS) | $(OUTDIR)
 	$(LD) -m elf_x86_64 -pie --script $(TOOLCHAIN)/link.x -e _init --eh-frame-hdr -L$(TOOLCHAIN)/lib -L$(GH_SDK) $(GH_SDK)/build/crtprx.o $(OBJS) -o $(TARGET_ELF) $(LIBS)
 	$(TOOLCHAIN)/bin/$(CDIR)/create-fself -in=$(TARGET_ELF) -out=$(TARGET_ELF).oelf --lib=$@ --paid 0x3800000000000011
+	test -s $@
 
 clean:
 	rm -rf $(OBJDIR) $(OUTDIR)
