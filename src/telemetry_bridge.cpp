@@ -45,7 +45,7 @@ void* run_worker(void*) {
         if(item.kind==Present) (void)writer.append_present(item.info);
         else {
             char path[1200];
-            if(std::snprintf(path,sizeof(path),"%s/frame_%08u.bmp",root,item.number)<(int)sizeof(path))
+            if(snprintf(path,sizeof(path),"%s/frame_%08u.bmp",root,item.number)<(int)sizeof(path))
                 (void)writer.write_rgba8_bmp(path,item.pixels,item.width,item.height,item.pitch);
             free(item.pixels);
         }
