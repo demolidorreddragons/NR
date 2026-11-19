@@ -1,0 +1,64 @@
+name: PS4 Read-only Plugin Diagnostics
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/ps4-readonly-diagnostics.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  inspect-console:
+    runs-on: [self-hosted, Windows, X64, ps4-lan]
+    steps:
+      - name: Read PS4 GoldHEN plugin state (no writes)
+        shell: powershell
+        env:
+          PS4_IP: ${{ vars.PS4_IP }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          $credentials = New-Object System.Net.NetworkCredential("anonymous", "anonymous@example.com")
+
+          function Read-Ftp([string]$path, [string]$method) {
+            $request = [System.Net.FtpWebRequest]::Create("ftp://$($env:PS4_IP):2121$path")
+            $request.Method = $method
+            $request.Credentials = $credentials
+            $request.UsePassive = $true
+            $request.UseBinary = $true
+            $request.KeepAlive = $false
+            $request.Timeout = 20000
+            $request.ReadWriteTimeout = 20000
+            $response = $request.GetResponse()
+            try {
+              if ($method -eq [System.Net.WebRequestMethods+Ftp]::GetFileSize) {
+                return [string]$response.ContentLength
+              }
+              $reader = New-Object System.IO.StreamReader($response.GetResponseStream())
+              try { return $reader.ReadToEnd() } finally { $reader.Dispose() }
+            } finally { $response.Dispose() }
+          }
+
+          Write-Host "PS4=$env:PS4_IP"
+          Write-Host "=== GoldHEN directory ==="
+          try { Read-Ftp "/data/GoldHEN/" ([System.Net.WebRequestMethods+Ftp]::ListDirectory) | Write-Host }
+          catch { Write-Host "GOLDHEN_DIR_ERROR: $($_.Exception.Message)" }
+
+          Write-Host "=== Plugin directory ==="
+          try { Read-Ftp "/data/GoldHEN/plugins/" ([System.Net.WebRequestMethods+Ftp]::ListDirectory) | Write-Host }
+          catch { Write-Host "PLUGIN_DIR_ERROR: $($_.Exception.Message)" }
+
+          Write-Host "=== PNE PRX size ==="
+          try { Write-Host (Read-Ftp "/data/GoldHEN/plugins/ps4_neural_engine.prx" ([System.Net.WebRequestMethods+Ftp]::GetFileSize)) }
+          catch { Write-Host "PNE_PRX_MISSING: $($_.Exception.Message)" }
+
+          Write-Host "=== plugins.ini ==="
+          try { Write-Host (Read-Ftp "/data/GoldHEN/plugins.ini" ([System.Net.WebRequestMethods+Ftp]::DownloadFile)) }
+          catch { Write-Host "PLUGINS_INI_ERROR: $($_.Exception.Message)" }
+
+          Write-Host "=== installer log ==="
+          try { Write-Host (Read-Ftp "/data/GoldHEN/ps4_neural_engine_install.log" ([System.Net.WebRequestMethods+Ftp]::DownloadFile)) }
+          catch { Write-Host "INSTALL_LOG_ERROR: $($_.Exception.Message)" }
+
+          Write-Host "READ_ONLY_DIAGNOSTICS_COMPLETE"
