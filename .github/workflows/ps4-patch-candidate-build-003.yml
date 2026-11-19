@@ -1,0 +1,178 @@
+name: PS4 Patch Candidate Build 003
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/ps4-patch-candidate-build-003.yml"
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  build-candidate:
+    # Disposable hosted Windows runner only; never execute third-party tools on the PS4 bridge.
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout Neural Engine
+        uses: actions/checkout@v4
+
+      - name: Checkout OrbisPkgTool validator
+        uses: actions/checkout@v4
+        with:
+          repository: pearlxcore/OrbisPkgTool
+          ref: master
+          path: OrbisPkgTool-src
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Build independent PKG validator
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          dotnet build OrbisPkgTool-src/OrbisPkgTool/OrbisPkgTool.csproj --configuration Release
+          if ($LASTEXITCODE -ne 0) { throw "OrbisPkgTool build failed." }
+          $tool = "OrbisPkgTool-src/OrbisPkgTool/bin/Release/net10.0-windows/OrbisPkgTool.dll"
+          if (-not (Test-Path $tool)) { throw "OrbisPkgTool DLL missing: $tool" }
+
+      - name: Download exact base PKG 002 artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ps4-neural-engine-build
+          path: base-artifact
+          repository: demolidorreddragons/NR
+          run-id: 44623808730
+          github-token: ${{ github.token }}
+
+      - name: Download pinned Fake PKG Tools v7
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $url = "https://github.com/CyB1K/PS4-Fake-PKG-Tools-3.87/releases/download/v7/PS4_Fake_PKG_Tools_3.87_V7.rar"
+          $archive = Join-Path $env:RUNNER_TEMP "fake-pkg-tools-v7.rar"
+          Invoke-WebRequest -Uri $url -OutFile $archive
+          $expected = "206FF9CD1199AE3943944FE61FB9247EC0B398B079AB125543FB1AD115E76ED7"
+          $actual = (Get-FileHash -Algorithm SHA256 $archive).Hash
+          if ($actual -ne $expected) { throw "Fake PKG Tools archive SHA-256 mismatch: $actual" }
+          if ((Get-Item $archive).Length -ne 6674278) { throw "Unexpected release archive size." }
+          $dest = Join-Path $env:RUNNER_TEMP "fake-pkg-tools"
+          New-Item -ItemType Directory -Force -Path $dest | Out-Null
+          & "$env:ProgramFiles\7-Zip\7z.exe" x $archive "-o$dest" -y
+          if ($LASTEXITCODE -ne 0) { throw "7-Zip extraction failed." }
+          $cmd = Get-ChildItem $dest -Recurse -File -Filter "orbis-pub-cmd.exe" | Select-Object -First 1
+          if (-not $cmd) { throw "orbis-pub-cmd.exe missing." }
+          $toolHash = (Get-FileHash -Algorithm SHA256 $cmd.FullName).Hash
+          if ($toolHash -ne "9D136A27A0739555329E46B61208B7105D4C5AEA5644CBF8052BFED4250D0E1B") { throw "orbis-pub-cmd hash mismatch." }
+          "ORBiS_PUB_CMD=$($cmd.FullName)" | Out-File "$env:RUNNER_TEMP\tool-path.txt"
+          "ORBiS_PUB_CMD_SHA256=$toolHash" | Out-File "$env:RUNNER_TEMP\tool-path.txt" -Append
+
+      - name: Generate associated patch GP4 and build candidate
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $basePkg = Join-Path $env:GITHUB_WORKSPACE "base-artifact/pkg/PS4-Neural-Engine-002.pkg"
+          if (-not (Test-Path $basePkg)) { throw "Base PKG 002 not found: $basePkg" }
+          $tool = "OrbisPkgTool-src/OrbisPkgTool/bin/Release/net10.0-windows/OrbisPkgTool.dll"
+          $pubCmd = Get-Content "$env:RUNNER_TEMP\tool-path.txt" | Where-Object { $_ -like "ORBiS_PUB_CMD=*" } | ForEach-Object { $_.Substring(13) }
+          if (-not (Test-Path $pubCmd)) { throw "orbis-pub-cmd path invalid." }
+
+          $work = Join-Path $env:RUNNER_TEMP "patch-003"
+          $extract = Join-Path $work "base-extracted"
+          $gp4 = Join-Path $work "PS4-Neural-Engine-003.gp4"
+          $pkg = Join-Path $work "PS4-Neural-Engine-003-CANDIDATE.pkg"
+          $verify = Join-Path $work "verify"
+          New-Item -ItemType Directory -Force -Path $work | Out-Null
+          New-Item -ItemType Directory -Force -Path "candidate-output" | Out-Null
+
+          "=== BASE PACKAGE ===" | Tee-Object -FilePath "candidate-output/build-report.txt"
+          dotnet "$tool" info "$basePkg" 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
+          if ($LASTEXITCODE -ne 0) { throw "Base PKG info failed." }
+
+          "=== EXTRACT BASE ===" | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
+          dotnet "$tool" extract "$basePkg" "$extract" --verbose 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
+          if ($LASTEXITCODE -ne 0) { throw "Base PKG extraction failed." }
+
+          "=== RESTRUCTURE IMAGE0 + SC0 ===" | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
+          dotnet "$tool" restructure "$extract" --verbose 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
+          if ($LASTEXITCODE -ne 0) { throw "Base package restructure failed." }
+
+          $image = Join-Path $extract "Image0"
+          $sfo = Join-Path $image "sce_sys/param.sfo"
+          $eboot = Join-Path $image "eboot.bin"
+          $prx = Join-Path $image "ps4_neural_engine.prx"
+          foreach ($p in @($sfo,$eboot,$prx)) {
+            if (-not (Test-Path $p)) { throw "Required base payload missing: $p" }
+          }
+
+          "=== SET PATCH PARAM.SFO ===" | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
+          dotnet "$tool" sfo set "$sfo" CATEGORY gpe 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
+          if ($LASTEXITCODE -ne 0) { throw "SFO CATEGORY update failed." }
+          dotnet "$tool" sfo set "$sfo" APP_VER 01.01 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
+          if ($LASTEXITCODE -ne 0) { throw "SFO APP_VER update failed." }
+          dotnet "$tool" sfo set "$sfo" VERSION 01.00 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
+          if ($LASTEXITCODE -ne 0) { throw "SFO VERSION update failed." }
+          dotnet "$tool" sfo read "$sfo" 2>&1 | Tee-Object -FilePath "candidate-output/patch-param-sfo.txt"
+          if ($LASTEXITCODE -ne 0) { throw "Patch SFO readback failed." }
+
+          $zeroKey = "00000000000000000000000000000000"
+          "=== CREATE ASSOCIATED PATCH GP4 ===" | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
+          & $pubCmd gp4_proj_create --volume_type pkg_ps4_patch --content_id IV0000-PNEU00001_00-PS4NEURALENG0000 --passcode $zeroKey --entitlement_key $zeroKey --storage_type digital25 --app_path $basePkg $gp4 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
+          if ($LASTEXITCODE -ne 0 -or -not (Test-Path $gp4)) { throw "Associated patch GP4 creation failed." }
+
+          "=== ADD PATCH PAYLOAD ===" | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
+          & $pubCmd gp4_file_add --force --pfs_compression enable $eboot "eboot.bin" $gp4 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
+          if ($LASTEXITCODE -ne 0) { throw "Adding eboot.bin to GP4 failed." }
+          & $pubCmd gp4_file_add --force --pfs_compression enable $prx "ps4_neural_engine.prx" $gp4 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
+          if ($LASTEXITCODE -ne 0) { throw "Adding PRX to GP4 failed." }
+          & $pubCmd gp4_file_add --force --pfs_compression enable $sfo "sce_sys/param.sfo" $gp4 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
+          if ($LASTEXITCODE -ne 0) { throw "Adding patch param.sfo to GP4 failed." }
+
+          [xml]$project = Get-Content $gp4
+          $volumeType = $project.psproject.volume.volume_type
+          $appPath = $project.psproject.volume.package.app_path
+          if ($volumeType -ne "pkg_ps4_patch") { throw "GP4 volume_type is not pkg_ps4_patch." }
+          if (-not $appPath) { throw "GP4 has no Application Package association." }
+          if ($project.psproject.files.file.Count -lt 3) { throw "GP4 has fewer than 3 payload entries." }
+          Copy-Item $gp4 "candidate-output/PS4-Neural-Engine-003.gp4"
+          "GP4_VOLUME_TYPE=$volumeType" | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
+          "GP4_APP_PATH=$appPath" | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
+          "GP4_FILE_COUNT=$($project.psproject.files.file.Count)" | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
+
+          "=== BUILD CANDIDATE PKG ===" | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
+          & $pubCmd img_create --no_progress_bar $gp4 $pkg 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
+          if ($LASTEXITCODE -ne 0 -or -not (Test-Path $pkg)) { throw "img_create failed." }
+
+          "=== VALIDATE CANDIDATE PKG ===" | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
+          dotnet "$tool" validate "$pkg" 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
+          if ($LASTEXITCODE -ne 0) { throw "Independent PKG validation failed." }
+          dotnet "$tool" info "$pkg" 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
+          if ($LASTEXITCODE -ne 0) { throw "Candidate PKG info inspection failed." }
+
+          dotnet "$tool" extract "$pkg" "$verify" --verbose 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
+          if ($LASTEXITCODE -ne 0) { throw "Candidate PKG extraction failed." }
+          $verifySfo = Get-ChildItem $verify -Recurse -File -Filter "param.sfo" | Select-Object -First 1
+          if (-not $verifySfo) { throw "Candidate PKG param.sfo not found after extraction." }
+          $sfoText = dotnet "$tool" sfo read "$($verifySfo.FullName)" 2>&1
+          $sfoText | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
+          if (($sfoText -join "`n") -notmatch "CATEGORY = gpe" -or ($sfoText -join "`n") -notmatch "APP_VER = 01.01") { throw "Candidate patch SFO metadata readback mismatch." }
+
+          Copy-Item $pkg "candidate-output/PS4-Neural-Engine-003-CANDIDATE.pkg"
+          $hash = (Get-FileHash -Algorithm SHA256 "candidate-output/PS4-Neural-Engine-003-CANDIDATE.pkg").Hash
+          "CANDIDATE_PKG_SHA256=$hash" | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
+          "CANDIDATE_PKG_BYTES=$((Get-Item 'candidate-output/PS4-Neural-Engine-003-CANDIDATE.pkg').Length)" | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
+          "STATUS=PC_BUILD_AND_STRUCTURAL_VALIDATION_PASSED; NOT_HARDWARE_TESTED; DO_NOT_INSTALL_YET" | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
+
+      - name: Upload patch candidate and audit report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: PS4-Neural-Engine-003-patch-candidate
+          path: |
+            candidate-output/*
+          if-no-files-found: warn
+          retention-days: 7
