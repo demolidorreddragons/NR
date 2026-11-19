@@ -195,92 +195,6 @@ jobs:
           run-id: 44607927443
           github-token: ${{ github.token }}
 
-      - name: Move verified PKG into /data/pkg and verify destination
-        shell: powershell -NoProfile -ExecutionPolicy Bypass -Command "& '{0}'"
-        env:
-          PS4_IP: ${{ vars.PS4_IP }}
-        run: |
-          $ErrorActionPreference = "Stop"
-          $credentials = New-Object System.Net.NetworkCredential("anonymous", "anonymous@example.com")
-          $fileName = "IV0000-PNEU00001_00-PS4NEURALENG0000.pkg"
-          $sourcePath = "/data/$fileName"
-          $targetDir = "/data/pkg"
-          $targetPath = "$targetDir/$fileName"
-
-          function Invoke-FtpRequest($path, $method, $renameTo = $null) {
-            $uri = "ftp://$($env:PS4_IP):2121$path"
-            $request = [System.Net.FtpWebRequest]::Create($uri)
-            $request.Method = $method
-            $request.Credentials = $credentials
-            $request.UsePassive = $true
-            $request.UseBinary = $true
-            $request.KeepAlive = $false
-            $request.Timeout = 30000
-            $request.ReadWriteTimeout = 30000
-            if ($renameTo) { $request.RenameTo = $renameTo }
-            return $request
-          }
-
-          # Create /data/pkg if it does not already exist.
-          try {
-            $r = Invoke-FtpRequest "$targetDir/" ([System.Net.WebRequestMethods+Ftp]::MakeDirectory)
-            $response = $r.GetResponse()
-            $response.Dispose()
-            Write-Host "Created $targetDir"
-          } catch {
-            # Confirm the directory exists; do not hide unrelated failures.
-            $r = Invoke-FtpRequest "$targetDir/" ([System.Net.WebRequestMethods+Ftp]::ListDirectory)
-            $response = $r.GetResponse()
-            $response.Dispose()
-            Write-Host "$targetDir already exists."
-          }
-
-          # Refuse to overwrite an existing destination.
-          try {
-            $r = Invoke-FtpRequest $targetPath ([System.Net.WebRequestMethods+Ftp]::GetFileSize)
-            $response = $r.GetResponse()
-            $existingSize = $response.ContentLength
-            $response.Dispose()
-            throw "Destination already exists ($existingSize bytes); refusing to overwrite."
-          } catch {
-            if ($_.Exception.Message -like "Destination already exists*") { throw }
-            Write-Host "Destination does not exist; safe to move."
-          }
-
-          # Rename within the PS4 filesystem, preserving the already verified file.
-          $r = Invoke-FtpRequest $sourcePath ([System.Net.WebRequestMethods+Ftp]::Rename) "$targetDir/$fileName"
-          $response = $r.GetResponse()
-          Write-Host "FTP move response: $($response.StatusDescription.Trim())"
-          $response.Dispose()
-
-          # Verify destination size and SHA-256 by downloading it back.
-          $verifyPath = Join-Path $env:RUNNER_TEMP "ps4-pkg-moved-verify.pkg"
-          $r = Invoke-FtpRequest $targetPath ([System.Net.WebRequestMethods+Ftp]::DownloadFile)
-          $response = $null
-          $stream = $null
-          $output = $null
-          try {
-            $response = $r.GetResponse()
-            $stream = $response.GetResponseStream()
-            $output = [System.IO.File]::Create($verifyPath)
-            $stream.CopyTo($output)
-            $output.Dispose()
-            $output = $null
-            $size = (Get-Item -LiteralPath $verifyPath).Length
-            $hash = (Get-FileHash -LiteralPath $verifyPath -Algorithm SHA256).Hash.ToLowerInvariant()
-            if ($size -ne 6619136 -or $hash -ne "ab9f88a493f382413323c3196142f2d14e5ba348459091e4c9a3ad874ec513fb") {
-              throw "Destination verification failed: $size bytes, SHA256 $hash"
-            }
-            Write-Host "SUCCESS: PKG moved and verified at $targetPath"
-            Write-Host "Size: $size bytes"
-            Write-Host "SHA256: $hash"
-          } finally {
-            if ($output) { $output.Dispose() }
-            if ($stream) { $stream.Dispose() }
-            if ($response) { $response.Dispose() }
-            Remove-Item -LiteralPath $verifyPath -Force -ErrorAction SilentlyContinue
-          }
-
       - name: Transfer PKG to PS4 storage and verify remote copy
         shell: powershell -NoProfile -ExecutionPolicy Bypass -Command "& '{0}'"
         env:
@@ -357,3 +271,109 @@ jobs:
             if ($response) { $response.Dispose() }
             Remove-Item -LiteralPath $verifyPath -Force -ErrorAction SilentlyContinue
           }
+
+      - name: Move verified PKG into /data/pkg and verify destination
+        shell: powershell -NoProfile -ExecutionPolicy Bypass -Command "& '{0}'"
+        env:
+          PS4_IP: ${{ vars.PS4_IP }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          $credentials = New-Object System.Net.NetworkCredential("anonymous", "anonymous@example.com")
+          $fileName = "IV0000-PNEU00001_00-PS4NEURALENG0000.pkg"
+          $sourcePath = "/data/$fileName"
+          $targetDir = "/data/pkg"
+          $targetPath = "$targetDir/$fileName"
+
+          function Invoke-FtpRequest($path, $method, $renameTo = $null) {
+            $uri = "ftp://$($env:PS4_IP):2121$path"
+            $request = [System.Net.FtpWebRequest]::Create($uri)
+            $request.Method = $method
+            $request.Credentials = $credentials
+            $request.UsePassive = $true
+            $request.UseBinary = $true
+            $request.KeepAlive = $false
+            $request.Timeout = 30000
+            $request.ReadWriteTimeout = 30000
+            if ($renameTo) { $request.RenameTo = $renameTo }
+            return $request
+          }
+
+          # Create /data/pkg if it does not already exist.
+          try {
+            $r = Invoke-FtpRequest "$targetDir/" ([System.Net.WebRequestMethods+Ftp]::MakeDirectory)
+            $response = $r.GetResponse()
+            $response.Dispose()
+            Write-Host "Created $targetDir"
+          } catch {
+            # Confirm the directory exists; do not hide unrelated failures.
+            $r = Invoke-FtpRequest "$targetDir/" ([System.Net.WebRequestMethods+Ftp]::ListDirectory)
+            $response = $r.GetResponse()
+            $response.Dispose()
+            Write-Host "$targetDir already exists."
+          }
+
+          # If the destination already exists, verify it before removing the duplicate source.
+          $targetExists = $false
+          try {
+            $r = Invoke-FtpRequest $targetPath ([System.Net.WebRequestMethods+Ftp]::GetFileSize)
+            $response = $r.GetResponse()
+            $targetSize = $response.ContentLength
+            $response.Dispose()
+            $targetExists = $true
+          } catch {
+            Write-Host "Destination does not exist yet."
+          }
+
+          if ($targetExists) {
+            if ($targetSize -ne 6619136) { throw "Existing destination has unexpected size $targetSize; refusing to overwrite." }
+            $r = Invoke-FtpRequest $targetPath ([System.Net.WebRequestMethods+Ftp]::DownloadFile)
+            $response = $r.GetResponse()
+            $stream = $response.GetResponseStream()
+            $checkPath = Join-Path $env:RUNNER_TEMP "ps4-pkg-existing-check.pkg"
+            $output = [System.IO.File]::Create($checkPath)
+            $stream.CopyTo($output)
+            $output.Dispose(); $stream.Dispose(); $response.Dispose()
+            $existingHash = (Get-FileHash -LiteralPath $checkPath -Algorithm SHA256).Hash.ToLowerInvariant()
+            Remove-Item -LiteralPath $checkPath -Force
+            if ($existingHash -ne "ab9f88a493f382413323c3196142f2d14e5ba348459091e4c9a3ad874ec513fb") {
+              throw "Existing destination hash differs; refusing to overwrite."
+            }
+            $r = Invoke-FtpRequest $sourcePath ([System.Net.WebRequestMethods+Ftp]::DeleteFile)
+            $response = $r.GetResponse(); $response.Dispose()
+            Write-Host "Verified existing destination; removed duplicate from /data."
+          } else {
+            # Rename the verified source file into /data/pkg.
+            $r = Invoke-FtpRequest $sourcePath ([System.Net.WebRequestMethods+Ftp]::Rename) "$targetDir/$fileName"
+            $response = $r.GetResponse()
+            Write-Host "FTP move response: $($response.StatusDescription.Trim())"
+            $response.Dispose()
+          }
+
+          # Verify destination size and SHA-256 by downloading it back.
+          $verifyPath = Join-Path $env:RUNNER_TEMP "ps4-pkg-moved-verify.pkg"
+          $r = Invoke-FtpRequest $targetPath ([System.Net.WebRequestMethods+Ftp]::DownloadFile)
+          $response = $null
+          $stream = $null
+          $output = $null
+          try {
+            $response = $r.GetResponse()
+            $stream = $response.GetResponseStream()
+            $output = [System.IO.File]::Create($verifyPath)
+            $stream.CopyTo($output)
+            $output.Dispose()
+            $output = $null
+            $size = (Get-Item -LiteralPath $verifyPath).Length
+            $hash = (Get-FileHash -LiteralPath $verifyPath -Algorithm SHA256).Hash.ToLowerInvariant()
+            if ($size -ne 6619136 -or $hash -ne "ab9f88a493f382413323c3196142f2d14e5ba348459091e4c9a3ad874ec513fb") {
+              throw "Destination verification failed: $size bytes, SHA256 $hash"
+            }
+            Write-Host "SUCCESS: PKG moved and verified at $targetPath"
+            Write-Host "Size: $size bytes"
+            Write-Host "SHA256: $hash"
+          } finally {
+            if ($output) { $output.Dispose() }
+            if ($stream) { $stream.Dispose() }
+            if ($response) { $response.Dispose() }
+            Remove-Item -LiteralPath $verifyPath -Force -ErrorAction SilentlyContinue
+          }
+
