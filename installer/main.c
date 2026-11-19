@@ -43,21 +43,9 @@ static void write_status(const char* message) {
 }
 
 static int copy_prx(char* error, size_t error_size) {
-    struct stat src_stat, dst_stat;
     int in = open(SOURCE_PRX, O_RDONLY);
     if (in < 0) {
         snprintf(error, error_size, "ERROR: cannot open source PRX %s (errno=%d).", SOURCE_PRX, errno);
-        return 0;
-    }
-    if (fstat(in, &src_stat) != 0) {
-        int saved_errno = errno;
-        close(in);
-        snprintf(error, error_size, "ERROR: cannot stat open source PRX (errno=%d).", saved_errno);
-        return 0;
-    }
-    if (src_stat.st_size <= 0) {
-        close(in);
-        snprintf(error, error_size, "ERROR: source PRX is empty (size=%lld).", (long long)src_stat.st_size);
         return 0;
     }
 
@@ -70,7 +58,8 @@ static int copy_prx(char* error, size_t error_size) {
     }
 
     char buffer[16384];
-    long long copied = 0;
+    long long source_bytes = 0;
+    long long written_bytes = 0;
     int ok = 1;
     int saved_errno = 0;
     for (;;) {
@@ -82,6 +71,7 @@ static int copy_prx(char* error, size_t error_size) {
             saved_errno = errno;
             break;
         }
+        source_bytes += n;
         ssize_t offset = 0;
         while (offset < n) {
             ssize_t written = write(out, buffer + offset, (size_t)(n - offset));
@@ -97,16 +87,12 @@ static int copy_prx(char* error, size_t error_size) {
                 break;
             }
             offset += written;
-            copied += written;
+            written_bytes += written;
         }
         if (!ok) break;
     }
 
     if (ok && fsync(out) != 0) {
-        ok = 0;
-        saved_errno = errno;
-    }
-    if (fstat(out, &dst_stat) != 0 && ok) {
         ok = 0;
         saved_errno = errno;
     }
@@ -121,15 +107,54 @@ static int copy_prx(char* error, size_t error_size) {
 
     if (!ok) {
         remove(DEST_TMP);
-        snprintf(error, error_size, "ERROR: PRX read/write failed after %lld bytes (errno=%d).",
-                 copied, saved_errno);
+        snprintf(error, error_size, "ERROR: PRX copy failed after reading %lld and writing %lld bytes (errno=%d).",
+                 source_bytes, written_bytes, saved_errno);
         return 0;
     }
-    if (dst_stat.st_size != src_stat.st_size || copied != (long long)src_stat.st_size) {
+    if (source_bytes <= 0 || written_bytes != source_bytes) {
         remove(DEST_TMP);
-        snprintf(error, error_size,
-                 "ERROR: PRX size mismatch (source=%lld copied=%lld destination=%lld).",
-                 (long long)src_stat.st_size, copied, (long long)dst_stat.st_size);
+        snprintf(error, error_size, "ERROR: PRX copy count mismatch (read=%lld written=%lld).",
+                 source_bytes, written_bytes);
+        return 0;
+    }
+
+    /* Do not trust st_size/fstat here: PS4's observed stat values do not match
+       the byte stream. Verify the temporary file by reading and comparing it. */
+    int verify_src = open(SOURCE_PRX, O_RDONLY);
+    int verify_dst = open(DEST_TMP, O_RDONLY);
+    if (verify_src < 0 || verify_dst < 0) {
+        saved_errno = errno;
+        if (verify_src >= 0) close(verify_src);
+        if (verify_dst >= 0) close(verify_dst);
+        remove(DEST_TMP);
+        snprintf(error, error_size, "ERROR: cannot reopen PRX files for verification (errno=%d).", saved_errno);
+        return 0;
+    }
+
+    char source_buffer[16384], destination_buffer[16384];
+    long long verified_bytes = 0;
+    for (;;) {
+        ssize_t a = read(verify_src, source_buffer, sizeof(source_buffer));
+        if (a < 0 && errno == EINTR) continue;
+        if (a < 0) { ok = 0; saved_errno = errno; break; }
+        ssize_t b = read(verify_dst, destination_buffer, sizeof(destination_buffer));
+        if (b < 0 && errno == EINTR) continue;
+        if (b < 0) { ok = 0; saved_errno = errno; break; }
+        if (a != b || (a > 0 && memcmp(source_buffer, destination_buffer, (size_t)a) != 0)) {
+            ok = 0;
+            saved_errno = EIO;
+            break;
+        }
+        if (a == 0) break;
+        verified_bytes += a;
+    }
+    close(verify_src);
+    close(verify_dst);
+
+    if (!ok || verified_bytes != source_bytes) {
+        remove(DEST_TMP);
+        snprintf(error, error_size, "ERROR: PRX read-back verification failed (source=%lld verified=%lld errno=%d).",
+                 source_bytes, verified_bytes, saved_errno);
         return 0;
     }
     if (rename(DEST_TMP, DEST_PRX) != 0) {
