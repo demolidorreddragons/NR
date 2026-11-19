@@ -240,13 +240,17 @@ jobs:
           PS4_IP: ${{ vars.PS4_IP }}
         run: |
           $ErrorActionPreference = "Stop"
-          $pkg = Join-Path $env:GITHUB_WORKSPACE "transfer/pkg/IV0000-PNEU00001_00-PS4NEURALENG0000.pkg"
-          if (-not (Test-Path -LiteralPath $pkg -PathType Leaf)) {
-            throw "Validated PKG artifact was not found at expected path."
+          $pkgFiles = @(Get-ChildItem -LiteralPath (Join-Path $env:GITHUB_WORKSPACE "transfer/pkg") -Filter "PS4-Neural-Engine-*.pkg" -File)
+          if ($pkgFiles.Count -ne 1) {
+            throw "Expected exactly one numbered PKG, found $($pkgFiles.Count)."
           }
+          $pkg = $pkgFiles[0].FullName
+          $pkgNumber = [regex]::Match($pkgFiles[0].BaseName, "^PS4-Neural-Engine-(\d{3,})$").Groups[1].Value
+          if (-not $pkgNumber) { throw "PKG release number could not be parsed." }
           $localHash = (Get-FileHash -LiteralPath $pkg -Algorithm SHA256).Hash.ToLowerInvariant()
           $localSize = (Get-Item -LiteralPath $pkg).Length
-          $remotePath = "/data/PS4-Neural-Engine-$($localHash.Substring(0,12)).pkg"
+          $remotePath = "/data/PS4-Neural-Engine-$pkgNumber-$($localHash.Substring(0,12)).pkg"
+          Add-Content -Path $env:GITHUB_ENV -Value "PKG_NUMBER=$pkgNumber"
           $uri = "ftp://$($env:PS4_IP):2121$remotePath"
           $credentials = New-Object System.Net.NetworkCredential("anonymous", "anonymous@example.com")
 
@@ -320,7 +324,7 @@ jobs:
         run: |
           $ErrorActionPreference = "Stop"
           $credentials = New-Object System.Net.NetworkCredential("anonymous", "anonymous@example.com")
-          $fileName = "PS4-Neural-Engine-$($env:PKG_SHA256.Substring(0,12)).pkg"
+          $fileName = "PS4-Neural-Engine-$($env:PKG_NUMBER)-$($env:PKG_SHA256.Substring(0,12)).pkg"
           $sourcePath = "/data/$fileName"
           $targetDir = "/data/pkg"
           $targetPath = "$targetDir/$fileName"
