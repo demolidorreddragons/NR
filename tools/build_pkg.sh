@@ -55,6 +55,13 @@ sfo TITLE Utf8 128 "PS4 Neural Engine Installer"
 sfo TITLE_ID Utf8 12 "$TITLE_ID"
 sfo VERSION Utf8 8 1.00
 
+# Validate all staged files before building. param.sfo and icon0.png are
+# PKG metadata entries; pkg_extract exposes the uroot payload, not those entries.
+for required in "$STAGE/ps4_neural_engine.prx" "$STAGE/eboot.bin" \
+                "$STAGE/sce_sys/param.sfo" "$STAGE/sce_sys/icon0.png"; do
+  test -s "$required" || { echo "PKG_STAGE: missing or empty: $required" >&2; exit 1; }
+done
+
 cd "$STAGE"
 "$TOOLS/create-gp4" -out package.gp4 --content-id="$CONTENT_ID" \
   --files "eboot.bin ps4_neural_engine.prx sce_sys/param.sfo sce_sys/icon0.png"
@@ -69,30 +76,27 @@ rm -rf "$VERIFY" && mkdir -p "$VERIFY"
 echo "EXTRACTION_STAGE: extracting PKG payload for file-level verification"
 "$TOOLS/PkgTool.Core" pkg_extract --verbose "$pkg" "$VERIFY"
 echo "EXTRACTION_STAGE: PKG payload extraction completed"
-echo "VERIFY_STAGE: listing extracted PKG files"
+echo "VERIFY_STAGE: checking extracted uroot payload"
 find "$VERIFY" -maxdepth 5 -type f -printf '%p (%s bytes)\\n' | sort
 python3 - "$VERIFY" <<'PY'
 import os
 import sys
 
 root = sys.argv[1]
-required = {
-    "ps4_neural_engine.prx": False,
-    "eboot.bin": False,
-    "param.sfo": False,
-    "icon0.png": False,
-}
+required = {"ps4_neural_engine.prx", "eboot.bin", "keystone"}
+found = set()
 for current, _, files in os.walk(root):
     for name in files:
         path = os.path.join(current, name)
-        if name in required and os.path.getsize(path) > 0:
-            required[name] = True
-            print(f"VERIFY_STAGE: found {name} ({os.path.getsize(path)} bytes)")
-missing = [name for name, found in required.items() if not found]
+        size = os.path.getsize(path)
+        if name in required and size > 0:
+            found.add(name)
+            print(f"VERIFY_STAGE: found {name} ({size} bytes)")
+missing = sorted(required - found)
 if missing:
-    print("VERIFY_STAGE: missing or empty: " + ", ".join(missing), file=sys.stderr)
+    print("VERIFY_STAGE: missing or empty extracted payload: " + ", ".join(missing), file=sys.stderr)
     raise SystemExit(1)
-print("VERIFY_STAGE: all four required package files are present and non-empty")
+print("VERIFY_STAGE: extracted executable payload is complete")
 PY
 sha256sum "$pkg"
 echo "PKG generated and validated: $pkg"
