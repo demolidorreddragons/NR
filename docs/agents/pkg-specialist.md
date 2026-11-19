@@ -79,3 +79,11 @@ Source artifact: build run 44623808730, artifact 14578192913.
 - This is a successful association-only GP4, not yet a complete patch project: its `<files img_no="0"/>` and `<rootdir/>` are empty. No PKG was built or installed.
 - PS4 PARAM.SFO reference table explicitly maps `gde` to “Non-Game Mini App” and `gpe` to “Non-Game Mini App Patch”. The next step is to stage the changed payload, set patch SFO metadata, add files to this associated GP4, and audit the complete project before any PKG build.
 - The generator's `gengp4_patch.exe --help` is not a usable CLI help switch (it treats `--help` as a directory); no-argument and `/?` invocations can open/block, so the workflow bounds and terminates them. Use the command-line `orbis-pub-cmd` route for reproducible automation.
+
+
+### Patch build blocker identified (2026-11-19, run 44634035504)
+- The associated GP4 is valid and contains four planned payload entries (eboot, PRX, PARAM.SFO, changeinfo) after the next workflow revision; the initial package-build attempt reached `img_create` but failed with: `Volume Type/Storage Type ... (app:unknown, patch:digital25)`.
+- The base PKG header is `content_type=0x1A` (PS4 game-data/application base) and its SFO is `CATEGORY=gde`, `APP_VER=01.00`, `CONTENT_ID=IV0000-PNEU00001_00-PS4NEURALENG0000`. The OrbisPkgTool viewer's label `Addon` is not authoritative here: its classifier only recognizes `gd/gp/ac` and falls back to Addon for `gde`; it does not change the header's 0x1A application type.
+- The failure indicates Fake PKG Tools' publisher generator cannot currently resolve the base/patch storage-type pairing from this base package. Its SFO `PUBTOOLINFO` lacks an explicit `st_type` token even though the original GP4 was `storage_type=digital50`. This is the leading hypothesis, not yet proven.
+- The patch format requires `sce_sys/changeinfo/changeinfo.xml`; the initial candidate omitted it and the generator warned that the package would not be importable into GEMS. The follow-up adds a valid changeinfo file and probes `digital50` rather than `digital25`.
+- Follow-up run: 44634453533. Do not install any candidate from these failed builds. No PKG was produced, and the PS4 remains untouched.
