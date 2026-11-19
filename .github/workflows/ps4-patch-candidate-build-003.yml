@@ -43,7 +43,11 @@ jobs:
           $builder = $builder.Replace($categoryOld, $categoryNew)
           if (-not $builder.Contains("img0_pc_ksize=832")) { throw "PkgBuilder PUBTOOLINFO anchor not found." }
           $builder = $builder.Replace("img0_pc_ksize=832", "img0_pc_ksize=832,st_type=digital50")
-          Set-Content -Path $builderPath -Value $builder -NoNewline
+          [IO.File]::WriteAllText($builderPath, $builder, [Text.UTF8Encoding]::new($false))
+          $builderCheck = [IO.File]::ReadAllText($builderPath)
+          $storageTagCount = [regex]::Matches($builderCheck, "img0_pc_ksize=832,st_type=digital50").Count
+          if ($storageTagCount -lt 3) { throw "PkgBuilder storage metadata patch not persisted; count=$storageTagCount" }
+          "PKGBUILDER_ST_TYPE_PATCH_COUNT=$storageTagCount" | Out-File $env:GITHUB_STEP_SUMMARY -Append
           dotnet build OrbisPkgTool-src/OrbisPkgTool/OrbisPkgTool.csproj --configuration Release
           if ($LASTEXITCODE -ne 0) { throw "OrbisPkgTool build failed." }
           $tool = "OrbisPkgTool-src/OrbisPkgTool/bin/Release/net10.0-windows/OrbisPkgTool.dll"
@@ -123,11 +127,11 @@ jobs:
           $tempBaseExtract = Join-Path $work "temp-base-verify"
           dotnet "$tool" extract "$basePkgForGp4" "$tempBaseExtract" 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
           if ($LASTEXITCODE -ne 0) { throw "Temporary base PKG readback failed." }
-          $tempBaseSfo = Get-ChildItem $tempBaseExtract -Recurse -File -Filter "param.sfo" | Select-Object -First 1
-          if (-not $tempBaseSfo) { throw "Temporary base SFO missing." }
-          $tempBaseSfoText = dotnet "$tool" sfo read "$($tempBaseSfo.FullName)" 2>&1
+          $tempBaseSfo = Join-Path $tempBaseExtract "Sc0/param.sfo"
+          if (-not (Test-Path $tempBaseSfo)) { throw "Temporary base outer Sc0/param.sfo missing." }
+          $tempBaseSfoText = dotnet "$tool" sfo read "$tempBaseSfo" 2>&1
           $tempBaseSfoText | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
-          if (($tempBaseSfoText -join "`n") -notmatch "CATEGORY = gde" -or ($tempBaseSfoText -join "`n") -notmatch "st_type=digital50") { throw "Temporary base SFO storage metadata readback failed." }
+          if (($tempBaseSfoText -join "`n") -notmatch "CATEGORY = gde" -or ($tempBaseSfoText -join "`n") -notmatch "st_type=digital50") { throw "Temporary base outer SFO storage metadata readback failed." }
 
           $sfo = Join-Path $image "sce_sys/param.sfo"
           $eboot = Join-Path $image "eboot.bin"
