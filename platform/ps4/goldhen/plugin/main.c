@@ -89,7 +89,7 @@ static void *input_thread(void *arg) {
    const bool upload_down = (data.buttons & upload_chord) == upload_chord;
    if (upload_down && !upload_was_down) {
     int upload_action = pne_github_upload_confirmed_log();
-    if (upload_action == 2) NotifyStatic(TEX_ICON_SYSTEM, "PNE: lote listado; pressione L3+L1+Cross novamente para confirmar");
+    if (upload_action == 2) { /* Detailed batch preview notification was already sent. */ }
     else if (upload_action == 1) NotifyStatic(TEX_ICON_SYSTEM, "PNE: envio iniciado; resultado sera notificado");
     else NotifyStatic(TEX_ICON_SYSTEM, "PNE: autorize, verifique o lote ou aguarde o envio atual");
    }
