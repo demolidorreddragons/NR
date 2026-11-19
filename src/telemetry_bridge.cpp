@@ -78,7 +78,7 @@ extern "C" int pne_telemetry_start(const char* directory) {
 }
 
 extern "C" void pne_telemetry_stop(void) {
-    if (!running.exchange(false)) return;
+    running.store(false, std::memory_order_release);
     cv.notify_all();
     if (worker.joinable()) worker.join();
 }
