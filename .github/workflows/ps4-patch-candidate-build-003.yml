@@ -100,29 +100,35 @@ jobs:
 
           # The original PKG 002 was built without PUBTOOLINFO st_type. Sony's
           # img_create therefore reports its associated app storage as "unknown".
-          # Rebuild a byte-identical-content base from its own GP4 with explicit
-          # digital50 metadata, then associate the patch to that rebuilt base.
-          $baseGp4Dir = Join-Path $work "base-gp4"
+          # Rebuild the exact extracted app payload with the OrbisPkgTool GP4
+          # generator (default digital50), then associate the patch to that base.
+          $baseSource = Join-Path $work "base-source"
           $baseRebuildDir = Join-Path $work "base-rebuilt"
-          New-Item -ItemType Directory -Force -Path $baseGp4Dir,$baseRebuildDir | Out-Null
+          New-Item -ItemType Directory -Force -Path $baseSource,$baseRebuildDir | Out-Null
           "=== REBUILD BASE WITH EXPLICIT DIGITAL50 STORAGE METADATA ===" | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
-          & dotnet "$tool" pkg_makegp4 --passcode $zeroKey $basePkg $baseGp4Dir 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
-          if ($LASTEXITCODE -ne 0) { throw "Base GP4 generation failed." }
-          $baseGp4 = Get-ChildItem $baseGp4Dir -Recurse -File -Filter "*.gp4" | Select-Object -First 1
-          if (-not $baseGp4) { throw "Base GP4 not found after pkg_makegp4." }
-          $rebuiltBaseSfo = Get-ChildItem $baseGp4Dir -Recurse -File -Filter "param.sfo" | Select-Object -First 1
-          if (-not $rebuiltBaseSfo) { throw "Base GP4 param.sfo source missing." }
-          & dotnet "$tool" sfo set "$($rebuiltBaseSfo.FullName)" PUBTOOLINFO "c_date=20261119,img0_l0_size=7,img0_l1_size=0,img0_sc_ksize=512,img0_pc_ksize=832,st_type=digital50" 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
+          & dotnet "$tool" extract "$basePkg" "$baseSource" --verbose 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
+          if ($LASTEXITCODE -ne 0) { throw "Base extraction for metadata rebuild failed." }
+          & dotnet "$tool" restructure "$baseSource" --verbose 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
+          if ($LASTEXITCODE -ne 0) { throw "Base restructure for metadata rebuild failed." }
+          $baseImage = Join-Path $baseSource "Image0"
+          $rebuiltBaseSfo = Join-Path $baseImage "sce_sys/param.sfo"
+          if (-not (Test-Path $rebuiltBaseSfo)) { throw "Rebuilt base source param.sfo missing." }
+          & dotnet "$tool" sfo set "$rebuiltBaseSfo" PUBTOOLINFO "c_date=20261119,img0_l0_size=7,img0_l1_size=0,img0_sc_ksize=512,img0_pc_ksize=832,st_type=digital50" 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
           if ($LASTEXITCODE -ne 0) { throw "Base PUBTOOLINFO update failed." }
-          & dotnet "$tool" pkg_build "$($baseGp4.FullName)" $baseRebuildDir 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
-          if ($LASTEXITCODE -ne 0) { throw "Rebuilt base PKG build failed." }
-          $rebuiltBasePkg = Get-ChildItem $baseRebuildDir -Recurse -File -Filter "*.pkg" | Select-Object -First 1
-          if (-not $rebuiltBasePkg) { throw "Rebuilt base PKG missing." }
-          & dotnet "$tool" validate "$($rebuiltBasePkg.FullName)" 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
+          $baseGp4 = Join-Path $work "PS4-Neural-Engine-002-base.gp4"
+          & dotnet "$tool" gp4gen "$baseImage" --passcode $zeroKey --out $baseGp4 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
+          if ($LASTEXITCODE -ne 0 -or -not (Test-Path $baseGp4)) { throw "Base GP4 generation failed." }
+          [xml]$baseProject = Get-Content $baseGp4
+          if ($baseProject.psproject.volume.package.storage_type -ne "digital50") { throw "Base GP4 storage_type is not digital50." }
+          $rebuiltBasePkg = Join-Path $baseRebuildDir "PS4-Neural-Engine-002-DIGITAL50.pkg"
+          & dotnet "$tool" pkg build "$baseGp4" "$baseImage" --out $rebuiltBasePkg --validate 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
+          if ($LASTEXITCODE -ne 0 -or -not (Test-Path $rebuiltBasePkg)) { throw "Rebuilt base PKG build failed." }
+          & dotnet "$tool" validate "$rebuiltBasePkg" 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
           if ($LASTEXITCODE -ne 0) { throw "Rebuilt base PKG validation failed." }
-          & dotnet "$tool" info "$($rebuiltBasePkg.FullName)" 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
+          & dotnet "$tool" info "$rebuiltBasePkg" 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
           if ($LASTEXITCODE -ne 0) { throw "Rebuilt base PKG info inspection failed." }
-          $basePkg = $rebuiltBasePkg.FullName
+          & dotnet "$tool" sfo read "$rebuiltBaseSfo" 2>&1 | Tee-Object -FilePath "candidate-output/rebuilt-base-param-sfo.txt"
+          $basePkg = $rebuiltBasePkg
           "REBUILT_BASE_PKG=$basePkg" | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
           $extract = Join-Path $work "base-extracted"
           $gp4 = Join-Path $work "PS4-Neural-Engine-003.gp4"
