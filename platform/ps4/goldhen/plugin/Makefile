@@ -18,7 +18,7 @@ CXX := clang++
 LD := ld.lld
 CDIR := macos
 endif
-COMMON_FLAGS := --target=x86_64-pc-freebsd12-elf -fPIC -funwind-tables -fno-exceptions -fno-rtti -D__FINAL__=1 -D__USE_PRINTF__ -isysroot $(TOOLCHAIN) -isystem $(TOOLCHAIN)/include -I$(GH_SDK)/include -I$(ROOT)/include -I.
+COMMON_FLAGS := --target=x86_64-pc-freebsd12-elf -fPIC -funwind-tables -fno-exceptions -fno-rtti -D__FINAL__=1 -D__USE_PRINTF__ -isysroot $(TOOLCHAIN) -isystem $(TOOLCHAIN)/include -isystem /usr/include/x86_64-linux-gnu -I$(GH_SDK)/include -I$(ROOT)/include -I.
 CFLAGS := $(COMMON_FLAGS) -std=c11 -c
 CXXFLAGS := $(COMMON_FLAGS) -std=c++17 -isystem $(TOOLCHAIN)/include/c++/v1 -c
 LIBS := -lSceLibcInternal -lSceGnmDriver -lScePad -lGoldHEN_Hook -lkernel -lSceSysmodule -lSceSystemService -lSceUserService
