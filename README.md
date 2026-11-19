@@ -1,40 +1,44 @@
-# PS4 Neural Engine — NR diagnostics scaffold
+# PS4 Neural Engine — diagnostics and integration scaffold
 
-This repository is the public home for the PS4 Neural Engine diagnostics and capture integration work.
+Public source repository for the PS4 Neural Engine project. The currently implemented runtime is the **GoldHEN diagnostics/capture scaffold**, not a completed neural renderer.
 
-## Current scope
+## Implemented
 
-- Portable telemetry format and file writer.
-- Explicit, user-started capture sessions.
-- CSV presentation timing logs.
-- BMP export only from a CPU-readable RGBA8 staging buffer supplied by a **title-specific, verified adapter**.
-- Optional, separately initiated upload of a reviewed diagnostics archive.
+- Bounded, non-blocking presentation-event queue and worker-thread file writer.
+- Explicit capture sessions; capture is OFF by default.
+- CSV frame-time telemetry.
+- BMP export only from CPU-readable RGBA8 staging memory provided by a verified title-specific adapter.
+- OpenOrbis/GoldHEN PRX cross-build workflow and a homebrew PKG installer pipeline.
+- PKG installer app copies the PRX to `/data/GoldHEN/plugins` and registers it in `/data/GoldHEN/plugins.ini`.
 
-## Important hardware boundary
+## Build and validation
 
-A generic `sceGnmSubmitAndFlipCommandBuffers` hook can observe presentation submissions and timing metadata. It does **not** by itself provide a safe CPU-readable framebuffer. Frame capture requires a per-title adapter that performs a supported GPU readback, waits for GPU completion, handles cache coherency, and validates dimensions and row pitch.
+- Host CMake tests: automated through `.github/workflows/host-tests.yml`.
+- PS4 cross-build: `.github/workflows/ps4-prx.yml`, pinned to OpenOrbis Toolchain v0.5.4 and GoldHEN_Plugins_SDK commit `bcea3c7ef01dac6d7f9f49ebf9e90fe66d86f5f7`.
+- Local PRX compilation is not equivalent to loading the plugin on a console. Firmware 14.02 / GoldHEN runtime validation remains outstanding.
+- PKG installer usage: see `docs/PKG_INSTALLER.md`.
 
-No generic framebuffer interception, GNM compute backend, neural inference runtime, or firmware-14.02-tested PRX is claimed by this repository yet.
+## Hardware boundary
 
-## Build target
+A generic `sceGnmSubmitAndFlipCommandBuffers` hook observes presentation submissions and timing metadata. It does **not** provide a safe CPU-readable framebuffer. Frame capture requires a per-title adapter that owns render-target access, performs supported GPU readback, waits for completion, handles cache coherency, and validates dimensions and row pitch.
 
-The PS4 plugin scaffold is intended for OpenOrbis PS4 Toolchain plus GoldHEN_Plugins_SDK. The repository does not redistribute Sony SDK components or proprietary NVIDIA DLLs/weights. Build and hardware validation must be performed with a legally obtained homebrew toolchain and a jailbroken test console.
+No generic framebuffer interception, GNM compute backend, neural inference runtime, temporal reconstruction, or universal per-game rendering path is implemented yet. The PS4 Pro uses AMD GCN hardware; NVIDIA DLSS binaries, Tensor Core paths, and proprietary weights are not portable to it.
 
 ## Capture controls and privacy
 
-- Capture is OFF by default.
-- A user must explicitly start and stop a session on the console.
-- Frames and logs remain on the console until the user explicitly exports and uploads them.
+- Capture is OFF by default and starts only after an explicit controller action.
+- Frames and logs remain on the console until the user exports them.
 - Never embed a GitHub token in a PRX, PKG, source file, or diagnostics archive.
 - Review captures for account names, chat, personal information, and copyrighted material before publishing to a public repository.
 
 ## Layout
 
-- `src/telemetry.cpp`: portable CSV and BMP writer.
-- `include/pne/telemetry.hpp`: capture API.
-- `platform/ps4/goldhen/plugin/README.md`: PRX integration contract.
-- `docs/UPLOAD.md`: reviewed manual upload procedure.
+- `src/telemetry.cpp`: CSV/BMP writer.
+- `src/telemetry_bridge.cpp`: bounded producer queue and worker.
+- `include/pne/telemetry.hpp`: telemetry API.
+- `platform/ps4/goldhen/plugin/`: GoldHEN PRX and cross-build Makefile.
+- `installer/`: console-side PKG installer app.
+- `tools/build_pkg.sh`: PKG generation and validation.
+- `docs/UPLOAD.md`: reviewed manual diagnostics upload procedure.
 
-## Status
-
-This is an integration scaffold, not a finished PS4 PKG or a validated in-game neural renderer. Host-side tests do not prove GNM/PRX compatibility on a PS4 Pro or firmware 14.02.
+This repository is an integration foundation, not a finished in-game neural renderer. CI builds do not prove PS4 Pro / firmware 14.02 runtime compatibility.
