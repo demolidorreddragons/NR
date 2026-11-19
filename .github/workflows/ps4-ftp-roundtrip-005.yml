@@ -1,0 +1,44 @@
+name: PS4 FTP Roundtrip QA 005
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/ps4-ftp-roundtrip-005.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: [self-hosted, Windows, X64, ps4-lan]
+    steps:
+      - name: Test isolated harmless FTP file roundtrip and cleanup
+        shell: powershell -NoProfile -ExecutionPolicy Bypass -File {0}
+        env:
+          PS4_IP: ${{ vars.PS4_IP }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          $token = [guid]::NewGuid().ToString("N")
+          $name = "pne_ftp_probe_$token.txt"
+          $local = Join-Path $env:RUNNER_TEMP $name
+          $readback = Join-Path $env:RUNNER_TEMP ($name + ".readback")
+          $payload = "PS4-FTP-PROBE-$token-" + ("X" * 137)
+          [IO.File]::WriteAllText($local, $payload, [Text.Encoding]::ASCII)
+          $url = "ftp://$($env:PS4_IP):2121/data/GoldHEN/plugins/$name"
+          $creds = "anonymous:anonymous@example.com"
+          try {
+            & curl.exe --fail --silent --show-error --ftp-pasv --user $creds --upload-file $local $url
+            if ($LASTEXITCODE -ne 0) { throw "FTP probe upload failed: $LASTEXITCODE" }
+            & curl.exe --fail --silent --show-error --ftp-pasv --user $creds --output $readback $url
+            if ($LASTEXITCODE -ne 0) { throw "FTP probe download failed: $LASTEXITCODE" }
+            $expected = (Get-FileHash $local -Algorithm SHA256).Hash.ToLowerInvariant()
+            $actual = (Get-FileHash $readback -Algorithm SHA256).Hash.ToLowerInvariant()
+            $size = (Get-Item $readback).Length
+            Write-Host "PROBE expected_bytes=$((Get-Item $local).Length) actual_bytes=$size expected_sha=$expected actual_sha=$actual"
+            if ($expected -ne $actual) { throw "FTP harmless roundtrip mismatch" }
+            Write-Host "FTP_ROUNDTRIP_CONFIRMED"
+          } finally {
+            & curl.exe --silent --show-error --ftp-pasv --user $creds --quote ("DELE /data/GoldHEN/plugins/" + $name) $url 2>$null
+            if ($LASTEXITCODE -eq 0) { Write-Host "PROBE_CLEANED_UP" } else { Write-Host "PROBE_CLEANUP_REQUIRES_AUDIT name=$name exit=$LASTEXITCODE" }
+          }
