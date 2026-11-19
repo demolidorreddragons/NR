@@ -36,3 +36,16 @@ Source artifact: build run 44623808730, artifact 14578192913.
 3. Build a numbered candidate PKG and run structural validation plus independent metadata inspection.
 4. Reject it if the tool cannot prove the base-package association.
 5. Only after PC-side validation, plan a controlled PS4 installation test that preserves user data and does not replace the existing app or saves.
+
+## Experimental GP4 audit result (2026-11-19, run 44631789567)
+- OrbisPkgTool CLI compiled successfully (61 warnings, 0 errors); the base PKG artifact downloaded with matching SHA-256.
+- The PKG extracted successfully: 14/14 files.
+- `gp4gen --patch` completed, but its output is **not a valid update candidate**:
+  - `volume_type=pkg_ps4_patch`
+  - `content_id=""`
+  - `app_type=full`, `version=01.00`, `app_version=01.00`
+  - It enumerated the base application's own 14 files, including its `eboot.bin`, PRX and base metadata.
+- Source inspection of OrbisPkgTool `Gp4Project.cs` confirms the project model has no Application Package / `app_path` association field. Its `gp4gen --patch` flag changes the volume type and does not establish the base-package relationship.
+- Therefore the audit workflow passing means only that the experimental generator ran; it does **not** mean a patch was generated. Reject this GP4 and do not build or install it.
+- Host tests on the same commit passed (run 44631789523).
+- Supporting references: Fake PKG Tools' documented Patch tab > Application Package and the `orbis-pub-cmd gp4_proj_create --app_path` flow are described in the external references linked in the engineering investigation. The required builder path must expose equivalent functionality.
