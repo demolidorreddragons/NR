@@ -121,7 +121,7 @@ jobs:
           [xml]$baseProject = Get-Content $baseGp4
           if ($baseProject.psproject.volume.package.storage_type -ne "digital50") { throw "Base GP4 storage_type is not digital50." }
           $rebuiltBasePkg = Join-Path $baseRebuildDir "PS4-Neural-Engine-002-DIGITAL50.pkg"
-          & dotnet "$tool" pkg build "$baseGp4" "$baseImage" --out $rebuiltBasePkg --validate 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
+          & dotnet "$tool" pkg build "$baseGp4" "$baseImage" --out $rebuiltBasePkg --content-flags 0x0C000000 --validate 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
           if ($LASTEXITCODE -ne 0 -or -not (Test-Path $rebuiltBasePkg)) { throw "Rebuilt base PKG build failed." }
           & dotnet "$tool" validate "$rebuiltBasePkg" 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
           if ($LASTEXITCODE -ne 0) { throw "Rebuilt base PKG validation failed." }
@@ -191,13 +191,8 @@ jobs:
           "=== CREATE ASSOCIATED PATCH GP4 ===" | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
           & $pubCmd gp4_proj_create --volume_type pkg_ps4_patch --content_id IV0000-PNEU00001_00-PS4NEURALENG0000 --passcode $zeroKey --entitlement_key $zeroKey --storage_type digital25 --app_path $basePkg $gp4 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
           if ($LASTEXITCODE -ne 0 -or -not (Test-Path $gp4)) { throw "Associated patch GP4 creation failed." }
-          # CLI accepts digital25 only; change the generated GP4 to match the
-          # rebuilt digital50 base and keep SFO PUBTOOLINFO in sync.
-          [xml]$patchProject = Get-Content $gp4
-          $patchProject.psproject.volume.package.storage_type = "digital50"
-          $patchProject.Save($gp4)
-          [xml]$patchProjectCheck = Get-Content $gp4
-          if ($patchProjectCheck.psproject.volume.package.storage_type -ne "digital50") { throw "Patch GP4 storage_type was not updated to digital50." }
+          # Keep Sony's accepted patch storage_type (digital25). The base
+          # must be a non-game application package, not GD_AC addon content.
 
           "=== ADD PATCH PAYLOAD ===" | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
           & $pubCmd gp4_file_add --force --pfs_compression enable $eboot "eboot.bin" $gp4 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
