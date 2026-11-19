@@ -9,7 +9,7 @@
 int main() {
  const auto dir=std::filesystem::temp_directory_path()/"pne-telemetry-test";
  std::error_code ec; std::filesystem::remove_all(dir,ec);
- pne::telemetry::Writer writer(dir.string());
+ pne::telemetry::Writer writer(dir.string().c_str());
  assert(writer.start() && writer.active());
  assert(writer.append_present({1000,1000,0x43555341,1}));
  assert(writer.append_present({1016,1000,0x43555341,0}));
