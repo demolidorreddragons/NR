@@ -9,7 +9,7 @@ struct BindingLayout { std::uint32_t binding, byte_offset, descriptor_bytes, arr
 inline constexpr std::uint32_t kDescriptorBindingStride = 64;
 inline constexpr std::size_t kMaxResourceBindings = 32;
 struct ResourceTableLayout { BindingLayout bindings[kMaxResourceBindings]{}; std::size_t binding_count = 0; std::uint32_t byte_size = 0; };
-enum class ResourceTableError { none, null_requirements, null_output, too_many_bindings, unsupported_descriptor_set, zero_array_count, invalid_descriptor_kind, bindings_not_strictly_sorted, offset_overflow, overlapping_binding, table_size_overflow, invalid_table_address };
+enum class ResourceTableError { none, null_requirements, null_output, too_many_bindings, unsupported_descriptor_set, zero_array_count, invalid_descriptor_kind, bindings_not_strictly_sorted, offset_overflow, overlapping_binding, table_size_overflow, invalid_table_address, invalid_user_data_slot };
 ResourceTableError build_resource_table_layout(const BindingRequirement* requirements, std::size_t requirement_count, ResourceTableLayout* output) noexcept;
 ResourceTableError validate_indirect_resource_table_range(std::uint64_t gpu_address, std::uint32_t byte_size) noexcept;
 ResourceTableError build_cs_indirect_table_pointer_packet(std::uint32_t start_register, std::uint64_t gpu_address, std::uint32_t byte_size, std::uint32_t packet_dwords[4]) noexcept;
