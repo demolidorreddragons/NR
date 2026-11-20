@@ -119,3 +119,18 @@ The independent sources are not fully consistent: the OpenGNM header comment say
 Inspection of the uploaded diagnostic `.sb` files resolved the earlier start-vs-end ambiguity for the pinned PSBC/OpenGNM format. Four short shader binaries have the input-usage slot table at `0x58` and their stored offsets resolve exactly to that start address under the OpenGNM header comment's formula `OrbShdr - offset*4`: decode 215, encode 136, FP16 GEMM 92, scalar FP32 GEMM 74. The fpPS4 formula that subtracts the slot count resolves each of these four one dword too early (`0x54`), so it is not the correct interpretation for these emitted binaries and remains a discrepancy to investigate against real retail samples.
 
 The tiled FP32 GEMM has `OrbShdr=0x990`, actual slot table `0x58..0x5c`, expected start-pointer offset `(0x990-0x58)/4=590), but the stored 8-bit field is 78. It therefore resolves to `0x858` in the code region. This confirms an 8-bit truncation bug in PSBC's writer, not a false-positive bounds check. The validator and fail-closed compiler guard have been corrected to use the start-pointer convention, corroborated by the four short outputs, and reject offsets above 255. The previous note saying the guard used the fpPS4 end-pointer interpretation is superseded by this artifact-based finding.
+
+
+### Diagnostic artifact hashes — run 44681174240
+
+Artifact `nr-gcn8-compute-shaders-gfx8` (ID `14604397439`) ZIP SHA-256: `015855d5d8177056f0f7babf235ef87e62e5f294dc771fd47b3610a71ba45426`. The five emitted `.sb` files are diagnostic only:
+
+| Shader | Bytes | SHA-256 |
+|---|---:|---|
+| `gemm_fp32_wave64_tiled.sb` | 2,504 | `530ba36073bc1e0f1a564039016d987f6d7bda90e373291a8509c8576d2f196b` |
+| `gemm_fp32.sb` | 440 | `d0f22febb2a94524a52ed59f8b77b04c2c28eb2a69828e81a0cfc2d9ef60e9e2` |
+| `gemm_fp16_accum.sb` | 512 | `b3a2734bd6008806e2bac44f32b11bc5183b2534189b2cebd06329f04286bf52` |
+| `e4m3_decode.sb` | 1,004 | `268b0ff3c750a873afee6f355290ee31dd0712d3c01853513e6ecdd3cc86e03e` |
+| `e4m3_encode.sb` | 688 | `5be6431766df62ab812f197511273481c91453526bd1990f8f5e57685e1ed0f2` |
+
+These hashes identify the exact outputs used to derive the pointer offsets above. They do not indicate GNM metadata acceptance, runtime compatibility, or hardware execution.
