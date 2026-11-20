@@ -44,8 +44,8 @@ successful host build is not evidence of GPU execution.
 
 | # | Work item | State | Evidence / gate |
 |---:|---|---|---|
-| 39 | Recover/authenticate model inputs | **Verifier implemented; inputs absent** | `tools/verify_model_inputs.py` checks three source archives and two extracted resources against pinned SHA-256 values. |
-| 40 | Check 310.8.0/310.8.3 semantic compatibility | **Blocked on inputs and graph metadata** | Matching package identity or raw hashes do not establish semantic compatibility. |
+| 39 | Recover/authenticate model inputs | **PASS — THREE ARCHIVES + RESOURCE + STAGE VERIFIED** | Inputs recovered from Library; all three ZIP hashes match, `WEIGHTS_HT` resource hash/size verified, 153 records inspected, and `s00.bin` reproduced byte-for-byte. See `docs/DLSSNR_310_8_3_RESOURCE.md`. |
+| 40 | Check 310.8.0/310.8.3 semantic compatibility | **PARTIAL — WEIGHT RESOURCE BYTE-IDENTICAL; GRAPH/RUNTIME PARITY OPEN** | The 310.8.3 DLL's `WEIGHTS_HT` SHA-256 matches the published 310.8.0 reference exactly. This proves weight-payload identity only; preprocessing, graph code, conditioning and runtime ABI still require comparison. |
 | 41 | Executable representation of 71 blocks | **Reference graph only** | 71-block reconstruction exists in prior REA evidence; no executable PS4 graph integrated. |
 | 42 | Missing operators | **Blocked on model graph/operator inventory** | Cannot enumerate or implement missing operators without the actual graph and operator definitions. |
 | 43 | Load/transfer weights | **Blocked on authenticated files and runtime** | No model files are present in the build environment; no GPU memory path. |
