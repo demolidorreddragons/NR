@@ -37,3 +37,18 @@ Once PSBC builds:
 ## Explicit non-claims
 
 This source audit does not prove that the compiled binaries execute on the console, that PSBC's standalone descriptor layout matches the eventual GNM runtime bindings, or that the selected Tonga/GFX8 target perfectly models every PS4 Pro hardware stepping. Those require emitted-binary inspection and hardware validation.
+
+
+## Build blocker: AMD packet headers (2026-11-20)
+
+The GCN8 compiler workflow run `44675683282` was inspected from its job log. The pinned PSBC build generated the Mesa register, NIR, ACO, and SPIR-V files successfully, then failed at the first C compilation unit:
+
+```
+src/amd/common/sid.h:12:10: fatal error: amd_cp_packets_gfx11.h: No such file or directory
+```
+
+This is a missing code-generation step, not evidence of a GFX8 ISA incompatibility. The pinned PSBC source's `src/amd/common/meson.build` defines `amd_packet_headers` custom targets for both `gfx11` and `gfx12`. Each target runs `src/amd/packets/parse_cp_pm4_table_data_json.py` with the GFX11/GFX12 packet JSON and opcode header inputs, then emits `src/amd/common/amd_cp_packets_gfx11.h` and `amd_cp_packets_gfx12.h`. The Makefile's `GENERATED` list does not include these two headers.
+
+The NR workflow was amended in commit `9a02161f1ea2ebb297609acbdbb9163b86510e98` to reproduce those two upstream Meson code-generation targets before `make`, and assert both outputs are non-empty. This is a targeted build-system correction based on the pinned source's own Meson definition; it does not patch compiler semantics or remove GFX11/GFX12 declarations.
+
+**Validation state:** the correction has been committed, but no workflow run on this new commit has yet been observed. Therefore the PSBC host compiler build remains **BLOCKED / NOT YET REVALIDATED**. No SPIR-V-to-GFX8 compilation, `.sb` artifact, GNM metadata inspection, or PS4 Pro GPU execution is claimed.
