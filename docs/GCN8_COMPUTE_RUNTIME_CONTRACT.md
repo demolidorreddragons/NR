@@ -92,6 +92,28 @@ count, GPU address encoding and cache visibility still require authoritative
 validation. The descriptor class is now identified as V# by PSBC's own source,
 but the final writable V# byte construction is not yet accepted.
 
+## GNM compute binary metadata parser
+
+`platform/ps4/gcn8/host/shader_binary_contract.*` now parses the pinned PSBC
+PS4 NEO compute container layout without invoking PSBC. It validates the GNM
+`Shdr` file header, compute/NEO target, CS header size, single indirect
+resource-table slot, the 8-bit slot-table pointer, code range, common shader
+size and raw seven-word `GnmCsStageRegisters` block. It returns the code
+offset/length, slot-table offset/count, CRC field and register words.
+
+The parser intentionally does not recompute CRC; the pinned upstream
+`verify_sb.py` does that. The host helper
+`set_cs_program_gpu_address` mirrors `sceGnmCsRegsSetAddress`: it replaces
+the binary-relative `computepgmlo/hi` values with a 256-byte-aligned GPU code
+address below 48 bits. Runtime use must copy the code to GPU-visible memory
+first, then patch the register block; the parser itself never submits or
+dispatches a shader.
+
+The C++ test covers malformed headers, wrong stage/target, slot pointer/count,
+code range, resource slot, CS registers and address alignment. The GFX8 CI
+workflow also runs this parser against all five emitted `.sb` files before
+the byte-level Python report verifier. This remains host-side evidence.
+
 ## Memory-management boundary
 
 The OpenOrbis SDK headers declare the following candidate libkernel calls:
