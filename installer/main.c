@@ -93,7 +93,8 @@ static int copy_prx(char* error, size_t error_size) {
         return 0;
     }
 
-    int out = -1;\n    if (!open_staged_file(DEST_TMP, &out)) out = -1;
+    int out = -1;
+    if (!open_staged_file(DEST_TMP, &out)) out = -1;
     if (out < 0) {
         int saved_errno = errno;
         close(in);
