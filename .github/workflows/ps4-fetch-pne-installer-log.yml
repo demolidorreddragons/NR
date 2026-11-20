@@ -1,4 +1,4 @@
-name: Fetch PS4 PNE installer log
+name: Fetch PS4 PNE installer log and transaction recovery state
 
 on:
   push:
@@ -14,19 +14,53 @@ jobs:
     runs-on: [self-hosted, Windows, X64, ps4-lan]
     timeout-minutes: 5
     steps:
-      - name: Read installer log from PS4 FTP (read-only)
+      - name: Read installer log, transaction backups and staged files (read-only)
         shell: powershell -ExecutionPolicy Bypass -File {0}
         env:
           PS4_IP: ${{ vars.PS4_IP }}
         run: |
           $ErrorActionPreference = "Stop"
           if (-not $env:PS4_IP) { throw "PS4_IP repository variable is missing." }
-          $url = "ftp://$($env:PS4_IP):2121/data/GoldHEN/ps4_neural_engine_install.log"
-          $out = Join-Path $env:RUNNER_TEMP "ps4_neural_engine_install.log"
-          $result = & curl.exe --fail --silent --show-error --ftp-pasv --user "anonymous:anonymous@example.com" --output $out $url 2>&1
-          if ($LASTEXITCODE -ne 0) { throw "FTP read failed for $url : $result" }
-          if (-not (Test-Path -LiteralPath $out)) { throw "FTP returned no log file." }
-          Write-Host "PNE_INSTALL_LOG_BEGIN"
-          Get-Content -LiteralPath $out -Raw | Write-Host
-          Write-Host "PNE_INSTALL_LOG_END"
-          Write-Host "PNE_LOG_BYTES=$((Get-Item -LiteralPath $out).Length)"
+          $base = "ftp://$($env:PS4_IP):2121"
+          $cred = "anonymous:anonymous@example.com"
+          $temp = Join-Path $env:RUNNER_TEMP "pne-transaction-diagnostics"
+          New-Item -ItemType Directory -Force -Path $temp | Out-Null
+
+          function Read-FtpText([string]$remote, [string]$label, [bool]$required = $false) {
+            $out = Join-Path $temp ($label -replace '[^A-Za-z0-9_.-]','_')
+            $result = & curl.exe --fail --silent --show-error --ftp-pasv --user $cred --output $out "$base$remote" 2>&1
+            if ($LASTEXITCODE -ne 0) {
+              if ($required) { throw "Required FTP read failed for $remote : $result" }
+              Write-Host "FILE_UNAVAILABLE $remote : $result"
+              return
+            }
+            Write-Host "===== BEGIN $remote ====="
+            Get-Content -LiteralPath $out -Raw | Write-Host
+            Write-Host "===== END $remote ====="
+            Write-Host "FILE_BYTES $remote $((Get-Item -LiteralPath $out).Length)"
+          }
+
+          function List-Ftp([string]$remote) {
+            Write-Host "===== DIRECTORY $remote ====="
+            $listing = & curl.exe --fail --silent --show-error --ftp-pasv --user $cred --list-only "$base$remote" 2>&1
+            if ($LASTEXITCODE -ne 0) { Write-Host "DIRECTORY_UNAVAILABLE $remote : $listing"; return @() }
+            $listing | ForEach-Object { Write-Host $_ }
+            return @($listing)
+          }
+
+          $pluginFiles = List-Ftp "/data/GoldHEN/plugins/"
+          $goldhenFiles = List-Ftp "/data/GoldHEN/"
+          $null = List-Ftp "/data/"
+          $null = List-Ftp "/data/pkg/"
+
+          Read-FtpText "/data/GoldHEN/ps4_neural_engine_install.log" "current-installer-log.txt" $true
+          Read-FtpText "/data/GoldHEN/plugins.ini" "plugins.ini.txt"
+          Read-FtpText "/data/GoldHEN/plugins.ini.pne-backup" "plugins.ini.pne-backup.txt"
+          Read-FtpText "/data/GoldHEN/plugins.ini.pne-tmp" "plugins.ini.pne-tmp.txt"
+          Read-FtpText "/data/GoldHEN/plugins/ps4_neural_engine.prx.pne-backup" "ps4_neural_engine.prx.pne-backup.txt"
+          Read-FtpText "/data/GoldHEN/plugins/ps4_neural_engine.prx.pne-tmp" "ps4_neural_engine.prx.pne-tmp.txt"
+          Read-FtpText "/data/install.log" "data-install.log.txt"
+          Read-FtpText "/data/pkg/install.log" "pkg-install.log.txt"
+          Write-Host "PLUGIN_FILE_COUNT=$($pluginFiles.Count)"
+          Write-Host "GOLDHEN_FILE_COUNT=$($goldhenFiles.Count)"
+          Write-Host "PNE_TRANSACTION_DIAGNOSTICS_READ_ONLY_COMPLETE"
