@@ -40,6 +40,11 @@ class ManifestTests(unittest.TestCase):
     def test_overlap(self): self.m["tensors"][1]["stageOffset"]=7; self.invalid()
     def test_path_traversal(self): self.m["stages"][0]["file"]="../../bad"; self.invalid()
     def test_metadata_disagreement(self): self.m["tensors"][0]["block"]=1; self.invalid()
+    def test_missing_block_coverage(self):
+        self.m["totals"]["blockCount"] = 2
+        self.m["tensors"][1]["name"] = "block0.layer1.layer"
+        self.m["tensors"][1]["block"] = 0
+        self.invalid()
     def test_gap(self): self.m["tensors"][1]["stageOffset"]=9; self.invalid(full_coverage=True)
     def test_inventory_mismatch(self):
         inv=self.root/"inventory.json"; inv.write_text(json.dumps({"records":[
