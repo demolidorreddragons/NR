@@ -66,7 +66,16 @@ jobs:
           name: ps4-neural-engine-build
           path: base-artifact
           repository: demolidorreddragons/NR
-          run-id: ${{ github.event.workflow_run.id || '44644315395' }}
+          run-id: 44644315395
+          github-token: ${{ github.token }}
+
+      - name: Download current PRX payload for the patch delta
+        uses: actions/download-artifact@v4
+        with:
+          name: ps4-neural-engine-build
+          path: current-prx-artifact
+          repository: demolidorreddragons/NR
+          run-id: ${{ github.event.workflow_run.id || '44649084819' }}
           github-token: ${{ github.token }}
 
       - name: Download pinned Fake PKG Tools v7
@@ -105,10 +114,9 @@ jobs:
           New-Item -ItemType Directory -Force -Path "candidate-output" | Out-Null
           $zeroKey = "00000000000000000000000000000000"
 
-          # Keep the original, independently validated base PKG byte-for-byte.
-          # Do not rebuild its SFO: Sony img_create rejected the reconstructed
-          # app package param.sfo before patch image creation.
-          "SOURCE_BASE_PKG_MODE=ORIGINAL_VALIDATED_PKG_002_UNMODIFIED" | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
+          # The patch baseline is the previously validated PKG 002 artifact.
+          # The current build's PRX is kept separate and added only to the patch.
+          "SOURCE_BASE_PKG_MODE=ORIGINAL_VALIDATED_PKG_002_FROM_RUN_44644315395" | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
           $extract = Join-Path $work "base-extracted"
           $gp4 = Join-Path $work "PS4-Neural-Engine-003.gp4"
           $pkg = Join-Path $work "PS4-Neural-Engine-003-CANDIDATE.pkg"
@@ -143,9 +151,18 @@ jobs:
           $sfo = Join-Path $image "sce_sys/param.sfo"
           $eboot = Join-Path $image "eboot.bin"
           $prx = Join-Path $image "ps4_neural_engine.prx"
+          $patchPrx = Join-Path $env:GITHUB_WORKSPACE "current-prx-artifact/ps4/ps4_neural_engine.prx"
+          if (-not (Test-Path $patchPrx)) { throw "Current PRX build payload missing: $patchPrx" }
           foreach ($p in @($sfo,$eboot,$prx)) {
             if (-not (Test-Path $p)) { throw "Required base payload missing: $p" }
           }
+
+          $basePrxHash = (Get-FileHash -Algorithm SHA256 $prx).Hash
+          $patchPrxHash = (Get-FileHash -Algorithm SHA256 $patchPrx).Hash
+          "BASE_SOURCE_PRX_SHA256=$basePrxHash" | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
+          "PATCH_SOURCE_PRX_SHA256=$patchPrxHash" | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
+          "PATCH_SOURCE_PRX_BYTES=$((Get-Item $patchPrx).Length)" | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
+          if ($basePrxHash -eq $patchPrxHash) { throw "Current PRX payload is byte-identical to baseline PKG 002; no functional patch delta exists." }
 
           "=== REBUILD BASE WITH SONY PUBLISHER TOOL ===" | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
           # Sony img_create rejected the base SFO's legacy APP_VER "1.00".
@@ -248,10 +265,10 @@ jobs:
           # Re-run the pair build against the normalized Windows-path QA check.
           "=== ADD PATCH PAYLOAD ===" | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
           "PATCH_SOURCE_EBOOT_SHA256=$((Get-FileHash -Algorithm SHA256 $eboot).Hash)" | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
-          "PATCH_SOURCE_PRX_SHA256=$((Get-FileHash -Algorithm SHA256 $prx).Hash)" | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
+          "PATCH_SOURCE_PRX_SHA256=$((Get-FileHash -Algorithm SHA256 $patchPrx).Hash)" | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
           & $pubCmd gp4_file_add --force --pfs_compression enable $eboot "eboot.bin" $gp4 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
           if ($LASTEXITCODE -ne 0) { throw "Adding eboot.bin to GP4 failed." }
-          & $pubCmd gp4_file_add --force --pfs_compression enable $prx "ps4_neural_engine.prx" $gp4 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
+          & $pubCmd gp4_file_add --force --pfs_compression enable $patchPrx "ps4_neural_engine.prx" $gp4 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
           if ($LASTEXITCODE -ne 0) { throw "Adding PRX to GP4 failed." }
           & $pubCmd gp4_file_add --force --pfs_compression enable $sfo "sce_sys/param.sfo" $gp4 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
           if ($LASTEXITCODE -ne 0) { throw "Adding patch param.sfo to GP4 failed." }
