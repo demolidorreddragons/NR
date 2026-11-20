@@ -12,6 +12,7 @@ struct ResourceTableLayout { BindingLayout bindings[kMaxResourceBindings]{}; std
 enum class ResourceTableError { none, null_requirements, null_output, too_many_bindings, unsupported_descriptor_set, zero_array_count, invalid_descriptor_kind, bindings_not_strictly_sorted, offset_overflow, overlapping_binding, table_size_overflow, invalid_table_address };
 ResourceTableError build_resource_table_layout(const BindingRequirement* requirements, std::size_t requirement_count, ResourceTableLayout* output) noexcept;
 ResourceTableError validate_indirect_resource_table_range(std::uint64_t gpu_address, std::uint32_t byte_size) noexcept;
+ResourceTableError build_cs_indirect_table_pointer_packet(std::uint32_t start_register, std::uint64_t gpu_address, std::uint32_t byte_size, std::uint32_t packet_dwords[4]) noexcept;
 std::uint32_t descriptor_size_bytes(DescriptorKind kind) noexcept;
 const char* resource_table_error_string(ResourceTableError error) noexcept;
 }
