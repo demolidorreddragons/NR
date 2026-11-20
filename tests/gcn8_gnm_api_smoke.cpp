@@ -42,5 +42,14 @@ static_assert(std::is_same<decltype(&sceGnmDrawCmdSetVsharpUserData),
                            GnmCmdSetVsharpSignature>::value,
               "unexpected buffer descriptor binding signature");
 
-// Compile-only API/ABI declaration smoke test. No GNM call is executed.
+// Link references force the PS4 import library to resolve the firmware NIDs.
+// These pointers are never invoked by the smoke executable.
+extern "C" {
+__attribute__((used)) GnmDispatchDirectSignature pne_gcn8_dispatch_direct_import =
+    &sceGnmDispatchDirect;
+__attribute__((used)) GnmSetCsShaderSignature pne_gcn8_set_cs_shader_import =
+    &sceGnmSetCsShader;
+}
+
+// Compile/link-only API/ABI smoke test. No GNM call is executed.
 int pne_gcn8_gnm_api_smoke() { return 0; }
