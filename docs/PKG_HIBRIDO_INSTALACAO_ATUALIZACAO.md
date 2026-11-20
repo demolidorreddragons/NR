@@ -1,6 +1,6 @@
 # Arquitetura do PKG híbrido — instalação inicial e atualização do Neural Engine
 
-**Estado:** especificação de engenharia; implementação ainda não aprovada.  
+**Estado:** especificação de engenharia com manifesto/hash e staging exclusivo parcialmente implementados; instalação ainda não aprovada.  
 **Alvo:** PS4 Pro / Orbis + GoldHEN.  
 **Branch:** `feature/gcn8-numeric-kernels`.  
 **Identidade atual:** TITLE_ID `PNEU00001`, CONTENT_ID `IV0000-PNEU00001_00-PS4NEURALENG0000`.
@@ -102,21 +102,23 @@ Se a versão empacotada for igual à instalada e os hashes coincidirem, retornar
 
 | Etapa | Trabalho | Critério de saída |
 |---|---|---|
-| H1 | Manifesto de release e hash do PRX no build | Artefato e manifesto concordam byte a byte |
-| H2 | Máquina de estados NEW/UPDATE/LEGACY/RECOVERY/CONFLICT | Testes unitários para todos os estados |
-| H3 | Temporários exclusivos e proteção contra symlink | Testes para arquivo/link preexistente e colisão |
-| H4 | Idempotência e detecção de versão/hash | Segunda execução não altera o estado |
+| H1 | Manifesto de release e hash do PRX no build/runtime | **IMPLEMENTADO — CI REVALIDAÇÃO PENDENTE** | Build e eboot verificam identidade e hash; teste host do SHA-256 passou. |
+| H2 | Máquina de estados NEW/UPDATE/LEGACY/RECOVERY/CONFLICT | **PENDENTE** | Estados ainda não formalizados no eboot. |
+| H3 | Temporários exclusivos e proteção contra symlink | **PARCIAL — IMPLEMENTADO** | `O_CREAT | O_EXCL` rejeita arquivo/link preexistente nos nomes temporários; falta fault injection Orbis. |
+| H4 | Idempotência e detecção de versão/hash | **PENDENTE** | Ainda não compara versão/hash já instalada para retornar ALREADY_CURRENT ou recusar downgrade. |
 | H5 | Fault injection de cada write/fsync/rename/rollback | Nenhum cenário destrói silenciosamente a versão anterior |
-| H6 | QA independente do PKG exato | Categoria/SFO, manifesto, hashes, payload e extração aprovados |
+| H6 | QA independente do PKG exato | **IMPLEMENTADO — EXECUÇÃO PENDENTE** | Job Windows separado usa OrbisPkgTool pinado e verifica GP4/SFO/manifesto/hash/payload. |
 | H7 | Teste controlado de instalação inicial e atualização | Evidência de console, logs, rollback e carregamento |
 | H8 | Decisão sobre atualização do próprio app via Package Manager | Somente após prova separada do fluxo base/patch ou reinstalação |
 
 ## 9. Estado atual e bloqueios
 
 - O build atual gera um PKG full/base `gde`, não um patch.
-- O eboot atual já copia o PRX e atualiza `plugins.ini`, mas ainda não tem manifesto de release, hash SHA-256 do payload, máquina de estados formal ou política de downgrade.
-- O instalador atual abre `DEST_TMP` e `CONFIG_TMP` com truncamento; deve migrar para criação exclusiva antes de qualquer teste de instalação.
-- A transação PRX + configuração ainda não é atomicamente indivisível.
+- O build gera `pne-release.ini` com identidade e SHA-256 do PRX; o eboot agora valida schema, TITLE_ID, CONTENT_ID, nome do PRX e SHA-256 antes de criar diretórios ou alterar destinos. A validação usa SHA-256 implementado localmente e vetores de teste host.
+- `DEST_TMP` e `CONFIG_TMP` são criados com `O_CREAT | O_EXCL`; arquivos temporários preexistentes fazem a operação abortar.
+- A transação PRX + configuração preserva backups e tenta rollback, mas os dois caminhos não podem ser trocados atomicamente em conjunto.
+- A máquina de estados NEW/UPDATE/LEGACY/RECOVERY/CONFLICT, detecção de downgrade e idempotência por hash ainda não estão completas.
+- O workflow de build agora preserva GP4/SFO/manifest e tem um job QA separado em Windows com OrbisPkgTool fixado; a primeira execução sobre o artefato atualizado ainda precisa passar.
 - Não há evidência de instalação/atualização do pacote no PS4 Pro nem de carregamento bem-sucedido do PRX.
 
 **Decisão:** seguir com um único PKG full/base cujo eboot faz instalação inicial e atualização idempotente do plugin GoldHEN. Não rotular o arquivo como base+patch do Package Manager até existir evidência técnica de um mecanismo PS4 válido para isso. O pacote permanece bloqueado para instalação real até QA e autorização explícita.
