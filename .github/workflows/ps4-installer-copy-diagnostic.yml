@@ -1,0 +1,44 @@
+name: PS4 read-only installer failure diagnosis
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/ps4-installer-copy-diagnostic.yml"
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: [self-hosted, Windows, X64, ps4-lan]
+    steps:
+      - name: Retrieve installer log and inspect relevant directories without changes
+        shell: powershell -NoProfile -ExecutionPolicy Bypass -File {0}
+        env:
+          PS4_IP: ${{ vars.PS4_IP }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          if (-not $env:PS4_IP) { throw "PS4_IP variable missing." }
+          $base = "ftp://$($env:PS4_IP):2121"
+          $creds = "anonymous:anonymous@example.com"
+          function Get-Listing([string]$path) {
+            Write-Host "=== LIST $path ==="
+            $out = & curl.exe --fail --silent --show-error --ftp-pasv --user $creds ($base + $path) 2>&1
+            if ($LASTEXITCODE -eq 0) { $out | ForEach-Object { Write-Host $_ } }
+            else { Write-Host "LIST_UNAVAILABLE path=$path exit=$LASTEXITCODE"; $out | ForEach-Object { Write-Host $_ } }
+          }
+          Get-Listing "/data/GoldHEN/"
+          Get-Listing "/data/GoldHEN/plugins/"
+          Get-Listing "/user/app/"
+          $log = Join-Path $env:RUNNER_TEMP "ps4-neural-engine-install.log"
+          $url = $base + "/data/GoldHEN/ps4_neural_engine_install.log"
+          $result = & curl.exe --fail --silent --show-error --ftp-pasv --user $creds --output $log $url 2>&1
+          if ($LASTEXITCODE -eq 0 -and (Test-Path -LiteralPath $log)) {
+            Write-Host "=== INSTALL_LOG_BEGIN ==="
+            Get-Content -LiteralPath $log | ForEach-Object { Write-Host $_ }
+            Write-Host "=== INSTALL_LOG_END ==="
+            Write-Host "INSTALL_LOG_BYTES=$((Get-Item $log).Length)"
+          } else {
+            Write-Host "INSTALL_LOG_NOT_RETRIEVABLE exit=$LASTEXITCODE"
+            $result | ForEach-Object { Write-Host $_ }
+          }
+          Write-Host "READ_ONLY=true"
+          Write-Host "NO_FILES_WRITTEN_OR_DELETED=true"
