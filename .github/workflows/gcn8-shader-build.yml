@@ -167,6 +167,45 @@ jobs:
           for shader in gemm_fp32_wave64_tiled gemm_fp32 gemm_fp16_accum e4m3_decode e4m3_encode; do
             spirv-val --target-env vulkan1.1 "dist/ps4/gcn8/${shader}.spv"
           done
+      - name: Generate SPIR-V provenance manifest
+        run: |
+          python3 - <<'PY'
+          import hashlib, json, platform, subprocess
+          from pathlib import Path
+          shaders = ("gemm_fp32_wave64_tiled", "gemm_fp32", "gemm_fp16_accum", "e4m3_decode", "e4m3_encode")
+          records = []
+          for shader in shaders:
+              source = Path("platform/ps4/gcn8/shaders") / f"{shader}.comp"
+              binary = Path("dist/ps4/gcn8") / f"{shader}.spv"
+              if not source.is_file() or not binary.is_file():
+                  raise SystemExit(f"Missing SPIR-V provenance input for {shader}")
+              records.append({
+                  "shader": shader,
+                  "source_sha256": hashlib.sha256(source.read_bytes()).hexdigest(),
+                  "spirv_sha256": hashlib.sha256(binary.read_bytes()).hexdigest(),
+                  "spirv_bytes": binary.stat().st_size,
+              })
+          report = {
+              "target": "PS4 Pro NEO / GFX8",
+              "validation": "spirv-val --target-env vulkan1.1",
+              "host": platform.platform(),
+              "glslang": subprocess.check_output(["glslangValidator", "--version"], text=True).splitlines()[0],
+              "spirv_val": subprocess.check_output(["spirv-val", "--version"], text=True).splitlines()[0],
+              "shaders": records,
+          }
+          Path("dist/ps4/gcn8/spirv-manifest.json").write_text(json.dumps(report, indent=2))
+          PY
+      - name: Upload validated SPIR-V inputs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nr-gcn8-spirv
+          path: |
+            platform/ps4/gcn8/shaders/*.comp
+            dist/ps4/gcn8/*.spv
+            dist/ps4/gcn8/spirv-manifest.json
+          if-no-files-found: warn
+          retention-days: 30
       - name: Compile SPIR-V to PS4 Pro GFX8 GNM shader binaries
         run: |
           for shader in gemm_fp32_wave64_tiled gemm_fp32 gemm_fp16_accum e4m3_decode e4m3_encode; do
