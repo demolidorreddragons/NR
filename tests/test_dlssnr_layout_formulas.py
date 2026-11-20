@@ -8,6 +8,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from tools.verify_dlssnr_tensor_layout import expected_lengths, fused_end, upsample_length
+from tools.export_dlssnr_graph_layout import build_graph_layout
 
 
 class DlssNrLayoutFormulaTests(unittest.TestCase):
@@ -47,6 +48,17 @@ class DlssNrLayoutFormulaTests(unittest.TestCase):
         self.assertEqual(layout["block56.layer0.layer"], 230176)
         self.assertEqual(layout["block62.layer0.layer"], 70048)
         self.assertEqual(layout["block66.layer0.layer"], 22784)
+
+    def test_machine_readable_graph_export_has_all_blocks_and_records(self):
+        graph = build_graph_layout()
+        self.assertEqual(graph["schema"], "nr-dlssnr-reference-graph-layout-v1")
+        self.assertEqual(graph["model"]["blocks"], 71)
+        self.assertEqual(graph["model"]["tensor_records"], 153)
+        self.assertEqual(len(graph["blocks"]), 71)
+        self.assertEqual(sum(len(block["tensor_records"]) for block in graph["blocks"]), 153)
+        self.assertEqual(len(graph["transitions"]), 11)
+        self.assertEqual(graph["blocks"][0]["channels_in"], 16)
+        self.assertEqual(graph["blocks"][70]["channels_out"], 4)
 
     def test_post_head_and_fused_widths(self):
         layout = expected_lengths()
