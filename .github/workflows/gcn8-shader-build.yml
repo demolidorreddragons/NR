@@ -296,11 +296,29 @@ jobs:
               first_slot_type = None
               input_usage_slots = []
               if num_slots:
+                  # The input-usage table follows GnmCsShader in the header.
+                  # chunkUsageBaseOffsetDwords is an 8-bit dword offset back
+                  # from OrbShdr; do not accept a wrapped/truncated pointer.
+                  expected_slot_offset = cs_header + cs_header_size
+                  expected_offset_bytes = orb - expected_slot_offset
+                  if expected_offset_bytes < 0 or expected_offset_bytes % 4:
+                      raise SystemExit(f"Input usage slot offset is not dword aligned: {shader}")
+                  expected_chunk_offset = expected_offset_bytes // 4
+                  if expected_chunk_offset > 0xff:
+                      raise SystemExit(
+                          f"PSBC GNM chunkUsageBaseOffsetDwords overflows its 8-bit field: "
+                          f"{shader} needs {expected_chunk_offset} dwords (max 255)"
+                      )
+                  if chunk_offset != expected_chunk_offset:
+                      raise SystemExit(
+                          f"GNM input-usage offset was truncated: {shader} "
+                          f"stored={chunk_offset} expected={expected_chunk_offset}"
+                      )
                   slot_offset = orb - chunk_offset * 4
-                  # GnmShaderBinaryInfo.chunkUsageBaseOffsetDwords is relative to OrbShdr.
-              # The slot table resides in the code/chunk region, not after GnmCsShader.
-              if chunk_offset == 0 or slot_offset < code_start or slot_offset + num_slots * 4 > orb:
-                      raise SystemExit(f"Input usage slot range is out of bounds: {shader}")
+                  if slot_offset != expected_slot_offset:
+                      raise SystemExit(f"GNM input-usage slot pointer mismatch: {shader}")
+                  if slot_offset + num_slots * 4 > code_start:
+                      raise SystemExit(f"Input usage slot table overlaps GCN code: {shader}")
                   usage_names = {
                       0x00: "IMM_RESOURCE", 0x01: "IMM_SAMPLER",
                       0x02: "IMM_CONSTBUFFER", 0x03: "IMM_VERTEXBUFFER",
@@ -332,6 +350,8 @@ jobs:
                           "chunk_mask": control >> 4,
                       })
                   first_slot_type = input_usage_slots[0]["usage_type"]
+              elif chunk_offset != 0:
+                  raise SystemExit(f"GNM has a chunk offset but zero input-usage slots: {shader}")
               spirv_path = Path("dist/ps4/gcn8") / f"{shader}.spv"
               spirv_text = subprocess.check_output(["spirv-dis", str(spirv_path)], text=True)
               entry = re.search(r'OpEntryPoint\s+GLCompute\s+(%\w+)\s+"main"', spirv_text)
