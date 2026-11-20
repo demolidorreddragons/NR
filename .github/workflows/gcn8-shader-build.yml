@@ -297,13 +297,12 @@ jobs:
               first_slot_type = None
               input_usage_slots = []
               if num_slots:
-                  # GnmCsShader is followed by the input-usage slots. The
-                  # independent fpPS4 parser resolves the slot table as:
-                  # OrbShdr - chunkUsageBaseOffsetDwords*4 - numSlots*4.
-                  # The 8-bit offset therefore points to the END of the table.
+                  # GnmCsShader is followed by the input-usage slots.
+                  # OpenGNM's header comment and the four short emitted
+                  # compute shaders resolve the slot-table START as
+                  # OrbShdr - chunkUsageBaseOffsetDwords*4.
                   expected_slot_start = cs_header + cs_header_size
-                  expected_slot_end = expected_slot_start + num_slots * 4
-                  expected_offset_bytes = orb - expected_slot_end
+                  expected_offset_bytes = orb - expected_slot_start
                   if expected_offset_bytes < 0 or expected_offset_bytes % 4:
                       raise SystemExit(f"Input usage slot offset is not dword aligned: {shader}")
                   expected_chunk_offset = expected_offset_bytes // 4
@@ -317,8 +316,8 @@ jobs:
                           f"GNM input-usage offset is invalid/truncated: {shader} "
                           f"stored={chunk_offset} expected={expected_chunk_offset}"
                       )
-                  slot_offset = orb - chunk_offset * 4 - num_slots * 4
-                  if slot_offset != expected_slot_start or expected_slot_end > code_start:
+                  slot_offset = orb - chunk_offset * 4
+                  if slot_offset != expected_slot_start or slot_offset + num_slots * 4 > code_start:
                       raise SystemExit(f"GNM input-usage slot table location is invalid: {shader}")
                   usage_names = {
                       0x00: "IMM_RESOURCE", 0x01: "IMM_SAMPLER",
