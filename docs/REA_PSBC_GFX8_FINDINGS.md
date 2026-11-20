@@ -67,3 +67,20 @@ The workflow now also compiles and executes a small Linux `sysconf` probe before
 ## Numeric shader review — beta-zero NaN isolation (2026-11-20)
 
 Source review found that the scalar FP32 and FP16-emulation GEMM shaders evaluated `beta * C` even when `beta == 0`. IEEE arithmetic makes `0 * NaN` produce NaN, so an unused/uninitialized C buffer could contaminate the output. Both shaders now conditionally avoid reading C when beta is zero (commits `07c83b144dd5712b4ac46cc227a1f6e9e0e468ce` and `92a3bc3fdfb925f5326532bc06da5c20dcbd94ee`). Host regression coverage now includes beta-zero/NaN isolation, E4M3FN signed zero, infinities, NaN, and tie-to-even boundaries. Host CI run `44677189726` completed successfully on commit `92a3bc3fdfb925f5326532bc06da5c20dcbd94ee`. This validates the host regression suite only; the shader compiler workflow has not yet produced GFX8 binaries.
+
+
+## First successful host compiler build and GFX8 conversion blocker (2026-11-20)
+
+Run `44679024542` completed the pinned PSBC host compiler build and link. The workflow had to generate NIR/ACO C sources before starting a fresh Make process (the Makefile's source wildcards are evaluated at parse time), generate Mesa's `format_srgb.c` and `gfx10_format_table.c`, and select BLAKE3's portable-only path because the standalone Makefile omitted the upstream x86 SIMD assembly objects. These are host build integration changes; they do not alter the PS4 shader instruction set.
+
+The five NR compute sources compiled to SPIR-V and all five passed `spirv-val --target-env vulkan1.1`. GNM conversion then aborted on the tiled FP32 GEMM shader at:
+
+```
+assert(config->lds_size <= compiler_info->ac->lds_size_per_workgroup)
+```
+
+Inspection of the pinned `libpsbc/psbc_compile.c` showed that its standalone `setup_ac_info()` populated VGPR/SGPR limits but left `lds_size_per_workgroup` zero for every target. The authoritative pinned Mesa implementation in `src/amd/common/ac_gpu_info.c` sets this limit to 64 KiB for GFX7+ and 32 KiB for GFX6. The new local integration script `tools/apply_psbc_gfx8_fixes.py` sets the same value in the standalone target setup before building. This is a narrowly scoped correction to compiler capability metadata, not a change to the shader or an invented LDS size.
+
+The same run showed the negative CLI test's 4-byte SPIR-V fixture reached NIR/ACO and caused a process crash; the previous shell gate accepted any nonzero exit and therefore misclassified the crash as rejection. The integration script now validates SPIR-V file length and the 5-word header before calling libpsbc, and the workflow requires a normal nonzero exit (not a signal/segfault) with no output file. The script hash is recorded in the GNM provenance report.
+
+**Validation state:** the host compiler and SPIR-V gates passed in run `44679024542`; the LDS and CLI patches have not yet been revalidated. No GNM `.sb` artifact, ISA, register report, or hardware dispatch is accepted.
