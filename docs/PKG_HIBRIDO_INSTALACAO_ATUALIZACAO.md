@@ -1,6 +1,6 @@
 # Arquitetura do PKG híbrido — instalação inicial e atualização do Neural Engine
 
-**Estado:** especificação de engenharia com manifesto/hash e staging exclusivo parcialmente implementados; instalação ainda não aprovada.  
+**Estado:** manifesto/hash, staging exclusivo, backups/rollback best-effort e QA estrutural PC do PKG 006 aprovados; máquina de estados e idempotência completas pendentes; instalação ainda não aprovada.  
 **Alvo:** PS4 Pro / Orbis + GoldHEN.  
 **Branch:** `feature/gcn8-numeric-kernels`.  
 **Identidade atual:** TITLE_ID `PNEU00001`, CONTENT_ID `IV0000-PNEU00001_00-PS4NEURALENG0000`.
@@ -107,7 +107,7 @@ Se a versão empacotada for igual à instalada e os hashes coincidirem, retornar
 | H3 | Temporários exclusivos e proteção contra symlink | **PARCIAL — IMPLEMENTADO** | `O_CREAT+O_EXCL` rejeita arquivo/link preexistente nos nomes temporários; falta fault injection Orbis. |
 | H4 | Idempotência e detecção de versão/hash | **PENDENTE** | Ainda não compara versão/hash já instalada para retornar ALREADY_CURRENT ou recusar downgrade. |
 | H5 | Fault injection de cada write/fsync/rename/rollback | Nenhum cenário destrói silenciosamente a versão anterior |
-| H6 | QA independente do PKG exato | **IMPLEMENTADO — EXECUÇÃO PENDENTE** | Job Windows separado usa OrbisPkgTool pinado e verifica GP4/SFO/manifesto/hash/payload. |
+| H6 | QA independente do PKG exato | **PASS — PC ONLY** | Run `44683251209`, job `independent-pkg-qa`, OrbisPkgTool pinado: estrutura/digests/assinaturas PASS, 15/15 arquivos extraídos, SFO semântico e PRX/manifesto embutidos conferidos. Artefato QA `14605348032`; não é teste no console. |
 | H7 | Teste controlado de instalação inicial e atualização | Evidência de console, logs, rollback e carregamento |
 | H8 | Decisão sobre atualização do próprio app via Package Manager | Somente após prova separada do fluxo base/patch ou reinstalação |
 
@@ -118,7 +118,7 @@ Se a versão empacotada for igual à instalada e os hashes coincidirem, retornar
 - `DEST_TMP` e `CONFIG_TMP` são criados com `O_CREAT | O_EXCL`; arquivos temporários preexistentes fazem a operação abortar.
 - A transação PRX + configuração preserva backups e tenta rollback, mas os dois caminhos não podem ser trocados atomicamente em conjunto.
 - A máquina de estados NEW/UPDATE/LEGACY/RECOVERY/CONFLICT, detecção de downgrade e idempotência por hash ainda não estão completas.
-- O workflow de build agora preserva GP4/SFO/manifest e tem um job QA separado em Windows com OrbisPkgTool fixado; a primeira execução sobre o artefato atualizado ainda precisa passar.
+- O workflow de build preserva GP4/SFO/manifest e o job QA Windows com OrbisPkgTool fixado passou no run `44683251209` para o PKG exato; QA PC não prova instalação nem ABI/runtime.
 - Não há evidência de instalação/atualização do pacote no PS4 Pro nem de carregamento bem-sucedido do PRX.
 
 **Decisão:** seguir com um único PKG full/base cujo eboot faz instalação inicial e atualização idempotente do plugin GoldHEN. Não rotular o arquivo como base+patch do Package Manager até existir evidência técnica de um mecanismo PS4 válido para isso. O pacote permanece bloqueado para instalação real até QA e autorização explícita.
