@@ -88,3 +88,18 @@ O relatório acima permanece válido para o artefato antigo (run `44669637925`, 
 - A primeira tentativa de compilar o novo eboot com SHA-256 (run `44678927683`) chegou à etapa de PKG e falhou porque `-std=c11` ocultou as declarações POSIX `fdopen`/`fileno` no sysroot Orbis. O build foi ajustado para `-std=gnu11` (commit `748539b1805069efa69c45c24e1d35bb796b204e`); é necessária nova execução antes de avaliar o artefato. Nenhum PKG atualizado foi produzido por essa tentativa.
 
 - A suíte host completa passou novamente no run `44679268881` (commit `e5cbab467e917825227a5411d69c44421cd8e9e1`). O teste SHA-256 cobre agora vetores vazio, `abc`, bloco de 56 bytes e 1 milhão de `a`, além de validar o manifesto válido/inválido. A compilação cruzada do instalador e a QA independente do PKG continuam pendentes no run de PRX/PKG.
+
+
+## Artefato PKG/GP4 produzido — run 44679198630 (20/11/2026)
+
+O build do PRX e do PKG concluiu com sucesso; o job de QA independente compilou o OrbisPkgTool fixado e executou a validação estrutural do pacote com resultado `Validation: PASS`, seguida de extração completa de 15/15 arquivos. A etapa QA falhou depois disso por uma asserção excessivamente estrita que exigia igualdade byte a byte entre o PARAM.SFO do GP4 e o SFO reserializado dentro do PKG. Não houve falha de assinatura, digest ou extração. A verificação foi alterada para comparar semanticamente os campos obrigatórios em ambos os SFOs e preservar os dois arquivos para inspeção; nova execução pendente (commit `8ad812e7112c3cf2c9cd933abc33abaaf3f0fb84`).
+
+Evidência do artefato `ps4-neural-engine-build` (artifact ID `14603817345`, ZIP SHA-256 `2fceb8d8d5f4778ed933b06d7a3bccde8729b88dd3b6f393fe72822e6428b802`):
+
+- PKG: 6,619,136 bytes; SHA-256 `3c0f0b6a83017877e31dd167dfa2da7fcbced64fd020c481f9f6f364e8ce658c`. Os dois nomes de PKG no artifact são byte a byte idênticos.
+- GP4: 1,665 bytes; SHA-256 `84efd6d7ba455e08874fdadb6a9fd5559f751cd169b7b7087502a2b1b14c5c00`. O XML declara `volume_type=pkg_ps4_app`, `app_type=full`, `storage_type=digital50`, CONTENT_ID esperado e associa `eboot.bin`, PRX, manifesto, PARAM.SFO, icon0 e módulos de suporte.
+- PRX: 206,528 bytes; SHA-256 `7561da3d3b83766becddcb37c1257d83c61009b5e814825ee60694d19f9cf704`.
+- Manifesto: 289 bytes; SHA-256 `ee1bfc66233095543f29bc9e666f59e0ceaf5050b2d722406da0292eecc9190c`. Declara `abi_status=unverified` e `hardware_status=not_tested`.
+- SFO de staging: 1,072 bytes; SHA-256 `80987527aeece05aedc3c5852a4f729fdf5536c139f1fbfd56cafbb68730cec0`.
+
+O GP4 confirma que este artefato é um **full base application**, não um patch de atualização PS4. O comportamento de instalar/atualizar o PRX está dentro do eboot; não se deve apresentá-lo como patch associado. A QA final ainda não é PASS e não houve instalação ou teste no console.
