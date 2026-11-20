@@ -21,6 +21,8 @@ using GnmCmdSetCsShaderSignature =
 using GnmCmdSetVsharpSignature =
     void (*)(GnmCommandBuffer*, GnmShaderStage, uint32_t,
              const GnmBuffer*);
+using GnmCmdSetPointerSignature =
+    void (*)(GnmCommandBuffer*, GnmShaderStage, uint32_t, void*);
 
 using KernelAllocateDirectMemorySignature =
     int32_t (*)(off_t, off_t, size_t, size_t, int32_t, off_t*);
@@ -39,6 +41,10 @@ static_assert(std::is_same<decltype(&sceKernelReleaseDirectMemory),
               "unexpected sceKernelReleaseDirectMemory signature");
 
 static_assert(sizeof(GnmBuffer) == 16, "GnmBuffer ABI changed");
+static_assert(sizeof(GnmInputUsageSlot) == 4,
+              "input-usage slot ABI changed");
+static_assert(GNM_SHINPUTUSAGE_PTR_INDIRECTRESOURCETABLE == 0x1c,
+              "indirect resource table usage enum changed");
 static_assert(sizeof(GnmCommandBuffer) == 64, "GnmCommandBuffer ABI changed");
 static_assert(sizeof(GnmCsStageRegisters) == 28,
               "compute shader register ABI changed");
@@ -58,6 +64,9 @@ static_assert(std::is_same<decltype(&sceGnmDrawCmdSetCsShader),
 static_assert(std::is_same<decltype(&sceGnmDrawCmdSetVsharpUserData),
                            GnmCmdSetVsharpSignature>::value,
               "unexpected buffer descriptor binding signature");
+static_assert(std::is_same<decltype(&sceGnmDrawCmdSetPointerUserData),
+                           GnmCmdSetPointerSignature>::value,
+              "unexpected indirect resource table pointer signature");
 
 // Link references force the PS4 import library to resolve the firmware NIDs.
 // These pointers are never invoked by the smoke executable.
@@ -66,6 +75,9 @@ __attribute__((used)) GnmDispatchDirectSignature pne_gcn8_dispatch_direct_import
     &sceGnmDispatchDirect;
 __attribute__((used)) GnmSetCsShaderSignature pne_gcn8_set_cs_shader_import =
     &sceGnmSetCsShader;
+__attribute__((used)) GnmCmdSetPointerSignature
+    pne_gcn8_set_indirect_resource_table_import =
+        &sceGnmDrawCmdSetPointerUserData;
 __attribute__((used)) KernelAllocateDirectMemorySignature
     pne_gcn8_allocate_direct_memory_import = &sceKernelAllocateDirectMemory;
 __attribute__((used)) KernelMapDirectMemorySignature
