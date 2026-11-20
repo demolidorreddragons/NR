@@ -126,7 +126,8 @@ def validate(manifest_path: Path, inventory_path: Path | None = None,
     return {"status":"PASS","block_count":blocks,"blocks_present":len(present),
             "tensor_count":len(tensors),"stage_count":len(stage_map),"tensor_payload_bytes":total,
             "stages":{k:{"bytes":v["size"],"sha256":v["sha256"],**coverage[k]} for k,v in stage_map.items()},
-            "inventory_compared":bool(inventory_path),"full_coverage_required":full_coverage,\n            "reference_layout_checked":reference_layout,"reference_layout_records":reference_layout_count,
+            "inventory_compared":bool(inventory_path),"full_coverage_required":full_coverage,
+            "reference_layout_checked":reference_layout,"reference_layout_records":reference_layout_count,
             "scope":"Container/slice integrity only; no semantic shapes, version parity, or inference validation."}
 
 def reference_layout_sizes() -> dict[str, int]:
@@ -199,7 +200,8 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("manifest", type=Path); ap.add_argument("--inventory", type=Path)
     ap.add_argument("--expected-blocks", type=int); ap.add_argument("--expected-tensors", type=int)
-    ap.add_argument("--require-full-coverage", action="store_true")\n    ap.add_argument("--check-reference-layout", action="store_true", help="check all record sizes against OpenDLSS-NR nr_graph.cpp")
+    ap.add_argument("--require-full-coverage", action="store_true")
+    ap.add_argument("--check-reference-layout", action="store_true", help="check all record sizes against OpenDLSS-NR nr_graph.cpp")
     a = ap.parse_args()
     try: result = validate(a.manifest, a.inventory, a.expected_blocks, a.expected_tensors, a.require_full_coverage, a.check_reference_layout)
     except ValidationError as e:
