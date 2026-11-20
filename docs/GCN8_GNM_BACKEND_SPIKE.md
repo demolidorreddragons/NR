@@ -47,7 +47,10 @@ The first hardware backend should own these operations explicitly:
    and memory-type requirements.
 2. Upload input matrices and initialize residual/output storage.
 3. Load and validate the GFX8 compute shader binary and its register metadata.
-4. Bind the CS stage and all four storage-buffer resources.
+4. Bind the CS stage and map each SPIR-V storage binding using the actual
+   shader input-usage metadata. Do not assume that all four GLSL storage
+   buffers map to V# descriptors: RW-resource and resource-table usage must be
+   checked in the compiled GNM binary before choosing the user-data setter.
 5. Bind the 20-byte parameter block using the actual GNM user-data/constant
    mechanism; the current host struct size alone does not prove this ABI.
 6. Emit dispatch dimensions from `GemmDispatch.groups_x/groups_y`, with the
@@ -89,6 +92,9 @@ emission test with a successful PS4 Pro compute dispatch.
 
 The compile-only smoke test checks function-pointer signatures and the sizes
 of `GnmBuffer`, `GnmCommandBuffer`, `GnmCsStageRegisters`, and `GnmCsShader`
-against the pinned headers. It does not link against or call firmware exports.
+against the pinned headers. `GnmBuffer` is a 16-byte V# descriptor; its
+presence does not prove it is the correct descriptor type for the compiler's
+RW storage-buffer lowering. The test does not link against or call firmware
+exports.
 No external runtime code has been vendored, no firmware function was called,
 and no console state was changed.
