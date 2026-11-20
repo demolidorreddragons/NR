@@ -58,8 +58,8 @@ This ledger records the next 40 work items. A task is **DONE** only when its sta
 | 82 | Dispatch minimal shader on PS4 Pro | **BLOCKED BY 81** | Hardware log and verified output buffer; no claim from host tests. |
 | 83 | Execute FP32 GEMM on hardware | **BLOCKED BY 82** | GPU output compared against independent CPU reference. |
 | 84 | Execute FP16 path and measure accuracy | **BLOCKED BY 82** | ISA classification, numerical error and timing; no assumed native FP16. |
-| 85 | Recover and authenticate model archives/resources | **BLOCKED — INPUTS ABSENT** | All expected source archive/resource SHA-256 checks pass. |
-| 86 | Verify 310.8.0/310.8.3 semantic compatibility | **BLOCKED BY 85** | Tensor names/shapes/layouts/operators and graph mapping independently reconciled. |
+| 85 | Recover and authenticate model archives/resources | **PASS — INPUTS RECOVERED AND REPRODUCED** | Three ZIP hashes, DLL/resource hashes, 153 records, contiguous tensor slices and `s00.bin`/manifest byte-for-byte re-export verified. See `docs/DLSSNR_310_8_3_RESOURCE.md`; proprietary payloads remain out of Git. |
+| 86 | Verify 310.8.0/310.8.3 semantic compatibility | **PARTIAL — WEIGHTS MATCH; FULL GRAPH PARITY OPEN** | The 310.8.3 DLL contains the exact 310.8.0 reference `WEIGHTS_HT` payload. The 310.8.3 graph/preprocessing/runtime and semantic tensor shapes are not yet independently proven. |
 | 87 | Build executable representation of all 71 graph blocks | **BLOCKED BY 86** | Complete operator/tensor graph with validated weights and shapes. |
 | 88 | Implement and differential-test partial inference | **BLOCKED BY 87** | Per-operator reference comparisons including edge cases and tolerances. |
 | 89 | Integrate neural backend with renderer and fallback | **BLOCKED BY 80, 88** | Defined image input/output ownership, fallback path and end-to-end frame tests. |
