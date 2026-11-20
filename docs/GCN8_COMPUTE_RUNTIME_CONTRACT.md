@@ -42,10 +42,15 @@ binding). The emitted ISA uses scalar loads from the table pointer and buffer
 load/store instructions. The pinned PSBC source now confirms the compiler-side ABI: each storage
 binding is a 16-byte V# descriptor in descriptor set 0, at byte offset N×64.
 The table pointer is the `PTR_INDIRECTRESOURCETABLE` user-data pointer at
-register 2, so `sceGnmDrawCmdSetPointerUserData` is the matching setter
-candidate. This establishes the generated binary's descriptor class/layout;
-it does not prove the writable V# field values, GPU VA mapping, cache policy
-or runtime setter behavior on PS4 Pro.
+register 2. A PRX link probe showed that OpenGNM's
+`sceGnmDrawCmdSetPointerUserData` is a source helper, not a firmware export
+(`ld.lld` reports it undefined when treated as an import); its generic
+implementation also uses `SET_SH_REG` without the compute-engine shader-type
+bit. NR therefore adds `pne_gcn8_set_cs_indirect_resource_table_pointer`, a
+local PM4 writer that targets CS user register 2 and sets
+`PKT3_SHADER_TYPE_S(1)`. This is a compile/link candidate only; it has not been
+executed on hardware. Writable V# field values, GPU VA mapping and cache
+policy remain unverified.
 
 The resource-allocation fields are decoded from the pinned Mesa GFX8 register
 JSON. They are compile-time allocations, not runtime occupancy measurements.
