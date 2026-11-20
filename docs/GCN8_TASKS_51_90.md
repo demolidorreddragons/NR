@@ -59,7 +59,7 @@ This ledger records the next 40 work items. A task is **DONE** only when its sta
 | 83 | Execute FP32 GEMM on hardware | **BLOCKED BY 82** | GPU output compared against independent CPU reference. |
 | 84 | Execute FP16 path and measure accuracy | **BLOCKED BY 82** | ISA classification, numerical error and timing; no assumed native FP16. |
 | 85 | Recover and authenticate model archives/resources | **PASS — INPUTS RECOVERED AND REPRODUCED** | Three ZIP hashes, DLL/resource hashes, 153 records, contiguous tensor slices and `s00.bin`/manifest byte-for-byte re-export verified. See `docs/DLSSNR_310_8_3_RESOURCE.md`; proprietary payloads remain out of Git. |
-| 86 | Verify 310.8.0/310.8.3 semantic compatibility | **PARTIAL — WEIGHTS + ALL 153 LAYOUTS MATCH REFERENCE; DLL GRAPH PARITY OPEN** | Exact `WEIGHTS_HT` resource hash parity and all 153 tensor names/byte lengths match the pinned 310.8.0 graph formulas; full 310.8.3 DLL graph/preprocessing/runtime code is not independently compared. See `docs/DLSSNR_310_8_3_RESOURCE.md`. |
+| 86 | Verify 310.8.0/310.8.3 semantic compatibility | **PARTIAL — WEIGHTS + ALL 153 LAYOUTS MATCH; WHOLE DLL IDENTIFIED; GRAPH PARITY OPEN** | 310.8.3 DLL SHA-256 `f95feb54…14a39fcc`, PE32+ x86-64, FileVersion `310.8.3.0`; its `WEIGHTS_HT` resource is byte-identical to the 310.8.0 reference and all 153 tensor names/lengths reconcile. No 310.8.0 DLL is available for code-section/runtime comparison. |
 | 87 | Build executable representation of all 71 graph blocks | **PARTIAL — 71-BLOCK LAYOUT EXPORT + HOST TESTS PASS; INFERENCE NOT INTEGRATED** | `tools/verify_dlssnr_tensor_layout.py` verifies all 153 packed records; `tools/export_dlssnr_graph_layout.py` emits 71 blocks, 11 transitions and 153 tensor layouts. Host tests passed run `44683109821`; PS4 graph execution remains unimplemented. |
 | 88 | Implement and differential-test partial inference | **BLOCKED BY 87** | Per-operator reference comparisons including edge cases and tolerances. |
 | 89 | Integrate neural backend with renderer and fallback | **BLOCKED BY 80, 88** | Defined image input/output ownership, fallback path and end-to-end frame tests. |
@@ -69,7 +69,7 @@ This ledger records the next 40 work items. A task is **DONE** only when its sta
 
 - Task 51 patch committed as `cb66861b05fbe9601300b3bce39f99cc212447d4`.
 - The observed failure in run `44676657053` was missing `HAVE_SYSCONF` in the hand-written Linux host build configuration. The pinned Mesa source uses that feature macro to select POSIX `sysconf` for physical-memory and page-size queries. The workflow now checks that capability with a compiled/running probe. Host numeric regression tests on commit `92a3bc3f` passed run `44677189726`. The latest non-canceled compiler attempt `44677801306` passed dependency checkout, host configuration, the `sysconf` probe and all Mesa header generators; the PSBC build is now running.
-- Revalidation is required. No task from 61 onward is marked complete; no accepted `.sb` artifacts, GNM dispatch, PS4 Pro GPU measurements, model intake, or neural renderer are claimed.
+- Revalidation is required. Tasks 61–65 (SPIR-V) and 85 (model intake) have verified host-side evidence. No accepted tiled `.sb`, GNM dispatch, PS4 Pro GPU measurements, or operational neural renderer are claimed.
 - REA-5 remains **NOT EXECUTED**. It is a documented independent-review protocol, not a separately instantiated agent.
 - Console installation, plugin activation, `plugins.ini` changes, saves/app-data changes and persistent console modifications remain outside this work.
 
@@ -100,7 +100,7 @@ The pinned GNM memory/submission investigation is recorded in `docs/REA_GNM_MEMO
 
 ## Additional host-side hardening (2026-11-20)
 
-- Model intake verifier now rejects symbolic-link inputs instead of following paths outside the supplied intake directory. Tests cover symlink rejection and size mismatch even when a digest matches the fixture. Commit: `ce319840a21ef218dd5cd8bc145a8d04ab3f58c4` (verifier), followed by `f7a2ad21db452f93af9847baaf6747784c4d611b` (tests). The real model archives remain absent, so task 85 stays blocked.
+- Model intake verifier now rejects symbolic-link inputs instead of following paths outside the supplied intake directory. Tests cover symlink rejection and size mismatch even when a digest matches the fixture. Commit: `ce319840a21ef218dd5cd8bc145a8d04ab3f58c4` (verifier), followed by `f7a2ad21db452f93af9847baaf6747784c4d611b` (tests). The model archives were recovered from Library and authenticated; task 85 is PASS. The 310.8.3 DLL's complete-file identity and PE metadata are recorded in `docs/DLSSNR_310_8_3_RESOURCE.md`.
 - GFX8 workflow concurrency now queues follow-up commits instead of canceling an active compiler build mid-checkout. Commit: `e9acec50f1b63a1242448b47e4ef240c92a6a27f`. A successful run is still required for tasks 51 and 55–70.
 
 - Tiled GEMM host emulation now runs 40 deterministic randomized shape/value cases (including non-multiple-of-16 boundaries) and verifies that `beta=0` does not propagate NaNs from C. Commit: `8a605b753c20aca544754ca8db461735b4454a9b`. This remains CPU emulation, not GPU shader execution.
