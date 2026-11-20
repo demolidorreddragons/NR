@@ -24,10 +24,10 @@ This ledger records the next 40 work items. A task is **DONE** only when its sta
 
 | # | Work item | State | Acceptance evidence |
 |---:|---|---|---|
-| 61 | Compile scalar FP32 GEMM to SPIR-V | **PASS — SPIR-V + GNM EMISSION** | Run `44680087030` compiled/validated the scalar FP32 SPIR-V and emitted a non-empty PS4 NEO `.sb`; container audit remains separate. |
-| 62 | Compile tiled FP32 GEMM to SPIR-V | **PASS — SPIR-V + GNM EMISSION** | Run `44680087030` compiled/validated the tiled FP32 SPIR-V and emitted a non-empty PS4 NEO `.sb`; container audit remains separate. |
-| 63 | Compile FP16-emulation shader to SPIR-V | **PASS — SPIR-V + GNM EMISSION** | Run `44680087030` compiled/validated the FP16-emulation SPIR-V and emitted a non-empty PS4 NEO `.sb`; no native FP16 claim. |
-| 64 | Compile E4M3 encode/decode shaders to SPIR-V | **PASS — BOTH SPIR-V + GNM EMITTED** | Run `44680087030` compiled/validated both E4M3 modules and emitted non-empty PS4 NEO `.sb` files; container audit remains separate. |
+| 61 | Compile scalar FP32 GEMM to SPIR-V | **PASS — SPIR-V GENERATED + VALIDATED** | Run `44680087030` generated the scalar FP32 module and passed `spirv-val --target-env vulkan1.1`. |
+| 62 | Compile tiled FP32 GEMM to SPIR-V | **PASS — SPIR-V GENERATED + VALIDATED** | Run `44680087030` generated the tiled FP32 module and passed `spirv-val --target-env vulkan1.1`. |
+| 63 | Compile FP16-emulation shader to SPIR-V | **PASS — SPIR-V GENERATED + VALIDATED** | Run `44680087030` generated the FP16-emulation module and passed `spirv-val --target-env vulkan1.1`; no native FP16 claim. |
+| 64 | Compile E4M3 encode/decode shaders to SPIR-V | **PASS — BOTH SPIR-V MODULES GENERATED + VALIDATED** | Run `44680087030` generated and validated both E4M3 modules with `spirv-val --target-env vulkan1.1`. |
 | 65 | Validate all SPIR-V modules | **PASS — FIVE MODULES VALIDATED + HASHED** | Run `44680087030` passed `spirv-val --target-env vulkan1.1` for all five modules and generated the source/SPIR-V provenance manifest; SPIR-V artifact upload passed. |
 | 66 | Compile all five shaders for PS4 NEO/GFX8 | **PARTIAL — FIVE `.sb` EMITTED, RESOURCE METADATA INVALID** | Run `44680087030` emitted five non-empty outputs, but the first binary's 8-bit `chunkUsageBaseOffsetDwords` does not resolve to the actual input-usage table. Do not treat these as valid GNM binaries until the PSBC layout is fixed. |
 | 67 | Validate GNM containers and CRCs | **BLOCKED — PSBC INPUT-USAGE OFFSET INVALID** | Run `44680087030` produced five `.sb` files, and upstream `verify_shader()` passed the first container's CRC/structure. Independent offset analysis shows the stored `chunkUsageBaseOffsetDwords=78` resolves to the wrong location; the expected end-of-slot-table offset is 589 dwords, beyond the 8-bit field. Do not accept these containers; PSBC writer/layout must be fixed. |
