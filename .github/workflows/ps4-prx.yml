@@ -41,6 +41,38 @@ jobs:
           echo "3c7cd5bb593ca74fa1c13fd59f3938dc0fc07985167f7275063019e63abe4526  /tmp/openorbis.tar.gz" | sha256sum -c -
           tar -xzf /tmp/openorbis.tar.gz -C "$GITHUB_WORKSPACE"
           echo "OO_PS4_TOOLCHAIN=$GITHUB_WORKSPACE/OpenOrbis/PS4Toolchain" >> "$GITHUB_ENV"
+      - name: Checkout and patch pinned LibOrbisPkg builder
+        uses: actions/checkout@v4
+        with:
+          repository: OpenOrbis/LibOrbisPkg
+          ref: 92a4e7f8e5914cb06b52ba3ae6b0675da438a051
+          path: LibOrbisPkg-src
+      - name: Build patched PkgTool.Core preserving PUBTOOLINFO storage type
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - name: Compile patched PkgTool.Core
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path("LibOrbisPkg-src/LibOrbisPkg/PKG/PkgBuilder.cs")
+          s = p.read_text(encoding="utf-8-sig")
+          old = 'sfo["PUBTOOLINFO"] = new SFO.Utf8Value("PUBTOOLINFO", date+time+sizeInfo, 0x200);'
+          new = 'sfo["PUBTOOLINFO"] = new SFO.Utf8Value("PUBTOOLINFO", date+time+sizeInfo+",st_type=digital50", 0x200);'
+          if s.count(old) != 1:
+              raise SystemExit("Expected unique upstream PUBTOOLINFO assignment was not found; refusing an ambiguous patch.")
+          p.write_text(s.replace(old, new), encoding="utf-8")
+          if new not in p.read_text(encoding="utf-8"):
+              raise SystemExit("Patched PkgBuilder source verification failed.")
+          print("PKG_BUILDER_PATCH=verified; st_type=digital50 is appended after calculated sizes")
+          PY
+          dotnet publish LibOrbisPkg-src/PkgTool.Core/PkgTool.Core.csproj -c Release -r linux-x64 --self-contained false -o "$RUNNER_TEMP/pkgtool-patched"
+          test -x "$RUNNER_TEMP/pkgtool-patched/PkgTool.Core"
+          mkdir -p "$OO_PS4_TOOLCHAIN/bin/linux/pkgtool-patched"
+          cp -a "$RUNNER_TEMP/pkgtool-patched/." "$OO_PS4_TOOLCHAIN/bin/linux/pkgtool-patched/"
+          echo "PKGTOOL_CORE=$OO_PS4_TOOLCHAIN/bin/linux/pkgtool-patched/PkgTool.Core" >> "$GITHUB_ENV"
+          "$OO_PS4_TOOLCHAIN/bin/linux/pkgtool-patched/PkgTool.Core" 2>&1 | head -n 8 || true
+
       - name: Checkout pinned GoldHEN plugin SDK
         uses: actions/checkout@v4
         with:
