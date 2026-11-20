@@ -22,10 +22,10 @@ successful host build is not evidence of GPU execution.
 
 | # | Work item | State | Evidence / gate |
 |---:|---|---|---|
-| 27 | GPU memory allocation | **API candidate identified** | OpenOrbis direct-memory allocation/map/release declarations and framebuffer sample reviewed. Compute memory type/protection and GPU-address semantics remain unverified. |
-| 28 | CPU/GPU mapping | **Blocked** | Direct-memory mapping is declared, but mapping to a valid GPU virtual address and cache ownership rules are not established. |
-| 29 | Buffer descriptors | **Blocked** | V# descriptor ABI is known (16 bytes); correct descriptor form for shader RW resources is not known yet. |
-| 30 | Configure compute shader | **API surface identified** | CS register setup helper exists; actual registers must come from generated shader metadata. |
+| 27 | GPU memory allocation | **BLOCKED — COMPUTE MEMORY CONTRACT NOT PROVEN** | Direct-memory allocation/map/release APIs are identified, but compute memory type, protections, GPU address semantics and cache/lifetime rules remain unverified. No allocator implemented. |
+| 28 | CPU/GPU mapping | **BLOCKED — GPU VA/CACHE CONTRACT NOT PROVEN** | Mapping declarations exist, but no hardware evidence establishes that the mapped address is a valid CS GPU address or how cache ownership transitions must be performed. |
+| 29 | Buffer descriptors | **PARTIAL — V# ABI + INDIRECT TABLE LAYOUT IDENTIFIED** | PSBC source and compiled metadata establish 16-byte V# storage-buffer entries in an indirect resource table, binding N at N×64, table pointer at user register 2. Writable V# encoding/cache semantics remain unproven on hardware. |
+| 30 | Configure compute shader | **PARTIAL — CS METADATA PROVEN FOR FIRST ARTIFACT** | Compiled tiled GEMM metadata records wave64, 8×8×1 local size, 8 user SGPRs, 2,048-byte LDS allocation and no scratch. Runtime register programming remains unexecuted. |
 | 31 | Command buffer | **API surface identified** | Typed command-buffer helpers are compile/link checked; no runtime command buffer built/submitted. |
 | 32 | Submit and synchronize | **API surface identified** | Submit/submit-done declarations reviewed; completion and queue lifecycle not exercised. |
 | 33 | Cache coherency/error handling | **Blocked** | No verified cache maintenance path or hardware observations. |
