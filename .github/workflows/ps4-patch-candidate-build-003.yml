@@ -2,14 +2,6 @@ name: PS4 Patch Candidate Build 003
 
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - ".github/workflows/ps4-patch-candidate-build-003.yml"
-  workflow_run:
-    workflows: ["PS4 PRX and PKG build"]
-    types: [completed]
-    branches: [main]
 
 permissions:
   actions: read
