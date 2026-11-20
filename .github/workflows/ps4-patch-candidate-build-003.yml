@@ -233,7 +233,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "Patch SFO readback failed." }
           $patchSfoText = Get-Content "candidate-output/patch-param-sfo.txt" -Raw
           if ($patchSfoText -notmatch "PUBTOOLINFO.*st_type=digital25") { throw "Patch SFO storage type must match GP4 patch storage_type=digital25." }
-          if ($patchSfoText -match "(?m)^FORMAT\s*=") { throw "Patch SFO still contains the unsupported base-only FORMAT field." }
+          if ($patchSfoText -notmatch "(?m)^FORMAT = obs$") { throw "Patch SFO must contain Sony-required FORMAT=obs." }
 
           $changeInfoDir = Join-Path $image "sce_sys/changeinfo"
           New-Item -ItemType Directory -Force -Path $changeInfoDir | Out-Null
