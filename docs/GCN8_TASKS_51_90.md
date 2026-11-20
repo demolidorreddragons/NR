@@ -15,9 +15,9 @@ This ledger records the next 40 work items. A task is **DONE** only when its sta
 | 54 | Resolve subsequent missing headers or generated files | **PENDING** | Only fix errors reproduced in CI logs; preserve upstream declarations. |
 | 55 | Reproduce clean PSBC build | **BLOCKED BY 51** | Clean runner build completes from pinned revisions. |
 | 56 | Resolve compiler/linker errors exposed after C compilation | **PENDING** | Successful final link with no suppressed errors. |
-| 57 | Verify PSBC executable and CLI target selection | **PENDING** | Executable runs; help and `-n` select PS4 NEO/GFX8. |
-| 58 | Record compiler/dependency provenance | **PENDING** | SHA-256, commit IDs, compiler versions, build flags and artifact manifest. |
-| 59 | Exercise compiler positive/negative input tests | **PARTIAL — HOST NUMERIC REGRESSIONS PASS** | Host CI run `44677189726` passed E4M3FN edge cases, beta-zero/NaN isolation and tiled GEMM reference tests; PSBC CLI malformed-input tests remain pending. |
+| 57 | Verify PSBC executable and CLI target selection | **IMPLEMENTED — CI REVALIDATION PENDING** | New gate runs `-h` and checks the documented PS4 Pro (NEO/GFX8) target before shader compilation. |
+| 58 | Record compiler/dependency provenance | **IMPLEMENTED — CI REVALIDATION PENDING** | GNM report now records PSBC executable SHA-256, host/tool versions, pinned source revisions, shader source/SPIR-V/GNM hashes. |
+| 59 | Exercise compiler positive/negative input tests | **IMPLEMENTED — CI REVALIDATION PENDING** | Added CLI help/target check and malformed 4-byte SPIR-V rejection test; host numerical regression suite already passes. |
 | 60 | Accept reproducible GFX8 toolchain | **PENDING** | All prior gates pass; host build alone is not shader correctness. |
 
 ## Phase 12 — Compile and inspect GFX8 shaders
@@ -90,3 +90,6 @@ Task 68 provenance fields and report artifact upload were added in commit `5b91e
 
 
 Task 67 structural validation was hardened in commit `9dbebb41c8ef61a5b6f4797e6a25a0421edd2477`: the report stage now rejects invalid code ranges and input-usage slot ranges, and includes truncated-header and corrupted-CRC negative controls. The checks are implemented but await actual GNM shader files.
+
+
+Tasks 57–59 received additional CI gates in commit `6570ece7959f36f4e15268d1a4512fc2118baa53`: PSBC CLI help must advertise PS4 Pro NEO/GFX8, malformed SPIR-V must be rejected without producing an output file, and the artifact report records host/compiler tool versions plus the PSBC executable hash. These gates await the PSBC host build completing successfully.
