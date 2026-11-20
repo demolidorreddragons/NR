@@ -24,15 +24,20 @@ include:
 - `include/gnm_shaderbinary.h`: shader binary container definitions.
 - `include/gnm_helpers.h`: helper APIs, including direct-memory utilities.
 
-The pinned headers provide two layers: the low-level runtime declarations in
-`gnmdriver.h` and typed command-buffer helpers in
-`gnm_drawcommandbuffer.h`. The latter exposes `sceGnmDrawCmdSetCsShader`,
-`sceGnmDrawCmdSetVsharpUserData`, `sceGnmDrawCmdSetPointerUserData`, and
-`sceGnmDrawCmdDispatchDirect`. These are enough to type-check a first command
-recording path, but not to claim a working compute backend. Dispatch only emits
-a packet; memory allocation, descriptor construction, shader register
-metadata, user-data slot mapping, command submission, synchronization, and
-completion handling remain separate responsibilities.
+The pinned headers provide two layers: low-level runtime declarations in
+`gnmdriver.h` and typed command-buffer helpers in `gnm_drawcommandbuffer.h`.
+The PRX link smoke confirmed `sceGnmDrawCmdSetCsShader`,
+`sceGnmDrawCmdDispatchDirect`, `sceGnmSubmitCommandBuffers` and
+`sceGnmSubmitDone` imports. A link probe also established that
+`sceGnmDrawCmdSetPointerUserData` is **not** a firmware export: it is a helper
+implemented in OpenGNM `src/drawcommandbuffer.c`. Its generic writer omits the
+compute-engine shader-type bit, so NR does not import or call it. Instead,
+`pne_gcn8_set_cs_indirect_resource_table_pointer` emits the CS-specific
+`SET_SH_REG` packet with `PKT3_SHADER_TYPE_S(1)`; its packet words are covered
+by host tests and it compiles/links into the PRX. None of these helpers has been
+executed on hardware. Memory allocation, writable V# construction, cache
+visibility, submission, synchronization and completion still need a
+separately verified lifecycle.
 
 The companion `opengnm-psbc` project documents SPIR-V-to-GNM shader binary
 compilation and lists GFX8/Polaris as a supported target. Its repository head
