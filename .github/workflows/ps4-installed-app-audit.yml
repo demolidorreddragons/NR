@@ -10,7 +10,7 @@ jobs:
   inspect-installed-app:
     runs-on: [self-hosted, Windows, X64, ps4-lan]
     steps:
-      - name: Read installed app package without modifying console
+      - name: Read installed app metadata without modifying console
         shell: powershell -NoProfile -ExecutionPolicy Bypass -File {0}
         env:
           PS4_IP: ${{ vars.PS4_IP }}
@@ -25,29 +25,26 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "Cannot read installed TITLE_ID directory /$appPath. $listing" }
           $listing | ForEach-Object { Write-Host "INSTALLED_APP_ENTRY=$([string]$_)" }
 
-          $pkg = Join-Path $env:RUNNER_TEMP "PNEU00001-installed-app.pkg"
-          $pkgUrl = $appUrl + "app.pkg"
-          $download = & curl.exe --fail --silent --show-error --ftp-pasv --user $creds --output $pkg $pkgUrl 2>&1
-          if ($LASTEXITCODE -ne 0) { throw "Could not retrieve installed app.pkg from /$appPath. $download" }
-          $bytes = (Get-Item -LiteralPath $pkg).Length
-          $hash = (Get-FileHash -LiteralPath $pkg -Algorithm SHA256).Hash.ToLowerInvariant()
-          Write-Host "READ_ONLY_AUDIT=PASS"
-          Write-Host "INSTALLED_TITLE_ID=PNEU00001"
-          Write-Host "INSTALLED_APP_PKG_BYTES=$bytes"
-          Write-Host "INSTALLED_APP_PKG_SHA256=$hash"
           New-Item -ItemType Directory -Force -Path "audit-output" | Out-Null
-          Copy-Item -LiteralPath $pkg -Destination "audit-output/installed-app.pkg"
+          foreach ($name in @("app.json", "app.xml", "app.pkg")) {
+            $destination = Join-Path (Resolve-Path "audit-output").Path $name
+            $url = $appUrl + $name
+            $download = & curl.exe --fail --silent --show-error --ftp-pasv --user $creds --output $destination $url 2>&1
+            if ($LASTEXITCODE -ne 0) { throw "Could not retrieve $name from /$appPath. $download" }
+            $bytes = (Get-Item -LiteralPath $destination).Length
+            $hash = (Get-FileHash -LiteralPath $destination -Algorithm SHA256).Hash.ToLowerInvariant()
+            Write-Host "INSTALLED_FILE=$name BYTES=$bytes SHA256=$hash"
+          }
           @(
             "READ_ONLY_AUDIT=PASS"
-            "FTP_PATH=/$appPath/app.pkg"
-            "BYTES=$bytes"
-            "SHA256=$hash"
+            "FTP_PATH=/$appPath"
+            "FILES=app.json,app.xml,app.pkg"
             "NO_CONSOLE_FILES_WRITTEN=true"
           ) | Set-Content -LiteralPath "audit-output/audit-report.txt" -Encoding UTF8
-      - name: Retain read-only package evidence
+      - name: Retain read-only metadata evidence
         uses: actions/upload-artifact@v4
         with:
-          name: PS4-installed-Neural-Engine-package-audit
+          name: PS4-installed-Neural-Engine-metadata-audit
           path: audit-output/*
           if-no-files-found: error
           retention-days: 7
