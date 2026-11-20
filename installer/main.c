@@ -45,6 +45,27 @@ static ssize_t read_block(int fd, void* buffer, size_t capacity) {
 #define STATUS "/data/GoldHEN/ps4_neural_engine_install.log"
 #define MAX_CONFIG 65536
 
+/* O_EXCL makes stale files and symlinks at staging paths a hard stop, never a target to truncate. */
+static int open_staged_file(const char* path, int* fd_out) {
+    int fd = open(path, O_WRONLY | O_CREAT | O_EXCL, 0600);
+    if (fd < 0) return 0;
+    *fd_out = fd;
+    return 1;
+}
+
+static FILE* fopen_staged_file(const char* path) {
+    int fd = -1;
+    if (!open_staged_file(path, &fd)) return NULL;
+    FILE* stream = fdopen(fd, "wb");
+    if (!stream) {
+        int saved_errno = errno;
+        close(fd);
+        remove(path);
+        errno = saved_errno;
+    }
+    return stream;
+}
+
 static void notify(const char* message) {
     OrbisNotificationRequest request;
     memset(&request, 0, sizeof(request));
@@ -72,7 +93,7 @@ static int copy_prx(char* error, size_t error_size) {
         return 0;
     }
 
-    int out = open(DEST_TMP, O_WRONLY | O_CREAT | O_TRUNC, 0666);
+    int out = -1;\n    if (!open_staged_file(DEST_TMP, &out)) out = -1;
     if (out < 0) {
         int saved_errno = errno;
         close(in);
@@ -227,7 +248,7 @@ static int configure_loader(char* error, size_t error_size) {
         if (in_default && strcmp(line, DEST_PRX) == 0) found_entry = 1;
     }
     if (found_entry) {
-        FILE* staged = fopen(CONFIG_TMP, "wb");
+        FILE* staged = fopen_staged_file(CONFIG_TMP);
         if (!staged) {
             snprintf(error, error_size, "ERROR: cannot stage unchanged plugins.ini (errno=%d).", errno);
             return 0;
@@ -288,7 +309,7 @@ static int configure_loader(char* error, size_t error_size) {
         used += n;
     }
 
-    FILE* out = fopen(CONFIG_TMP, "wb");
+    FILE* out = fopen_staged_file(CONFIG_TMP);
     if (!out) {
         snprintf(error, error_size, "ERROR: cannot create temporary plugins.ini (errno=%d).", errno);
         return 0;
