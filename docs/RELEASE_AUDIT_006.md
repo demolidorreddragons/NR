@@ -125,3 +125,16 @@ Evidência QA artifact ID `14603449254`, SHA-256 do ZIP `390a11b6f285def47f8105d
 ## Strict release-manifest key allowlist
 
 The runtime manifest parser now rejects unknown keys rather than silently ignoring misspellings or unexpected fields. A regression fixture with a misspelled `prx_sha256` key is included. Host suite run `44680540413` passed the manifest/SHA-256 tests, GCN8 numerical reference tests, model-input verifier tests, and the build/test stages. This is host evidence only; the Orbis installer has not been executed on hardware.
+
+
+## Rebuild after strict manifest-key validation — independent QA PASS
+
+Run `44680530122` rebuilt the PRX/PKG after the manifest parser began rejecting unknown keys. Both build and independent QA jobs passed. QA artifact ID `14604351098`, ZIP SHA-256 `c3d064600a39d75661df7e80eca172d236ecaf857642988e67f0031b38d87512`:
+
+- PKG: 6,619,136 bytes; SHA-256 `0ddfd28e30d1d2c910f4da3edccf677cb809dff2644e869bc6373173bc080a00`.
+- GP4 SHA-256 `09318e3aea98ab0e8815afb04ea80bb79c4b388dc4c418d47c8c0d81b0a1f95c`.
+- Staged and embedded SFO hashes match the prior build; semantic required fields PASS.
+- PRX SHA-256 remains `7561da3d3b83766becddcb37c1257d83c61009b5e814825ee60694d19f9cf704`; EBOOT is 119,808 bytes.
+- QA: `PASS_PC_ONLY_NOT_HARDWARE_TESTED`; `PKG_KIND=FULL_BASE_APPLICATION_NOT_PATCH`.
+
+This confirms repeatable PC-only package validation after the manifest hardening. It does not authorize console installation or prove PRX runtime/ABI compatibility.
