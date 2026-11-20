@@ -35,6 +35,18 @@ constexpr uint32_t kFenceMagic = 0x4E52434Du; // "NRCM"
 constexpr uint32_t kFencePollCount = 10000;
 constexpr uint32_t kFencePollUs = 1000;
 
+static_assert(kDcbOffset + kDcbBytes <= kShaderOffset,
+              "DCB overlaps shader storage");
+static_assert(kShaderOffset < kTableOffset &&
+              kTableOffset + 80 <= kInputOffset,
+              "shader/resource table regions overlap");
+static_assert(kInputOffset + kElementCount * sizeof(float) <= kOutputOffset,
+              "input/output regions overlap");
+static_assert(kOutputOffset + kElementCount * sizeof(float) <= kFenceOffset,
+              "output/fence regions overlap");
+static_assert(kFenceOffset + sizeof(uint32_t) <= kDirectBytes,
+              "fence exceeds direct allocation");
+
 struct DirectAllocation {
     off_t direct_offset = 0;
     void* mapped = nullptr;
@@ -136,6 +148,11 @@ extern "C" int pne_gcn8_compute_smoke_run(const char* shader_path,
         shader_view.registers.computenumthready != 1 ||
         shader_view.registers.computenumthreadz != 1) {
         log.message("RESULT=FAIL; REASON=UNEXPECTED_LOCAL_SIZE");
+        std::free(shader_file);
+        return 12;
+    }
+    if (shader_view.code_size > kTableOffset - kShaderOffset) {
+        log.message("RESULT=FAIL; REASON=SHADER_EXCEEDS_RESERVED_GPU_REGION");
         std::free(shader_file);
         return 12;
     }
