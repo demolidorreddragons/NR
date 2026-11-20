@@ -86,29 +86,28 @@ ResourceTableError build_cs_indirect_table_pointer_packet(
     std::uint32_t start_register,
     std::uint64_t gpu_address,
     std::uint32_t byte_size,
-    std::uint32_t packet_dwords[4]) noexcept {
+    std::uint32_t packet_dwords[3]) noexcept {
     if (!packet_dwords) return ResourceTableError::null_output;
-    packet_dwords[0] = packet_dwords[1] = packet_dwords[2] = packet_dwords[3] = 0;
-    if (start_register > 14u)
+    packet_dwords[0] = packet_dwords[1] = packet_dwords[2] = 0;
+    if (start_register > 15u)
         return ResourceTableError::invalid_user_data_slot;
     const auto range_error = validate_indirect_resource_table_range(gpu_address, byte_size);
     if (range_error != ResourceTableError::none)
         return range_error;
 
-    constexpr std::uint32_t packet3_set_sh_reg_compute_2_dwords = 0xC0027602u;
+    constexpr std::uint32_t packet3_set_sh_reg_compute_1_dword = 0xC0017602u;
     constexpr std::uint32_t sh_register_offset = 0x0000B000u;
     constexpr std::uint32_t compute_user_data_0 = 0x0000B900u;
     constexpr std::uint32_t compute_user_data_15 = 0x0000B93Cu;
     const std::uint32_t register_address =
         compute_user_data_0 + start_register * sizeof(std::uint32_t);
-    if (register_address + sizeof(std::uint32_t) > compute_user_data_15 ||
+    if (register_address > compute_user_data_15 ||
         register_address < sh_register_offset)
         return ResourceTableError::invalid_user_data_slot;
 
-    packet_dwords[0] = packet3_set_sh_reg_compute_2_dwords;
+    packet_dwords[0] = packet3_set_sh_reg_compute_1_dword;
     packet_dwords[1] = (register_address - sh_register_offset) >> 2;
     packet_dwords[2] = static_cast<std::uint32_t>(gpu_address);
-    packet_dwords[3] = 0; // PSBC address32_hi is zero.
     return ResourceTableError::none;
 }
 
