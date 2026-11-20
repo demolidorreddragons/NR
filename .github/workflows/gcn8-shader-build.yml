@@ -92,23 +92,57 @@ jobs:
             .deps/opengnm-psbc/opengnm-psbc -s compute -f "dist/ps4/gcn8/${shader}.spv" -o "dist/ps4/gcn8/${shader}.sb" -n
             test -s "dist/ps4/gcn8/${shader}.sb"
           done
-      - name: Verify GNM shader containers and compute metadata
+      - name: Validate GNM compute containers and record raw metadata (not register decode)
         run: |
           python3 - <<'PY'
+          import hashlib
           import importlib.util
+          import json
+          import struct
           from pathlib import Path
           spec = importlib.util.spec_from_file_location("verify_sb", ".deps/opengnm-psbc/tests/verify_sb.py")
           module = importlib.util.module_from_spec(spec)
           spec.loader.exec_module(module)
           shaders = ("gemm_fp32_wave64_tiled", "gemm_fp32", "gemm_fp16_accum", "e4m3_decode", "e4m3_encode")
+          report = []
           for shader in shaders:
               path = Path("dist/ps4/gcn8") / f"{shader}.sb"
               if not module.verify_shader(str(path), module.GNM_SHADER_COMPUTE):
                   raise SystemExit(f"GFX8 compute shader container validation failed: {shader}")
               data = path.read_bytes()
-              if b"OrbShdr" not in data:
-                  raise SystemExit(f"GNM shader binary metadata marker missing: {shader}")
-              print(f"VERIFIED {shader}: GNM compute container; no hardware dispatch")
+              orb = data.find(b"OrbShdr")
+              if orb < 0 or orb + module.GNM_BINARY_INFO_SIZE > len(data):
+                  raise SystemExit(f"GNM binary info is truncated: {shader}")
+              u32 = lambda off: struct.unpack_from("<I", data, off)[0]
+              length_field = u32(orb + 8)
+              chunk_offset = data[orb + 12]
+              num_slots = data[orb + 13]
+              first_slot_type = None
+              if num_slots:
+                  slot_offset = orb - chunk_offset * 4
+                  if slot_offset < module.PSSL_HEADER_SIZE + module.GNM_FILE_HEADER_SIZE or slot_offset >= len(data):
+                      raise SystemExit(f"Input usage slot offset is out of range: {shader}")
+                  first_slot_type = data[slot_offset]
+              report.append({
+                  "shader": shader,
+                  "file": str(path),
+                  "bytes": len(data),
+                  "sha256": hashlib.sha256(data).hexdigest(),
+                  "pssl_shader_type": data[12],
+                  "pssl_code_type": data[13],
+                  "pssl_code_size": u32(16),
+                  "gnm_stage": data[module.PSSL_HEADER_SIZE + 8],
+                  "gnm_target_gpu_mode": data[module.PSSL_HEADER_SIZE + 11],
+                  "orbshdr_offset": orb,
+                  "chunk_usage_base_offset_dwords": chunk_offset,
+                  "input_usage_slots": num_slots,
+                  "first_input_usage_type": first_slot_type,
+                  "shader_hash": f"{u32(orb + 20):08x}{u32(orb + 16):08x}",
+                  "gcn_code_size": (length_field >> 8) & 0xffffff,
+                  "crc32": f"{u32(orb + 24):08x}"
+              })
+              print(f"VERIFIED {shader}: compute container/CRC valid; register metadata still requires ISA decoding")
+          Path("dist/ps4/gcn8/gnm-container-report.json").write_text(json.dumps(report, indent=2) + "\\n")
           PY
       - uses: actions/upload-artifact@v4
         with:
