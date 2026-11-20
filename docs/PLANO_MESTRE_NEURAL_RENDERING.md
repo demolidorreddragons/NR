@@ -230,3 +230,19 @@ Uma fase só muda para **APROVADA** quando suas evidências forem anexadas e rev
 
 **EM EXECUÇÃO — auditoria parcial concluída.** O branch/PR, documentação, workflows e principais kernels foram inspecionados. Ainda falta recuperar o log detalhado do PKG e consolidar inventário completo de ferramentas/modelos. O próximo trabalho técnico é resolver B0 e B1 sem instalar nada no console.
 
+
+
+### Atualização da auditoria — falha de PKG diagnosticada e correção aplicada
+
+O log integral do job `136064398853` no run `44668763351` revelou a causa exata:
+
+```
+Generated icon0.png is not a valid PNG.
+```
+
+O PRX foi compilado com sucesso. A geração do pacote parou na validação da assinatura PNG do ícone. A inspeção de `tools/make_icon.py` mostrou que a assinatura estava escrita com escapes duplicados, fazendo a comparação procurar bytes literais de barra invertida em vez da assinatura PNG real.
+
+**Correção aplicada:** commit `4f8b82a8dbea1e213236b03e04e5616122939ae6`. A verificação agora compara os primeiros oito bytes com `bytes.fromhex("89504e470d0a1a0a")`, evitando ambiguidade de escaping.
+
+**Estado após correção:** correção de código publicada no branch; ainda não há build PKG pós-correção confirmado. O próximo gate é executar novamente o workflow de PRX/PKG e inspecionar a validação e extração do pacote. Até esse resultado, não declarar o bloqueio B0 resolvido nem afirmar que existe um novo PKG funcional.
+
