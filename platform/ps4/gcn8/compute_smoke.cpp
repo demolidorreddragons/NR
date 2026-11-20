@@ -53,17 +53,24 @@ struct DirectAllocation {
     bool allocated = false;
     bool keep_until_process_exit = false;
 
-    bool allocate() {
+    bool allocate(Logger& log) {
+        log.message("STAGE=BEFORE_GET_DIRECT_MEMORY_SIZE");
         const size_t direct_size = sceKernelGetDirectMemorySize();
+        log.line("DIRECT_MEMORY_AVAILABLE_BYTES", direct_size);
+        log.message("STAGE=AFTER_GET_DIRECT_MEMORY_SIZE");
         if (direct_size < kDirectBytes) return false;
+        log.message("STAGE=BEFORE_ALLOCATE_DIRECT_MEMORY");
         int32_t rc = sceKernelAllocateDirectMemory(
             0, static_cast<off_t>(direct_size), kDirectBytes, kAlignment,
             GNM_DIRECT_MEMORY_TYPE_WC_GARLIC, &direct_offset);
+        log.line("ALLOCATE_DIRECT_MEMORY_RESULT", static_cast<uint32_t>(rc));
         if (rc != 0) return false;
         allocated = true;
+        log.message("STAGE=BEFORE_MAP_DIRECT_MEMORY");
         rc = sceKernelMapDirectMemory(
             &mapped, kDirectBytes, GNM_PROT_CPU_GPU_RW, 0,
             direct_offset, kAlignment);
+        log.line("MAP_DIRECT_MEMORY_RESULT", static_cast<uint32_t>(rc));
         if (rc != 0 || !mapped) {
             mapped = nullptr;
             return false;
@@ -169,7 +176,7 @@ extern "C" int pne_gcn8_compute_smoke_run(const char* shader_path,
 
     DirectAllocation memory;
     log.message("STAGE=BEFORE_DIRECT_MEMORY_ALLOCATE");
-    if (!memory.allocate()) {
+    if (!memory.allocate(log)) {
         log.message("RESULT=FAIL; REASON=DIRECT_MEMORY_ALLOC_OR_MAP");
         std::free(shader_file);
         return 13;
