@@ -154,3 +154,11 @@ Source artifact: build run 44623808730, artifact 14578192913.
 - The Sony rebuild attempt stopped before producing a base PKG. The uploaded evidence artifact 14587718343 contains the report and original base SFO readback only. No patch GP4 or PKG was produced by this run.
 - Engineering commit `27f7c1392ff087d5bf313ae17b6fcfb3a357b370` normalizes APP_VER to `01.00` only in the disposable SFO copy before the next Sony base rebuild, then reads it back and asserts the normalized value. This directly targets the publisher's explicit APP_VER diagnostic; it does not alter PKG 002 or establish that the Sony rebuild or patch build will pass.
 - The run's `host-tests` passed (44644299610). Next candidate workflow is triggered by the patch-workflow change. Keep the base app, app data, saves, canonical PRX, and PS4 deployment untouched.
+
+
+### Sony publisher VERSION validation follow-up (2026-11-20)
+- Patch candidate run 44644594618 used the real validated PKG 002, confirmed its embedded PUBTOOLINFO contains `st_type=digital50`, and normalized APP_VER from `1.00` to `01.00` in the disposable extracted copy.
+- Sony `img_create` then advanced past the prior APP_VER rejection but failed with the explicit next error: `sce_sys/param.sfo: Param VERSION: Invalid value.` No Sony-rebuilt base or patch PKG was produced.
+- Engineering commit `8ef7e5daa2e391f35229f984c5fffb440e8ad34f` now normalizes both APP_VER and VERSION to `01.00` only in the temporary extracted base copy and asserts both readbacks before invoking Sony `img_create`. The original PKG 002 artifact remains unchanged.
+- The push-trigger fallback now selects the latest validated base artifact from run `44644315395`, rather than stale run `44643472429`.
+- This is a targeted response to the observed publisher error, not a proven fix. The next candidate must pass Sony base creation, independent base validation/readback, associated patch creation, independent patch validation, and QA before it can be called PKG 003.
