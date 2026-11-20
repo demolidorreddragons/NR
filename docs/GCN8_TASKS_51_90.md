@@ -54,7 +54,7 @@ This ledger records the next 40 work items. A task is **DONE** only when its sta
 
 | # | Work item | State | Acceptance evidence |
 |---:|---|---|---|
-| 81 | Approve reversible PS4 Pro test procedure | **NOT STARTED** | Explicitly approved procedure, preconditions, recovery plan; no install or persistent changes implied. |
+| 81 | Approve reversible PS4 Pro test procedure | **PLAN DRAFTED — EXECUTION NOT AUTHORIZED** | `docs/PS4_PRO_REVERSIBLE_TEST_PLAN.md` defines read-only preflight, separate approval gates, exact backup/recovery requirements and PASS/FAIL/BLOCKED criteria. No console action is authorized. |
 | 82 | Dispatch minimal shader on PS4 Pro | **BLOCKED BY 81** | Hardware log and verified output buffer; no claim from host tests. |
 | 83 | Execute FP32 GEMM on hardware | **BLOCKED BY 82** | GPU output compared against independent CPU reference. |
 | 84 | Execute FP16 path and measure accuracy | **BLOCKED BY 82** | ISA classification, numerical error and timing; no assumed native FP16. |
