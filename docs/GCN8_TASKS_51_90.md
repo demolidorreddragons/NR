@@ -18,7 +18,7 @@ This ledger records the next 40 work items. A task is **DONE** only when its sta
 | 57 | Verify PSBC executable and CLI target selection | **PASS — `-n` TARGET CHECK** | Run `44679024542` passed CLI help and PS4 Pro (NEO/GFX8) target selection; malformed-input handling is tracked separately in task 59. |
 | 58 | Record compiler/dependency provenance | **IMPLEMENTED — CI REVALIDATION PENDING** | GNM report now records PSBC executable SHA-256, host/tool versions, pinned source revisions, shader source/SPIR-V/GNM hashes. |
 | 59 | Exercise compiler positive/negative input tests | **PASS — CLI NEGATIVE INPUT REJECTED CLEANLY** | Run `44680087030` built PSBC and passed the truncated-SPIR-V CLI test: normal error exit, expected diagnostic, no output `.sb`; no segmentation fault. |
-| 60 | Accept reproducible GFX8 toolchain | **PARTIAL — HOST/SPIR-V PASS; GNM METADATA GUARD BLOCKS EMISSION** | Run `44682060810` built patched PSBC, passed CLI negative test and all five SPIR-V validations, then refused tiled GEMM with `590 dwords exceeds 8-bit field` rather than emitting invalid `.sb`. SPIR-V artifact uploaded; GNM layout fix remains open. |
+| 60 | Accept reproducible GFX8 toolchain | **PARTIAL — HOST/SPIR-V PASS; TILED CODE SIZE STILL EXCEEDS GNM OFFSET** | Run `44739274959` rebuilt patched PSBC and validated all five SPIR-V modules; one `[[dont_unroll]]` reduction lowered tiled GEMM's required pointer from 590 to 400 dwords, still above the 255 maximum. A second loop-compaction experiment is running in `44739871394`; no tiled `.sb` is accepted. |
 
 ## Phase 12 — Compile and inspect GFX8 shaders
 
