@@ -9,7 +9,7 @@ import argparse, hashlib, json, re, sys
 from pathlib import Path, PurePosixPath
 
 FORMAT = "PNE-exported-DLSSNR-packed-v1"
-NAME = re.compile(r"^block(\\d+)\\.layer(\\d+)\\.([A-Za-z0-9_]+)$")
+NAME = re.compile(r"^block(\d+)\.layer(\d+)\.([A-Za-z0-9_]+)$")
 SHA = re.compile(r"^[0-9a-f]{64}$")
 
 class ValidationError(ValueError): pass
@@ -49,7 +49,7 @@ def validate(manifest_path: Path, inventory_path: Path | None = None,
         if not isinstance(sid, str) or not sid or sid in stage_map: raise ValidationError(f"invalid/duplicate stage id: {sid!r}")
         if not isinstance(rel, str) or not rel: raise ValidationError(f"{sid}: missing file path")
         p = PurePosixPath(rel)
-        if p.is_absolute() or any(x in ("", ".", "..") for x in p.parts) or "\\\\" in rel or ":" in rel:
+        if p.is_absolute() or any(x in ("", ".", "..") for x in p.parts) or "\\" in rel or ":" in rel:
             raise ValidationError(f"{sid}: unsafe stage path {rel!r}")
         path = root / "model" / Path(*p.parts)
         base = (root / "model").resolve()
