@@ -50,9 +50,39 @@ REA-5 has not independently reviewed these artifacts.
 
 ## Resource-binding constraint
 
-`GnmBuffer` is a 16-byte V# descriptor. The presence of a V# setter does not
-prove that GLSL `std430` storage-buffer variables emitted by the shader
-compiler are represented by V# descriptors. The first compiler artifact now identifies the indirect resource-table pointer (start register 2), user-SGPR count, and four SPIR-V binding offsets. Before implementing binding, independently confirm the descriptor kind, descriptor bytes, address encoding, slot numbering and register layout against an authoritative GNM parser or real PS4 sample. Do not bind the four GEMM buffers by assumption.
+`GnmBuffer` is a 16-byte V# descriptor, and the pinned PSBC source explicitly lowers storage-buffer descriptors to 16-byte V# entries in an indirect resource table. The compiled GNM metadata identifies that table pointer at user register 2. The remaining work is to validate writable V# fields, GPU-address encoding, cache policy and exact table allocation/registration before implementing binding. Do not treat the compiler's descriptor-layout contract as proof of runtime memory visibility.
+
+## Descriptor-table layout inferred from the pinned PSBC implementation
+
+The pinned PSBC source `libpsbc/psbc_compile.c` documents and implements the
+descriptor ABI used by these standalone shaders:
+
+- descriptor set 0 only;
+- binding N begins at byte offset N × 64;
+- uniform/storage buffer and texel-buffer descriptors are 16-byte V# entries;
+- sampled/storage images are 32-byte T# entries; samplers are 16-byte S# entries;
+- combined image samplers occupy 48 bytes (T# at +0, S# at +32);
+- the table pointer is passed in the 32-bit user SGPR named by
+  `PTR_INDIRECTRESOURCETABLE`; PSBC sets `address32_hi=0`, so the table must
+  be below 4 GiB.
+
+For the current GEMM shader, PSBC logs four storage-buffer bindings at offsets
+0, 64, 128 and 192, with 16-byte descriptors; the descriptor table size is
+208 bytes. The GNM metadata says `PTR_INDIRECTRESOURCETABLE` starts at user
+register 2. The pinned OpenGNM helper `sceGnmDrawCmdSetPointerUserData`
+writes a host pointer as two 32-bit words to the requested CS user-data slot;
+its implementation maps slot 2 to the compute user-data register pair 2:3.
+This gives a concrete command-recording candidate for the table pointer,
+subject to confirming the actual GPU VA and runtime behavior on hardware.
+
+OpenGNM's `GnmBuffer` is exactly 16 bytes and exposes base address, stride,
+record count, format and memory-type fields. Its convenience
+`sceGnmCreateConstBuffer` and `sceGnmCreateVertexBuffer` helpers set
+`GNM_MEMORY_READONLY`; do not use them blindly for writable SSBOs. The
+descriptor's correct writable-memory/cache policy, raw-dword format, record
+count, GPU address encoding and cache visibility still require authoritative
+validation. The descriptor class is now identified as V# by PSBC's own source,
+but the final writable V# byte construction is not yet accepted.
 
 ## Memory-management boundary
 
