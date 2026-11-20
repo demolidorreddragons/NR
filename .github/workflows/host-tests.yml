@@ -28,7 +28,7 @@ jobs:
           assert 'rollback:' in installer and 'rollback incomplete' in installer and 'previous files restored' in installer, 'transaction rollback path and outcome reporting missing'
           assert 'rename(DEST_TMP, DEST_PRX)' in installer, 'staged PRX must be committed only in transaction'
           assert 'rename(CONFIG_TMP, CONFIG)' in installer, 'staged plugins.ini must be committed only in transaction'
-          assert 'if (found_entry)' in installer and 'fopen(CONFIG_TMP, "wb")' in installer, 'existing loader entry must still stage config'
+          assert 'if (found_entry)' in installer and 'fopen_staged_file(CONFIG_TMP)' in installer, 'existing loader entry must still stage config'\n          assert 'O_CREAT | O_EXCL' in installer, 'staging files must be created exclusively'\n          assert 'O_TRUNC' not in installer, 'installer must never truncate a pre-existing staging path'\n          assert 'fdopen(fd, "wb")' in installer, 'staged config must wrap the exclusively-created descriptor'
           print('Installer transaction and recovery invariants passed')
           PY
       - name: Configure
