@@ -37,6 +37,16 @@ on:
       - "platform/ps4/gcn8/host/shader_binary_contract.cpp"
       - "platform/ps4/gcn8/host/shader_binary_contract.h"
       - "tests/test_gcn8_shader_binary.cpp"
+      - "platform/ps4/gcn8/compute_smoke.cpp"
+      - "platform/ps4/gcn8/compute_smoke.h"
+      - "platform/ps4/gcn8/gnm_resource_binding.cpp"
+      - "platform/ps4/gcn8/gnm_resource_binding.h"
+      - "platform/ps4/gcn8/host/resource_table_contract.cpp"
+      - "platform/ps4/gcn8/host/resource_table_contract.h"
+      - "tests/gcn8_gnm_api_smoke.cpp"
+      - "tests/test_gcn8_gnm_packets.cpp"
+      - "platform/ps4/goldhen/plugin/Makefile"
+      - ".github/workflows/ps4-prx.yml"
       - ".github/workflows/gcn8-shader-build.yml"
 
 permissions:
