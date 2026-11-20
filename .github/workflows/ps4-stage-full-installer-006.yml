@@ -25,7 +25,7 @@ jobs:
           name: PS4-Neural-Engine-006-independent-QA
           path: approved
           repository: demolidorreddragons/NR
-          run-id: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.id || '0' }}
+          run-id: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.id || '44663222188' }}
           github-token: ${{ github.token }}
       - name: Download exact PKG from same build run
         uses: actions/download-artifact@v4
