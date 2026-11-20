@@ -22,6 +22,13 @@ int main() {
     assert(d.b_required_bytes == 19u * 31u * sizeof(float));
     assert(d.out_required_bytes == 17u * 31u * sizeof(float));
 
+    // The scalar and FP16-rounded reference shaders use 8x8 local sizes,
+    // while the wave64 tiled shader covers 16x16 outputs per workgroup.
+    assert(make_gemm_dispatch_for_tile(p, av, bv, cv, ov, 8u, 8u, &d) == ContractError::none);
+    assert(d.groups_x == 4u && d.groups_y == 3u);
+    assert(make_gemm_dispatch_for_tile(p, av, bv, cv, ov, 0u, 8u, &d)
+           == ContractError::invalid_workgroup_size);
+
     p.m = 0;
     assert(make_gemm_dispatch(p, av, bv, cv, ov, &d) == ContractError::zero_output_dimension);
     p = {17, 31, 19, 1.0f, 0.0f};
