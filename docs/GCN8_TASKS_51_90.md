@@ -63,7 +63,7 @@ This ledger records the next 40 work items. A task is **DONE** only when its sta
 | 87 | Build executable representation of all 71 graph blocks | **BLOCKED BY 86** | Complete operator/tensor graph with validated weights and shapes. |
 | 88 | Implement and differential-test partial inference | **BLOCKED BY 87** | Per-operator reference comparisons including edge cases and tolerances. |
 | 89 | Integrate neural backend with renderer and fallback | **BLOCKED BY 80, 88** | Defined image input/output ownership, fallback path and end-to-end frame tests. |
-| 90 | Independent audit and experimental release gate | **NOT APPROVED** | REA-5 clean-room review, hardware evidence, package/ABI/rollback audit and explicit release approval. |
+| 90 | Independent audit and experimental release gate | **PARTIAL — PKG PC QA PASS; RELEASE NOT APPROVED** | Run `44680087099` passed independent PKG structure/digest/signature/payload validation and 15/15 extraction on PC. REA-5 clean-room review, hardware/ABI/runtime/rollback evidence and explicit release approval remain open. |
 
 ## Current concrete progress
 
