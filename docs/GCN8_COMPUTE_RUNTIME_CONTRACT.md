@@ -42,7 +42,7 @@ binding). The emitted ISA uses scalar loads from the table pointer and buffer
 load/store instructions. The pinned PSBC source now confirms the compiler-side ABI: each storage
 binding is a 16-byte V# descriptor in descriptor set 0, at byte offset N×64.
 The table pointer is the `PTR_INDIRECTRESOURCETABLE` user-data pointer at
-register 2. A PRX link probe showed that OpenGNM's
+register 2 and occupies one 32-bit SGPR in this binary. A PRX link probe showed that OpenGNM's
 `sceGnmDrawCmdSetPointerUserData` is a source helper, not a firmware export
 (`ld.lld` reports it undefined when treated as an import); its generic
 implementation also uses `SET_SH_REG` without the compute-engine shader-type
@@ -77,13 +77,20 @@ descriptor ABI used by these standalone shaders:
 For the current GEMM shader, PSBC logs four storage-buffer bindings at offsets
 0, 64, 128 and 192, with 16-byte descriptors; the descriptor table size is
 208 bytes. The GNM metadata says `PTR_INDIRECTRESOURCETABLE` starts at user
-register 2. The pinned OpenGNM helper `sceGnmDrawCmdSetPointerUserData`
-writes a host pointer as two 32-bit words to the requested CS user-data slot;
-its implementation maps slot 2 to the compute user-data register pair 2:3.
-This gives a concrete command-recording candidate for the table pointer,
-subject to confirming the actual GPU VA and runtime behavior on hardware.
+register 2. The OpenGNM helper `sceGnmDrawCmdSetPointerUserData` writes two 32-bit
+words, but that generic behavior is **not correct for this compiled shader**.
+The raw slot control byte is `0x00` (`registercount=0`), PSBC documents
+`address32_hi=0`, and the emitted ISA loads the table base from SGPR `s2`;
+SGPR `s3` is used for scalar shader parameters. Writing a high pointer word
+to register 3 would corrupt live shader data.
 
-The same host contract now constructs the exact four-dword compute `SET_SH_REG` packet. For start register 2 it expects header `0xC0027602`, register offset `0x242`, low address dword and zero high dword; its tests cover slot 14/15 boundaries and invalid table ranges. `gnm_resource_binding.cpp` statically asserts that the pinned OpenGNM PM4 macros and GFX8 register definitions match these constants, then copies the tested packet into the command buffer. Host CTest passed run `44744971532`; PRX compile/link revalidation is pending. This still does not prove that a real command buffer is accepted by the GPU.
+NR therefore emits a three-dword compute `SET_SH_REG` packet with exactly one
+data dword: header `0xC0017602`, register offset `0x242` (CS user register
+2), and the low 32-bit table address. No high dword is written. The previous
+four-dword/`0xC0027602` packet test in run `44744971532` is superseded; the
+corrected one-dword packet host/PRX revalidation is pending. The PS4 wrapper
+statically asserts that the OpenGNM PM4 macros and GFX8 register definitions
+match the host packet constants. This still does not prove GPU acceptance.
 
 The host-only implementation `platform/ps4/gcn8/host/resource_table_contract.*`
 now mirrors this layout and rejects unsupported sets, unsorted/overlapping
