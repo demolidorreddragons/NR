@@ -27,7 +27,7 @@ def integer(v, label, minimum=0):
 
 def validate(manifest_path: Path, inventory_path: Path | None = None,
              expected_blocks: int | None = None, expected_tensors: int | None = None,
-             full_coverage: bool = False) -> dict:
+             full_coverage: bool = False, reference_layout: bool = False) -> dict:
     root = manifest_path.parent.resolve()
     try: m = json.loads(manifest_path.read_text(encoding="utf-8"))
     except (OSError, UnicodeError, json.JSONDecodeError) as e:
@@ -113,19 +113,95 @@ def validate(manifest_path: Path, inventory_path: Path | None = None,
         actual = {t["name"]: t["byteLength"] for t in tensors}
         if expected != actual: raise ValidationError("manifest tensor names/byte lengths differ from source inventory")
 
+    reference_layout_count = 0
+    if reference_layout:
+        expected_layout = reference_layout_sizes()
+        actual_layout = {t["name"]: t["byteLength"] for t in tensors}
+        if actual_layout != expected_layout:
+            missing = sorted(set(expected_layout) - set(actual_layout))[:5]
+            extra = sorted(set(actual_layout) - set(expected_layout))[:5]
+            mismatch = sorted(n for n in set(expected_layout) & set(actual_layout) if expected_layout[n] != actual_layout[n])[:5]
+            raise ValidationError(f"reference layout mismatch: missing={missing}, extra={extra}, sizes={mismatch}")
+        reference_layout_count = len(expected_layout)
     return {"status":"PASS","block_count":blocks,"blocks_present":len(present),
             "tensor_count":len(tensors),"stage_count":len(stage_map),"tensor_payload_bytes":total,
             "stages":{k:{"bytes":v["size"],"sha256":v["sha256"],**coverage[k]} for k,v in stage_map.items()},
-            "inventory_compared":bool(inventory_path),"full_coverage_required":full_coverage,
+            "inventory_compared":bool(inventory_path),"full_coverage_required":full_coverage,\n            "reference_layout_checked":reference_layout,"reference_layout_records":reference_layout_count,
             "scope":"Container/slice integrity only; no semantic shapes, version parity, or inference validation."}
+
+def reference_layout_sizes() -> dict[str, int]:
+    """Expected record byte lengths from OpenDLSS-NR's pinned nr_graph.cpp."""
+    def align_up(v, a): return (v + a - 1) // a * a
+    def fused_end(c):
+        heads = c // 32
+        expert = c >= 64
+        count = c // 32 if expert else 0
+        expand = count * c * 128 if expert else c * 128
+        weights = expand + (count * 128 * 32 + count * 32 * c if expert else 128 * c)
+        ffn_skip = weights + 16
+        qkv = ffn_skip + c * 2 + 16
+        relative = qkv + 3 * c * c
+        scale = relative + heads * 8192
+        projection = scale + align_up(heads * 4, 16)
+        attention_skip = projection + c * c
+        return attention_skip + c * 2
+    def upsample_size(input_channels, c):
+        heads = c // 32
+        expert = c >= 64
+        count = c // 32 if expert else 0
+        expand = count * c * 128 if expert else c * 128
+        weights = expand + (count * 128 * 32 + count * 32 * c if expert else 128 * c)
+        narrow_padding = 16 if c == 32 else 0
+        ffn_skip = weights + input_channels * c + narrow_padding
+        transition_scale = ffn_skip + c * 2 + narrow_padding
+        qkv = transition_scale + c * 2
+        relative = qkv + 3 * c * c
+        scale = relative + heads * 8192
+        projection = scale + align_up(heads * 4, 16)
+        attention_skip = projection + c * c
+        return attention_skip + c * 2 + 16
+
+    sizes = {"block0.layer0.layer": 21696}
+    for b in range(1, 5):
+        sizes[f"block{b}.layer0.layer"] = fused_end(32) + 16 + (32 * 64 if b == 4 else 0)
+    for b in range(5, 9):
+        sizes[f"block{b}.layer0.layer"] = fused_end(64) + (64 * 128 if b == 8 else 16)
+    for b in range(9, 15):
+        sizes[f"block{b}.layer0.layer"] = fused_end(128) + (128 * 256 if b == 14 else 16)
+    for b in range(15, 23):
+        sizes[f"block{b}.layer0.layer"] = fused_end(256) + (256 * 512 if b == 22 else 16)
+
+    split_sizes = (524288, 263168, 917568, 263168)
+    for b in list(range(23, 31)) + list(range(40, 48)):
+        for layer, size in enumerate(split_sizes):
+            sizes[f"block{b}.layer{layer}.layer"] = size
+    sizes["block30.layer4.layer"] = 512 * 1024 + 16
+
+    vit_sizes = (1024 * 4096 + 16, 1024 * 4096 + 2048,
+                 3 * 1024 * 1024 + 32 * 4, 2, 1024 * 1024 + 2048)
+    for b in range(31, 39):
+        for layer, size in enumerate(vit_sizes):
+            sizes[f"block{b}.layer{layer}.layer"] = size
+    sizes["block39.layer0.layer"] = 1024 * 512 + 512 * 2
+
+    for channels, first, last in ((256, 48, 55), (128, 56, 61),
+                                  (64, 62, 65), (32, 66, 69)):
+        for b in range(first, last + 1):
+            sizes[f"block{b}.layer0.layer"] = (
+                upsample_size(channels * 2, channels) if b == first else fused_end(channels) + 16
+            )
+    sizes["block70.layer0.layer"] = 21808
+    sizes["block70.layer0.blend_scale"] = 2
+    return sizes
+
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("manifest", type=Path); ap.add_argument("--inventory", type=Path)
     ap.add_argument("--expected-blocks", type=int); ap.add_argument("--expected-tensors", type=int)
-    ap.add_argument("--require-full-coverage", action="store_true")
+    ap.add_argument("--require-full-coverage", action="store_true")\n    ap.add_argument("--check-reference-layout", action="store_true", help="check all record sizes against OpenDLSS-NR nr_graph.cpp")
     a = ap.parse_args()
-    try: result = validate(a.manifest, a.inventory, a.expected_blocks, a.expected_tensors, a.require_full_coverage)
+    try: result = validate(a.manifest, a.inventory, a.expected_blocks, a.expected_tensors, a.require_full_coverage, a.check_reference_layout)
     except ValidationError as e:
         print(json.dumps({"status":"FAIL","error":str(e)}, indent=2), file=sys.stderr); return 1
     print(json.dumps(result, indent=2)); return 0
