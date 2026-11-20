@@ -58,7 +58,7 @@ cp "$SAMPLE/sce_module/libc.prx" "$STAGE/sce_module/libc.prx"
 cp "$SAMPLE/sce_module/libSceFios2.prx" "$STAGE/sce_module/libSceFios2.prx"
 cp "$SAMPLE/sce_sys/about/right.sprx" "$STAGE/sce_sys/about/right.sprx"
 
-INSTALLER_CFLAGS=(--target=x86_64-pc-freebsd12-elf -std=c11 -fPIC -funwind-tables \
+INSTALLER_CFLAGS=(--target=x86_64-pc-freebsd12-elf -std=gnu11 -fPIC -funwind-tables \
   -isysroot "$OO_PS4_TOOLCHAIN" -isystem "$OO_PS4_TOOLCHAIN/include" \
   -isystem /usr/include/x86_64-linux-gnu -I"$GOLDHEN_SDK/include" -I"$ROOT/installer")
 clang "${INSTALLER_CFLAGS[@]}" -c "$ROOT/installer/main.c" -o "$STAGE/installer.o"
