@@ -176,7 +176,7 @@ jobs:
           # PlayGo chunk metadata is generated/owned by Sony's image publisher.
           # The extracted PKG's Sc0 copies are not valid input payload files for
           # img_create; remove them from this disposable rebuild tree.
-          foreach ($publisherFile in @("sce_sys/playgo-chunk.dat","sce_sys/playgo-chunk.sha","sce_sys/playgo-manifest.xml")) {
+          foreach ($publisherFile in @("sce_sys/license.dat","sce_sys/license.info","sce_sys/psreserved.dat","sce_sys/playgo-chunk.dat","sce_sys/playgo-chunk.sha","sce_sys/playgo-manifest.xml")) {
             $publisherPath = Join-Path $image $publisherFile
             if (Test-Path $publisherPath) {
               Remove-Item -LiteralPath $publisherPath -Force
