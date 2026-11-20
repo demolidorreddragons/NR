@@ -69,7 +69,7 @@ int main(void) {
     const char wrong_content[] =
         "schema=1\nrelease_number=006\ninstaller_version=1\napp_version=01.02\n"
         "title_id=PNEU00001\ncontent_id=IV0000-WRONG_00-PS4NEURALENG0000\n"
-        "prx_file=ps4_neural_engine.prx\nprx_sha256=ba7816bf8f01cfea414140de5dae3b00361a396177a9cb410ff61f20015ad\n"
+        "prx_file=ps4_neural_engine.prx\nprx_sha256=ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad\n"
         "abi_status=unverified\nhardware_status=not_tested\n";
     write_text(manifest_path, wrong_content);
     assert(pne_validate_release_manifest(manifest_path, prx_path, error, sizeof(error)) == 0);
@@ -78,8 +78,8 @@ int main(void) {
     const char duplicate_hash[] =
         "schema=1\nrelease_number=006\ninstaller_version=1\napp_version=01.02\n"
         "title_id=PNEU00001\ncontent_id=IV0000-PNEU00001_00-PS4NEURALENG0000\n"
-        "prx_file=ps4_neural_engine.prx\nprx_sha256=ba7816bf8f01cfea414140de5dae3b00361a396177a9cb410ff61f20015ad\n"
-        "prx_sha256=ba7816bf8f01cfea414140de5dae3b00361a396177a9cb410ff61f20015ad\n"
+        "prx_file=ps4_neural_engine.prx\nprx_sha256=ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad\n"
+        "prx_sha256=ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad\n"
         "abi_status=unverified\nhardware_status=not_tested\n";
     write_text(manifest_path, duplicate_hash);
     assert(pne_validate_release_manifest(manifest_path, prx_path, error, sizeof(error)) == 0);
@@ -88,7 +88,7 @@ int main(void) {
     const char missing_field[] =
         "schema=1\nrelease_number=006\ninstaller_version=1\napp_version=01.02\n"
         "title_id=PNEU00001\ncontent_id=IV0000-PNEU00001_00-PS4NEURALENG0000\n"
-        "prx_file=ps4_neural_engine.prx\nprx_sha256=ba7816bf8f01cfea414140de5dae3b00361a396177a9cb410ff61f20015ad\n"
+        "prx_file=ps4_neural_engine.prx\nprx_sha256=ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad\n"
         "abi_status=unverified\n";
     write_text(manifest_path, missing_field);
     assert(pne_validate_release_manifest(manifest_path, prx_path, error, sizeof(error)) == 0);
