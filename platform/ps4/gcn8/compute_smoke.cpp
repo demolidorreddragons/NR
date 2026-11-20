@@ -274,9 +274,7 @@ extern "C" int pne_gcn8_compute_smoke_run(const char* shader_path,
     }
 
     before = cmd.cmdptr;
-    sceGnmDrawCmdEventWriteEop(
-        &cmd, GNM_CACHE_FLUSH_AND_INV_TS_EVENT, fence_address,
-        GNM_DATA_SEL_SEND_DATA32, kFenceMagic);
+    pne_gcn8_emit_eop_fence(&cmd, fence_address, kFenceMagic);
     if (cmd.cmdptr - before != 6) {
         log.message("RESULT=FAIL; REASON=EOP_FENCE_PACKET");
         return 22;
