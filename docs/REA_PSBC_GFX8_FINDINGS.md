@@ -146,3 +146,8 @@ Shader compilation failed: internal error
 ```
 
 No `.sb` file was emitted. The GNM diagnostic artifact (ID `14605031783`, ZIP SHA-256 `50f3d70d9042b91ed9ec8db960da908ed0698f1a05fc53ca854a3934b48f6554`) contains only the five validated SPIR-V modules: `e4m3_decode`, `e4m3_encode`, `gemm_fp16_accum`, `gemm_fp32`, and `gemm_fp32_wave64_tiled`. The separate SPIR-V artifact (ID `14604462717`) also passed upload. This confirms the fail-closed behavior; it does not solve the long-shader GNM layout. The workflow remains failed at GNM conversion by design until issue [#8](https://github.com/demolidorreddragons/NR/issues/8) is resolved.
+
+
+## Tiled GEMM code-size reduction experiment — run 44739274959
+
+The first targeted source experiment added GLSL `[[dont_unroll]]` to the 16-iteration LDS reduction loop. The pinned PSBC compiler rebuilt successfully, all five SPIR-V modules validated, and GNM conversion refused the tiled shader at **400 dwords** rather than the prior **590 dwords**. The 8-bit field maximum remains 255 dwords, so the shader is still correctly rejected and no invalid tiled `.sb` is accepted. The source was then updated to also prevent unrolling the four-iteration cooperative tile-load loop (commit `cf2f737ab42be937941ede74256e5706b29775e8`); its CI revalidation is pending. This is a code-size experiment only and does not yet validate GNM metadata or GPU semantics.
