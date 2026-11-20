@@ -30,7 +30,7 @@ jobs:
       - name: Install host compiler and shader tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential python3 python3-mako glslang-tools spirv-tools
+          sudo apt-get install -y build-essential python3 python3-mako glslang-tools spirv-tools llvm-18
       - name: Checkout pinned shader compiler and header dependencies
         run: |
           git clone https://github.com/PS4-OpenGNM/opengnm-psbc.git .deps/opengnm-psbc
@@ -131,6 +131,8 @@ jobs:
         run: |
           glslangValidator --version
           spirv-val --version
+          llvm-mc-18 --version | tee /tmp/llvm-mc-version.txt
+          grep -F "AMDGPU" /tmp/llvm-mc-version.txt
           for shader in gemm_fp32_wave64_tiled gemm_fp32 gemm_fp16_accum e4m3_decode e4m3_encode; do
             spirv-val --target-env vulkan1.1 "dist/ps4/gcn8/${shader}.spv"
           done
@@ -163,6 +165,7 @@ jobs:
               "glslang": subprocess.check_output(["glslangValidator", "--version"], text=True).splitlines()[0],
               "spirv_val": subprocess.check_output(["spirv-val", "--version"], text=True).splitlines()[0],
               "spirv_dis": subprocess.check_output(["spirv-dis", "--version"], text=True).splitlines()[0],
+              "llvm_mc": subprocess.check_output(["llvm-mc-18", "--version"], text=True).splitlines()[0],
               "psbc_cli": subprocess.check_output([".deps/opengnm-psbc/opengnm-psbc", "-h"], text=True).splitlines()[0],
               "psbc_binary_sha256": hashlib.sha256(Path(".deps/opengnm-psbc/opengnm-psbc").read_bytes()).hexdigest(),
           }
@@ -202,6 +205,8 @@ jobs:
                   raise SystemExit(f"CS header size does not match slot count: {shader}")
               if code_start != expected_code_start:
                   raise SystemExit(f"GCN code start does not follow the CS header/slot table: {shader}")
+              if gcn_code_size == 0 or gcn_code_size % 4:
+                  raise SystemExit(f"GCN code size is not a non-zero dword-aligned length: {shader}")
               if common_shader_size != gcn_code_size + module.GNM_BINARY_INFO_SIZE:
                   raise SystemExit(f"CS common shader size disagrees with GCN code length: {shader}")
               first_slot_type = None
@@ -253,6 +258,20 @@ jobs:
               if not local_mode:
                   raise SystemExit(f"Static SPIR-V LocalSize execution mode not found: {shader}")
               local_size = [int(value) for value in local_mode.groups()]
+              code_bytes = data[code_start:code_start + gcn_code_size]
+              if len(code_bytes) != gcn_code_size:
+                  raise SystemExit(f"GCN code bytes are truncated: {shader}")
+              raw_code_path = Path("dist/ps4/gcn8") / f"{shader}.gcn.bin"
+              raw_code_path.write_bytes(code_bytes)
+              hex_input = " ".join(f"0x{value:02x}" for value in code_bytes)
+              disassembly = subprocess.run(
+                  ["llvm-mc-18", "--disassemble", "--triple=amdgcn--", "--mcpu=tonga"],
+                  input=hex_input, text=True, capture_output=True, check=True,
+              ).stdout
+              if not disassembly.strip() or "<unknown>" in disassembly or "invalid instruction" in disassembly.lower():
+                  raise SystemExit(f"LLVM GFX8 disassembler could not decode all shader code: {shader}")
+              isa_path = Path("dist/ps4/gcn8") / f"{shader}.isa"
+              isa_path.write_text(disassembly, encoding="utf-8")
               cs_registers = {
                   "computepgmlo": u32(cs_header + 8),
                   "computepgmhi": u32(cs_header + 12),
@@ -294,6 +313,11 @@ jobs:
                   "first_input_usage_type": first_slot_type,
                   "input_usage_slots_raw": input_usage_slots,
                   "spirv_local_size": local_size,
+                  "gcn_code_file": str(raw_code_path),
+                  "gcn_code_sha256": hashlib.sha256(code_bytes).hexdigest(),
+                  "isa_file": str(isa_path),
+                  "isa_sha256": hashlib.sha256(disassembly.encode("utf-8")).hexdigest(),
+                  "isa_lines": len([line for line in disassembly.splitlines() if line.strip()]),
                   "cs_common_data": {
                       "shader_size_raw": common_shader_size,
                       "is_using_srt": common_is_using_srt,
@@ -339,5 +363,7 @@ jobs:
           path: |
             dist/ps4/gcn8/*.spv
             dist/ps4/gcn8/*.sb
+            dist/ps4/gcn8/*.gcn.bin
+            dist/ps4/gcn8/*.isa
             dist/ps4/gcn8/gnm-container-report.json
           if-no-files-found: error
