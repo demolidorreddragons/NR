@@ -1,8 +1,8 @@
 #include "compute_contract.h"
 
 #include <cmath>
-#include <limits>
 #include <cstdint>
+#include <limits>
 
 namespace pne::gcn8 {
 namespace {
@@ -34,7 +34,7 @@ ContractError make_gemm_dispatch(const GemmParams& p,
                                  const BufferView& c,
                                  const BufferView& out,
                                  GemmDispatch* dispatch) {
-    if (!dispatch) return ContractError::null_buffer;
+    if (!dispatch) return ContractError::null_dispatch;
     if (p.m == 0 || p.n == 0) return ContractError::zero_output_dimension;
     if (!std::isfinite(p.alpha) || !std::isfinite(p.beta))
         return ContractError::invalid_scalar;
@@ -48,6 +48,15 @@ ContractError make_gemm_dispatch(const GemmParams& p,
         !checked_mul(mk, sizeof(float), &a_bytes) ||
         !checked_mul(kn, sizeof(float), &b_bytes)) {
         return ContractError::size_overflow;
+    }
+    // The shader uses 32-bit uint arithmetic for linear indexing and K-loop
+    // increments. Reject dimensions that could wrap before a GPU dispatch.
+    const auto shader_index_limit =
+        static_cast<std::size_t>(std::numeric_limits<std::uint32_t>::max());
+    if (mn > shader_index_limit || mk > shader_index_limit ||
+        kn > shader_index_limit ||
+        p.k > std::numeric_limits<std::uint32_t>::max() - 15u) {
+        return ContractError::shader_index_overflow;
     }
 
     if (!a.data || !b.data || !c.data || !out.data)
@@ -74,7 +83,9 @@ ContractError make_gemm_dispatch(const GemmParams& p,
 const char* contract_error_string(ContractError error) noexcept {
     switch (error) {
     case ContractError::none: return "none";
+    case ContractError::null_dispatch: return "null dispatch output";
     case ContractError::zero_output_dimension: return "zero output dimension";
+    case ContractError::shader_index_overflow: return "shader 32-bit index overflow";
     case ContractError::size_overflow: return "buffer size overflow";
     case ContractError::null_buffer: return "null buffer";
     case ContractError::buffer_too_small: return "buffer too small";
