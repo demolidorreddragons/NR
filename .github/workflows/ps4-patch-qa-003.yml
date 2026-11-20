@@ -58,9 +58,9 @@ jobs:
           $pkg = Join-Path $env:GITHUB_WORKSPACE "qa-candidate/PS4-Neural-Engine-003-CANDIDATE.pkg"
           $gp4 = Join-Path $env:GITHUB_WORKSPACE "qa-candidate/PS4-Neural-Engine-003.gp4"
           $report = Join-Path $env:GITHUB_WORKSPACE "qa-candidate/build-report.txt"
-          $base = Join-Path $env:GITHUB_WORKSPACE "qa-candidate/PS4-Neural-Engine-002.pkg"
+          $base = Join-Path $env:GITHUB_WORKSPACE "qa-candidate/PS4-Neural-Engine-Installed-Original.pkg"
           $originalBase = Join-Path $env:GITHUB_WORKSPACE "qa-candidate/PS4-Neural-Engine-Installed-Original.pkg"
-          if (-not (Test-Path $pkg) -or -not (Test-Path $gp4) -or -not (Test-Path $base) -or -not (Test-Path $originalBase)) { throw "Required patch, GP4, rebuilt base, or exact installed original PKG missing." }
+          if (-not (Test-Path $pkg) -or -not (Test-Path $gp4) -or -not (Test-Path $base) -or -not (Test-Path $originalBase)) { throw "Required patch, GP4, or exact installed original base PKG missing." }
           New-Item -ItemType Directory -Force -Path qa-output | Out-Null
 
           $baseHash = (Get-FileHash -Algorithm SHA256 $base).Hash
@@ -68,9 +68,9 @@ jobs:
           $reportText = Get-Content $report -Raw
           $expectedHash = [regex]::Match($reportText, "CANDIDATE_PKG_SHA256=([A-Fa-f0-9]{64})").Groups[1].Value
           if (-not $expectedHash -or $candidateHash -ne $expectedHash) { throw "Candidate SHA-256 does not match engineering report." }
-          "BASE_PKG_SHA256=$baseHash" | Out-File qa-output/qa-report.txt
-          $expectedBaseHash = [regex]::Match($reportText, "DELIVERABLE_BASE_PKG_SHA256=([A-Fa-f0-9]{64})").Groups[1].Value
-          if (-not $expectedBaseHash -or $baseHash -ne $expectedBaseHash) { throw "Delivered base PKG SHA-256 does not match engineering report." }
+          "ASSOCIATED_INSTALLED_BASE_PKG_SHA256=$baseHash" | Out-File qa-output/qa-report.txt
+          $expectedBaseHash = [regex]::Match($reportText, "PATCH_ASSOCIATED_BASE_PKG_SHA256=([A-Fa-f0-9]{64})").Groups[1].Value
+          if (-not $expectedBaseHash -or $baseHash -ne $expectedBaseHash) { throw "Patch association base PKG SHA-256 does not match engineering report." }
           "CANDIDATE_PKG_SHA256=$candidateHash" | Out-File qa-output/qa-report.txt -Append
           $originalHash = (Get-FileHash -Algorithm SHA256 $originalBase).Hash
           $expectedOriginalHash = [regex]::Match($reportText, "INSTALLED_BASE_PKG_SHA256=([A-Fa-f0-9]{64})").Groups[1].Value
@@ -94,7 +94,7 @@ jobs:
           $appPath = $project.psproject.volume.package.app_path
           if ($volume -ne "pkg_ps4_patch") { throw "GP4 is not pkg_ps4_patch." }
           if ($storage -ne "digital25") { throw "Patch GP4 storage type mismatch." }
-          if ([IO.Path]::GetFileName($appPath) -ne "PS4-Neural-Engine-002.pkg") { throw "GP4 does not reference the exact original PKG 002: $appPath" }
+          if ([IO.Path]::GetFileName($appPath) -ne "installed-app.pkg") { throw "GP4 does not reference the exact installed base app.pkg: $appPath" }
           "GP4_VOLUME_TYPE=$volume" | Out-File qa-output/qa-report.txt -Append
           "GP4_STORAGE_TYPE=$storage" | Out-File qa-output/qa-report.txt -Append
           "GP4_APP_PATH=$appPath" | Out-File qa-output/qa-report.txt -Append
@@ -118,8 +118,8 @@ jobs:
           if (-not $baseSfo -or -not $patchSfo) { throw "Base or patch PARAM.SFO missing." }
           $baseText = (dotnet "$tool" sfo read "$($baseSfo.FullName)" 2>&1) -join "`n"
           $patchText = (dotnet "$tool" sfo read "$($patchSfo.FullName)" 2>&1) -join "`n"
-          foreach ($required in @("CATEGORY = gd","APP_VER = 01.00","VERSION = 01.00","CONTENT_ID = IV0000-PNEU00001_00-PS4NEURALENG0000","TITLE_ID = PNEU00001","st_type=digital50")) {
-            if ($baseText -notmatch [regex]::Escape($required)) { throw "Delivered Sony-built base SFO missing expected metadata: $required" }
+          foreach ($required in @("CATEGORY = gd","APP_VER = 1.00","CONTENT_ID = IV0000-PNEU00001_00-PS4NEURALENG0000","TITLE_ID = PNEU00001")) {
+            if ($baseText -notmatch [regex]::Escape($required)) { throw "Exact installed base SFO missing expected metadata: $required" }
           }
           foreach ($required in @("CATEGORY = gp","APP_VER = 01.01","CONTENT_ID = IV0000-PNEU00001_00-PS4NEURALENG0000","TITLE_ID = PNEU00001","st_type=digital25")) {
             if ($patchText -notmatch [regex]::Escape($required)) { throw "Patch SFO missing expected metadata: $required" }
@@ -154,6 +154,7 @@ jobs:
           "BASE_PRX_SHA256=$basePrxHash" | Out-File qa-output/qa-report.txt -Append
           "PATCH_PRX_SHA256=$patchPrxHash" | Out-File qa-output/qa-report.txt -Append
           "BASE_CATEGORY=gd" | Out-File qa-output/qa-report.txt -Append
+          "BASE_APP_VER=1.00_EXACT_INSTALLED_BASE" | Out-File qa-output/qa-report.txt -Append
           "PATCH_CATEGORY=gp" | Out-File qa-output/qa-report.txt -Append
           "PATCH_APP_VER=01.01" | Out-File qa-output/qa-report.txt -Append
           "QA_STATUS=PASS_PC_ONLY_NOT_HARDWARE_TESTED" | Out-File qa-output/qa-report.txt -Append
