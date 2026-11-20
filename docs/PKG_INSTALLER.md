@@ -2,6 +2,8 @@
 
 PKG 006 is a full base-application installer (not a patch) intended for a jailbroken PS4. It carries APP_VER/VERSION 01.02 and a freshly built eboot containing the corrected byte-stream PRX copier. This is deliberate: the audited console installation was an older `CATEGORY=gd`, `APP_VER=1.00` base, not the `gde` PKG 002 that patch 003 targeted. Install it through GoldHEN/Debug Package Installer, then launch **PS4 Neural Engine Installer** once.
 
+The installer first validates `/app0/pne-release.ini` (schema, release identity, PRX filename and SHA-256 of `/app0/ps4_neural_engine.prx`) before creating the GoldHEN destination directory or changing persistent plugin/configuration files. The SHA-256 implementation is included in the installer and covered by host test vectors.
+
 The installer:
 1. Copies `/app0/ps4_neural_engine.prx` to `/data/GoldHEN/plugins/ps4_neural_engine.prx` using a temporary file.
 2. Verifies the copied PRX by reading both files back and comparing every byte; it does not trust PS4 `stat`/`fstat` size metadata. Interrupted reads (`EINTR`) are retried, and short reads are accumulated independently on each stream before byte comparison.
@@ -45,3 +47,7 @@ O instalador foi alterado para não ativar o PRX imediatamente após a cópia:
 A revisão estática não substitui compilação, testes de falha em filesystem compatível, QA independente do PKG, nem teste de hardware. O instalador continua **não aprovado para instalação** até esses gates passarem.
 
 A verificação automatizada de invariantes do instalador foi adicionada ao workflow `host-tests` e está sendo executada também na branch `feature/gcn8-numeric-kernels`. A aprovação desse teste de host não representa execução do binário no FreeBSD/Orbis nem validação de operações `rename` no filesystem do PS4.
+
+### Manifest integrity preflight (2026-11-20)
+
+`installer/release_manifest.c` now rejects missing/duplicate required fields, unsupported schema, mismatched TITLE_ID/CONTENT_ID, unexpected PRX filename, malformed SHA-256, and a PRX whose computed SHA-256 differs from the manifest. This check runs before `mkdir` or staging. Host tests cover a valid manifest, SHA mismatch, wrong CONTENT_ID, duplicate hash key, missing field, malformed hash, and the SHA-256 `abc` test vector. Host CI run `44678921838` passed this test and the rest of the host suite. This does not establish PRX ABI compatibility, GoldHEN loading, or hardware readiness.
