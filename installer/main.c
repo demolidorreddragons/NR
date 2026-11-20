@@ -329,38 +329,60 @@ static int configure_loader(char* error, size_t error_size) {
     return 1;
 }
 
-/* Commit PRX and loader config with retained recovery copies. */
+/* Commit PRX and loader config with retained, collision-free recovery copies. */
 static int path_exists(const char* path) {
     struct stat st;
     return stat(path, &st) == 0;
 }
 
+/* Never delete or overwrite a recovery copy. Rotate the new backup name instead. */
+static int choose_backup_path(const char* base, char* output, size_t capacity) {
+    if (!base || !output || capacity == 0) return 0;
+    if (!path_exists(base)) {
+        int n = snprintf(output, capacity, "%s", base);
+        return n > 0 && (size_t)n < capacity;
+    }
+    for (unsigned index = 1; index < 10000; ++index) {
+        int n = snprintf(output, capacity, "%s.%03u", base, index);
+        if (n <= 0 || (size_t)n >= capacity) return 0;
+        if (!path_exists(output)) return 1;
+    }
+    errno = ENOSPC;
+    return 0;
+}
+
 static int commit_install(char* error, size_t error_size) {
+    char prx_backup[256] = {0};
+    char config_backup[256] = {0};
     int had_prx = path_exists(DEST_PRX);
     int had_config = path_exists(CONFIG);
     int moved_prx = 0, moved_config = 0, installed_prx = 0;
     int failure = 0;
 
-    if (path_exists(DEST_BACKUP) || path_exists(CONFIG_BACKUP)) {
-        snprintf(error, error_size, "ERROR: existing recovery backup found; refusing to overwrite it.");
+    if (had_prx && !choose_backup_path(DEST_BACKUP, prx_backup, sizeof(prx_backup))) {
+        snprintf(error, error_size, "ERROR: cannot reserve a unique PRX recovery backup path (errno=%d).", errno);
+        return 0;
+    }
+    if (had_config && !choose_backup_path(CONFIG_BACKUP, config_backup, sizeof(config_backup))) {
+        snprintf(error, error_size, "ERROR: cannot reserve a unique plugins.ini recovery backup path (errno=%d).", errno);
         return 0;
     }
     if (had_prx) {
-        if (rename(DEST_PRX, DEST_BACKUP) != 0) {
-            snprintf(error, error_size, "ERROR: cannot back up existing PRX (errno=%d).", errno);
+        if (rename(DEST_PRX, prx_backup) != 0) {
+            snprintf(error, error_size, "ERROR: cannot back up existing PRX to %s (errno=%d).", prx_backup, errno);
             return 0;
         }
         moved_prx = 1;
     }
     if (had_config) {
-        if (rename(CONFIG, CONFIG_BACKUP) != 0) {
+        if (rename(CONFIG, config_backup) != 0) {
             int operation_errno = errno;
             int restore_errno = 0;
-            if (moved_prx && rename(DEST_BACKUP, DEST_PRX) != 0) restore_errno = errno;
+            if (moved_prx && rename(prx_backup, DEST_PRX) != 0) restore_errno = errno;
             if (restore_errno) {
                 snprintf(error, error_size,
-                         "ERROR: cannot back up plugins.ini (errno=%d); PRX restore also failed (errno=%d); inspect .pne-backup.",
-                         operation_errno, restore_errno);
+                         "ERROR: cannot back up plugins.ini (errno=%d); PRX restore also failed (errno=%d); inspect %s.",
+                         operation_errno, restore_errno, prx_backup);
             } else {
                 snprintf(error, error_size,
                          "ERROR: cannot back up plugins.ini (errno=%d); previous PRX restored.",
@@ -385,14 +407,14 @@ rollback:
     {
         int rollback_errno = 0;
         if (installed_prx && remove(DEST_PRX) != 0 && errno != ENOENT) rollback_errno = errno;
-        if (moved_config && rename(CONFIG_BACKUP, CONFIG) != 0 && rollback_errno == 0) rollback_errno = errno;
-        if (moved_prx && rename(DEST_BACKUP, DEST_PRX) != 0 && rollback_errno == 0) rollback_errno = errno;
+        if (moved_config && rename(config_backup, CONFIG) != 0 && rollback_errno == 0) rollback_errno = errno;
+        if (moved_prx && rename(prx_backup, DEST_PRX) != 0 && rollback_errno == 0) rollback_errno = errno;
         remove(DEST_TMP);
         remove(CONFIG_TMP);
         if (rollback_errno) {
             snprintf(error, error_size,
-                     "ERROR: transactional commit failed (errno=%d); rollback incomplete (errno=%d); inspect .pne-backup.",
-                     failure, rollback_errno);
+                     "ERROR: transactional commit failed (errno=%d); rollback incomplete (errno=%d); inspect %s and %s.",
+                     failure, rollback_errno, prx_backup, config_backup);
         } else {
             snprintf(error, error_size,
                      "ERROR: transactional commit failed (errno=%d); previous files restored.",
