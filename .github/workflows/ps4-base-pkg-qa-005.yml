@@ -1,0 +1,84 @@
+name: PS4 Base PKG 005 Independent QA
+on:
+  workflow_run:
+    workflows: ["PS4 PRX and PKG build"]
+    types: [completed]
+    branches: [main]
+permissions:
+  actions: read
+  contents: read
+jobs:
+  audit:
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: windows-latest
+    steps:
+      - name: Checkout pinned independent PKG inspector
+        uses: actions/checkout@v4
+        with:
+          repository: pearlxcore/OrbisPkgTool
+          ref: 3de6da849b64a8ad0d5ba00dd4e8919934b868b0
+          path: OrbisPkgTool-src
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - name: Download exact build artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ps4-neural-engine-build
+          path: build-artifact
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+      - name: Build independent inspector
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          dotnet build OrbisPkgTool-src/OrbisPkgTool/OrbisPkgTool.csproj --configuration Release
+          if ($LASTEXITCODE -ne 0) { throw "Independent PKG inspector build failed." }
+          $tool = "OrbisPkgTool-src/OrbisPkgTool/bin/Release/net10.0-windows/OrbisPkgTool.dll"
+          if (-not (Test-Path $tool)) { throw "Inspector DLL missing." }
+          "TOOL=$tool" | Out-File "$env:RUNNER_TEMP\pkg005-tool.txt"
+      - name: Validate full base package, SFO, and executable payload
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $tool = (Get-Content "$env:RUNNER_TEMP\pkg005-tool.txt" | Select-Object -First 1).Substring(5)
+          $pkg = Join-Path $env:GITHUB_WORKSPACE "build-artifact/pkg/PS4-Neural-Engine-005.pkg"
+          if (-not (Test-Path $pkg)) { throw "Numbered PKG 005 missing." }
+          New-Item -ItemType Directory -Force -Path qa-output | Out-Null
+          $size = (Get-Item $pkg).Length
+          $hash = (Get-FileHash -Algorithm SHA256 $pkg).Hash.ToLowerInvariant()
+          "PKG_NUMBER=005" | Out-File qa-output/qa-report.txt
+          "PKG_KIND=FULL_BASE_APPLICATION_NOT_PATCH" | Out-File qa-output/qa-report.txt -Append
+          "PKG_BYTES=$size" | Out-File qa-output/qa-report.txt -Append
+          "PKG_SHA256=$hash" | Out-File qa-output/qa-report.txt -Append
+          dotnet "$tool" validate "$pkg" 2>&1 | Tee-Object qa-output/pkg-validation.txt
+          if ($LASTEXITCODE -ne 0) { throw "Independent PKG validation failed." }
+          $out = Join-Path $env:RUNNER_TEMP "pkg005-extracted"
+          dotnet "$tool" extract "$pkg" "$out" --verbose 2>&1 | Tee-Object qa-output/pkg-extract.txt
+          if ($LASTEXITCODE -ne 0) { throw "PKG extraction failed." }
+          $sfo = Get-ChildItem $out -Recurse -File -Filter param.sfo | Select-Object -First 1
+          if (-not $sfo) { throw "Embedded PARAM.SFO missing." }
+          $sfoText = (dotnet "$tool" sfo read "$($sfo.FullName)" 2>&1) -join [Environment]::NewLine
+          $sfoText | Out-File qa-output/param-sfo.txt
+          if ($LASTEXITCODE -ne 0) { throw "Embedded SFO read failed." }
+          foreach ($required in @("CATEGORY = gde","APP_VER = 01.01","VERSION = 01.01","TITLE_ID = PNEU00001","CONTENT_ID = IV0000-PNEU00001_00-PS4NEURALENG0000","st_type=digital50")) {
+            if ($sfoText -notmatch [regex]::Escape($required)) { throw "Embedded SFO missing expected field: $required" }
+          }
+          $eboot = Get-ChildItem $out -Recurse -File | Where-Object { $_.Name -eq "eboot.bin" } | Select-Object -First 1
+          $prx = Get-ChildItem $out -Recurse -File | Where-Object { $_.Name -eq "ps4_neural_engine.prx" } | Select-Object -First 1
+          if (-not $eboot -or $eboot.Length -le 0) { throw "Fresh installer eboot.bin missing." }
+          if (-not $prx -or $prx.Length -le 0) { throw "Packaged Neural Engine PRX missing." }
+          "EBOOT_BYTES=$($eboot.Length)" | Out-File qa-output/qa-report.txt -Append
+          "PRX_BYTES=$($prx.Length)" | Out-File qa-output/qa-report.txt -Append
+          "CATEGORY=gde; APP_VER=01.01; VERSION=01.01; STORAGE=digital50" | Out-File qa-output/qa-report.txt -Append
+          "QA_STATUS=PASS_PC_ONLY_NOT_HARDWARE_TESTED" | Out-File qa-output/qa-report.txt -Append
+          Get-Content qa-output/qa-report.txt | Out-File $env:GITHUB_STEP_SUMMARY -Append
+      - name: Upload independent QA evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: PS4-Neural-Engine-005-independent-QA
+          path: qa-output/*
+          if-no-files-found: warn
+          retention-days: 30
