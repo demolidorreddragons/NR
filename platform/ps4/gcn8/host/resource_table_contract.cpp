@@ -107,7 +107,7 @@ ResourceTableError build_cs_indirect_table_pointer_packet(
 
     packet_dwords[0] = packet3_set_sh_reg_compute_1_dword;
     packet_dwords[1] = (register_address - sh_register_offset) >> 2;
-    packet_dwords[2] = static_cast<std::uint32_t>(gpu_address);
+    packet_dwords[2] = static_cast<std::uint32_t>(gpu_address); // One SGPR only; SGPR3 carries scalar parameters.
     return ResourceTableError::none;
 }
 
