@@ -22,6 +22,16 @@ If an instruction is unclear, resolve the ambiguity from the repository document
 - A base PKG is not a patch. Do not describe a candidate as installable or ready until it is a genuine associated patch and has passed package validation and QA. Hardware readiness requires actual console validation.
 - Never invent workflow runs, artifacts, hashes, test results, or successful outcomes.
 
+## Mandatory PS4 Windows bridge usage
+
+- Before attempting any PS4 FTP/KLog/network task, consult [`docs/PS4_WINDOWS_BRIDGE.md`](docs/PS4_WINDOWS_BRIDGE.md) and use the configured self-hosted Windows runner labeled `[self-hosted, Windows, X64, ps4-lan]`.
+- The bridge runner is the default route to the PS4 LAN. Do not ask the user to recreate the bridge, rerun PowerShell commands, or re-upload diagnostics when the runner and existing artifacts can perform the task.
+- Do not attempt to substitute hosted GitHub runners or the hosted ChatGPT container for the Windows LAN runner.
+- Inspect the workflow's actual capabilities before use. A read-only connectivity test is not a file-transfer workflow. Transfer requires explicit upload plus remote read-back/integrity verification.
+- Use the successful build run's exact artifact, branch, and commit. Verify its SHA-256 before and after transfer; report success only when the remote digest matches.
+- Keep package staging, package installation, PRX deployment, and PRX activation distinct. Do not install packages or activate PRX without the user's explicit authorization.
+- Review scripts before running them on the privileged self-hosted runner; never execute untrusted third-party code there.
+
 ## PS4 safety boundaries
 
 - Do not uninstall the app, alter saves or app data, activate a PRX, or edit `plugins.ini` without a clear technical reason and the user's approval.
