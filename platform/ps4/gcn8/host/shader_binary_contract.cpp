@@ -130,6 +130,7 @@ ShaderBinaryError parse_gfx8_cs_shader_binary(
     output->code_size = code_size;
     output->slot_table_offset = static_cast<std::uint32_t>(actual_slot_offset);
     output->slot_count = slot_count;
+    output->chunk_usage_base_offset_dwords = chunk_offset;
     output->crc32 = read_u32(data + orb_offset + 24);
     output->version_major = version_major;
     output->version_minor = version_minor;
