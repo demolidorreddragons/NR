@@ -1,6 +1,6 @@
 import hashlib, json, tempfile, unittest
 from pathlib import Path
-from tools.validate_model_manifest import ValidationError, validate
+from tools.validate_model_manifest import ValidationError, validate, reference_layout_sizes
 
 class ManifestTests(unittest.TestCase):
     def setUp(self):
@@ -24,6 +24,13 @@ class ManifestTests(unittest.TestCase):
         inv=self.root/"inventory.json"; inv.write_text(json.dumps({"records":[
           {"name":"block0.layer0.layer","payload_bytes":8},{"name":"block0.layer1.layer","payload_bytes":8}]}))
         self.assertEqual(validate(self.path, inv, 1, 2, True)["status"],"PASS")
+    def test_reference_graph_layout_table(self):
+        sizes = reference_layout_sizes()
+        self.assertEqual(len(sizes), 153)
+        self.assertEqual(sizes["block0.layer0.layer"], 21696)
+        self.assertEqual(sizes["block31.layer3.layer"], 2)
+        self.assertEqual(sizes["block70.layer0.blend_scale"], 2)
+
     def test_bad_hash(self): self.m["stages"][0]["sha256"]="0"*64; self.invalid()
     def test_duplicate_name(self): self.m["tensors"][1]=dict(self.m["tensors"][0]); self.invalid()
     def test_overflow(self): self.m["tensors"][1]["stageOffset"]=15; self.invalid()
