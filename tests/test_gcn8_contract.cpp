@@ -33,5 +33,7 @@ int main() {
     assert(make_gemm_dispatch(p, av, bv, cv, ov, &d) == ContractError::invalid_scalar);
     assert(make_gemm_dispatch({17, 31, 19, 1.0f, 0.0f}, av, bv, cv, ov, nullptr)
            == ContractError::null_buffer);
+    assert(make_gemm_dispatch({UINT32_MAX, UINT32_MAX, 1, 1.0f, 0.0f},
+                              av, bv, cv, ov, &d) == ContractError::size_overflow);
     return 0;
 }
