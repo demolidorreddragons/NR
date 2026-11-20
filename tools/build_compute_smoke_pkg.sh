@@ -135,6 +135,7 @@ shader_file=compute_smoke_add.sb
 shader_sha256=$SHADER_SHA256
 pkg_file=$(basename "$numbered_pkg")
 pkg_sha256=$PKG_SHA256
+pointer_semantics=unresolved_open_gnm_start_vs_fpps4_end_pointer
 hardware_status=not_run
 EOF
 cp "$STAGE/package.gp4" "$OUT/package.gp4"
