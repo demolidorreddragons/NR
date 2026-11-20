@@ -168,9 +168,12 @@ def verify(artifact_dir: Path) -> dict:
                 })
             require(actual_slots == record.get("input_usage_slots_raw"),
                     f"{name}: raw input usage table differs from report")
-            require(all(slot["usage_type"] == 0x1C and slot["api_slot"] == 0
-                        and slot["start_register"] == 2 for slot in actual_slots),
-                    f"{name}: unexpected resource table slot contract")
+            require(len(actual_slots) == 1 and
+                    all(slot["usage_type"] == 0x1C and slot["api_slot"] == 0
+                        and slot["start_register"] == 2
+                        and slot["register_count_bit"] == 0
+                        and slot["control_raw"] == 0 for slot in actual_slots),
+                    f"{name}: expected one-dword indirect resource table pointer at CS user SGPR 2")
         else:
             require(chunk_offset == 0,
                     f"{name}: non-zero chunk offset with no input usage slots")
