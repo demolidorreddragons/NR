@@ -137,6 +137,15 @@ jobs:
         run: python3 tools/build_goldhen_plugin_archive.py
       - name: Build installable PKG
         run: bash tools/build_pkg.sh
+      - name: Preserve GP4 and release metadata for independent QA
+        run: |
+          mkdir -p dist/pkg/audit
+          cp build/pkg-stage/package.gp4 dist/pkg/audit/PS4-Neural-Engine-006.gp4
+          cp build/pkg-stage/sce_sys/param.sfo dist/pkg/audit/param.sfo
+          cp build/pkg-stage/pne-release.ini dist/pkg/audit/pne-release.ini
+          test -s dist/pkg/audit/PS4-Neural-Engine-006.gp4
+          test -s dist/pkg/audit/param.sfo
+          test -s dist/pkg/audit/pne-release.ini
       - name: Upload PRX and PKG artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -148,3 +157,102 @@ jobs:
             dist/goldhen/*.zip
             dist/goldhen/*.sha256
           if-no-files-found: error
+
+  independent-pkg-qa:
+    name: independent-pkg-qa
+    needs: build-prx-and-pkg
+    runs-on: windows-latest
+    permissions:
+      actions: read
+      contents: read
+    steps:
+      - name: Checkout pinned independent PKG inspector
+        uses: actions/checkout@v4
+        with:
+          repository: pearlxcore/OrbisPkgTool
+          ref: 3de6da849b64a8ad0d5ba00dd4e8919934b868b0
+          path: OrbisPkgTool-src
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - name: Download exact build artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ps4-neural-engine-build
+          path: build-artifact
+      - name: Build independent inspector
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          dotnet build OrbisPkgTool-src/OrbisPkgTool/OrbisPkgTool.csproj --configuration Release
+          if ($LASTEXITCODE -ne 0) { throw "Independent PKG inspector build failed." }
+          $tool = "OrbisPkgTool-src/OrbisPkgTool/bin/Release/net10.0-windows/OrbisPkgTool.dll"
+          if (-not (Test-Path $tool)) { throw "Inspector DLL missing." }
+          "TOOL=$tool" | Out-File "$env:RUNNER_TEMP\pkg006-tool.txt"
+      - name: Independently validate GP4, PKG, SFO, manifest and payload
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $tool = (Get-Content "$env:RUNNER_TEMP\pkg006-tool.txt" | Select-Object -First 1).Substring(5)
+          $artifact = Join-Path $env:GITHUB_WORKSPACE "build-artifact"
+          $pkg = Join-Path $artifact "pkg/PS4-Neural-Engine-006.pkg"
+          $gp4 = Join-Path $artifact "pkg/audit/PS4-Neural-Engine-006.gp4"
+          $manifest = Join-Path $artifact "pkg/audit/pne-release.ini"
+          $sfo = Join-Path $artifact "pkg/audit/param.sfo"
+          $sourcePrx = Join-Path $artifact "ps4/ps4_neural_engine.prx"
+          foreach ($file in @($pkg,$gp4,$manifest,$sfo,$sourcePrx)) {
+            if (-not (Test-Path $file)) { throw "Required audit input missing: $file" }
+          }
+          New-Item -ItemType Directory -Force -Path qa-output | Out-Null
+          $pkgHash = (Get-FileHash -Algorithm SHA256 $pkg).Hash.ToLowerInvariant()
+          $gp4Hash = (Get-FileHash -Algorithm SHA256 $gp4).Hash.ToLowerInvariant()
+          $sourcePrxHash = (Get-FileHash -Algorithm SHA256 $sourcePrx).Hash.ToLowerInvariant()
+          $gp4Text = Get-Content $gp4 -Raw
+          if ($gp4Text -notmatch "IV0000-PNEU00001_00-PS4NEURALENG0000") { throw "GP4 CONTENT_ID mismatch." }
+          foreach ($entry in @("eboot.bin","ps4_neural_engine.prx","pne-release.ini","sce_sys/param.sfo")) {
+            if ($gp4Text -notmatch [regex]::Escape($entry)) { throw "GP4 file association missing: $entry" }
+          }
+          $manifestText = Get-Content $manifest -Raw
+          foreach ($required in @("schema=1","release_number=006","title_id=PNEU00001","content_id=IV0000-PNEU00001_00-PS4NEURALENG0000","abi_status=unverified","hardware_status=not_tested","prx_sha256=$sourcePrxHash")) {
+            if ($manifestText -notmatch [regex]::Escape($required)) { throw "Release manifest mismatch: $required" }
+          }
+          dotnet "$tool" validate "$pkg" 2>&1 | Tee-Object qa-output/pkg-validation.txt
+          if ($LASTEXITCODE -ne 0) { throw "Independent PKG validation failed." }
+          $out = Join-Path $env:RUNNER_TEMP "pkg006-extracted"
+          dotnet "$tool" extract "$pkg" "$out" --verbose 2>&1 | Tee-Object qa-output/pkg-extract.txt
+          if ($LASTEXITCODE -ne 0) { throw "Independent PKG extraction failed." }
+          $embeddedSfo = Get-ChildItem $out -Recurse -File -Filter param.sfo | Select-Object -First 1
+          if (-not $embeddedSfo) { throw "Embedded PARAM.SFO missing." }
+          $sfoText = (dotnet "$tool" sfo read "$($embeddedSfo.FullName)" 2>&1) -join [Environment]::NewLine
+          $sfoText | Out-File qa-output/param-sfo.txt
+          if ($LASTEXITCODE -ne 0) { throw "Embedded SFO read failed." }
+          foreach ($required in @("CATEGORY = gde","APP_VER = 01.02","VERSION = 01.02","TITLE_ID = PNEU00001","CONTENT_ID = IV0000-PNEU00001_00-PS4NEURALENG0000","st_type=digital50")) {
+            if ($sfoText -notmatch [regex]::Escape($required)) { throw "Embedded SFO missing expected field: $required" }
+          }
+          $eboot = Get-ChildItem $out -Recurse -File | Where-Object { $_.Name -eq "eboot.bin" } | Select-Object -First 1
+          $prx = Get-ChildItem $out -Recurse -File | Where-Object { $_.Name -eq "ps4_neural_engine.prx" } | Select-Object -First 1
+          $embeddedManifest = Get-ChildItem $out -Recurse -File | Where-Object { $_.Name -eq "pne-release.ini" } | Select-Object -First 1
+          if (-not $eboot -or $eboot.Length -le 0) { throw "Fresh installer eboot.bin missing." }
+          if (-not $prx -or $prx.Length -le 0) { throw "Packaged PRX missing." }
+          if (-not $embeddedManifest) { throw "Packaged release manifest missing." }
+          $embeddedPrxHash = (Get-FileHash -Algorithm SHA256 $prx.FullName).Hash.ToLowerInvariant()
+          if ($embeddedPrxHash -ne $sourcePrxHash) { throw "Packaged PRX differs from standalone build PRX." }
+          if ((Get-Content $embeddedManifest.FullName -Raw) -ne $manifestText) { throw "Packaged manifest differs from staged release manifest." }
+          "PKG_KIND=FULL_BASE_APPLICATION_NOT_PATCH" | Out-File qa-output/qa-report.txt
+          "PKG_BYTES=$((Get-Item $pkg).Length)" | Out-File qa-output/qa-report.txt -Append
+          "PKG_SHA256=$pkgHash" | Out-File qa-output/qa-report.txt -Append
+          "GP4_SHA256=$gp4Hash" | Out-File qa-output/qa-report.txt -Append
+          "PRX_SHA256=$embeddedPrxHash" | Out-File qa-output/qa-report.txt -Append
+          "EBOOT_BYTES=$($eboot.Length)" | Out-File qa-output/qa-report.txt -Append
+          "CATEGORY=gde; APP_VER=01.02; VERSION=01.02; STORAGE=digital50" | Out-File qa-output/qa-report.txt -Append
+          "QA_STATUS=PASS_PC_ONLY_NOT_HARDWARE_TESTED" | Out-File qa-output/qa-report.txt -Append
+          Get-Content qa-output/qa-report.txt | Out-File $env:GITHUB_STEP_SUMMARY -Append
+      - name: Upload independent QA evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: PS4-Neural-Engine-006-independent-QA
+          path: qa-output/*
+          if-no-files-found: warn
+          retention-days: 30
