@@ -31,7 +31,12 @@ void main() {
     const uint blockRow = gl_WorkGroupID.y * 16u;
     const uint blockCol = gl_WorkGroupID.x * 16u;
 
-    const uint row0 = blockRow + ly * 2u;\n    const uint row1 = row0 + 1u;\n    const uint col0 = blockCol + lx * 2u;\n    const uint col1 = col0 + 1u;\n\n    float acc00 = 0.0;
+    const uint row0 = blockRow + ly * 2u;
+    const uint row1 = row0 + 1u;
+    const uint col0 = blockCol + lx * 2u;
+    const uint col1 = col0 + 1u;
+
+    float acc00 = 0.0;
     float acc01 = 0.0;
     float acc10 = 0.0;
     float acc11 = 0.0;
@@ -55,11 +60,6 @@ void main() {
         }
 
         barrier();
-
-        const uint row0 = blockRow + ly * 2u;
-        const uint row1 = row0 + 1u;
-        const uint col0 = blockCol + lx * 2u;
-        const uint col1 = col0 + 1u;
 
         for (uint k = 0u; k < 16u; ++k) {
             const float a0 = tileA[ly * 2u][k];
