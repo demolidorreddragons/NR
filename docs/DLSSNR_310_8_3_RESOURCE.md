@@ -90,3 +90,14 @@ Verified results:
 - The separate 2-byte `block70.layer0.blend_scale` record is consumed by the demo composition path, not by the graph's neural block schedule.
 
 The host-only formula regression suite passed in GitHub Actions run `44682885720` (also run `44682843012` on the PR). The full pinned manifest/stage audit passed locally against the recovered Library files. This reconciles all packed tensor record sizes and names with the 310.8.0 graph; it does not decode the E4M3/FP16 payload values or prove that the 310.8.3 DLL's non-weight graph/runtime code is identical.
+
+
+## Machine-readable 71-block layout export
+
+The reference graph's tensor-layout description can be exported without the proprietary payload:
+
+```sh
+python3 tools/export_dlssnr_graph_layout.py dlssnr-310.8.0-graph-layout.json
+```
+
+The JSON describes all 71 block IDs, input/output channel widths, block family (fused, split-512, ViT, upsample, pre/post), 11 stage transitions, and all 153 expected tensor records with packed byte lengths and consumer classification (`graph`, `demo`, or `unused_by_current_graph`). It pins the OpenDLSS-NR graph source commit and both resource/stage hashes. Host tests validate the exported block/record/transition counts. This is a machine-readable reference layout; it is not yet the PS4 runtime's executable inference graph.
