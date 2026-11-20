@@ -51,7 +51,7 @@ jobs:
           PYTHON=python3
           DESTDIR=/usr/local
           BINDIR=/usr/local/bin
-          SHARED_FLAGS=-Iinclude/ -Ilibpsbc/ -I../opengnm/include -I../SPIRV-Headers/include -I../Vulkan-Headers/include -Isrc/ -Isrc/amd -Isrc/amd/common -Isrc/amd/common/nir -Isrc/amd/compiler -Isrc/amd/vulkan -Isrc/amd/vulkan/nir -Isrc/vulkan/runtime -Isrc/vulkan/runtime/bvh -Isrc/vulkan/util -Isrc/compiler -Isrc/compiler/nir -Isrc/compiler/spirv -Isrc/gallium/include -Isrc/mesa -Isrc/mesa/main -Isrc/util -Icmd/psbc -Iinclude/mesa -D_GNU_SOURCE -D_XOPEN_SOURCE=700 -DUTIL_ARCH_LITTLE_ENDIAN=1 -DUTIL_ARCH_BIG_ENDIAN=0 -DHAVE_STRUCT_TIMESPEC=1 -DHAVE_PTHREAD=1
+          SHARED_FLAGS=-Iinclude/mesa -Iinclude/ -Ilibpsbc/ -I../opengnm/include -I../SPIRV-Headers/include -I../Vulkan-Headers/include -Isrc/ -Isrc/amd -Isrc/amd/common -Isrc/amd/common/nir -Isrc/amd/compiler -Isrc/amd/vulkan -Isrc/amd/vulkan/nir -Isrc/vulkan/runtime -Isrc/vulkan/runtime/bvh -Isrc/vulkan/util -Isrc/compiler -Isrc/compiler/nir -Isrc/compiler/spirv -Isrc/gallium/include -Isrc/mesa -Isrc/mesa/main -Isrc/util -Icmd/psbc -Iinclude/mesa -D_GNU_SOURCE -D_XOPEN_SOURCE=700 -DUTIL_ARCH_LITTLE_ENDIAN=1 -DUTIL_ARCH_BIG_ENDIAN=0 -DHAVE_STRUCT_TIMESPEC=1 -DHAVE_PTHREAD=1
           CFLAGS=-std=gnu11 -O2 -g -Wall -Wno-unused-function -Wno-unused-variable $(SHARED_FLAGS)
           CXXFLAGS=-std=c++17 -O2 -g -Wall -Wno-unused-function -Wno-unused-variable $(SHARED_FLAGS)
           LDFLAGS=-lm -pthread -ldl
@@ -74,6 +74,8 @@ jobs:
           test -s src/compiler/builtin_types.h
           python3 src/compiler/builtin_types_c.py src/compiler/builtin_types.c
           test -s src/compiler/builtin_types.c
+          python3 src/vulkan/util/vk_struct_type_cast_gen.py --xml src/vulkan/registry/vk.xml --out src/vulkan/util/vk_struct_type_cast.h --beta false
+          test -s src/vulkan/util/vk_struct_type_cast.h
       - name: Build pinned opengnm-psbc host compiler
         working-directory: .deps/opengnm-psbc
         run: |
