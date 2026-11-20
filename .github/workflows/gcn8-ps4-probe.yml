@@ -5,6 +5,8 @@ on:
     branches: [feature/gcn8-numeric-kernels]
     paths:
       - ".github/workflows/gcn8-ps4-probe.yml"
+      - "platform/ps4/gcn8/shaders/**"
+      - "platform/ps4/gcn8/README.md"
 
 permissions:
   contents: read
