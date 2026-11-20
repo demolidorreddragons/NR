@@ -41,13 +41,13 @@ This ledger records the next 40 work items. A task is **DONE** only when its sta
 |---:|---|---|---|
 | 71 | Determine actual shader resource ABI | **BLOCKED BY 70** | Emitted metadata and ISA identify resource classes and user-data mapping. |
 | 72 | Validate read/write descriptor representation | **BLOCKED BY 71** | Descriptor bytes independently checked against shader ABI. |
-| 73 | Establish supported GPU memory type/protection | **PENDING** | Firmware/API evidence and safe allocation constraints. |
-| 74 | Establish CPU/GPU address mapping | **BLOCKED BY 73** | Valid GPU VA, alignment and ownership semantics documented. |
-| 75 | Implement bounded GPU buffer lifecycle | **BLOCKED BY 73–74** | Allocation/map/unmap/release with failure-path tests. |
-| 76 | Implement cache-coherency protocol | **BLOCKED BY 74** | Verified flush/invalidate and ordering semantics. |
+| 73 | Establish supported GPU memory type/protection | **PARTIAL — API CANDIDATE IDENTIFIED** | Pinned OpenGNM VideoOut helper uses WC_GARLIC + CPU/GPU RW; compute-buffer suitability is not established. |
+| 74 | Establish CPU/GPU address mapping | **PARTIAL — DIRECT-MEMORY OFFSET FOUND** | Helper retains CPU mapping and direct-memory offset; generic compute GPU-VA translation remains unproven. |
+| 75 | Implement bounded GPU buffer lifecycle | **PARTIAL — UPSTREAM CANDIDATE REVIEWED** | OpenGNM helper checks alignment/overflow and rolls back map failure; NR compute lifecycle not implemented. |
+| 76 | Implement cache-coherency protocol | **BLOCKED** | No compute-buffer flush/invalidate sequence verified. |
 | 77 | Configure compute stage from real shader metadata | **BLOCKED BY 70** | Register setup matches compiled binary, not guessed constants. |
-| 78 | Build command-buffer recording path | **BLOCKED BY 71–77** | Correct resource binding and dispatch packet construction. |
-| 79 | Implement submission, completion and recovery | **BLOCKED BY 78** | Verified queue lifecycle, timeout/error path and resource lifetime. |
+| 78 | Build command-buffer recording path | **PARTIAL — API SURFACE DOCUMENTED** | CS bind, V# user-data and dispatch packet helpers identified; resource ABI still blocks safe binding. |
+| 79 | Implement submission, completion and recovery | **PARTIAL — API SURFACE DOCUMENTED** | Submit and submit-done APIs identified; NR compute lifecycle/timeout/recovery unimplemented. |
 | 80 | Build isolated GNM compute harness | **BLOCKED BY 79** | Minimal reproducible harness with logs and cleanup. |
 
 ## Phase 14 — Hardware validation, model and renderer
@@ -93,3 +93,6 @@ Task 67 structural validation was hardened in commit `9dbebb41c8ef61a5b6f4797e6a
 
 
 Tasks 57–59 received additional CI gates in commit `6570ece7959f36f4e15268d1a4512fc2118baa53`: PSBC CLI help must advertise PS4 Pro NEO/GFX8, malformed SPIR-V must be rejected without producing an output file, and the artifact report records host/compiler tool versions plus the PSBC executable hash. These gates await the PSBC host build completing successfully.
+
+
+The pinned GNM memory/submission investigation is recorded in `docs/REA_GNM_MEMORY_SUBMIT_FINDINGS.md` (commit `e91ca768598a61a2f69ae9ec48974740c37e3a4d`). It narrows the candidate APIs but deliberately does not infer compute memory semantics from the VideoOut helper.
