@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+import random
 import struct
 
 
@@ -111,6 +112,37 @@ def test_tiled_gemm_mapping() -> None:
 
 
 
+
+def test_tiled_gemm_randomized_and_beta_zero_nan() -> None:
+    rng = random.Random(0x6C434E38)
+    for _ in range(40):
+        m = rng.randint(1, 35)
+        n = rng.randint(1, 35)
+        k = rng.randint(1, 37)
+        a = [rng.uniform(-2.0, 2.0) for _ in range(m * k)]
+        b = [rng.uniform(-2.0, 2.0) for _ in range(k * n)]
+        c = [rng.uniform(-1.0, 1.0) for _ in range(m * n)]
+        alpha = rng.uniform(-1.5, 1.5)
+        beta = rng.uniform(-0.75, 0.75)
+        got = tiled_gemm_emulation(a, b, m, n, k, alpha, beta, c)
+        for row in range(m):
+            for col in range(n):
+                dot = sum(a[row * k + inner] * b[inner * n + col] for inner in range(k))
+                expected = alpha * dot + beta * c[row * n + col]
+                assert math.isclose(got[row * n + col], expected, rel_tol=1e-11, abs_tol=1e-10), (
+                    m, n, k, row, col, got[row * n + col], expected
+                )
+
+    # The tiled shader must not read C when beta is zero.
+    m, n, k = 17, 19, 23
+    a = [1.0] * (m * k)
+    b = [2.0] * (k * n)
+    c = [math.nan] * (m * n)
+    got = tiled_gemm_emulation(a, b, m, n, k, 1.0, 0.0, c)
+    assert all(value == 2.0 * k for value in got)
+
+
+
 def scalar_gemm_beta_zero(a, b, c, m: int, n: int, k: int, alpha: float, beta: float):
     """Reference the shader's contract that beta=0 does not consume C."""
     out = [0.0] * (m * n)
@@ -173,6 +205,7 @@ def main() -> None:
     assert encode_e4m3fn(-0.0) == 0x80
 
     test_tiled_gemm_mapping()
+    test_tiled_gemm_randomized_and_beta_zero_nan()
     test_beta_zero_does_not_consume_nan_c()
     test_e4m3fn_edge_rounding()
 
@@ -182,7 +215,7 @@ def main() -> None:
     assert half(65504.0) == 65504.0
     assert half(1.00048828125) == 1.0  # ties-to-even
 
-    print("PASS: E4M3FN round-trip/edge rounding, binary16 fixtures, beta=0 NaN isolation, tiled GEMM mapping and edge dimensions")
+    print("PASS: E4M3FN round-trip/edge rounding, binary16 fixtures, beta=0 NaN isolation, tiled GEMM mapping, randomized shapes and beta=0 NaN isolation")
 
 
 if __name__ == "__main__":
