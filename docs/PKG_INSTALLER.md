@@ -28,3 +28,18 @@ O filtro do workflow de QA foi ampliado para incluir a branch de trabalho. A pr�
 **Decisão atual: NÃO APROVADO PARA INSTALAÇÃO NO PS4 PRO.** Não executar o eboot do instalador: ele grava em `/data/GoldHEN/plugins` e altera `/data/GoldHEN/plugins.ini`. Nenhuma operação no console está autorizada por esta auditoria.
 
 Relatório completo: [docs/RELEASE_AUDIT_006.md](RELEASE_AUDIT_006.md).
+
+## Transação e recuperação — revisão em 20/11/2026
+
+O instalador foi alterado para não ativar o PRX imediatamente após a cópia:
+1. O PRX novo é copiado para `DEST_TMP` e verificado byte a byte, mas permanece em staging.
+2. A nova configuração `plugins.ini` também é preparada em `CONFIG_TMP`, inclusive quando a entrada do plugin já existe.
+3. Antes do commit, arquivos existentes são movidos para `*.pne-backup`. Se já houver qualquer backup, a instalação aborta sem sobrescrevê-lo.
+4. O PRX staged e a configuração staged são promovidos. Se uma promoção falhar, o instalador tenta remover o PRX novo e restaurar os arquivos anteriores.
+5. Backups anteriores são retidos mesmo após sucesso; não são apagados automaticamente.
+
+**Limitações:** dois arquivos em caminhos distintos não podem ser trocados atomicamente como uma única operação POSIX. A rotina reduz a janela de inconsistência e tenta rollback, mas falha de energia/kernel no meio do commit ainda pode exigir recuperação manual. Se o rollback também falhar, o log indica que os backups devem ser inspecionados.
+
+**Recuperação manual:** antes de nova tentativa, verificar `/data/GoldHEN/plugins/ps4_neural_engine.prx.pne-backup` e `/data/GoldHEN/plugins.ini.pne-backup`. Não apagar backups automaticamente. Restaurar somente após identificar qual versão está ativa e preservar uma cópia dos logs.
+
+A revisão estática não substitui compilação, testes de falha em filesystem compatível, QA independente do PKG, nem teste de hardware. O instalador continua **não aprovado para instalação** até esses gates passarem.
