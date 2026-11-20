@@ -89,6 +89,10 @@ def validate(manifest_path: Path, inventory_path: Path | None = None,
         stage_map[sid]["spans"].append((off, off + length, name))
         present.add(block); total += length
 
+    missing_blocks = sorted(set(range(blocks)) - present)
+    if missing_blocks:
+        raise ValidationError(f"manifest is missing tensor records for blocks: {missing_blocks}")
+
     coverage = {}
     for sid, s in stage_map.items():
         spans = sorted(s["spans"]); end = 0; gaps = 0
