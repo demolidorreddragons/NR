@@ -43,6 +43,10 @@ def verify(directory: Path) -> int:
     mismatched = 0
     for name, metadata in EXPECTED.items():
         path = directory / name
+        if path.is_symlink():
+            print(f"INVALID  {name}: symbolic links are not accepted")
+            mismatched += 1
+            continue
         if not path.is_file():
             print(f"MISSING  {name}")
             missing += 1
