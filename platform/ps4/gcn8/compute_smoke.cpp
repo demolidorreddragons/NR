@@ -128,9 +128,11 @@ extern "C" int pne_gcn8_compute_smoke_run(const char* shader_path,
                                            const char* log_path) {
     Logger log(log_path);
     log.message("PNE_GCN8_COMPUTE_SMOKE_BEGIN");
+    log.message("STAGE=ENTER_COMPUTE_SMOKE");
 
     uint8_t* shader_file = nullptr;
     size_t shader_file_size = 0;
+    log.message("STAGE=BEFORE_SHADER_OPEN");
     if (!read_file(shader_path, &shader_file, &shader_file_size)) {
         log.message("RESULT=FAIL; REASON=SHADER_FILE_READ");
         return 10;
@@ -166,11 +168,13 @@ extern "C" int pne_gcn8_compute_smoke_run(const char* shader_path,
     log.message("SLOT_POINTER_SEMANTICS=OPEN_GNM_START_POINTER_ASSUMPTION; FPPS4_ALTERNATIVE_UNRESOLVED");
 
     DirectAllocation memory;
+    log.message("STAGE=BEFORE_DIRECT_MEMORY_ALLOCATE");
     if (!memory.allocate()) {
         log.message("RESULT=FAIL; REASON=DIRECT_MEMORY_ALLOC_OR_MAP");
         std::free(shader_file);
         return 13;
     }
+    log.message("STAGE=DIRECT_MEMORY_ALLOCATED");
     const uint64_t base = static_cast<uint64_t>(
         reinterpret_cast<uintptr_t>(memory.mapped));
     log.line("DIRECT_MEMORY_BASE", base);
@@ -279,6 +283,7 @@ extern "C" int pne_gcn8_compute_smoke_run(const char* shader_path,
     cmd.cmdptr = dcb;
     cmd.sizedwords = kDcbDwords;
 
+    log.message("STAGE=BEFORE_GNM_DEFAULT_STATE");
     const uint32_t initial_dwords =
         sceGnmDispatchInitDefaultHardwareState(dcb, kDcbDwords);
     if (initial_dwords == 0 || initial_dwords >= kDcbDwords) {
@@ -322,10 +327,12 @@ extern "C" int pne_gcn8_compute_smoke_run(const char* shader_path,
     log.line("DEFAULT_STATE_DWORDS", initial_dwords);
     log.line("DCB_USED_DWORDS", static_cast<uint64_t>(cmd.cmdptr - dcb));
 
+    log.message("STAGE=BEFORE_GNM_SUBMIT");
     sceGnmFlushGarlic();
     void* dcb_addresses[1] = {dcb};
     uint32_t dcb_sizes[1] = {
         static_cast<uint32_t>((cmd.cmdptr - dcb) * sizeof(uint32_t))};
+    log.message("STAGE=GNM_SUBMIT_CALL");
     const int32_t submit_result = sceGnmSubmitCommandBuffers(
         1, dcb_addresses, dcb_sizes, nullptr, nullptr);
     if (submit_result != 0) {
