@@ -39,6 +39,8 @@ jobs:
           assert 'abi_status=unverified' in build_script and 'hardware_status=not_tested' in build_script, 'manifest must not claim unproven compatibility'
           print('Installer transaction and release-manifest invariants passed')
           PY
+      - name: Validate GCN8 numeric reference and tiled mapping
+        run: python3 tools/test_gcn8_numeric.py
       - name: Configure
         run: cmake -S . -B build
       - name: Build
