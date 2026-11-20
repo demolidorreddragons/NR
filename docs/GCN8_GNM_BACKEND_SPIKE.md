@@ -66,9 +66,13 @@ The first hardware backend should own these operations explicitly:
    one `PTR_INDIRECTRESOURCETABLE` pointer at user register 2. Pinned PSBC source
    explicitly defines storage buffers as 16-byte V# entries in set 0 at
    binding offsets N×64; the four GEMM bindings occupy offsets 0/64/128/192.
-   The pointer-user-data setter is the candidate for the table pointer, not
-   four direct V# user-data writes. Writable descriptor fields, GPU VA
-   constraints and cache policy still require validation.
+   OpenGNM's generic `sceGnmDrawCmdSetPointerUserData` is not a firmware
+   export and its source emits a generic `SET_SH_REG` packet without the
+   compute-engine type bit. NR now has a local
+   `pne_gcn8_set_cs_indirect_resource_table_pointer` packet writer that sets
+   `PKT3_SHADER_TYPE_S(1)` and writes the 64-bit user-data pair at CS register
+   2:3 (high dword zero). Its PRX compile/link smoke is pending. Writable V#
+   fields, GPU VA constraints and cache policy still require validation.
 5. Bind the 20-byte parameter block using the actual GNM user-data/constant
    mechanism; the current host struct size alone does not prove this ABI.
 6. Emit dispatch dimensions from `GemmDispatch.groups_x/groups_y`, with the
