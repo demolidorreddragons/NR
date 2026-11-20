@@ -198,19 +198,31 @@ extern "C" int pne_gcn8_compute_smoke_run(const char* shader_path,
     }
     *fence = 0;
 
-    GnmBuffer input_descriptor{};
-    sceGnmBufSetBaseAddress(&input_descriptor, input);
-    input_descriptor.stride = sizeof(float);
-    input_descriptor.numrecords = kElementCount;
-    sceGnmBufSetFormat(&input_descriptor, GNM_FMT_R32_FLOAT);
-    sceGnmBufSetMemoryType(&input_descriptor, GNM_MEMORY_READONLY, false, false);
+    // Build the four-dword GNM descriptors directly. OpenGNM's convenience
+    // setters call sceGnmWriteMsg on invalid input; that optional diagnostic
+    // import is not exported by the pinned OpenOrbis import library.
+    const auto make_float_buffer = [](GnmBuffer* descriptor, float* address,
+                                      GnmMemoryType memory_type) {
+        const uintptr_t gpu_address = reinterpret_cast<uintptr_t>(address);
+        *descriptor = {};
+        descriptor->baseaddress = static_cast<uint32_t>(gpu_address);
+        descriptor->baseaddresshi = (gpu_address >> 32) & 0xFFFu;
+        descriptor->stride = sizeof(float);
+        descriptor->numrecords = kElementCount;
+        const GnmDataFormat format = GNM_FMT_R32_FLOAT;
+        descriptor->numformat = static_cast<GnmBufNumFormat>(format.chantype);
+        descriptor->dataformat = static_cast<GnmBufferFormat>(format.surfacefmt);
+        descriptor->dstselx = format.chanx;
+        descriptor->dstsely = format.chany;
+        descriptor->dstselz = format.chanz;
+        descriptor->dstselw = format.chanw;
+        sceGnmBufSetMemoryType(descriptor, memory_type, false, false);
+    };
 
+    GnmBuffer input_descriptor{};
+    make_float_buffer(&input_descriptor, input, GNM_MEMORY_READONLY);
     GnmBuffer output_descriptor{};
-    sceGnmBufSetBaseAddress(&output_descriptor, output);
-    output_descriptor.stride = sizeof(float);
-    output_descriptor.numrecords = kElementCount;
-    sceGnmBufSetFormat(&output_descriptor, GNM_FMT_R32_FLOAT);
-    sceGnmBufSetMemoryType(&output_descriptor, GNM_MEMORY_UNCACHED, false, false);
+    make_float_buffer(&output_descriptor, output, GNM_MEMORY_UNCACHED);
 
     std::memset(table_bytes, 0, 80);
     std::memcpy(table_bytes, &input_descriptor, sizeof(input_descriptor));
