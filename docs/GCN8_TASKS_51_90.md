@@ -9,8 +9,8 @@ This ledger records the next 40 work items. A task is **DONE** only when its sta
 
 | # | Work item | State | Acceptance evidence |
 |---:|---|---|---|
-| 51 | Correct Linux `sysconf` feature detection in host build | **PATCHED — REVALIDATION RUNNING** | Workflow commit `cb66861b05fbe9601300b3bce39f99cc212447d4` defines `HAVE_SYSCONF=1`; rerun must pass C compilation. |
-| 52 | Audit host OS feature macros against pinned Mesa configuration | **PARTIAL — HOST SYSCONF VERIFIED BY PROBE PENDING** | Pinned `config.orbis.mak` also defines `HAVE_SYSCONF=1`; Linux CI now compiles/runs a `sysconf` probe before PSBC. Full `HAVE_*` audit remains open. |
+| 51 | Correct Linux `sysconf` feature detection in host build | **PATCHED — REVALIDATION PENDING** | `HAVE_SYSCONF=1` and a compiled POSIX probe are present; latest workflow has not reached PSBC compilation. |
+| 52 | Audit host OS feature macros against pinned Mesa configuration | **PARTIAL — SYSCONF SOURCE VERIFIED** | Pinned source and Orbis config use `HAVE_SYSCONF`; CI capability probe is implemented but latest run has not executed it. Full `HAVE_*` audit remains open. |
 | 53 | Separate host-platform and PS4-target configuration | **DOCUMENTED** | PSBC CLI is built for Linux host; `-n` selects PS4 NEO/GFX8 output. No cross-compile of the CLI is implied. |
 | 54 | Resolve subsequent missing headers or generated files | **PENDING** | Only fix errors reproduced in CI logs; preserve upstream declarations. |
 | 55 | Reproduce clean PSBC build | **BLOCKED BY 51** | Clean runner build completes from pinned revisions. |
@@ -28,9 +28,9 @@ This ledger records the next 40 work items. A task is **DONE** only when its sta
 | 62 | Compile tiled FP32 GEMM to SPIR-V | **BLOCKED BY 60** | Validated SPIR-V artifact and hash. |
 | 63 | Compile FP16-emulation shader to SPIR-V | **BLOCKED BY 60** | Validated artifact; no native FP16 claim. |
 | 64 | Compile E4M3 encode/decode shaders to SPIR-V | **BLOCKED BY 60** | Both artifacts validated; software conversion semantics documented. |
-| 65 | Validate all SPIR-V modules | **IMPLEMENTED — CI REVALIDATION PENDING** | Workflow installs `spirv-tools` and runs `spirv-val --target-env vulkan1.1` on all five modules before PSBC conversion. |
+| 65 | Validate all SPIR-V modules | **IMPLEMENTED — CI REVALIDATION PENDING** | Workflow installs `spirv-tools`; corrected shell expansion now validates each of the five module paths using `spirv-val --target-env vulkan1.1`. |
 | 66 | Compile all five shaders for PS4 NEO/GFX8 | **PENDING** | Five non-empty GNM shader binaries from pinned PSBC with `-n`. |
-| 67 | Validate GNM containers and CRCs | **PENDING** | Independent structural checks and negative malformed-container tests. |
+| 67 | Validate GNM containers and CRCs | **IMPLEMENTED — CI REVALIDATION PENDING** | Added code-range/slot bounds checks plus negative controls for truncated header and corrupted CRC; must run on real compiler output. |
 | 68 | Generate immutable shader artifact manifest | **IMPLEMENTED — CI REVALIDATION PENDING** | Container report now records source/SPIR-V/GNM hashes, sizes and pinned compiler/dependency revisions; report is included in uploaded artifact. |
 | 69 | Extract raw OrbShdr metadata | **PENDING** | Offsets/lengths and raw fields preserved with bounds checks. |
 | 70 | Decode ISA and resource/register metadata | **PENDING** | Disassembly and independently checked VGPR/SGPR/LDS/scratch/wave/resource interpretation. |
@@ -83,7 +83,10 @@ Proceed in dependency order. When an external prerequisite is absent (PS4 Pro te
 The scalar FP32 and FP16-emulation GEMM shaders now skip reading C when beta is exactly zero, preventing NaN propagation from an unused residual buffer. Host regression tests cover this contract and E4M3FN edge behavior. This does not count as shader compilation or GPU execution.
 
 
-Task 65 implementation was added to the shader workflow in commit `1809a26942db7d25f61e4620de0c3e88816d63bf`. It is not marked passed until a run validates all five generated SPIR-V modules.
+Task 65 implementation was added in commit `1809a26942db7d25f61e4620de0c3e88816d63bf`; commit `5849ef2b` fixed a shell-variable escaping error that would have prevented the validator from opening the five module paths. No SPIR-V validation is marked passed until CI executes it.
 
 
 Task 68 provenance fields and report artifact upload were added in commit `5b91e7e0d4c38ccbf64c66641b8611799f3b8656`. Task 69 raw OrbShdr offsets and fields were already collected by the workflow's report code, but their correctness remains subject to a successful build and later independent interpretation.
+
+
+Task 67 structural validation was hardened in commit `9dbebb41c8ef61a5b6f4797e6a25a0421edd2477`: the report stage now rejects invalid code ranges and input-usage slot ranges, and includes truncated-header and corrupted-CRC negative controls. The checks are implemented but await actual GNM shader files.
