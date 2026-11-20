@@ -107,6 +107,18 @@ jobs:
         run: |
           make -j2
           test -x opengnm-psbc
+      - name: Verify PSBC CLI target and reject malformed input
+        working-directory: .deps/opengnm-psbc
+        run: |
+          ./opengnm-psbc -h | tee /tmp/psbc-help.txt
+          grep -F "PS4 Pro (NEO/GFX8)" /tmp/psbc-help.txt
+          mkdir -p /tmp/psbc-negative
+          printf '\003\002\043\007' > /tmp/psbc-negative/invalid.spv
+          if ./opengnm-psbc -s compute -f /tmp/psbc-negative/invalid.spv -o /tmp/psbc-negative/invalid.sb -n; then
+            echo "PSBC unexpectedly accepted malformed SPIR-V" >&2
+            exit 1
+          fi
+          test ! -e /tmp/psbc-negative/invalid.sb
       - name: Compile NR compute shaders to SPIR-V
         run: |
           mkdir -p dist/ps4/gcn8
@@ -134,12 +146,23 @@ jobs:
           import importlib.util
           import json
           import struct
+          import subprocess
+          import platform
           from pathlib import Path
           spec = importlib.util.spec_from_file_location("verify_sb", ".deps/opengnm-psbc/tests/verify_sb.py")
           module = importlib.util.module_from_spec(spec)
           spec.loader.exec_module(module)
           shaders = ("gemm_fp32_wave64_tiled", "gemm_fp32", "gemm_fp16_accum", "e4m3_decode", "e4m3_encode")
           report = []
+          tool_versions = {
+              "host": platform.platform(),
+              "python": platform.python_version(),
+              "gcc": subprocess.check_output(["gcc", "--version"], text=True).splitlines()[0],
+              "glslang": subprocess.check_output(["glslangValidator", "--version"], text=True).splitlines()[0],
+              "spirv_val": subprocess.check_output(["spirv-val", "--version"], text=True).splitlines()[0],
+              "psbc_cli": subprocess.check_output([".deps/opengnm-psbc/opengnm-psbc", "-h"], text=True).splitlines()[0],
+              "psbc_binary_sha256": hashlib.sha256(Path(".deps/opengnm-psbc/opengnm-psbc").read_bytes()).hexdigest(),
+          }
           for shader in shaders:
               path = Path("dist/ps4/gcn8") / f"{shader}.sb"
               if not module.verify_shader(str(path), module.GNM_SHADER_COMPUTE):
@@ -171,6 +194,7 @@ jobs:
                   "opengnm_commit": "4b295ca54c82c83acf308d1c646a2dfa9ae57350",
                   "spirv_headers_commit": "09913f088a1197aba4aefd300a876b2ebbaa3391",
                   "vulkan_headers_tag": "v1.4.328",
+                  "tool_versions": tool_versions,
                   "bytes": len(data),
                   "sha256": hashlib.sha256(data).hexdigest(),
                   "pssl_shader_type": data[12],
