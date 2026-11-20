@@ -154,6 +154,7 @@ jobs:
             dist/ps4/ps4_neural_engine.prx
             dist/ps4/ps4_neural_engine.elf
             dist/pkg/*.pkg
+            dist/pkg/audit/*
             dist/goldhen/*.zip
             dist/goldhen/*.sha256
           if-no-files-found: error
@@ -224,6 +225,9 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "Independent PKG extraction failed." }
           $embeddedSfo = Get-ChildItem $out -Recurse -File -Filter param.sfo | Select-Object -First 1
           if (-not $embeddedSfo) { throw "Embedded PARAM.SFO missing." }
+          $stagedSfoHash = (Get-FileHash -Algorithm SHA256 $sfo).Hash.ToLowerInvariant()
+          $embeddedSfoHash = (Get-FileHash -Algorithm SHA256 $embeddedSfo.FullName).Hash.ToLowerInvariant()
+          if ($stagedSfoHash -ne $embeddedSfoHash) { throw "Packaged PARAM.SFO differs from staged GP4 SFO." }
           $sfoText = (dotnet "$tool" sfo read "$($embeddedSfo.FullName)" 2>&1) -join [Environment]::NewLine
           $sfoText | Out-File qa-output/param-sfo.txt
           if ($LASTEXITCODE -ne 0) { throw "Embedded SFO read failed." }
@@ -243,6 +247,7 @@ jobs:
           "PKG_BYTES=$((Get-Item $pkg).Length)" | Out-File qa-output/qa-report.txt -Append
           "PKG_SHA256=$pkgHash" | Out-File qa-output/qa-report.txt -Append
           "GP4_SHA256=$gp4Hash" | Out-File qa-output/qa-report.txt -Append
+          "PARAM_SFO_SHA256=$embeddedSfoHash" | Out-File qa-output/qa-report.txt -Append
           "PRX_SHA256=$embeddedPrxHash" | Out-File qa-output/qa-report.txt -Append
           "EBOOT_BYTES=$($eboot.Length)" | Out-File qa-output/qa-report.txt -Append
           "CATEGORY=gde; APP_VER=01.02; VERSION=01.02; STORAGE=digital50" | Out-File qa-output/qa-report.txt -Append
