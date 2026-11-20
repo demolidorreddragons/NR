@@ -22,4 +22,10 @@ extern "C" std::int32_t pne_gcn8_set_cs_indirect_resource_table_pointer(
     std::uint64_t table_gpu_address,
     std::uint32_t table_bytes);
 
+// Emits a cache-flush-and-invalidate EOP fence with a 32-bit completion value.
+extern "C" std::int32_t pne_gcn8_emit_eop_fence(
+    GnmCommandBuffer* command_buffer,
+    std::uint64_t fence_gpu_address,
+    std::uint32_t completion_value);
+
 #endif
