@@ -127,6 +127,18 @@ ordinary `malloc` addresses as GPU addresses.
 10. Compare output against the independent CPU reference and record error,
     latency, and firmware/toolchain identifiers.
 
+## Current execution gate
+
+The compiler-side ABI is now sufficiently concrete to define the **next** implementation boundary, but not to cross it blindly. The runtime gate remains closed until a reversible hardware probe establishes, independently, all of the following:
+
+- a GPU-visible allocation/mapping pair valid for a compute buffer;
+- construction of one writable V# descriptor whose base address and stride are accepted by the generated shader;
+- descriptor-table placement below the compiler's 32-bit table-pointer limit;
+- command-buffer initialization, CS shader state and pointer user-data recording;
+- submit/completion behavior and CPU-visible output after the documented cache transition.
+
+The first hardware probe must use a tiny scalar/write-read shader, not GEMM or the 71-block network. It must have a bounded allocation, a unique test address, deterministic expected output, timeout/recovery handling, and no installer/plugin changes. Failure at any gate leaves the runtime unmodified.
+
 ## Explicit non-claims
 
 - No GPU memory has been allocated by this project runtime.
