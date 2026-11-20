@@ -1,11 +1,10 @@
 name: GCN8 PS4 Pro compile probe
 
 on:
-  pull_request:
-    branches: [main]
+  push:
+    branches: [feature/gcn8-numeric-kernels]
     paths:
       - ".github/workflows/gcn8-ps4-probe.yml"
-      - "platform/ps4/gcn8/shaders/gemm_fp32_wave64_tiled.comp"
 
 permissions:
   contents: read
