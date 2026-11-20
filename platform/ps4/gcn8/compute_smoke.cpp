@@ -159,6 +159,11 @@ extern "C" int pne_gcn8_compute_smoke_run(const char* shader_path,
     log.line("SHADER_FILE_BYTES", shader_file_size);
     log.line("SHADER_CODE_BYTES", shader_view.code_size);
     log.line("SHADER_CODE_OFFSET", shader_view.code_offset);
+    log.line("CHUNK_USAGE_BASE_OFFSET_DWORDS",
+             shader_view.chunk_usage_base_offset_dwords);
+    log.line("INPUT_USAGE_SLOT_COUNT", shader_view.slot_count);
+    log.line("INPUT_USAGE_SLOT_TABLE_OFFSET", shader_view.slot_table_offset);
+    log.message("SLOT_POINTER_SEMANTICS=OPEN_GNM_START_POINTER_ASSUMPTION; FPPS4_ALTERNATIVE_UNRESOLVED");
 
     DirectAllocation memory;
     if (!memory.allocate()) {
