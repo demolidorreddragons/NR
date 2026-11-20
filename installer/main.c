@@ -13,6 +13,15 @@
 #include <unistd.h>
 #include <orbis/libkernel.h>
 
+/* Retry interrupted reads without advancing only one side of a byte comparison. */
+static ssize_t read_retry(int fd, void* buffer, size_t capacity) {
+    ssize_t n;
+    do {
+        n = read(fd, buffer, capacity);
+    } while (n < 0 && errno == EINTR);
+    return n;
+}
+
 #define SOURCE_PRX "/app0/ps4_neural_engine.prx"
 #define DEST_DIR "/data/GoldHEN/plugins"
 #define DEST_PRX DEST_DIR "/ps4_neural_engine.prx"
@@ -63,10 +72,9 @@ static int copy_prx(char* error, size_t error_size) {
     int ok = 1;
     int saved_errno = 0;
     for (;;) {
-        ssize_t n = read(in, buffer, sizeof(buffer));
+        ssize_t n = read_retry(in, buffer, sizeof(buffer));
         if (n == 0) break;
         if (n < 0) {
-            if (errno == EINTR) continue;
             ok = 0;
             saved_errno = errno;
             break;
@@ -134,11 +142,9 @@ static int copy_prx(char* error, size_t error_size) {
     char source_buffer[16384], destination_buffer[16384];
     long long verified_bytes = 0;
     for (;;) {
-        ssize_t a = read(verify_src, source_buffer, sizeof(source_buffer));
-        if (a < 0 && errno == EINTR) continue;
+        ssize_t a = read_retry(verify_src, source_buffer, sizeof(source_buffer));
         if (a < 0) { ok = 0; saved_errno = errno; break; }
-        ssize_t b = read(verify_dst, destination_buffer, sizeof(destination_buffer));
-        if (b < 0 && errno == EINTR) continue;
+        ssize_t b = read_retry(verify_dst, destination_buffer, sizeof(destination_buffer));
         if (b < 0) { ok = 0; saved_errno = errno; break; }
         if (a != b || (a > 0 && memcmp(source_buffer, destination_buffer, (size_t)a) != 0)) {
             ok = 0;
