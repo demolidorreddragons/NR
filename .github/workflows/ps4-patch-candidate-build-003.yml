@@ -245,6 +245,8 @@ jobs:
           # must be a non-game application package, not GD_AC addon content.
 
           "=== ADD PATCH PAYLOAD ===" | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
+          "PATCH_SOURCE_EBOOT_SHA256=$((Get-FileHash -Algorithm SHA256 $eboot).Hash)" | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
+          "PATCH_SOURCE_PRX_SHA256=$((Get-FileHash -Algorithm SHA256 $prx).Hash)" | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
           & $pubCmd gp4_file_add --force --pfs_compression enable $eboot "eboot.bin" $gp4 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
           if ($LASTEXITCODE -ne 0) { throw "Adding eboot.bin to GP4 failed." }
           & $pubCmd gp4_file_add --force --pfs_compression enable $prx "ps4_neural_engine.prx" $gp4 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
