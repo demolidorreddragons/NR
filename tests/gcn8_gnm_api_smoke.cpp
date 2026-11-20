@@ -7,6 +7,7 @@
 #include "gnm_commandbuffer.h"
 #include "gnm_drawcommandbuffer.h"
 #include "gnm_shaderbinary.h"
+#include "../platform/ps4/gcn8/gnm_resource_binding.h"
 
 using GnmDispatchDirectSignature =
     int32_t (PS4_SYSV_ABI *)(uint32_t*, uint32_t, uint32_t, uint32_t,
@@ -25,8 +26,6 @@ using GnmCmdSetCsShaderSignature =
 using GnmCmdSetVsharpSignature =
     void (*)(GnmCommandBuffer*, GnmShaderStage, uint32_t,
              const GnmBuffer*);
-using GnmCmdSetPointerSignature =
-    void (*)(GnmCommandBuffer*, GnmShaderStage, uint32_t, void*);
 
 using KernelAllocateDirectMemorySignature =
     int32_t (*)(off_t, off_t, size_t, size_t, int32_t, off_t*);
@@ -74,9 +73,12 @@ static_assert(std::is_same<decltype(&sceGnmDrawCmdSetCsShader),
 static_assert(std::is_same<decltype(&sceGnmDrawCmdSetVsharpUserData),
                            GnmCmdSetVsharpSignature>::value,
               "unexpected buffer descriptor binding signature");
-static_assert(std::is_same<decltype(&sceGnmDrawCmdSetPointerUserData),
-                           GnmCmdSetPointerSignature>::value,
-              "unexpected indirect resource table pointer signature");
+using PneGcn8SetResourceTablePointerSignature =
+    int32_t (*)(GnmCommandBuffer*, uint32_t, uint64_t, uint32_t);
+static_assert(std::is_same<
+                  decltype(&pne_gcn8_set_cs_indirect_resource_table_pointer),
+                  PneGcn8SetResourceTablePointerSignature>::value,
+              "unexpected NR compute resource-table pointer helper signature");
 
 // Link references force the PS4 import library to resolve the firmware NIDs.
 // These pointers are never invoked by the smoke executable.
@@ -89,9 +91,9 @@ __attribute__((used)) GnmSubmitCommandBuffersSignature
     pne_gcn8_submit_command_buffers_import = &sceGnmSubmitCommandBuffers;
 __attribute__((used)) GnmSubmitDoneSignature
     pne_gcn8_submit_done_import = &sceGnmSubmitDone;
-__attribute__((used)) GnmCmdSetPointerSignature
-    pne_gcn8_set_indirect_resource_table_import =
-        &sceGnmDrawCmdSetPointerUserData;
+__attribute__((used)) PneGcn8SetResourceTablePointerSignature
+    pne_gcn8_set_indirect_resource_table_packet =
+        &pne_gcn8_set_cs_indirect_resource_table_pointer;
 __attribute__((used)) KernelAllocateDirectMemorySignature
     pne_gcn8_allocate_direct_memory_import = &sceKernelAllocateDirectMemory;
 __attribute__((used)) KernelMapDirectMemorySignature
