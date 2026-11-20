@@ -43,3 +43,5 @@ O instalador foi alterado para não ativar o PRX imediatamente após a cópia:
 **Recuperação manual:** antes de nova tentativa, verificar `/data/GoldHEN/plugins/ps4_neural_engine.prx.pne-backup` e `/data/GoldHEN/plugins.ini.pne-backup`. Não apagar backups automaticamente. Restaurar somente após identificar qual versão está ativa e preservar uma cópia dos logs.
 
 A revisão estática não substitui compilação, testes de falha em filesystem compatível, QA independente do PKG, nem teste de hardware. O instalador continua **não aprovado para instalação** até esses gates passarem.
+
+A verificação automatizada de invariantes do instalador foi adicionada ao workflow `host-tests` e está sendo executada também na branch `feature/gcn8-numeric-kernels`. A aprovação desse teste de host não representa execução do binário no FreeBSD/Orbis nem validação de operações `rename` no filesystem do PS4.
