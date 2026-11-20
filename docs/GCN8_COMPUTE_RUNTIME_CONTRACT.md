@@ -39,10 +39,13 @@ wave64, LDS allocation 2,048 bytes, and no scratch. The compiled workgroup is
 PSBC's compiler log maps SPIR-V storage bindings 0–3 to descriptor-table byte
 offsets 0, 64, 128 and 192 (16-byte descriptor payloads reported for each
 binding). The emitted ISA uses scalar loads from the table pointer and buffer
-load/store instructions. This is useful ABI evidence, but it does not yet
-prove the exact Orbis runtime descriptor class, descriptor encoding, GPU VA
-semantics or the setter API. In particular, do not equate
-`PTR_INDIRECTRESOURCETABLE` with four directly bound V# descriptors.
+load/store instructions. The pinned PSBC source now confirms the compiler-side ABI: each storage
+binding is a 16-byte V# descriptor in descriptor set 0, at byte offset N×64.
+The table pointer is the `PTR_INDIRECTRESOURCETABLE` user-data pointer at
+register 2, so `sceGnmDrawCmdSetPointerUserData` is the matching setter
+candidate. This establishes the generated binary's descriptor class/layout;
+it does not prove the writable V# field values, GPU VA mapping, cache policy
+or runtime setter behavior on PS4 Pro.
 
 The resource-allocation fields are decoded from the pinned Mesa GFX8 register
 JSON. They are compile-time allocations, not runtime occupancy measurements.
@@ -178,8 +181,11 @@ ordinary `malloc` addresses as GPU addresses.
 4. Initialize a command buffer in GPU-visible command memory.
 5. Set CS registers from the generated shader binary metadata.
 6. Bind resources using the descriptor form proven by the metadata.
-7. Emit dispatch dimensions in workgroups, after confirming the generated
-   shader's local size and the helper's packet semantics.
+7. Emit dispatch dimensions as **workgroup counts**, not work-item counts.
+   AMD's GCN `DISPATCH_DIRECT` packet defines DIM_X/Y/Z as dimensions of the
+   thread-group array; the OpenGNM helper writes these fields directly. For
+   the tiled GEMM (8×8 local size, 16×16 output tile), use
+   `ceil(N/16) × ceil(M/16) × 1` groups.
 8. Submit using a supported compute submission path; wait for completion.
 9. Perform the documented GPU-to-CPU cache transition before reading output.
 10. Compare output against the independent CPU reference and record error,
@@ -187,7 +193,7 @@ ordinary `malloc` addresses as GPU addresses.
 
 ## Current execution gate
 
-The compiler-side ABI is now sufficiently concrete to define the **next** implementation boundary, but not to cross it blindly. The runtime gate remains closed until a reversible hardware probe establishes, independently, all of the following:
+The compiler-side descriptor-table ABI and shader metadata parser are now sufficiently concrete to define the **next** implementation boundary, but not to cross it blindly. The runtime gate remains closed until a reversible hardware probe establishes, independently, all of the following:
 
 - a GPU-visible allocation/mapping pair valid for a compute buffer;
 - construction of one writable V# descriptor whose base address and stride are accepted by the generated shader;
@@ -203,7 +209,7 @@ The first hardware probe must use a tiny scalar/write-read shader, not GEMM or t
 - No command buffer has been submitted by this project runtime.
 - No GCN8 dispatch has been executed on a PS4 Pro.
 - No cache-coherency behavior has been measured.
-- No shader resource binding has been proven.
+- No shader resource binding has been exercised on a PS4 Pro.
 
 
 ## Direct-memory SDK references
