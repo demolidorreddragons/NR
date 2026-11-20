@@ -1,0 +1,92 @@
+name: GCN8 shader compiler and GEMM binary
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [feature/gcn8-numeric-kernels]
+    paths:
+      - "platform/ps4/gcn8/shaders/**"
+      - ".github/workflows/gcn8-shader-build.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "platform/ps4/gcn8/shaders/**"
+      - ".github/workflows/gcn8-shader-build.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  build-gfx8-compute:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install host compiler and shader tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential python3 python3-mako glslang-tools
+      - name: Checkout pinned shader compiler and header dependencies
+        run: |
+          git clone https://github.com/PS4-OpenGNM/opengnm-psbc.git .deps/opengnm-psbc
+          git -C .deps/opengnm-psbc checkout 28697f007862427ebec54388ec972ce6e3545912
+          git clone https://github.com/PS4-OpenGNM/opengnm.git .deps/opengnm
+          git -C .deps/opengnm checkout 4b295ca54c82c83acf308d1c646a2dfa9ae57350
+          git clone https://github.com/KhronosGroup/SPIRV-Headers.git .deps/SPIRV-Headers
+          git -C .deps/SPIRV-Headers checkout 1.4.309.0
+          git clone https://github.com/KhronosGroup/Vulkan-Headers.git .deps/Vulkan-Headers
+          git -C .deps/Vulkan-Headers checkout v1.3.296
+      - name: Configure reproducible host compiler build
+        working-directory: .deps/opengnm-psbc
+        run: |
+          cat > config.mak <<'EOF'
+          CC=gcc
+          CXX=g++
+          LD=g++
+          AR=ar
+          PYTHON=python3
+          DESTDIR=/usr/local
+          BINDIR=/usr/local/bin
+          SHARED_FLAGS=-Iinclude/ -Ilibpsbc/ -I../opengnm/include -I../Vulkan-Headers/include -Isrc/ -Isrc/amd -Isrc/amd/common -Isrc/amd/common/nir -Isrc/amd/compiler -Isrc/amd/vulkan -Isrc/amd/vulkan/nir -Isrc/vulkan/runtime -Isrc/vulkan/runtime/bvh -Isrc/vulkan/util -Isrc/compiler -Isrc/compiler/nir -Isrc/compiler/spirv -Isrc/gallium/include -Isrc/mesa -Isrc/mesa/main -Isrc/util -Icmd/psbc -Iinclude/mesa -D_GNU_SOURCE -D_XOPEN_SOURCE=700 -DUTIL_ARCH_LITTLE_ENDIAN=1 -DUTIL_ARCH_BIG_ENDIAN=0 -DHAVE_STRUCT_TIMESPEC=1 -DHAVE_PTHREAD=1
+          CFLAGS=-std=gnu11 -O2 -g -Wall -Wno-unused-function -Wno-unused-variable
+          CXXFLAGS=-std=c++17 -O2 -g -Wall -Wno-unused-function -Wno-unused-variable
+          LDFLAGS=-lm -pthread -ldl
+          EOF
+          test -f ../SPIRV-Headers/include/spirv/spir-v.xml
+          test -f ../Vulkan-Headers/include/vulkan/vulkan.h
+      - name: Build pinned opengnm-psbc host compiler
+        working-directory: .deps/opengnm-psbc
+        run: |
+          make -j2
+          test -x opengnm-psbc
+      - name: Compile NR GEMM compute shader to SPIR-V
+        run: |
+          mkdir -p dist/ps4/gcn8
+          glslangValidator -V --target-env vulkan1.1 platform/ps4/gcn8/shaders/gemm_fp32_wave64_tiled.comp -o dist/ps4/gcn8/gemm_fp32_wave64_tiled.spv
+          test -s dist/ps4/gcn8/gemm_fp32_wave64_tiled.spv
+      - name: Compile SPIR-V to PS4 Pro GFX8 GNM shader binary
+        run: |
+          .deps/opengnm-psbc/opengnm-psbc -s compute -f dist/ps4/gcn8/gemm_fp32_wave64_tiled.spv -o dist/ps4/gcn8/gemm_fp32_wave64_tiled.sb -n
+          test -s dist/ps4/gcn8/gemm_fp32_wave64_tiled.sb
+      - name: Verify GNM shader container and compute metadata
+        run: |
+          python3 - <<'PY'
+          import importlib.util
+          from pathlib import Path
+          spec = importlib.util.spec_from_file_location("verify_sb", ".deps/opengnm-psbc/tests/verify_sb.py")
+          module = importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(module)
+          path = "dist/ps4/gcn8/gemm_fp32_wave64_tiled.sb"
+          if not module.verify_shader(path, module.GNM_SHADER_COMPUTE):
+              raise SystemExit("GFX8 compute shader container validation failed")
+          data = Path(path).read_bytes()
+          if b"OrbShdr" not in data:
+              raise SystemExit("GNM shader binary metadata marker missing")
+          print("GFX8_GEMM_SHADER_BINARY=container-verified; hardware dispatch not performed")
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nr-gcn8-gemm-gfx8-shader
+          path: |
+            dist/ps4/gcn8/gemm_fp32_wave64_tiled.spv
+            dist/ps4/gcn8/gemm_fp32_wave64_tiled.sb
+          if-no-files-found: error
