@@ -102,6 +102,7 @@ int main(int argc, char** argv) {
     assert(view.code_size == kCodeBytes);
     assert(view.slot_table_offset == kSlotTable);
     assert(view.slot_count == 1);
+    assert(view.chunk_usage_base_offset_dwords == 5);
     assert(view.crc32 == 0x12345678);
     assert(view.version_major == 1 && view.version_minor == 0);
     assert(view.target_gpu_mode == 2);
