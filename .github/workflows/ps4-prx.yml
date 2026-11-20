@@ -17,6 +17,7 @@ on:
       - "PKG_BUILD_NUMBER"
       - "docs/PKG_INSTALLER.md"
       - ".github/workflows/ps4-prx.yml"
+      - ".github/workflows/ps4-patch-candidate-build-003.yml"
 
 permissions:
   contents: read
