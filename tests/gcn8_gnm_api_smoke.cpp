@@ -21,8 +21,6 @@ using GnmSubmitCommandBuffersSignature =
 using GnmSubmitDoneSignature = int (PS4_SYSV_ABI *)(void);
 using GnmDispatchInitSignature = uint32_t (PS4_SYSV_ABI *)(uint32_t*, uint32_t);
 using GnmFlushGarlicSignature = void (PS4_SYSV_ABI *)(void);
-using GnmEopSignature =
-    void (*)(GnmCommandBuffer*, GnmEventType, uint64_t, GnmEventDataSel, uint64_t);
 using KernelGetDirectMemorySizeSignature = size_t (*)();
 using KernelMunmapSignature = int32_t (*)(void*, size_t);
 using KernelUsleepSignature = int32_t (*)(uint32_t);
@@ -75,9 +73,6 @@ static_assert(std::is_same<decltype(&sceGnmDispatchInitDefaultHardwareState),
 static_assert(std::is_same<decltype(&sceGnmFlushGarlic),
                            GnmFlushGarlicSignature>::value,
               "unexpected Garlic flush signature");
-static_assert(std::is_same<decltype(&sceGnmDrawCmdEventWriteEop),
-                           GnmEopSignature>::value,
-              "unexpected EOP fence signature");
 static_assert(std::is_same<decltype(&sceKernelGetDirectMemorySize),
                            KernelGetDirectMemorySizeSignature>::value,
               "unexpected direct-memory-size signature");
@@ -101,10 +96,15 @@ static_assert(std::is_same<decltype(&sceGnmDrawCmdSetVsharpUserData),
               "unexpected buffer descriptor binding signature");
 using PneGcn8SetResourceTablePointerSignature =
     int32_t (*)(GnmCommandBuffer*, uint32_t, uint64_t, uint32_t);
+using PneGcn8EopFenceSignature =
+    int32_t (*)(GnmCommandBuffer*, uint64_t, uint32_t);
 static_assert(std::is_same<
                   decltype(&pne_gcn8_set_cs_indirect_resource_table_pointer),
                   PneGcn8SetResourceTablePointerSignature>::value,
               "unexpected NR compute resource-table pointer helper signature");
+static_assert(std::is_same<decltype(&pne_gcn8_emit_eop_fence),
+                           PneGcn8EopFenceSignature>::value,
+              "unexpected NR compute EOP fence helper signature");
 
 // Link references force the PS4 import library to resolve the firmware NIDs.
 // These pointers are never invoked by the smoke executable.
@@ -121,8 +121,6 @@ __attribute__((used)) GnmDispatchInitSignature
     pne_gcn8_dispatch_init_import = &sceGnmDispatchInitDefaultHardwareState;
 __attribute__((used)) GnmFlushGarlicSignature
     pne_gcn8_flush_garlic_import = &sceGnmFlushGarlic;
-__attribute__((used)) GnmEopSignature
-    pne_gcn8_eop_fence_import = &sceGnmDrawCmdEventWriteEop;
 __attribute__((used)) KernelGetDirectMemorySizeSignature
     pne_gcn8_direct_memory_size_import = &sceKernelGetDirectMemorySize;
 __attribute__((used)) KernelMunmapSignature
@@ -132,6 +130,8 @@ __attribute__((used)) KernelUsleepSignature
 __attribute__((used)) PneGcn8SetResourceTablePointerSignature
     pne_gcn8_set_indirect_resource_table_packet =
         &pne_gcn8_set_cs_indirect_resource_table_pointer;
+__attribute__((used)) PneGcn8EopFenceSignature
+    pne_gcn8_emit_eop_fence_packet = &pne_gcn8_emit_eop_fence;
 __attribute__((used)) KernelAllocateDirectMemorySignature
     pne_gcn8_allocate_direct_memory_import = &sceKernelAllocateDirectMemory;
 __attribute__((used)) KernelMapDirectMemorySignature
