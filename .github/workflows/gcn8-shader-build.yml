@@ -70,6 +70,10 @@ jobs:
           test -s src/util/format/u_format_pack.h
           python3 src/util/format/u_format_table.py src/util/format/u_format.yaml > src/util/format/u_format_table.c
           test -s src/util/format/u_format_table.c
+          python3 src/compiler/builtin_types_h.py src/compiler/builtin_types.h
+          test -s src/compiler/builtin_types.h
+          python3 src/compiler/builtin_types_c.py src/compiler/builtin_types.c
+          test -s src/compiler/builtin_types.c
       - name: Build pinned opengnm-psbc host compiler
         working-directory: .deps/opengnm-psbc
         run: |
