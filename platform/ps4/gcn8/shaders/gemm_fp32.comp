@@ -1,0 +1,32 @@
+#version 450
+// Scalar FP32 GEMM reference kernel for GCN8 bring-up and numerical validation.
+// A[M,K] * B[K,N] + beta*C[M,N] -> D[M,N]. Not yet a tiled/performance kernel.
+layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+
+layout(std430, binding = 0) readonly buffer MatrixA { float a[]; };
+layout(std430, binding = 1) readonly buffer MatrixB { float b[]; };
+layout(std430, binding = 2) readonly buffer MatrixC { float c[]; };
+layout(std430, binding = 3) writeonly buffer MatrixD { float d[]; };
+
+layout(push_constant) uniform Params {
+    uint rows;
+    uint columns;
+    uint inner;
+    float alpha;
+    float beta;
+} params;
+
+void main() {
+    uint row = gl_GlobalInvocationID.y;
+    uint column = gl_GlobalInvocationID.x;
+    if (row >= params.rows || column >= params.columns) return;
+
+    float accumulator = 0.0;
+    for (uint k = 0u; k < params.inner; ++k) {
+        accumulator = fma(a[row * params.inner + k],
+                          b[k * params.columns + column],
+                          accumulator);
+    }
+    uint output_index = row * params.columns + column;
+    d[output_index] = fma(params.alpha, accumulator, params.beta * c[output_index]);
+}
