@@ -435,6 +435,7 @@ jobs:
                   "file": str(path),
                   "source_sha256": hashlib.sha256((Path("platform/ps4/gcn8/shaders") / f"{shader}.comp").read_bytes()).hexdigest(),
                   "spirv_sha256": hashlib.sha256((Path("dist/ps4/gcn8") / f"{shader}.spv").read_bytes()).hexdigest(),
+                  "spirv_bytes": (Path("dist/ps4/gcn8") / f"{shader}.spv").stat().st_size,
                   "psbc_commit": "28697f007862427ebec54388ec972ce6e3545912",
                   "opengnm_commit": "4b295ca54c82c83acf308d1c646a2dfa9ae57350",
                   "spirv_headers_commit": "09913f088a1197aba4aefd300a876b2ebbaa3391",
@@ -521,4 +522,5 @@ jobs:
             dist/ps4/gcn8/*.gcn.bin
             dist/ps4/gcn8/*.isa
             dist/ps4/gcn8/gnm-container-report.json
+            dist/ps4/gcn8/spirv-manifest.json
           if-no-files-found: warn
