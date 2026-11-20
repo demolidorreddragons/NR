@@ -1,6 +1,6 @@
 # GCN8 GNM backend spike — API audit
 
-Status: **API discovery only; no GNM backend is implemented or hardware-validated.**
+Status: **PSBC GFX8 host compilation and five shader container/ISA artifacts pass; no GNM runtime backend or hardware validation.**
 
 ## Findings
 
@@ -83,13 +83,11 @@ emission test with a successful PS4 Pro compute dispatch.
       compile-only API/ABI smoke test (`tests/gcn8_gnm_api_smoke.cpp`).
 - [ ] Audit runtime symbol availability, firmware delegation, and link behavior;
       header declarations alone do not prove exports.
-- [ ] Build a minimal PS4 PRX link-smoke using the typed GNM declarations.
+- [x] Build a minimal PS4 PRX link-smoke using the typed GNM declarations (run `44673126332`; compile/link only).
 - [x] Pin an audited `opengnm-psbc` revision and document its GFX8 CLI/build
       prerequisites (`28697f007862427ebec54388ec972ce6e3545912`).
-- [ ] Provision the pinned compiler dependencies and build `opengnm-psbc`
-      reproducibly in CI.
-- [ ] Compile the existing tiled shader to a GFX8 GNM binary; inspect CS
-      metadata and resource usage.
+- [x] Provision the pinned compiler dependencies and build `opengnm-psbc` reproducibly in CI (run `44739871394`).
+- [x] Compile the existing tiled shader to a GFX8 GNM binary; inspect CS metadata and resource usage (compiler-side only; run `44739871394`).
 - [ ] Implement buffer allocation, resource binding, user-data constants,
       command submission, synchronization, and readback.
 - [ ] Run a no-op/known-answer compute smoke test on PS4 Pro before GEMM.
@@ -134,9 +132,4 @@ This verifies compile-time declarations and link-time import resolution only.
 It does not prove firmware runtime availability on a particular console,
 valid resource binding, command submission, synchronization, or GPU execution.
 
-A separate workflow, `.github/workflows/gcn8-shader-build.yml`, now pins
-`opengnm-psbc` and its header dependencies, builds the host compiler, compiles
-the NR tiled GEMM shader for the GFX8/NEO target, and runs the upstream shader
-container verifier. Its first CI run is the acceptance gate; no shader binary
-is considered delivered until that workflow succeeds and the artifact is
-inspected.
+A separate workflow, `.github/workflows/gcn8-shader-build.yml`, pins `opengnm-psbc` and its header dependencies, builds the host compiler, compiles all five NR compute shaders for GFX8/NEO, validates all five containers and CRCs, checks the indirect-resource-table pointer, and disassembles the five GCN code ranges. Run `44739871394` passed; artifact details are in `docs/GCN8_GFX8_ARTIFACT_44739871394.md`. This is host/compiler evidence, not a runtime dispatch.
