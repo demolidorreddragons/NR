@@ -48,6 +48,7 @@ jobs:
           python3 tools/apply_psbc_gfx8_fixes.py .deps/opengnm-psbc
           git -C .deps/opengnm-psbc diff --check
           grep -F "lds_size_per_workgroup = gfxlevel >= GFX7 ? 64 * 1024 : 32 * 1024" .deps/opengnm-psbc/libpsbc/psbc_compile.c
+          grep -F "chunkusageoffset > 0xffu" .deps/opengnm-psbc/libpsbc/psbc_compile.c
           grep -F "Invalid SPIR-V file size" .deps/opengnm-psbc/cmd/psbc/main.c
       - name: Configure reproducible host compiler build
         working-directory: .deps/opengnm-psbc
