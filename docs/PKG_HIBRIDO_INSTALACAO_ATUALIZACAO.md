@@ -104,7 +104,7 @@ Se a versão empacotada for igual à instalada e os hashes coincidirem, retornar
 |---|---|---|
 | H1 | Manifesto de release e hash do PRX no build/runtime | **IMPLEMENTADO — CI REVALIDAÇÃO PENDENTE** | Build e eboot verificam identidade e hash; teste host do SHA-256 passou. |
 | H2 | Máquina de estados NEW/UPDATE/LEGACY/RECOVERY/CONFLICT | **PENDENTE** | Estados ainda não formalizados no eboot. |
-| H3 | Temporários exclusivos e proteção contra symlink | **PARCIAL — IMPLEMENTADO** | `O_CREAT | O_EXCL` rejeita arquivo/link preexistente nos nomes temporários; falta fault injection Orbis. |
+| H3 | Temporários exclusivos e proteção contra symlink | **PARCIAL — IMPLEMENTADO** | `O_CREAT+O_EXCL` rejeita arquivo/link preexistente nos nomes temporários; falta fault injection Orbis. |
 | H4 | Idempotência e detecção de versão/hash | **PENDENTE** | Ainda não compara versão/hash já instalada para retornar ALREADY_CURRENT ou recusar downgrade. |
 | H5 | Fault injection de cada write/fsync/rename/rollback | Nenhum cenário destrói silenciosamente a versão anterior |
 | H6 | QA independente do PKG exato | **IMPLEMENTADO — EXECUÇÃO PENDENTE** | Job Windows separado usa OrbisPkgTool pinado e verifica GP4/SFO/manifesto/hash/payload. |
