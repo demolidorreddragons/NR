@@ -142,7 +142,7 @@ jobs:
                   "crc32": f"{u32(orb + 24):08x}"
               })
               print(f"VERIFIED {shader}: compute container/CRC valid; register metadata still requires ISA decoding")
-          Path("dist/ps4/gcn8/gnm-container-report.json").write_text(json.dumps(report, indent=2) + "\\n")
+          Path("dist/ps4/gcn8/gnm-container-report.json").write_text(json.dumps(report, indent=2))
           PY
       - uses: actions/upload-artifact@v4
         with:
