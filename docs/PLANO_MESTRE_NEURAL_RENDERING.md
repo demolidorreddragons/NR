@@ -287,3 +287,24 @@ Isto **não** comprova instalação, atualização, inicialização ou execuçã
 | B4 — executor de QA realmente independente | **PENDENTE** |
 
 A Fase 0 permanece **EM EXECUÇÃO**. O build PKG bem-sucedido fecha somente a verificação estrutural do pacote; não promove o produto a release aprovada.
+
+## 10. Auditoria estática do PKG 006 — 20/11/2026
+
+Relatório detalhado: [docs/RELEASE_AUDIT_006.md](RELEASE_AUDIT_006.md).
+
+**Decisão:** PKG 006 NÃO APROVADO PARA INSTALAÇÃO no PS4 Pro nesta etapa.
+
+Achados:
+1. O workflow independente `ps4-base-pkg-qa-006.yml` filtrava somente builds da branch `main`; por isso não auditou o artefato do run 44669637925, produzido na branch de trabalho.
+2. O instalador substitui o PRX anterior sem backup/rollback transacional se a atualização de `plugins.ini` falhar.
+3. Executar o eboot altera armazenamento persistente do GoldHEN e `plugins.ini`; não é uma operação somente de leitura.
+4. A cópia byte a byte do PRX não valida ABI, compatibilidade ou capacidade de carregamento.
+5. O PRX permanece um scaffold de diagnóstico; não existe backend GNM compute nem inferência neural comprovada.
+
+Ajustes já publicados:
+- Workflow de QA 006 agora inclui `feature/gcn8-numeric-kernels` no filtro de branches.
+- `docs/PKG_INSTALLER.md` registra explicitamente que o instalador não deve ser executado antes de QA e autorização.
+
+**Nova execução solicitada pelo push:** [build run 44670068072](https://github.com/demolidorreddragons/NR/actions/runs/44670068072), pendente na fila no momento deste registro. O QA independente só será acionado se esse build terminar com sucesso.
+
+Nenhum FTP de escrita, staging, instalação, alteração de `plugins.ini`, ativação de PRX ou reinício do GoldHEN foi realizado.
