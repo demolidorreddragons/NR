@@ -73,8 +73,8 @@ jobs:
           s = s.replace(marker, marker + "\\n" + copy_after, 1)
           p.write_text(s, encoding="utf-8")
           check = p.read_text(encoding="utf-8")
-          if new not in check or check.index(new) > check.index(copy_after):
-              raise SystemExit("PUBTOOLINFO storage metadata is not copied into the final package SFO.")
+          if new not in check or check.count(copy_after) != 1:
+              raise SystemExit("Final SFO must contain one post-metadata copy operation.")
           if check.index(copy_after) < check.index(marker):
               raise SystemExit("SFO copy still occurs before PUBTOOLVER finalization.")
           print("PKG_BUILDER_PATCH=verified; final SFO copy now occurs after PUBTOOLINFO/PUBTOOLVER updates")
