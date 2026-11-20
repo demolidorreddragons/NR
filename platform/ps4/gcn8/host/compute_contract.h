@@ -45,6 +45,19 @@ enum class ContractError {
     invalid_scalar
 };
 
+// General contract for a kernel whose workgroup covers tile_width x tile_height outputs.
+// The 16x16 wrapper below is specifically for gemm_fp32_wave64_tiled.comp.
+ContractError make_gemm_dispatch_for_tile(
+    const GemmParams& params,
+    const BufferView& a,
+    const BufferView& b,
+    const BufferView& c,
+    const BufferView& out,
+    std::uint32_t tile_width,
+    std::uint32_t tile_height,
+    GemmDispatch* dispatch);
+
+// 16x16 tiled GCN8 GEMM dispatch.
 ContractError make_gemm_dispatch(
     const GemmParams& params,
     const BufferView& a,
