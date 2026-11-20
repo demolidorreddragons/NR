@@ -21,6 +21,18 @@ static ssize_t read_retry(int fd, void* buffer, size_t capacity) {
     } while (n < 0 && errno == EINTR);
     return n;
 }
+/* Accumulate short reads so source and destination block sizes are comparable. */
+static ssize_t read_block(int fd, void* buffer, size_t capacity) {
+    size_t total = 0;
+    while (total < capacity) {
+        ssize_t n = read_retry(fd, (char*)buffer + total, capacity - total);
+        if (n < 0) return -1;
+        if (n == 0) break;
+        total += (size_t)n;
+    }
+    return (ssize_t)total;
+}
+
 
 #define SOURCE_PRX "/app0/ps4_neural_engine.prx"
 #define DEST_DIR "/data/GoldHEN/plugins"
@@ -142,9 +154,9 @@ static int copy_prx(char* error, size_t error_size) {
     char source_buffer[16384], destination_buffer[16384];
     long long verified_bytes = 0;
     for (;;) {
-        ssize_t a = read_retry(verify_src, source_buffer, sizeof(source_buffer));
+        ssize_t a = read_block(verify_src, source_buffer, sizeof(source_buffer));
         if (a < 0) { ok = 0; saved_errno = errno; break; }
-        ssize_t b = read_retry(verify_dst, destination_buffer, sizeof(destination_buffer));
+        ssize_t b = read_block(verify_dst, destination_buffer, sizeof(destination_buffer));
         if (b < 0) { ok = 0; saved_errno = errno; break; }
         if (a != b || (a > 0 && memcmp(source_buffer, destination_buffer, (size_t)a) != 0)) {
             ok = 0;
