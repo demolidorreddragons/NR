@@ -14,6 +14,9 @@ on:
       - "platform/ps4/gcn8/shaders/**"
       - "tools/apply_psbc_gfx8_fixes.py"
       - "tools/verify_gfx8_report.py"
+      - "platform/ps4/gcn8/host/shader_binary_contract.cpp"
+      - "platform/ps4/gcn8/host/shader_binary_contract.h"
+      - "tests/test_gcn8_shader_binary.cpp"
       - ".github/workflows/gcn8-shader-build.yml"
   pull_request:
     branches: [main]
@@ -21,6 +24,9 @@ on:
       - "platform/ps4/gcn8/shaders/**"
       - "tools/apply_psbc_gfx8_fixes.py"
       - "tools/verify_gfx8_report.py"
+      - "platform/ps4/gcn8/host/shader_binary_contract.cpp"
+      - "platform/ps4/gcn8/host/shader_binary_contract.h"
+      - "tests/test_gcn8_shader_binary.cpp"
       - ".github/workflows/gcn8-shader-build.yml"
 
 permissions:
@@ -217,6 +223,20 @@ jobs:
             .deps/opengnm-psbc/opengnm-psbc -s compute -f "dist/ps4/gcn8/${shader}.spv" -o "dist/ps4/gcn8/${shader}.sb" -n
             test -s "dist/ps4/gcn8/${shader}.sb"
           done
+      - name: Parse emitted GFX8 binaries with NR C++ metadata contract
+        run: |
+          g++ -std=c++17 -O2 -Wall -Wextra -Werror \
+            -Iplatform/ps4/gcn8/host \
+            platform/ps4/gcn8/host/shader_binary_contract.cpp \
+            tests/test_gcn8_shader_binary.cpp \
+            -o /tmp/test_gcn8_shader_binary
+          /tmp/test_gcn8_shader_binary \
+            dist/ps4/gcn8/gemm_fp32_wave64_tiled.sb \
+            dist/ps4/gcn8/gemm_fp32.sb \
+            dist/ps4/gcn8/gemm_fp16_accum.sb \
+            dist/ps4/gcn8/e4m3_decode.sb \
+            dist/ps4/gcn8/e4m3_encode.sb
+
       - name: Validate GNM compute containers and record raw metadata (not register decode)
         run: |
           python3 - <<'PY'
