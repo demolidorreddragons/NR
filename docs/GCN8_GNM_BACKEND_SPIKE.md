@@ -33,10 +33,9 @@ The PRX link smoke confirmed `sceGnmDrawCmdSetCsShader`,
 implemented in OpenGNM `src/drawcommandbuffer.c`. Its generic writer omits the
 compute-engine shader-type bit, so NR does not import or call it. Instead,
 `pne_gcn8_set_cs_indirect_resource_table_pointer` emits the CS-specific
-`SET_SH_REG` packet with `PKT3_SHADER_TYPE_S(1)`. The exact packet builder
-passed host CTest run `44744971532`; the updated PRX wrapper now links that
-shared builder, and its compile/link revalidation is pending (the prior wrapper
-passed run `44743707987`). None of these helpers has been executed on hardware. Memory allocation, writable V# construction, cache
+`SET_SH_REG` packet with `PKT3_SHADER_TYPE_S(1)`. The earlier two-dword packet test in run `44744971532` is superseded. The
+corrected one-dword packet builder is being re-tested in host CTest and the
+updated PRX wrapper is awaiting compile/link revalidation. None of these helpers has been executed on hardware. Memory allocation, writable V# construction, cache
 visibility, submission, synchronization and completion still need a
 separately verified lifecycle.
 
@@ -76,8 +75,9 @@ The first hardware backend should own these operations explicitly:
    export and its source emits a generic `SET_SH_REG` packet without the
    compute-engine type bit. NR now has a local
    `pne_gcn8_set_cs_indirect_resource_table_pointer` packet writer that sets
-   `PKT3_SHADER_TYPE_S(1)` and writes the 64-bit user-data pair at CS register
-   2:3 (high dword zero). Its PRX compile/link smoke passed run `44743707987`; the same smoke linked
+   `PKT3_SHADER_TYPE_S(1)` and writes only the low 32-bit pointer dword at CS user
+   register 2; the compiler's `registercount=0` and `address32_hi=0` mean
+   register 3 must remain untouched for scalar parameters. Its PRX compile/link smoke passed run `44743707987`; the same smoke linked
    `sceGnmDrawCmdSetCsShader`, `sceGnmDrawCmdDispatchDirect`,
    `sceGnmSubmitCommandBuffers` and `sceGnmSubmitDone`. No firmware call or
    command submission occurred. Writable V# fields, GPU VA constraints and
