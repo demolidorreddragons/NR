@@ -25,6 +25,16 @@ jobs:
           $listing = & curl.exe --fail --silent --show-error --ftp-pasv --user $creds $base 2>&1
           if ($LASTEXITCODE -ne 0) { throw "Cannot list installed PNEU00001 directory." }
           $listing | ForEach-Object { Write-Host $_ }
+          # Retrieve the exact installed base PKG using explicit FTP CWD steps.
+          $installedPkg = Join-Path $capture "installed-app.pkg"
+          $pkgLog = & curl.exe --fail --silent --show-error --ftp-pasv --user $creds --quote "CWD user" --quote "CWD app" --quote "CWD PNEU00001" --ftp-method nocwd --output $installedPkg "ftp://$($env:PS4_IP):2121/app.pkg" 2>&1
+          if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $installedPkg)) {
+            $pkgLog | ForEach-Object { Write-Host $_ }
+            throw "Could not retrieve the exact installed app.pkg from /user/app/PNEU00001/."
+          }
+          $pkgItem = Get-Item -LiteralPath $installedPkg
+          $pkgHash = (Get-FileHash -LiteralPath $installedPkg -Algorithm SHA256).Hash.ToLowerInvariant()
+          Write-Host "INSTALLED_APP_PKG_BYTES=$($pkgItem.Length) SHA256=$pkgHash"
           foreach ($name in @("sce_sys/param.sfo","eboot.bin","ps4_neural_engine.prx")) {
             $local = Join-Path $env:RUNNER_TEMP ($name.Replace("/","_"))
             $url = $base + $name
