@@ -243,19 +243,28 @@ def verify(artifact_dir: Path) -> dict:
         crc_value = struct.unpack_from("<I", sb, orb + 24)[0]
         require(f"{crc_value:08x}" == record.get("crc32"),
                 f"{name}: report CRC field differs from container")
+        fp_ps4_candidate_slot_start = (
+            actual_slot_start - slot_count * 4 if slot_count else None
+        )
         results.append({
             "shader": name,
             "container_bytes": len(sb),
             "code_bytes": code_size,
             "slot_offset_dwords": chunk_offset,
-            "slot_start": slot_start,
+            "slot_start_open_gnm_hypothesis": actual_slot_start,
+            "slot_start_fp_ps4_hypothesis": fp_ps4_candidate_slot_start,
+            "pointer_hypotheses_agree": (
+                not slot_count or fp_ps4_candidate_slot_start == actual_slot_start
+            ),
             "crc32": f"{crc_value:08x}",
             "code_sha256": sha256(code),
         })
 
     return {
         "status": "PASS",
-        "verification": "byte-level independent artifact/report cross-check",
+        "verification": "byte-level artifact/report cross-check under OpenGNM start-pointer interpretation",
+        "runtime_semantics": "UNRESOLVED: fpPS4 subtracts numInputUsageSlots after resolving chunkUsageBaseOffsetDwords",
+        "gnm_runtime_validated": False,
         "shaders": results,
         "records": len(results),
         "provenance": EXPECTED_COMMITS,
