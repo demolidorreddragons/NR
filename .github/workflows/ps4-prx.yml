@@ -66,11 +66,11 @@ jobs:
           s = s.replace(old, new)
           # Upstream copied the SFO into pkg.ParamSfo before changing PUBTOOLINFO.
           # Move that copy after both metadata fields are finalized, or the PKG still embeds the stale SFO.
-          s = s.replace(copy_before + "\\n", "", 1)
+          s = s.replace(copy_before + "\n", "", 1)
           marker = '        sfo["PUBTOOLVER"] = new SFO.IntegerValue("PUBTOOLVER", 0x02890000);'
           if s.count(marker) != 1:
               raise SystemExit("Expected unique PUBTOOLVER finalization anchor was not found.")
-          s = s.replace(marker, marker + "\\n" + copy_after, 1)
+          s = s.replace(marker, marker + "\n" + copy_after, 1)
           p.write_text(s, encoding="utf-8")
           check = p.read_text(encoding="utf-8")
           if new not in check or check.count(copy_after) != 1:
