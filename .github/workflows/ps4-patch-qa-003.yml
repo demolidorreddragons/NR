@@ -124,7 +124,7 @@ jobs:
           foreach ($required in @("CATEGORY = gp","APP_VER = 01.01","CONTENT_ID = IV0000-PNEU00001_00-PS4NEURALENG0000","TITLE_ID = PNEU00001","st_type=digital25")) {
             if ($patchText -notmatch [regex]::Escape($required)) { throw "Patch SFO missing expected metadata: $required" }
           }
-          if ($patchText -notmatch "(?m)^FORMAT = obs$") { throw "Patch SFO must include Sony-required FORMAT=obs." }
+          if ($patchText -notmatch "FORMAT\\s*=\\s*obs") { throw "Patch SFO must include Sony-required FORMAT=obs." }
           foreach ($relative in @("ps4_neural_engine.prx")) {
             if (-not (Get-ChildItem $patchOut -Recurse -File | Where-Object { $_.FullName.EndsWith($relative,[StringComparison]::OrdinalIgnoreCase) })) { throw "Patch payload missing: $relative" }
           }
