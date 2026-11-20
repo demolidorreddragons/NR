@@ -22,6 +22,20 @@ extern "C" std::int32_t pne_gcn8_set_cs_indirect_resource_table_pointer(
     std::uint64_t table_gpu_address,
     std::uint32_t table_bytes);
 
+// Emits the compute shader register setup sequence (GFX8/MEC) without relying
+// on OpenGNM's optional high-level wrapper library.
+extern "C" std::int32_t pne_gcn8_set_cs_shader(
+    GnmCommandBuffer* command_buffer,
+    const GnmCsStageRegisters* registers);
+
+// Emits a compute-engine DISPATCH_DIRECT packet and trailing NOP padding.
+extern "C" std::int32_t pne_gcn8_dispatch_direct(
+    GnmCommandBuffer* command_buffer,
+    std::uint32_t groups_x,
+    std::uint32_t groups_y,
+    std::uint32_t groups_z,
+    std::uint32_t flags);
+
 // Emits a cache-flush-and-invalidate EOP fence with a 32-bit completion value.
 extern "C" std::int32_t pne_gcn8_emit_eop_fence(
     GnmCommandBuffer* command_buffer,
