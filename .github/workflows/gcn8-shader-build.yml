@@ -1,5 +1,9 @@
 name: GCN8 shader compiler and GEMM binary
 
+concurrency:
+  group: gcn8-shader-build
+  cancel-in-progress: true
+
 on:
   workflow_dispatch:
   push:
