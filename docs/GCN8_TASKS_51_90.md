@@ -28,7 +28,7 @@ This ledger records the next 40 work items. A task is **DONE** only when its sta
 | 62 | Compile tiled FP32 GEMM to SPIR-V | **BLOCKED BY 60** | Validated SPIR-V artifact and hash. |
 | 63 | Compile FP16-emulation shader to SPIR-V | **BLOCKED BY 60** | Validated artifact; no native FP16 claim. |
 | 64 | Compile E4M3 encode/decode shaders to SPIR-V | **BLOCKED BY 60** | Both artifacts validated; software conversion semantics documented. |
-| 65 | Validate all SPIR-V modules | **PENDING** | SPIRV-Tools validation and recorded tool version. |
+| 65 | Validate all SPIR-V modules | **IMPLEMENTED — CI REVALIDATION PENDING** | Workflow installs `spirv-tools` and runs `spirv-val --target-env vulkan1.1` on all five modules before PSBC conversion. |
 | 66 | Compile all five shaders for PS4 NEO/GFX8 | **PENDING** | Five non-empty GNM shader binaries from pinned PSBC with `-n`. |
 | 67 | Validate GNM containers and CRCs | **PENDING** | Independent structural checks and negative malformed-container tests. |
 | 68 | Generate immutable shader artifact manifest | **PENDING** | SHA-256, sizes, compiler revisions and source hashes. |
@@ -81,3 +81,6 @@ Proceed in dependency order. When an external prerequisite is absent (PS4 Pro te
 ## Additional source-level correctness correction
 
 The scalar FP32 and FP16-emulation GEMM shaders now skip reading C when beta is exactly zero, preventing NaN propagation from an unused residual buffer. Host regression tests cover this contract and E4M3FN edge behavior. This does not count as shader compilation or GPU execution.
+
+
+Task 65 implementation was added to the shader workflow in commit `1809a26942db7d25f61e4620de0c3e88816d63bf`. It is not marked passed until a run validates all five generated SPIR-V modules.
