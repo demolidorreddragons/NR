@@ -109,6 +109,8 @@ def expected_lengths() -> dict[str, int]:
 
     add(70, 0, 21808)
     add(70, 0, 2, "blend_scale")
+    if len(expected) != 153:
+        raise AssertionError(f"reference graph formula set has {len(expected)} tensors, expected 153")
     return expected
 
 
