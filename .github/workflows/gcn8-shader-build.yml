@@ -19,6 +19,8 @@ on:
       - "tests/test_gcn8_shader_binary.cpp"
       - "platform/ps4/gcn8/compute_smoke.cpp"
       - "platform/ps4/gcn8/compute_smoke.h"
+      - "platform/ps4/gcn8/smoke_main.cpp"
+      - "tools/build_compute_smoke_pkg.sh"
       - "platform/ps4/gcn8/gnm_resource_binding.cpp"
       - "platform/ps4/gcn8/gnm_resource_binding.h"
       - "platform/ps4/gcn8/host/resource_table_contract.cpp"
