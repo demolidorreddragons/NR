@@ -162,3 +162,10 @@ The workflow also matched SPIR-V `LocalSize` against the GNM CS thread dimension
 For the tiled kernel, compiler metadata reports 16 VGPRs, 32 SGPRs, 2,048 bytes LDS, zero scratch, 8 user SGPRs and wave64. The input-usage slot is `PTR_INDIRECTRESOURCETABLE`, API slot 0, start register 2. This is the first concrete descriptor-table clue, not a complete RW descriptor ABI: exact descriptor bytes, GPU VA encoding, memory class and runtime binding remain unverified. Register field decoding is based on pinned Mesa GFX8 JSON and has not been independently reviewed by REA-5.
 
 **Acceptance boundary:** tasks 60 and 66–69 now pass in the host/compiler scope. Task 70 is partial pending REA-5 review. No dispatch, allocation, submission, cache operation, numerical GPU readback or PS4 Pro execution occurred.
+
+
+## Independent byte-level artifact verification — run 44743915113
+
+The GFX8 workflow now passes a second verification path after compilation. The NR C++ parser accepted all five real `.sb` files, checking NEO compute stage, CS header/slot-table sizes, indirect resource-table slot, code range and raw register block. The Python verifier then compared each report record with actual source, SPIR-V, container, extracted GCN code and ISA bytes; it independently decoded the raw `COMPUTE_PGM_RSRC1/2` words using the pinned Mesa GFX8 register database and compared derived VGPR/SGPR/LDS/scratch/user-SGPR fields. The previously missing `spirv_bytes` field is now emitted and included in `spirv-manifest.json` provenance.
+
+Run `44743915113` passed every step. Artifact `14631648737`, ZIP SHA-256 `a722c2e67e8138b086cd8c6569850bb054277298339b4a23ea8e45d9ce337586`; detailed report: `docs/GCN8_GFX8_ARTIFACT_44743915113.md`. This is independent host-side byte/register cross-checking, not a clean-room REA-5 review or hardware test. REA-5 remains **NOT EXECUTED**.
