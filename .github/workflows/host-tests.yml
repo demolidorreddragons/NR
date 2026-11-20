@@ -50,6 +50,8 @@ jobs:
           "$RUNNER_TEMP/pne-installer-test/test_release_manifest"
       - name: Validate GCN8 numeric reference and tiled mapping
         run: python3 tools/test_gcn8_numeric.py
+      - name: Validate GNM input-usage offset arithmetic
+        run: python3 tools/test_gnm_slot_offsets.py
       - name: Validate model input intake verifier
         run: python3 tests/test_verify_model_inputs.py
       - name: Configure
