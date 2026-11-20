@@ -35,12 +35,35 @@ static void test_sha256_known_vector(void) {
     PNE_SHA256_CTX context;
     uint8_t digest[32];
     char hex[65];
+
+    pne_sha256_init(&context);
+    pne_sha256_final(&context, digest);
+    pne_sha256_hex(digest, hex);
+    assert(strcmp(hex, "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855") == 0);
+
     pne_sha256_init(&context);
     pne_sha256_update(&context, "a", 1);
     pne_sha256_update(&context, "bc", 2);
     pne_sha256_final(&context, digest);
     pne_sha256_hex(digest, hex);
     assert(strcmp(hex, valid_hash) == 0);
+
+    const char* boundary =
+        "abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq";
+    pne_sha256_init(&context);
+    pne_sha256_update(&context, boundary, strlen(boundary));
+    pne_sha256_final(&context, digest);
+    pne_sha256_hex(digest, hex);
+    assert(strcmp(hex, "248d6a61d20638b8e5c026930c3e6039a33ce45964ff2167f6ecedd419db06c1") == 0);
+
+    char block[1000];
+    memset(block, 'a', sizeof(block));
+    pne_sha256_init(&context);
+    for (unsigned i = 0; i < 1000; ++i)
+        pne_sha256_update(&context, block, sizeof(block));
+    pne_sha256_final(&context, digest);
+    pne_sha256_hex(digest, hex);
+    assert(strcmp(hex, "cdc76e5c9914fb9281a1c7e284d73e67f1809a48a497200e046d39ccc7112cd0") == 0);
 }
 
 int main(void) {
