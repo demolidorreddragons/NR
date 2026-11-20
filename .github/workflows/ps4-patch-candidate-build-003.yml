@@ -107,7 +107,7 @@ jobs:
           # Keep the original, independently validated base PKG byte-for-byte.
           # Do not rebuild its SFO: Sony img_create rejected the reconstructed
           # app package param.sfo before patch image creation.
-          "BASE_PKG_MODE=ORIGINAL_VALIDATED_PKG_002_UNMODIFIED" | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
+          "SOURCE_BASE_PKG_MODE=ORIGINAL_VALIDATED_PKG_002_UNMODIFIED" | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
           $extract = Join-Path $work "base-extracted"
           $gp4 = Join-Path $work "PS4-Neural-Engine-003.gp4"
           $pkg = Join-Path $work "PS4-Neural-Engine-003-CANDIDATE.pkg"
@@ -213,6 +213,7 @@ jobs:
           $baseHash = (Get-FileHash -Algorithm SHA256 "candidate-output/PS4-Neural-Engine-002.pkg").Hash
           "DELIVERABLE_BASE_PKG_SHA256=$baseHash" | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
           "DELIVERABLE_BASE_PKG_BYTES=$((Get-Item 'candidate-output/PS4-Neural-Engine-002.pkg').Length)" | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
+          "DELIVERABLE_BASE_MODE=SONY_REBUILT_FROM_ORIGINAL_002; APP_VER_AND_VERSION_NORMALIZED_TO_01.00" | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
 
           "=== SET PATCH PARAM.SFO ===" | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
           dotnet "$tool" sfo set "$sfo" CATEGORY gpe 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
