@@ -134,3 +134,15 @@ Artifact `nr-gcn8-compute-shaders-gfx8` (ID `14604397439`) ZIP SHA-256: `015855d
 | `e4m3_encode.sb` | 688 | `5be6431766df62ab812f197511273481c91453526bd1990f8f5e57685e1ed0f2` |
 
 These hashes identify the exact outputs used to derive the pointer offsets above. They do not indicate GNM metadata acceptance, runtime compatibility, or hardware execution.
+
+
+## Fail-closed GNM offset guard verified in CI — run 44682060810
+
+The latest pinned compiler workflow successfully applied the start-pointer guard, rebuilt PSBC, passed the malformed-SPIR-V CLI test, generated all five SPIR-V modules, and passed `spirv-val --target-env vulkan1.1`. During GNM conversion, the tiled shader was refused with the exact diagnostic:
+
+```
+PSBC: GNM input-usage offset 590 dwords exceeds 8-bit field; refusing invalid shader binary
+Shader compilation failed: internal error
+```
+
+No `.sb` file was emitted. The GNM diagnostic artifact (ID `14605031783`, ZIP SHA-256 `50f3d70d9042b91ed9ec8db960da908ed0698f1a05fc53ca854a3934b48f6554`) contains only the five validated SPIR-V modules: `e4m3_decode`, `e4m3_encode`, `gemm_fp16_accum`, `gemm_fp32`, and `gemm_fp32_wave64_tiled`. The separate SPIR-V artifact (ID `14604462717`) also passed upload. This confirms the fail-closed behavior; it does not solve the long-shader GNM layout. The workflow remains failed at GNM conversion by design until issue [#8](https://github.com/demolidorreddragons/NR/issues/8) is resolved.
