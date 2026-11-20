@@ -102,3 +102,5 @@ The pinned GNM memory/submission investigation is recorded in `docs/REA_GNM_MEMO
 
 - Model intake verifier now rejects symbolic-link inputs instead of following paths outside the supplied intake directory. Tests cover symlink rejection and size mismatch even when a digest matches the fixture. Commit: `ce319840a21ef218dd5cd8bc145a8d04ab3f58c4` (verifier), followed by `f7a2ad21db452f93af9847baaf6747784c4d611b` (tests). The real model archives remain absent, so task 85 stays blocked.
 - GFX8 workflow concurrency now queues follow-up commits instead of canceling an active compiler build mid-checkout. Commit: `e9acec50f1b63a1242448b47e4ef240c92a6a27f`. A successful run is still required for tasks 51 and 55–70.
+
+- Tiled GEMM host emulation now runs 40 deterministic randomized shape/value cases (including non-multiple-of-16 boundaries) and verifies that `beta=0` does not propagate NaNs from C. Commit: `8a605b753c20aca544754ca8db461735b4454a9b`. This remains CPU emulation, not GPU shader execution.
