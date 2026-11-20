@@ -60,7 +60,7 @@ The inventory deliberately reports:
 - `payloads_decoded=false`
 - `dimensions_are_semantic_shapes=false`
 
-Each resource record has a bounded byte payload and a one-dimensional envelope length. The 153 names and record boundaries are verified, but semantic matrix dimensions and per-record offsets still have to be reconciled against the reference `FusedLayout` / graph code. The manifest slices alone do not decode the packed tensors.
+Each resource record has a bounded byte payload and a one-dimensional envelope length. The 153 names, per-record byte lengths and stage offsets have now been reconciled against the pinned reference `FusedLayout` / graph formulas, and the complete stage is contiguous. Semantic matrix dimensions, tensor value encoding and numerical payload decoding remain unverified; byte-length agreement does not decode the packed tensors.
 
 The model directory uses one packed stage `s00` with 153 manifest slices. This is compatible with the OpenDLSS-NR model-directory ABI (stage ID, relative file, packed length, SHA-256, tensor slices), but it is not a PS4-ready model and does not mean the 71-block graph is integrated into the Neural Rendering PS4 runtime.
 
