@@ -18,6 +18,18 @@ on:
       - "PKG_BUILD_NUMBER"
       - "docs/PKG_INSTALLER.md"
       - ".github/workflows/ps4-prx.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "src/**"
+      - "include/**"
+      - "platform/ps4/**"
+      - "installer/**"
+      - "assets/**"
+      - "tools/**"
+      - "PKG_BUILD_NUMBER"
+      - "docs/PKG_INSTALLER.md"
+      - ".github/workflows/ps4-prx.yml"
 
 permissions:
   contents: read
