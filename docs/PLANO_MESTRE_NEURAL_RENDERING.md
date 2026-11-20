@@ -200,3 +200,33 @@ Nenhuma instalação, ativação de PRX, alteração de `plugins.ini`, remoção
 ## 7. Regra de promoção
 
 Uma fase só muda para **APROVADA** quando suas evidências forem anexadas e revisadas. Estados permitidos: **NÃO INICIADA**, **EM EXECUÇÃO**, **BLOQUEADA**, **REPROVADA**, **APROVADA**. Não usar “pronto” como sinônimo de “compilou”.
+
+
+## 8. Registro da primeira auditoria — 20/11/2026
+
+**Branch verificada:** `feature/gcn8-numeric-kernels`  
+**Commit do plano:** `a63aefdfe6348c5dde1cb8fa7834ea27784c2f86`  
+**PR #5:** aberto, ainda WIP.
+
+| Verificação | Resultado observado | Consequência |
+|---|---|---|
+| Host CI | PASS no run [44668770203](https://github.com/demolidorreddragons/NR/actions/runs/44668770203), commit de código `ff7c50d` | Testes host/telemetria passaram nessa revisão; o run é anterior ao commit documental do plano |
+| Build PRX | PASS no run [44668763351](https://github.com/demolidorreddragons/NR/actions/runs/44668763351) até a etapa de compilação PRX | PRX foi compilado; isso não prova carregamento no console |
+| Build PKG | FAIL no run [44668763351](https://github.com/demolidorreddragons/NR/actions/runs/44668763351), etapa **Build installable PKG** | Não houve artefato PKG aprovado; motivo específico ainda precisa ser extraído do log dessa etapa |
+| Probe GFX8 | FAIL no run [44667415701](https://github.com/demolidorreddragons/NR/actions/runs/44667415701), etapa de compilação | A descoberta de ferramentas terminou, mas a compilação não; execução anterior reportou ausência de `glslangValidator` e `opengnm-psbc` |
+| GNM compute | Não localizado/implementado no escopo atual do PR | Bloqueia prova de dispatch/readback até existir harness |
+| Execução GPU no PS4 Pro | Não comprovada | Não há medição de latência/GFLOP/s nem readback de compute |
+| Renderer neural completo | Não comprovado; README declara scaffold de diagnóstico | Não promover a release como renderer neural |
+
+### Bloqueios prioritários encontrados
+
+1. **B0 — PKG:** obter o log integral da etapa que falhou no run `44668763351`; corrigir a causa antes de qualquer novo pacote candidato.
+2. **B1 — Toolchain GFX8:** localizar ou provisionar versões confiáveis de `glslangValidator` e `opengnm-psbc`, registrar origem e hashes, e repetir a compilação.
+3. **B2 — Backend compute:** projetar e implementar harness GNM mínimo, separado do instalador/PRX de diagnóstico.
+4. **B3 — Referência neural:** localizar e validar o modelo, pesos e especificação do grafo de 71 blocos; sem isso, não inventar parâmetros ou afirmar port completo.
+5. **B4 — QA independente:** definir executor separado e protocolo de teste cego; até lá, revisões são internas e devem ser rotuladas como tal.
+
+### Estado da Fase 0
+
+**EM EXECUÇÃO — auditoria parcial concluída.** O branch/PR, documentação, workflows e principais kernels foram inspecionados. Ainda falta recuperar o log detalhado do PKG e consolidar inventário completo de ferramentas/modelos. O próximo trabalho técnico é resolver B0 e B1 sem instalar nada no console.
+
