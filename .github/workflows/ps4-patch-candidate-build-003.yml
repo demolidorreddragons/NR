@@ -51,6 +51,28 @@ jobs:
           $storageTagCount = [regex]::Matches($builderCheck, "img0_pc_ksize=832,st_type=digital50").Count
           if ($storageTagCount -lt 3) { throw "PkgBuilder storage metadata patch not persisted; count=$storageTagCount" }
           "PKGBUILDER_ST_TYPE_PATCH_COUNT=$storageTagCount" | Out-File $env:GITHUB_STEP_SUMMARY -Append
+
+          # Sony's patch SFO schema rejects the base-app-only FORMAT field.
+          # Add a deterministic remove subcommand to the checked-out validator.
+          $programPath = "OrbisPkgTool-src/OrbisPkgTool/Program.cs"
+          $program = Get-Content $programPath -Raw
+          $needle = '            case "check":'
+          $removeCase = @'
+                      case "remove":
+                      {
+                          string file = args[1], key = args[2];
+                          var sfo = OrbisPkgTool.Sfo.ParamSfo.Parse(File.ReadAllBytes(file));
+                          int removed = sfo.Values.RemoveAll(v => string.Equals(v.Key, key, StringComparison.OrdinalIgnoreCase));
+                          if (removed == 0) throw new ArgumentException($"SFO key not found: {key}");
+                          File.WriteAllBytes(file, sfo.Serialize());
+                          Console.WriteLine($"Removed {key}");
+                          break;
+                      }
+          '@
+          if (-not $program.Contains($needle)) { throw "SFO command insertion anchor not found." }
+          $program = $program.Replace($needle, $removeCase + $needle)
+          [IO.File]::WriteAllText($programPath, $program, [Text.UTF8Encoding]::new($false))
+          if (-not ([IO.File]::ReadAllText($programPath).Contains('case "remove":'))) { throw "SFO remove command patch was not persisted." }
           dotnet build OrbisPkgTool-src/OrbisPkgTool/OrbisPkgTool.csproj --configuration Release
           if ($LASTEXITCODE -ne 0) { throw "OrbisPkgTool build failed." }
           $tool = "OrbisPkgTool-src/OrbisPkgTool/bin/Release/net10.0-windows/OrbisPkgTool.dll"
@@ -189,10 +211,13 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "SFO ATTRIBUTE update failed." }
           dotnet "$tool" sfo set "$sfo" PUBTOOLINFO "c_date=20261120,img0_l0_size=7,img0_l1_size=0,img0_sc_ksize=512,img0_pc_ksize=832,st_type=digital25" 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
           if ($LASTEXITCODE -ne 0) { throw "SFO PUBTOOLINFO update failed." }
+          dotnet "$tool" sfo remove "$sfo" FORMAT 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
+          if ($LASTEXITCODE -ne 0) { throw "Patch-only SFO FORMAT field removal failed." }
           dotnet "$tool" sfo read "$sfo" 2>&1 | Tee-Object -FilePath "candidate-output/patch-param-sfo.txt"
           if ($LASTEXITCODE -ne 0) { throw "Patch SFO readback failed." }
           $patchSfoText = Get-Content "candidate-output/patch-param-sfo.txt" -Raw
           if ($patchSfoText -notmatch "PUBTOOLINFO.*st_type=digital25") { throw "Patch SFO storage type must match GP4 patch storage_type=digital25." }
+          if ($patchSfoText -match "(?m)^FORMAT\s*=") { throw "Patch SFO still contains the unsupported base-only FORMAT field." }
 
           $changeInfoDir = Join-Path $image "sce_sys/changeinfo"
           New-Item -ItemType Directory -Force -Path $changeInfoDir | Out-Null
