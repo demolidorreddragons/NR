@@ -59,7 +59,8 @@ jobs:
           $gp4 = Join-Path $env:GITHUB_WORKSPACE "qa-candidate/PS4-Neural-Engine-003.gp4"
           $report = Join-Path $env:GITHUB_WORKSPACE "qa-candidate/build-report.txt"
           $base = Join-Path $env:GITHUB_WORKSPACE "qa-candidate/PS4-Neural-Engine-002.pkg"
-          if (-not (Test-Path $pkg) -or -not (Test-Path $gp4) -or -not (Test-Path $base)) { throw "Required candidate patch, GP4, or delivered base PKG 002 missing." }
+          $originalBase = Join-Path $env:GITHUB_WORKSPACE "qa-candidate/PS4-Neural-Engine-Installed-Original.pkg"
+          if (-not (Test-Path $pkg) -or -not (Test-Path $gp4) -or -not (Test-Path $base) -or -not (Test-Path $originalBase)) { throw "Required patch, GP4, rebuilt base, or exact installed original PKG missing." }
           New-Item -ItemType Directory -Force -Path qa-output | Out-Null
 
           $baseHash = (Get-FileHash -Algorithm SHA256 $base).Hash
@@ -71,6 +72,21 @@ jobs:
           $expectedBaseHash = [regex]::Match($reportText, "DELIVERABLE_BASE_PKG_SHA256=([A-Fa-f0-9]{64})").Groups[1].Value
           if (-not $expectedBaseHash -or $baseHash -ne $expectedBaseHash) { throw "Delivered base PKG SHA-256 does not match engineering report." }
           "CANDIDATE_PKG_SHA256=$candidateHash" | Out-File qa-output/qa-report.txt -Append
+          $originalHash = (Get-FileHash -Algorithm SHA256 $originalBase).Hash
+          $expectedOriginalHash = [regex]::Match($reportText, "INSTALLED_BASE_PKG_SHA256=([A-Fa-f0-9]{64})").Groups[1].Value
+          if (-not $expectedOriginalHash -or $originalHash -ne $expectedOriginalHash) { throw "Exact installed original PKG hash mismatch." }
+          dotnet "$tool" validate "$originalBase" 2>&1 | Tee-Object qa-output/original-base-validation.txt
+          if ($LASTEXITCODE -ne 0) { throw "Exact installed original PKG validation failed." }
+          $originalOut = Join-Path $env:RUNNER_TEMP "qa-original-installed-base"
+          dotnet "$tool" extract "$originalBase" "$originalOut" --verbose 2>&1 | Tee-Object qa-output/original-base-extract.txt
+          if ($LASTEXITCODE -ne 0) { throw "Exact installed original PKG extraction failed." }
+          $originalSfo = Get-ChildItem $originalOut -Recurse -File -Filter param.sfo | Select-Object -First 1
+          if (-not $originalSfo) { throw "Exact installed original PARAM.SFO missing." }
+          $originalText = (dotnet "$tool" sfo read "$($originalSfo.FullName)" 2>&1) -join "`n"
+          foreach ($required in @("CATEGORY = gd","APP_VER = 1.00","TITLE_ID = PNEU00001","CONTENT_ID = IV0000-PNEU00001_00-PS4NEURALENG0000")) {
+            if ($originalText -notmatch [regex]::Escape($required)) { throw "Exact installed original SFO does not match console audit: $required" }
+          }
+          "INSTALLED_ORIGINAL_PKG_SHA256=$originalHash" | Out-File qa-output/qa-report.txt -Append
 
           [xml]$project = Get-Content $gp4
           $volume = $project.psproject.volume.volume_type
@@ -102,10 +118,10 @@ jobs:
           if (-not $baseSfo -or -not $patchSfo) { throw "Base or patch PARAM.SFO missing." }
           $baseText = (dotnet "$tool" sfo read "$($baseSfo.FullName)" 2>&1) -join "`n"
           $patchText = (dotnet "$tool" sfo read "$($patchSfo.FullName)" 2>&1) -join "`n"
-          foreach ($required in @("CATEGORY = gde","APP_VER = 01.00","VERSION = 01.00","CONTENT_ID = IV0000-PNEU00001_00-PS4NEURALENG0000","TITLE_ID = PNEU00001","st_type=digital50")) {
+          foreach ($required in @("CATEGORY = gd","APP_VER = 01.00","VERSION = 01.00","CONTENT_ID = IV0000-PNEU00001_00-PS4NEURALENG0000","TITLE_ID = PNEU00001","st_type=digital50")) {
             if ($baseText -notmatch [regex]::Escape($required)) { throw "Delivered Sony-built base SFO missing expected metadata: $required" }
           }
-          foreach ($required in @("CATEGORY = gpe","APP_VER = 01.01","CONTENT_ID = IV0000-PNEU00001_00-PS4NEURALENG0000","TITLE_ID = PNEU00001","st_type=digital25")) {
+          foreach ($required in @("CATEGORY = gp","APP_VER = 01.01","CONTENT_ID = IV0000-PNEU00001_00-PS4NEURALENG0000","TITLE_ID = PNEU00001","st_type=digital25")) {
             if ($patchText -notmatch [regex]::Escape($required)) { throw "Patch SFO missing expected metadata: $required" }
           }
           foreach ($relative in @("ps4_neural_engine.prx")) {
@@ -137,8 +153,8 @@ jobs:
           "PATCH_EBOOT_PRESENT=False_UNCHANGED_FILE_OMITTED" | Out-File qa-output/qa-report.txt -Append
           "BASE_PRX_SHA256=$basePrxHash" | Out-File qa-output/qa-report.txt -Append
           "PATCH_PRX_SHA256=$patchPrxHash" | Out-File qa-output/qa-report.txt -Append
-          "BASE_CATEGORY=gde" | Out-File qa-output/qa-report.txt -Append
-          "PATCH_CATEGORY=gpe" | Out-File qa-output/qa-report.txt -Append
+          "BASE_CATEGORY=gd" | Out-File qa-output/qa-report.txt -Append
+          "PATCH_CATEGORY=gp" | Out-File qa-output/qa-report.txt -Append
           "PATCH_APP_VER=01.01" | Out-File qa-output/qa-report.txt -Append
           "QA_STATUS=PASS_PC_ONLY_NOT_HARDWARE_TESTED" | Out-File qa-output/qa-report.txt -Append
           Get-Content qa-output/qa-report.txt | Out-File $env:GITHUB_STEP_SUMMARY -Append
