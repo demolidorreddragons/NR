@@ -41,6 +41,43 @@ def main() -> int:
     )
 
     replace_once(
+        root / "libpsbc/psbc_compile.c",
+        """    const uint32_t chunkusageoffset =
+        numinputslots > 0
+            ? (uint32_t)((orbshdr_offset - inputslots_offset) / 4)
+            : 0;
+""",
+        """    const size_t inputslots_end_offset =
+        inputslots_offset + numinputslots * sizeof(GnmInputUsageSlot);
+    if (orbshdr_offset < inputslots_end_offset ||
+        ((orbshdr_offset - inputslots_end_offset) & 3u) != 0) {
+        fprintf(stderr, "PSBC: invalid input-usage slot table range\\n");
+        free(newcode);
+        free(buf);
+        return PSBC_RESULT_INTERNAL_ERROR;
+    }
+    /*
+     * fpPS4's independent resolver locates the slot table by subtracting
+     * chunkUsageBaseOffsetDwords, then numInputUsageSlots dwords from OrbShdr.
+     * The field is uint8_t; refuse to truncate it. Large shaders need a
+     * separately validated layout change, not modulo-256 metadata.
+     */
+    const uint32_t chunkusageoffset =
+        numinputslots > 0
+            ? (uint32_t)((orbshdr_offset - inputslots_end_offset) / 4)
+            : 0;
+    if (chunkusageoffset > 0xffu) {
+        fprintf(stderr,
+                "PSBC: GNM input-usage offset %u dwords exceeds 8-bit field; refusing invalid shader binary\\n",
+                chunkusageoffset);
+        free(newcode);
+        free(buf);
+        return PSBC_RESULT_INTERNAL_ERROR;
+    }
+""",
+    )
+
+    replace_once(
         root / "cmd/psbc/main.c",
         """\tFILE* inputhandle = fopen(opts.inputfile, "r");
 \tif (!inputhandle) {
