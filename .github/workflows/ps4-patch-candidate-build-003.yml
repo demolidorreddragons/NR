@@ -1,10 +1,11 @@
 name: PS4 Patch Candidate Build 003
 
 on:
-  push:
+  workflow_dispatch:
+  workflow_run:
+    workflows: ["PS4 PRX and PKG build"]
+    types: [completed]
     branches: [main]
-    paths:
-      - ".github/workflows/ps4-patch-candidate-build-003.yml"
 
 permissions:
   actions: read
@@ -59,7 +60,7 @@ jobs:
           name: ps4-neural-engine-build
           path: base-artifact
           repository: demolidorreddragons/NR
-          run-id: 44641114863
+          run-id: ${{ github.event.workflow_run.id || '44641114863' }}
           github-token: ${{ github.token }}
 
       - name: Download pinned Fake PKG Tools v7
