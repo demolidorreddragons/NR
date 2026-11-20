@@ -33,9 +33,10 @@ The PRX link smoke confirmed `sceGnmDrawCmdSetCsShader`,
 implemented in OpenGNM `src/drawcommandbuffer.c`. Its generic writer omits the
 compute-engine shader-type bit, so NR does not import or call it. Instead,
 `pne_gcn8_set_cs_indirect_resource_table_pointer` emits the CS-specific
-`SET_SH_REG` packet with `PKT3_SHADER_TYPE_S(1)`; its packet words are covered
-by host tests and it compiles/links into the PRX. None of these helpers has been
-executed on hardware. Memory allocation, writable V# construction, cache
+`SET_SH_REG` packet with `PKT3_SHADER_TYPE_S(1)`. The exact packet builder
+passed host CTest run `44744971532`; the updated PRX wrapper now links that
+shared builder, and its compile/link revalidation is pending (the prior wrapper
+passed run `44743707987`). None of these helpers has been executed on hardware. Memory allocation, writable V# construction, cache
 visibility, submission, synchronization and completion still need a
 separately verified lifecycle.
 
