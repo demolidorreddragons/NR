@@ -19,11 +19,11 @@ CXX := clang++
 LD := ld.lld
 CDIR := macos
 endif
-COMMON_FLAGS := --target=x86_64-pc-freebsd12-elf -fPIC -funwind-tables -fno-exceptions -fno-rtti -D__FINAL__=1 -D__USE_PRINTF__ -isysroot $(TOOLCHAIN) -isystem $(TOOLCHAIN)/include -isystem /usr/include/x86_64-linux-gnu -I$(GH_SDK)/include -I$(ROOT)/include -I.
+COMMON_FLAGS := --target=x86_64-pc-freebsd12-elf -fPIC -funwind-tables -fno-exceptions -fno-rtti -D__FINAL__=1 -D__USE_PRINTF__ -isysroot $(TOOLCHAIN) -isystem $(TOOLCHAIN)/include -isystem /usr/include/x86_64-linux-gnu -I$(GH_SDK)/include -I$(ROOT)/include -I$(ROOT)/OpenGNM/include -I.
 CFLAGS := $(COMMON_FLAGS) -std=c11 -c
 CXXFLAGS := $(COMMON_FLAGS) -std=c++17 -isystem $(TOOLCHAIN)/include/c++/v1 -c
 LIBS := -lSceLibcInternal -lSceGnmDriver -lScePad -lGoldHEN_Hook -lkernel -lSceSystemService -lSceUserService -lSceHttp -lSceSsl -lSceNet -lSceSysmodule -lc++
-OBJS := $(OBJDIR)/main.o $(OBJDIR)/plugin_common.o $(OBJDIR)/telemetry.o $(OBJDIR)/telemetry_bridge.o $(OBJDIR)/github_client.o
+OBJS := $(OBJDIR)/main.o $(OBJDIR)/plugin_common.o $(OBJDIR)/telemetry.o $(OBJDIR)/telemetry_bridge.o $(OBJDIR)/github_client.o $(OBJDIR)/gnm_resource_binding.o
 
 .PHONY: all clean
 all: $(TARGET_PRX)
@@ -41,6 +41,8 @@ $(OBJDIR)/telemetry_bridge.o: $(ROOT)/src/telemetry_bridge.cpp $(ROOT)/include/p
 	$(CXX) $(CXXFLAGS) -I$(ROOT)/include -o $@ $<
 $(OBJDIR)/github_client.o: github_client.cpp $(ROOT)/include/pne/github_oauth.hpp plugin_common.h | $(OBJDIR)
 	$(CXX) $(CXXFLAGS) -o $@ $<
+$(OBJDIR)/gnm_resource_binding.o: $(ROOT)/platform/ps4/gcn8/gnm_resource_binding.cpp $(ROOT)/platform/ps4/gcn8/gnm_resource_binding.h | $(OBJDIR)
+	$(CXX) $(CXXFLAGS) -I$(ROOT)/OpenGNM/include -o $@ $<
 
 $(TARGET_PRX): $(OBJS) | $(OUTDIR)
 	$(LD) -m elf_x86_64 -pie --script $(TOOLCHAIN)/link.x -e _init --eh-frame-hdr -L$(TOOLCHAIN)/lib -L$(GH_SDK) $(GH_SDK)/build/crtprx.o $(OBJS) -o $(TARGET_ELF) $(LIBS)
