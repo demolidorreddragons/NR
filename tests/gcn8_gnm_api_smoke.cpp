@@ -74,5 +74,5 @@ __attribute__((used)) KernelReleaseDirectMemorySignature
     pne_gcn8_release_direct_memory_import = &sceKernelReleaseDirectMemory;
 }
 
-// Compile/link-only API/ABI smoke test. No GNM call is executed.
+// Compile/link-only GNM and direct-memory import smoke test. No firmware call is executed.
 int pne_gcn8_gnm_api_smoke() { return 0; }
