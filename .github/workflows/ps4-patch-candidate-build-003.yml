@@ -322,7 +322,7 @@ jobs:
           $appPath = $project.psproject.volume.package.app_path
           if ($volumeType -ne "pkg_ps4_patch") { throw "GP4 volume_type is not pkg_ps4_patch." }
           if (-not $appPath) { throw "GP4 has no Application Package association." }
-          if ([IO.Path]::GetFileName($appPath) -ne "installed-app.pkg") { throw "GP4 association does not point to the exact installed base app.pkg: $appPath" }
+          if ([IO.Path]::GetFileName($appPath) -ne "PS4-Neural-Engine-Installed-Base.pkg") { throw "GP4 association does not point to the Sony-rebuilt exact installed base app.pkg: $appPath" }
           if ($project.psproject.files.file.Count -lt 3) { throw "GP4 has fewer than 3 payload entries." }
           Copy-Item $gp4 "candidate-output/PS4-Neural-Engine-003.gp4"
           "GP4_VOLUME_TYPE=$volumeType" | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
