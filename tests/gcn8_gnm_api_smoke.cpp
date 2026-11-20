@@ -2,6 +2,7 @@
 #include <type_traits>
 
 #include "gnmdriver.h"
+#include <orbis/libkernel.h>
 #include "gnm_buffer.h"
 #include "gnm_commandbuffer.h"
 #include "gnm_drawcommandbuffer.h"
@@ -20,6 +21,22 @@ using GnmCmdSetCsShaderSignature =
 using GnmCmdSetVsharpSignature =
     void (*)(GnmCommandBuffer*, GnmShaderStage, uint32_t,
              const GnmBuffer*);
+
+using KernelAllocateDirectMemorySignature =
+    int32_t (*)(off_t, off_t, size_t, size_t, int32_t, off_t*);
+using KernelMapDirectMemorySignature =
+    int32_t (*)(void**, size_t, int32_t, int32_t, off_t, size_t);
+using KernelReleaseDirectMemorySignature = int32_t (*)(off_t, size_t);
+
+static_assert(std::is_same<decltype(&sceKernelAllocateDirectMemory),
+                           KernelAllocateDirectMemorySignature>::value,
+              "unexpected sceKernelAllocateDirectMemory signature");
+static_assert(std::is_same<decltype(&sceKernelMapDirectMemory),
+                           KernelMapDirectMemorySignature>::value,
+              "unexpected sceKernelMapDirectMemory signature");
+static_assert(std::is_same<decltype(&sceKernelReleaseDirectMemory),
+                           KernelReleaseDirectMemorySignature>::value,
+              "unexpected sceKernelReleaseDirectMemory signature");
 
 static_assert(sizeof(GnmBuffer) == 16, "GnmBuffer ABI changed");
 static_assert(sizeof(GnmCommandBuffer) == 64, "GnmCommandBuffer ABI changed");
@@ -49,6 +66,12 @@ __attribute__((used)) GnmDispatchDirectSignature pne_gcn8_dispatch_direct_import
     &sceGnmDispatchDirect;
 __attribute__((used)) GnmSetCsShaderSignature pne_gcn8_set_cs_shader_import =
     &sceGnmSetCsShader;
+__attribute__((used)) KernelAllocateDirectMemorySignature
+    pne_gcn8_allocate_direct_memory_import = &sceKernelAllocateDirectMemory;
+__attribute__((used)) KernelMapDirectMemorySignature
+    pne_gcn8_map_direct_memory_import = &sceKernelMapDirectMemory;
+__attribute__((used)) KernelReleaseDirectMemorySignature
+    pne_gcn8_release_direct_memory_import = &sceKernelReleaseDirectMemory;
 }
 
 // Compile/link-only API/ABI smoke test. No GNM call is executed.
