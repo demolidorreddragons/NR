@@ -172,6 +172,7 @@ jobs:
           "PATCH_BASE_MODE=ORIGINAL_VALIDATED_PKG_002_UNMODIFIED" | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
           "PATCH_BASE_PKG_SHA256=$baseHash" | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
           "PATCH_BASE_PKG_BYTES=$((Get-Item $basePkg).Length)" | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
+          Copy-Item $basePkg "candidate-output/PS4-Neural-Engine-002.pkg"
 
           "=== SET PATCH PARAM.SFO ===" | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
           dotnet "$tool" sfo set "$sfo" CATEGORY gpe 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
