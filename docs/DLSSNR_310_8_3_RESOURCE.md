@@ -101,3 +101,17 @@ python3 tools/export_dlssnr_graph_layout.py dlssnr-310.8.0-graph-layout.json
 ```
 
 The JSON describes all 71 block IDs, input/output channel widths, block family (fused, split-512, ViT, upsample, pre/post), 11 stage transitions, and all 153 expected tensor records with packed byte lengths and consumer classification (`graph`, `demo`, or `unused_by_current_graph`). It pins the OpenDLSS-NR graph source commit and both resource/stage hashes. Host tests validate the exported block/record/transition counts. This is a machine-readable reference layout; it is not yet the PS4 runtime's executable inference graph.
+
+
+## Whole-DLL identity and PE metadata (310.8.3)
+
+The recovered FrameRateX archive contains `streamline/nvngx_dlssnr.dll`. The complete DLL was extracted from the original ZIP and hashed:
+
+- DLL SHA-256: `f95feb54137ea11979f9b4ec4f00afd84b5c98a5624d3388fbf6a87714a39fcc`
+- PE format: PE32+, x86-64 DLL; image base `0x180000000`; entry RVA `0x7cec0`.
+- Version resource: FileVersion and ProductVersion `310.8.3.0`; FileDescription `NVIDIA DLSSNR - DVS PRODUCTION`; OriginalFilename `CL 38718415`.
+- Sections: `.text` size `0xAADFC`; `.rdata` `0x3361E`; `.data` `0x1062800`; `.rsrc` `0x8CDAC98`.
+- Export table: 55 named exports. Imports include VERSION.dll, ADVAPI32.dll, USER32.dll and KERNEL32.dll.
+- Embedded `WEIGHTS_HT` resource: SHA-256 `836f445d06ecd2e59bb9f17b84b91c143396fd76ccda1c9dc7fe81d5edd548f4`, byte-identical to the 310.8.0 reference payload.
+
+These facts authenticate the exact 310.8.3 DLL used for resource extraction and establish that the weight resource matches the 310.8.0 reference. They do **not** establish code-section equivalence, identical exported function behavior, preprocessing parity, or runtime ABI parity between the two versions. No 310.8.0 DLL binary is currently available for a direct PE/code comparison.
