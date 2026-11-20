@@ -12,7 +12,7 @@ successful host build is not evidence of GPU execution.
 | # | Work item | State | Evidence / gate |
 |---:|---|---|---|
 | 21 | Validate GNM import link smoke | **Passed (compile/link only)** | PS4 workflow run 44673126332 passed API/ABI compile and GNM import link. No firmware calls executed. |
-| 22 | Pin compiler/dependencies | **Pinned** | `opengnm-psbc` 28697f0; OpenGNM 4b295ca; SPIRV-Headers 09913f0; Vulkan-Headers v1.3.296. |
+| 22 | Pin compiler/dependencies | **Pinned** | `opengnm-psbc` 28697f0; OpenGNM 4b295ca; SPIRV-Headers 09913f0; Vulkan-Headers v1.4.328. |
 | 23 | Reproducible compiler workflow | **In CI validation** | `.github/workflows/gcn8-shader-build.yml`; host compiler build has not yet been accepted. |
 | 24 | Compile FP32 GFX8 GEMM | **Pending compiler CI** | Pipeline now targets tiled and scalar FP32. No accepted `.sb` artifact yet. |
 | 25 | Inspect shader metadata | **Pending compiler output** | Container verifier checks GNM type, OrbShdr presence, hash and CRC. Register/resource/user-SGPR interpretation still needs separate inspection. |
