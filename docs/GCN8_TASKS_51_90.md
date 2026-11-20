@@ -96,3 +96,9 @@ Tasks 57–59 received additional CI gates in commit `6570ece7959f36f4e15268d1a4
 
 
 The pinned GNM memory/submission investigation is recorded in `docs/REA_GNM_MEMORY_SUBMIT_FINDINGS.md` (commit `e91ca768598a61a2f69ae9ec48974740c37e3a4d`). It narrows the candidate APIs but deliberately does not infer compute memory semantics from the VideoOut helper.
+
+
+## Additional host-side hardening (2026-11-20)
+
+- Model intake verifier now rejects symbolic-link inputs instead of following paths outside the supplied intake directory. Tests cover symlink rejection and size mismatch even when a digest matches the fixture. Commit: `ce319840a21ef218dd5cd8bc145a8d04ab3f58c4` (verifier), followed by `f7a2ad21db452f93af9847baaf6747784c4d611b` (tests). The real model archives remain absent, so task 85 stays blocked.
+- GFX8 workflow concurrency now queues follow-up commits instead of canceling an active compiler build mid-checkout. Commit: `e9acec50f1b63a1242448b47e4ef240c92a6a27f`. A successful run is still required for tasks 51 and 55–70.
