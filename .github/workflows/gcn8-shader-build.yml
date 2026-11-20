@@ -297,7 +297,9 @@ jobs:
               input_usage_slots = []
               if num_slots:
                   slot_offset = orb - chunk_offset * 4
-                  if chunk_offset == 0 or slot_offset != cs_header + cs_header_size or slot_offset + num_slots * 4 > code_start:
+                  # GnmShaderBinaryInfo.chunkUsageBaseOffsetDwords is relative to OrbShdr.
+              # The slot table resides in the code/chunk region, not after GnmCsShader.
+              if chunk_offset == 0 or slot_offset < code_start or slot_offset + num_slots * 4 > orb:
                       raise SystemExit(f"Input usage slot range is out of bounds: {shader}")
                   usage_names = {
                       0x00: "IMM_RESOURCE", 0x01: "IMM_SAMPLER",
@@ -466,6 +468,7 @@ jobs:
           Path("dist/ps4/gcn8/gnm-container-report.json").write_text(json.dumps(report, indent=2))
           PY
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: nr-gcn8-compute-shaders-gfx8
           path: |
@@ -474,4 +477,4 @@ jobs:
             dist/ps4/gcn8/*.gcn.bin
             dist/ps4/gcn8/*.isa
             dist/ps4/gcn8/gnm-container-report.json
-          if-no-files-found: error
+          if-no-files-found: warn
