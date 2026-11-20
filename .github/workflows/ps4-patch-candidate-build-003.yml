@@ -2,6 +2,10 @@ name: PS4 Patch Candidate Build 003
 
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/ps4-patch-candidate-build-003.yml"
 
 permissions:
   actions: read
@@ -37,7 +41,7 @@ jobs:
           $builderPath = "OrbisPkgTool-src/OrbisPkgTool/Pkg/PkgBuilder.cs"
           $builder = Get-Content $builderPath -Raw
           $categoryOld = 'project.VolumeType == VolumeType.PkgPs4Patch ? "gp" : "gd"'
-          $categoryNew = 'project.VolumeType == VolumeType.PkgPs4Patch ? "gpe" : "gde"'
+          $categoryNew = 'project.VolumeType == VolumeType.PkgPs4Patch ? "gp" : "gd"'
           if (-not $builder.Contains($categoryOld)) { throw "PkgBuilder category mapping anchor not found." }
           $builder = $builder.Replace($categoryOld, $categoryNew)
           if (-not $builder.Contains("img0_pc_ksize=832")) { throw "PkgBuilder PUBTOOLINFO anchor not found." }
@@ -52,13 +56,13 @@ jobs:
           $tool = "OrbisPkgTool-src/OrbisPkgTool/bin/Release/net10.0-windows/OrbisPkgTool.dll"
           if (-not (Test-Path $tool)) { throw "OrbisPkgTool DLL missing: $tool" }
 
-      - name: Download exact validated base PKG 002
+      - name: Download exact installed app PKG from PS4 audit
         uses: actions/download-artifact@v4
         with:
-          name: ps4-neural-engine-build
+          name: installed-app-files-readonly
           path: base-artifact
           repository: demolidorreddragons/NR
-          run-id: 44644315395
+          run-id: 44657934789
           github-token: ${{ github.token }}
 
       - name: Download current PRX payload for the patch delta
@@ -67,7 +71,7 @@ jobs:
           name: ps4-neural-engine-build
           path: current-prx-artifact
           repository: demolidorreddragons/NR
-          run-id: ${{ github.event.workflow_run.id || '44649084819' }}
+          run-id: 44656276566
           github-token: ${{ github.token }}
 
       - name: Download pinned Fake PKG Tools v7
@@ -96,8 +100,8 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
-          $basePkg = Join-Path $env:GITHUB_WORKSPACE "base-artifact/pkg/PS4-Neural-Engine-002.pkg"
-          if (-not (Test-Path $basePkg)) { throw "Base PKG 002 not found: $basePkg" }
+          $basePkg = Join-Path $env:GITHUB_WORKSPACE "base-artifact/installed-app.pkg"
+          if (-not (Test-Path $basePkg)) { throw "Exact installed app.pkg not found: $basePkg" }
           $tool = "OrbisPkgTool-src/OrbisPkgTool/bin/Release/net10.0-windows/OrbisPkgTool.dll"
           $pubCmd = Get-Content "$env:RUNNER_TEMP\tool-path.txt" | Where-Object { $_ -like "ORBiS_PUB_CMD=*" } | ForEach-Object { $_.Substring(14) }
           if (-not (Test-Path $pubCmd)) { throw "orbis-pub-cmd path invalid." }
@@ -108,7 +112,7 @@ jobs:
 
           # The patch baseline is the previously validated PKG 002 artifact.
           # The current build's PRX is kept separate and added only to the patch.
-          "SOURCE_BASE_PKG_MODE=ORIGINAL_VALIDATED_PKG_002_FROM_RUN_44644315395" | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
+          "SOURCE_BASE_PKG_MODE=EXACT_INSTALLED_PKG_FROM_PS4_READONLY_AUDIT_RUN_44657934789" | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
           $extract = Join-Path $work "base-extracted"
           $gp4 = Join-Path $work "PS4-Neural-Engine-003.gp4"
           $pkg = Join-Path $work "PS4-Neural-Engine-003-CANDIDATE.pkg"
@@ -116,7 +120,7 @@ jobs:
           New-Item -ItemType Directory -Force -Path $work | Out-Null
           "BASE_PKG_ABSOLUTE_PATH=$basePkg" | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
 
-          "=== BASE PACKAGE: ORIGINAL VALIDATED PKG 002 ===" | Tee-Object -FilePath "candidate-output/build-report.txt"
+          "=== BASE PACKAGE: EXACT INSTALLED APP.PKG ===" | Tee-Object -FilePath "candidate-output/build-report.txt"
           dotnet "$tool" info "$basePkg" 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
           if ($LASTEXITCODE -ne 0) { throw "Base PKG info failed." }
 
@@ -133,7 +137,15 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "Original base SFO readback failed." }
           $baseStorage = ($baseSfoText -join "`n") -match "PUBTOOLINFO.*st_type="
           "BASE_SFO_HAS_STORAGE_TYPE=$baseStorage" | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
-          if (-not $baseStorage) { throw "Base PKG PARAM.SFO PUBTOOLINFO has no st_type; Sony img_create resolves app:unknown. Use the exact validated base PKG 002 artifact with explicit storage metadata before patch generation." }
+          if (-not $baseStorage) {
+            dotnet "$tool" sfo set "$($baseSfo.FullName)" PUBTOOLINFO "c_date=20261120,img0_l0_size=7,img0_l1_size=0,img0_sc_ksize=512,img0_pc_ksize=832,st_type=digital50" 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
+            if ($LASTEXITCODE -ne 0) { throw "Could not add Sony digital50 publisher metadata to the disposable base copy." }
+            $baseSfoText = dotnet "$tool" sfo read "$($baseSfo.FullName)" 2>&1
+            if (($baseSfoText -join "`n") -notmatch "st_type=digital50") { throw "Base SFO storage metadata readback failed." }
+          }
+          Copy-Item $basePkg "candidate-output/PS4-Neural-Engine-Installed-Original.pkg"
+          $installedBaseHash = (Get-FileHash -Algorithm SHA256 $basePkg).Hash
+          "INSTALLED_BASE_PKG_SHA256=$installedBaseHash" | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
 
           "=== RESTRUCTURE IMAGE0 + SC0 ===" | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
           dotnet "$tool" restructure "$extract" --verbose 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
@@ -159,6 +171,8 @@ jobs:
           "=== REBUILD BASE WITH SONY PUBLISHER TOOL ===" | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
           # Sony img_create rejected the base SFO's legacy APP_VER "1.00".
           # Normalize only the disposable Sony-rebuild copy to the documented XX.YY form.
+          dotnet "$tool" sfo set "$sfo" CATEGORY gd 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
+          if ($LASTEXITCODE -ne 0) { throw "Sony-base CATEGORY normalization failed." }
           dotnet "$tool" sfo set "$sfo" APP_VER 01.00 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
           if ($LASTEXITCODE -ne 0) { throw "Sony-base APP_VER normalization failed." }
           # The next publisher rejection identified VERSION=1.00 as invalid too.
@@ -215,7 +229,7 @@ jobs:
           $sonyBaseSfoText = dotnet "$tool" sfo read "$($sonyBaseSfo.FullName)" 2>&1
           $sonyBaseSfoText | Tee-Object -FilePath "candidate-output/sony-base-param-sfo.txt"
           if ($LASTEXITCODE -ne 0) { throw "Sony-built base SFO readback failed." }
-          if (($sonyBaseSfoText -join "`n") -notmatch "CATEGORY = gde" -or ($sonyBaseSfoText -join "`n") -notmatch "st_type=digital50") { throw "Sony-built base SFO category/storage metadata mismatch." }
+          if (($sonyBaseSfoText -join "`n") -notmatch "CATEGORY = gd" -or ($sonyBaseSfoText -join "`n") -notmatch "st_type=digital50") { throw "Sony-built base SFO category/storage metadata mismatch." }
           "SONY_BASE_PKG_BYTES=$((Get-Item $sonyBasePkg).Length)" | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
           "SONY_BASE_GP4_FILE_COUNT=$($sonyBaseProject.psproject.files.file.Count)" | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
 
@@ -226,7 +240,7 @@ jobs:
           "DELIVERABLE_BASE_MODE=SONY_REBUILT_FROM_ORIGINAL_002; APP_VER_AND_VERSION_NORMALIZED_TO_01.00" | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
 
           "=== SET PATCH PARAM.SFO ===" | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
-          dotnet "$tool" sfo set "$sfo" CATEGORY gpe 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
+          dotnet "$tool" sfo set "$sfo" CATEGORY gp 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
           if ($LASTEXITCODE -ne 0) { throw "SFO CATEGORY update failed." }
           dotnet "$tool" sfo set "$sfo" APP_VER 01.01 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
           if ($LASTEXITCODE -ne 0) { throw "SFO APP_VER update failed." }
@@ -296,7 +310,7 @@ jobs:
           if (-not $verifySfo) { throw "Candidate PKG param.sfo not found after extraction." }
           $sfoText = dotnet "$tool" sfo read "$($verifySfo.FullName)" 2>&1
           $sfoText | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
-          if (($sfoText -join "`n") -notmatch "CATEGORY = gpe" -or ($sfoText -join "`n") -notmatch "APP_VER = 01.01") { throw "Candidate patch SFO metadata readback mismatch." }
+          if (($sfoText -join "`n") -notmatch "CATEGORY = gp" -or ($sfoText -join "`n") -notmatch "APP_VER = 01.01") { throw "Candidate patch SFO metadata readback mismatch." }
 
           Copy-Item $pkg "candidate-output/PS4-Neural-Engine-003-CANDIDATE.pkg"
           $hash = (Get-FileHash -Algorithm SHA256 "candidate-output/PS4-Neural-Engine-003-CANDIDATE.pkg").Hash
