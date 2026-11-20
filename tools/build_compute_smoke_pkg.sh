@@ -60,7 +60,7 @@ COMMON=(--target=x86_64-pc-freebsd12-elf -std=c++17 -fPIC -fno-exceptions -fno-r
   -isystem "$OO_PS4_TOOLCHAIN/include/c++/v1" \
   -I"$OPEN_GNM_INCLUDE" -I"$ROOT/platform/ps4/gcn8" \
   -I"$ROOT/platform/ps4/gcn8/host")
-RUN_DEFINE="-DPNE_GCN8_SMOKE_RUN_ID=\\\"$RUN_ID\\\""
+RUN_DEFINE="-DPNE_GCN8_SMOKE_RUN_ID=\"$RUN_ID\""
 if [[ "$MODE" == "startup" ]]; then
   clang++ "${COMMON[@]}" "$RUN_DEFINE" -DPNE_GCN8_STARTUP_ONLY=1 -c "$ROOT/platform/ps4/gcn8/smoke_main.cpp" -o "$STAGE/smoke_main.o"
   # Deliberately omit every GNM/compute object and import from this probe.
