@@ -12,11 +12,23 @@ if [[ ! "$RUN_ID" =~ ^[A-Za-z0-9_-]+$ ]]; then
   echo "Invalid GITHUB_RUN_ID" >&2
   exit 1
 fi
-TITLE_ID="PNEU00002"
-CONTENT_ID="IV0000-PNEU00002_00-GCN8SMOKE0000000"
+MODE="${GCN8_SMOKE_MODE:-compute}"
+case "$MODE" in
+  compute)
+    TITLE_ID="PNEU00002"
+    CONTENT_ID="IV0000-PNEU00002_00-GCN8SMOKE0000000"
+    APP_TITLE="Neural Rendering GCN8 Smoke Test"
+    ;;
+  startup)
+    TITLE_ID="PNEU00003"
+    CONTENT_ID="IV0000-PNEU00003_00-GCN8STARTUP000000"
+    APP_TITLE="Neural Rendering Startup Probe"
+    ;;
+  *) echo "Unsupported GCN8_SMOKE_MODE: $MODE" >&2; exit 1 ;;
+esac
 APP_VERSION="01.00"
-STAGE="$ROOT/build/gcn8-smoke-stage/$RUN_ID"
-OUT="$ROOT/dist/gcn8-smoke/$RUN_ID"
+STAGE="$ROOT/build/gcn8-smoke-stage/$RUN_ID/$MODE"
+OUT="$ROOT/dist/gcn8-smoke/$RUN_ID/$MODE"
 SAMPLE="$OO_PS4_TOOLCHAIN/samples/piglet"
 OPEN_GNM_INCLUDE="${OPEN_GNM_INCLUDE:-$ROOT/OpenGNM/include}"
 test -s "$OPEN_GNM_INCLUDE/gnm_drawcommandbuffer.h"
@@ -48,20 +60,19 @@ COMMON=(--target=x86_64-pc-freebsd12-elf -std=c++17 -fPIC -fno-exceptions -fno-r
   -isystem "$OO_PS4_TOOLCHAIN/include/c++/v1" \
   -I"$OPEN_GNM_INCLUDE" -I"$ROOT/platform/ps4/gcn8" \
   -I"$ROOT/platform/ps4/gcn8/host")
-RUN_DEFINE="-DPNE_GCN8_SMOKE_RUN_ID=\"$RUN_ID\""
-clang++ "${COMMON[@]}" "$RUN_DEFINE" -c "$ROOT/platform/ps4/gcn8/smoke_main.cpp" -o "$STAGE/smoke_main.o"
-clang++ "${COMMON[@]}" -c "$ROOT/platform/ps4/gcn8/compute_smoke.cpp" -o "$STAGE/compute_smoke.o"
-clang++ "${COMMON[@]}" -c "$ROOT/platform/ps4/gcn8/gnm_resource_binding.cpp" -o "$STAGE/gnm_resource_binding.o"
-clang++ "${COMMON[@]}" -c "$ROOT/platform/ps4/gcn8/host/resource_table_contract.cpp" -o "$STAGE/resource_table_contract.o"
-clang++ "${COMMON[@]}" -c "$ROOT/platform/ps4/gcn8/host/shader_binary_contract.cpp" -o "$STAGE/shader_binary_contract.o"
-
-ld.lld -m elf_x86_64 -pie --script "$OO_PS4_TOOLCHAIN/link.x" --eh-frame-hdr \
-  -L"$OO_PS4_TOOLCHAIN/lib" \
-  "$STAGE/smoke_main.o" "$STAGE/compute_smoke.o" \
-  "$STAGE/gnm_resource_binding.o" "$STAGE/resource_table_contract.o" \
-  "$STAGE/shader_binary_contract.o" "$OO_PS4_TOOLCHAIN/lib/crt1.o" \
-  -o "$STAGE/smoke.elf" -lc -lc++ -lkernel -lSceGnmDriver
-
+RUN_DEFINE="-DPNE_GCN8_SMOKE_RUN_ID=\\\"$RUN_ID\\\""
+if [[ "$MODE" == "startup" ]]; then
+  clang++ "${COMMON[@]}" "$RUN_DEFINE" -DPNE_GCN8_STARTUP_ONLY=1 -c "$ROOT/platform/ps4/gcn8/smoke_main.cpp" -o "$STAGE/smoke_main.o"
+  # Deliberately omit every GNM/compute object and import from this probe.
+  ld.lld -m elf_x86_64 -pie --script "$OO_PS4_TOOLCHAIN/link.x" --eh-frame-hdr -L"$OO_PS4_TOOLCHAIN/lib" "$STAGE/smoke_main.o" "$OO_PS4_TOOLCHAIN/lib/crt1.o" -o "$STAGE/smoke.elf" -lc -lc++ -lkernel
+else
+  clang++ "${COMMON[@]}" "$RUN_DEFINE" -c "$ROOT/platform/ps4/gcn8/smoke_main.cpp" -o "$STAGE/smoke_main.o"
+  clang++ "${COMMON[@]}" -c "$ROOT/platform/ps4/gcn8/compute_smoke.cpp" -o "$STAGE/compute_smoke.o"
+  clang++ "${COMMON[@]}" -c "$ROOT/platform/ps4/gcn8/gnm_resource_binding.cpp" -o "$STAGE/gnm_resource_binding.o"
+  clang++ "${COMMON[@]}" -c "$ROOT/platform/ps4/gcn8/host/resource_table_contract.cpp" -o "$STAGE/resource_table_contract.o"
+  clang++ "${COMMON[@]}" -c "$ROOT/platform/ps4/gcn8/host/shader_binary_contract.cpp" -o "$STAGE/shader_binary_contract.o"
+  ld.lld -m elf_x86_64 -pie --script "$OO_PS4_TOOLCHAIN/link.x" --eh-frame-hdr -L"$OO_PS4_TOOLCHAIN/lib" "$STAGE/smoke_main.o" "$STAGE/compute_smoke.o" "$STAGE/gnm_resource_binding.o" "$STAGE/resource_table_contract.o" "$STAGE/shader_binary_contract.o" "$OO_PS4_TOOLCHAIN/lib/crt1.o" -o "$STAGE/smoke.elf" -lc -lc++ -lkernel -lSceGnmDriver
+fi
 test -s "$STAGE/smoke.elf"
 readelf -h "$STAGE/smoke.elf" | grep -Eq 'Class:[[:space:]]+ELF64'
 readelf -h "$STAGE/smoke.elf" | grep -Eq 'Machine:[[:space:]]+Advanced Micro Devices X86-64'
@@ -88,7 +99,7 @@ sfo FORMAT Utf8 4 obs
 sfo CONTENT_ID Utf8 48 "$CONTENT_ID"
 sfo DOWNLOAD_DATA_SIZE Integer 4 0
 sfo SYSTEM_VER Integer 4 1020
-sfo TITLE Utf8 128 "Neural Rendering GCN8 Smoke Test"
+sfo TITLE Utf8 128 "$APP_TITLE"
 sfo TITLE_ID Utf8 12 "$TITLE_ID"
 sfo VERSION Utf8 8 "$APP_VERSION"
 sfo PUBTOOLINFO Utf8 512 "c_date=$(date -u +%Y%m%d),img0_l0_size=7,img0_l1_size=0,img0_sc_ksize=512,img0_pc_ksize=832,st_type=digital50"
@@ -99,7 +110,7 @@ cd "$STAGE"
 "$PKGTOOL" pkg_build package.gp4 "$OUT"
 pkg="$(find "$OUT" -maxdepth 1 -type f -name '*.pkg' -print -quit)"
 test -n "$pkg" && test -s "$pkg"
-numbered_pkg="$OUT/PS4-Neural-Rendering-GCN8-Smoke-${RUN_ID}.pkg"
+numbered_pkg="$OUT/PS4-Neural-Rendering-GCN8-${MODE}-${RUN_ID}.pkg"
 cp "$pkg" "$numbered_pkg"
 "$PKGTOOL" pkg_validate --verbose "$numbered_pkg"
 VERIFY="$STAGE/pkg-verify"
@@ -127,6 +138,7 @@ PY
 PKG_SHA256="$(sha256sum "$numbered_pkg" | awk '{print $1}')"
 cat > "$OUT/SMOKE_PKG_MANIFEST.txt" <<EOF
 schema=1
+mode=$MODE
 run_id=$RUN_ID
 title_id=$TITLE_ID
 content_id=$CONTENT_ID
@@ -141,5 +153,6 @@ EOF
 cp "$STAGE/package.gp4" "$OUT/package.gp4"
 cp "$STAGE/sce_sys/param.sfo" "$OUT/param.sfo"
 sha256sum "$numbered_pkg" "$OUT/SMOKE_PKG_MANIFEST.txt" "$OUT/package.gp4"
+echo "GCN8_SMOKE_MODE=$MODE"
 echo "GCN8_SMOKE_PKG=$numbered_pkg"
 echo "GCN8_SMOKE_PKG_SHA256=$PKG_SHA256"
