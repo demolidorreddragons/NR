@@ -20,6 +20,10 @@ Pinned OpenGNM headers: `4b295ca54c82c83acf308d1c646a2dfa9ae57350`
 - The failure is now narrowed to the missing `vk_video` header set expected by this pinned Mesa Vulkan header. No compiler executable or GNM shader binaries are claimed.
 - Because the host compiler build failed, SPIR-V compilation, PS4 NEO GFX8 shader compilation and GNM container/metadata reporting were skipped.
 
+## Vulkan video-header dependency correction
+
+The failed run showed that the Mesa Vulkan headers at the pinned PSBC revision include `vk_video/vulkan_video_codec_av1std_encode.h`, which is absent from Vulkan-Headers `v1.3.296`. The GCN8 workflow now pins Vulkan-Headers `v1.4.328` and asserts that this exact header exists before compiling PSBC. This is a dependency compatibility correction only; the next CI run must establish whether the full PSBC host build succeeds. The newer headers are not evidence of Vulkan runtime use on PS4.
+
 ## Required follow-up from compiler output
 
 Once PSBC builds:
