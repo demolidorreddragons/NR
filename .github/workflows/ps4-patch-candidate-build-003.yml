@@ -211,8 +211,14 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "SFO ATTRIBUTE update failed." }
           dotnet "$tool" sfo set "$sfo" PUBTOOLINFO "c_date=20261120,img0_l0_size=7,img0_l1_size=0,img0_sc_ksize=512,img0_pc_ksize=832,st_type=digital25" 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
           if ($LASTEXITCODE -ne 0) { throw "SFO PUBTOOLINFO update failed." }
-          dotnet "$tool" sfo remove "$sfo" FORMAT 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
-          if ($LASTEXITCODE -ne 0) { throw "Patch-only SFO FORMAT field removal failed." }
+          $prePatchSfoText = dotnet "$tool" sfo read "$sfo" 2>&1
+          if ($LASTEXITCODE -ne 0) { throw "Pre-patch SFO readback failed." }
+          if (($prePatchSfoText -join "`n") -match "(?m)^FORMAT\\s*=") {
+            dotnet "$tool" sfo remove "$sfo" FORMAT 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
+            if ($LASTEXITCODE -ne 0) { throw "Patch-only SFO FORMAT field removal failed." }
+          } else {
+            "PATCH_SFO_FORMAT_FIELD_ABSENT=True" | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
+          }
           dotnet "$tool" sfo read "$sfo" 2>&1 | Tee-Object -FilePath "candidate-output/patch-param-sfo.txt"
           if ($LASTEXITCODE -ne 0) { throw "Patch SFO readback failed." }
           $patchSfoText = Get-Content "candidate-output/patch-param-sfo.txt" -Raw
