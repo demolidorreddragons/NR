@@ -162,3 +162,10 @@ Source artifact: build run 44623808730, artifact 14578192913.
 - Engineering commit `8ef7e5daa2e391f35229f984c5fffb440e8ad34f` now normalizes both APP_VER and VERSION to `01.00` only in the temporary extracted base copy and asserts both readbacks before invoking Sony `img_create`. The original PKG 002 artifact remains unchanged.
 - The push-trigger fallback now selects the latest validated base artifact from run `44644315395`, rather than stale run `44643472429`.
 - This is a targeted response to the observed publisher error, not a proven fix. The next candidate must pass Sony base creation, independent base validation/readback, associated patch creation, independent patch validation, and QA before it can be called PKG 003.
+
+
+### Sony publisher-managed directory collision (2026-11-20)
+- Candidate run 44647038528 used the latest base artifact and confirmed the temporary base SFO readback had both APP_VER and VERSION normalized to 01.00. Sony img_create advanced beyond the earlier VERSION rejection.
+- The next explicit publisher error was: `Could not create system directory. (sce_sys/about)`. The restructure log shows that OrbisPkgTool retained the original `Image0/sce_sys/about/right.sprx` and then carried that directory into the Sony GP4. This directly identifies a collision with the publisher-managed `sce_sys/about` directory.
+- Engineering commit 470ea26c35c61f03a9e7cce26723d217e261d523 removes only `sce_sys/about` from the disposable extracted copy before creating the Sony base GP4, asserts the directory is absent, and records the exclusion. The original PKG 002 artifact and PS4 state are untouched.
+- This is a targeted response to the exact publisher error, not a validated fix. Next gates remain Sony base creation, independent base validation and SFO readback, real patch association, patch build, independent validation, and QA.
