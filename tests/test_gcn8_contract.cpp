@@ -27,7 +27,7 @@ int main() {
     p = {17, 31, 19, 1.0f, 0.0f};
     BufferView short_a{a.data(), 4};
     assert(make_gemm_dispatch(p, short_a, bv, cv, ov, &d) == ContractError::buffer_too_small);
-    BufferView alias_out{a.data(), a.size() * sizeof(float)};
+    BufferView alias_out{b.data(), b.size() * sizeof(float)};
     assert(make_gemm_dispatch(p, av, bv, cv, alias_out, &d) == ContractError::output_aliases_input);
     p.alpha = std::numeric_limits<float>::infinity();
     assert(make_gemm_dispatch(p, av, bv, cv, ov, &d) == ContractError::invalid_scalar);
