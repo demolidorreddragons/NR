@@ -23,6 +23,7 @@ extern "C" std::int32_t pne_gcn8_set_cs_indirect_resource_table_pointer(
     if (!command_buffer || !command_buffer->cmdptr || !command_buffer->endptr)
         return PNE_GCN8_BINDING_INVALID_ARGUMENT;
 
+    // PSBC emits registercount=0/address32_hi=0: write only SGPR2; SGPR3 is live scalar data.
     std::uint32_t packet[3]{};
     const auto packet_error = pne::gcn8::build_cs_indirect_table_pointer_packet(
         start_register, table_gpu_address, table_bytes, packet);
