@@ -1,5 +1,9 @@
 name: PS4 PRX and PKG build
 
+concurrency:
+  group: ps4-prx-pkg-build
+  cancel-in-progress: true
+
 on:
   workflow_dispatch:
   push:
