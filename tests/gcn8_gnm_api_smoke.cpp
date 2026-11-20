@@ -19,6 +19,14 @@ using GnmSubmitCommandBuffersSignature =
     int32_t (PS4_SYSV_ABI *)(uint32_t, void* const[], uint32_t*,
                             void* const[], uint32_t*);
 using GnmSubmitDoneSignature = int (PS4_SYSV_ABI *)(void);
+using GnmDispatchInitSignature = uint32_t (PS4_SYSV_ABI *)(uint32_t*, uint32_t);
+using GnmFlushGarlicSignature = void (PS4_SYSV_ABI *)(void);
+using GnmEopSignature =
+    void (*)(GnmCommandBuffer*, GnmEventType, uint64_t, GnmEventDataSel, uint64_t);
+using KernelGetDirectMemorySizeSignature = size_t (*)();
+using KernelMunmapSignature = int32_t (*)(void*, size_t);
+using KernelUsleepSignature = int32_t (*)(uint32_t);
+
 using GnmCmdDispatchSignature =
     void (*)(GnmCommandBuffer*, uint32_t, uint32_t, uint32_t, uint32_t);
 using GnmCmdSetCsShaderSignature =
@@ -61,6 +69,24 @@ static_assert(std::is_same<decltype(&sceGnmSetCsShader),
 static_assert(std::is_same<decltype(&sceGnmSubmitCommandBuffers),
                            GnmSubmitCommandBuffersSignature>::value,
               "unexpected sceGnmSubmitCommandBuffers signature");
+static_assert(std::is_same<decltype(&sceGnmDispatchInitDefaultHardwareState),
+                           GnmDispatchInitSignature>::value,
+              "unexpected dispatch default-state signature");
+static_assert(std::is_same<decltype(&sceGnmFlushGarlic),
+                           GnmFlushGarlicSignature>::value,
+              "unexpected Garlic flush signature");
+static_assert(std::is_same<decltype(&sceGnmDrawCmdEventWriteEop),
+                           GnmEopSignature>::value,
+              "unexpected EOP fence signature");
+static_assert(std::is_same<decltype(&sceKernelGetDirectMemorySize),
+                           KernelGetDirectMemorySizeSignature>::value,
+              "unexpected direct-memory-size signature");
+static_assert(std::is_same<decltype(&sceKernelMunmap),
+                           KernelMunmapSignature>::value,
+              "unexpected direct-memory unmap signature");
+static_assert(std::is_same<decltype(&sceKernelUsleep),
+                           KernelUsleepSignature>::value,
+              "unexpected kernel sleep signature");
 static_assert(std::is_same<decltype(&sceGnmSubmitDone),
                            GnmSubmitDoneSignature>::value,
               "unexpected sceGnmSubmitDone signature");
@@ -91,6 +117,18 @@ __attribute__((used)) GnmSubmitCommandBuffersSignature
     pne_gcn8_submit_command_buffers_import = &sceGnmSubmitCommandBuffers;
 __attribute__((used)) GnmSubmitDoneSignature
     pne_gcn8_submit_done_import = &sceGnmSubmitDone;
+__attribute__((used)) GnmDispatchInitSignature
+    pne_gcn8_dispatch_init_import = &sceGnmDispatchInitDefaultHardwareState;
+__attribute__((used)) GnmFlushGarlicSignature
+    pne_gcn8_flush_garlic_import = &sceGnmFlushGarlic;
+__attribute__((used)) GnmEopSignature
+    pne_gcn8_eop_fence_import = &sceGnmDrawCmdEventWriteEop;
+__attribute__((used)) KernelGetDirectMemorySizeSignature
+    pne_gcn8_direct_memory_size_import = &sceKernelGetDirectMemorySize;
+__attribute__((used)) KernelMunmapSignature
+    pne_gcn8_munmap_import = &sceKernelMunmap;
+__attribute__((used)) KernelUsleepSignature
+    pne_gcn8_usleep_import = &sceKernelUsleep;
 __attribute__((used)) PneGcn8SetResourceTablePointerSignature
     pne_gcn8_set_indirect_resource_table_packet =
         &pne_gcn8_set_cs_indirect_resource_table_pointer;
