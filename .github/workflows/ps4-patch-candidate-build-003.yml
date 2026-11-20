@@ -244,6 +244,7 @@ jobs:
           # Keep Sony's accepted patch storage_type (digital25). The base
           # must be a non-game application package, not GD_AC addon content.
 
+          # Re-run the pair build against the normalized Windows-path QA check.
           "=== ADD PATCH PAYLOAD ===" | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
           "PATCH_SOURCE_EBOOT_SHA256=$((Get-FileHash -Algorithm SHA256 $eboot).Hash)" | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
           "PATCH_SOURCE_PRX_SHA256=$((Get-FileHash -Algorithm SHA256 $prx).Hash)" | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
