@@ -4,6 +4,7 @@
 #include <cstdint>
 
 #include "gnm_commandbuffer.h"
+#include "gnm_shader.h"
 
 enum : std::int32_t {
     PNE_GCN8_BINDING_OK = 0,
