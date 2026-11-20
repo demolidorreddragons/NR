@@ -108,7 +108,7 @@ jobs:
           foreach ($required in @("CATEGORY = gpe","APP_VER = 01.01","CONTENT_ID = IV0000-PNEU00001_00-PS4NEURALENG0000","TITLE_ID = PNEU00001","st_type=digital25")) {
             if ($patchText -notmatch [regex]::Escape($required)) { throw "Patch SFO missing expected metadata: $required" }
           }
-          foreach ($relative in @("eboot.bin","ps4_neural_engine.prx")) {
+          foreach ($relative in @("ps4_neural_engine.prx")) {
             if (-not (Get-ChildItem $patchOut -Recurse -File | Where-Object { $_.FullName.EndsWith($relative,[StringComparison]::OrdinalIgnoreCase) })) { throw "Patch payload missing: $relative" }
           }
           $changeInfo = Get-ChildItem $patchOut -Recurse -File | Where-Object {
@@ -122,18 +122,21 @@ jobs:
           $patchEboot = Get-ChildItem $patchOut -Recurse -File | Where-Object { $_.Name -eq "eboot.bin" } | Select-Object -First 1
           $basePrx = Get-ChildItem $baseOut -Recurse -File | Where-Object { $_.Name -eq "ps4_neural_engine.prx" } | Select-Object -First 1
           $patchPrx = Get-ChildItem $patchOut -Recurse -File | Where-Object { $_.Name -eq "ps4_neural_engine.prx" } | Select-Object -First 1
-          foreach ($item in @($baseEboot,$patchEboot,$basePrx,$patchPrx)) { if (-not $item) { throw "Executable payload comparison input missing." } }
+          foreach ($item in @($baseEboot,$basePrx,$patchPrx)) { if (-not $item) { throw "Executable payload comparison input missing." } }
+          if ($patchEboot) { throw "Unchanged eboot.bin must not be redundantly included in the patch payload." }
           $baseEbootHash = (Get-FileHash -Algorithm SHA256 $baseEboot.FullName).Hash
-          $patchEbootHash = (Get-FileHash -Algorithm SHA256 $patchEboot.FullName).Hash
           $basePrxHash = (Get-FileHash -Algorithm SHA256 $basePrx.FullName).Hash
           $patchPrxHash = (Get-FileHash -Algorithm SHA256 $patchPrx.FullName).Hash
+          $reportText = Get-Content $report -Raw
+          $expectedEbootHash = [regex]::Match($reportText, "PATCH_SOURCE_EBOOT_SHA256=([A-Fa-f0-9]{64})").Groups[1].Value
+          $expectedPrxHash = [regex]::Match($reportText, "PATCH_SOURCE_PRX_SHA256=([A-Fa-f0-9]{64})").Groups[1].Value
+          if (-not $expectedEbootHash -or $baseEbootHash -ne $expectedEbootHash) { throw "Base eboot does not match the exact unchanged source eboot." }
+          if (-not $expectedPrxHash -or $patchPrxHash -ne $expectedPrxHash) { throw "Patch PRX does not match the exact intended source PRX." }
+          if ($basePrxHash -eq $patchPrxHash) { throw "Patch PRX is byte-identical to base; no executable update exists." }
           "BASE_EBOOT_SHA256=$baseEbootHash" | Out-File qa-output/qa-report.txt -Append
-          "PATCH_EBOOT_SHA256=$patchEbootHash" | Out-File qa-output/qa-report.txt -Append
+          "PATCH_EBOOT_PRESENT=False_UNCHANGED_FILE_OMITTED" | Out-File qa-output/qa-report.txt -Append
           "BASE_PRX_SHA256=$basePrxHash" | Out-File qa-output/qa-report.txt -Append
           "PATCH_PRX_SHA256=$patchPrxHash" | Out-File qa-output/qa-report.txt -Append
-          if ($baseEbootHash -eq $patchEbootHash -and $basePrxHash -eq $patchPrxHash) {
-            throw "Patch contains no executable payload change; eboot.bin and ps4_neural_engine.prx are byte-identical to the bundled base. Metadata-only version bump is not approved as a functional update."
-          }
           "BASE_CATEGORY=gde" | Out-File qa-output/qa-report.txt -Append
           "PATCH_CATEGORY=gpe" | Out-File qa-output/qa-report.txt -Append
           "PATCH_APP_VER=01.01" | Out-File qa-output/qa-report.txt -Append
