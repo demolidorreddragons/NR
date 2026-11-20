@@ -163,6 +163,16 @@ jobs:
           $sonyBasePkg = Join-Path $work "PS4-Neural-Engine-002-SONY-BASE.pkg"
           & $pubCmd gp4_proj_create --volume_type pkg_ps4_app --content_id IV0000-PNEU00001_00-PS4NEURALENG0000 --passcode $zeroKey --entitlement_key $zeroKey --storage_type digital50 $sonyBaseGp4 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
           if ($LASTEXITCODE -ne 0 -or -not (Test-Path $sonyBaseGp4)) { throw "Sony base GP4 creation failed." }
+          # Fake PKG Tools creates sce_sys/about as a publisher-managed system directory.
+          # Keeping the extracted about/right.sprx collides with that creation and
+          # makes img_create fail with "Could not create system directory".
+          # This is a disposable association base only; let Sony regenerate it.
+          $publisherAbout = Join-Path $image "sce_sys/about"
+          if (Test-Path $publisherAbout) {
+            Remove-Item -LiteralPath $publisherAbout -Recurse -Force
+            "SONY_REGENERATED_DIRECTORY_EXCLUDED=sce_sys/about" | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
+          }
+          if (Test-Path $publisherAbout) { throw "Publisher-managed sce_sys/about directory was not removed from disposable base copy." }
           $baseFiles = @(Get-ChildItem $image -Recurse -File | Sort-Object FullName)
           if ($baseFiles.Count -lt 4) { throw "Sony base GP4 source payload is incomplete: $($baseFiles.Count) files." }
           foreach ($file in $baseFiles) {
