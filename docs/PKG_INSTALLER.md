@@ -55,3 +55,10 @@ A verificação automatizada de invariantes do instalador foi adicionada ao work
 ### Manifest integrity preflight (2026-11-20)
 
 `installer/release_manifest.c` now rejects missing/duplicate required fields, unsupported schema, mismatched TITLE_ID/CONTENT_ID, unexpected PRX filename, malformed SHA-256, and a PRX whose computed SHA-256 differs from the manifest. This check runs before `mkdir` or staging. Host tests cover a valid manifest, SHA mismatch, wrong CONTENT_ID, duplicate hash key, missing field, malformed hash, and the SHA-256 `abc` test vector. Host CI run `44678921838` passed this test and the rest of the host suite. This does not establish PRX ABI compatibility, GoldHEN loading, or hardware readiness.
+
+
+## Ícone oficial do aplicativo — regra obrigatória (2026-11-20)
+
+O SVG simplificado foi reprovado e não pode voltar a ser usado como substituto da arte aprovada. O PKG deve incorporar a imagem raster original aprovada pelo usuário, sem redesenho, composição alternativa, logos vetoriais aproximados ou geração por IA. A única transformação permitida é o redimensionamento proporcional da imagem quadrada original para 512×512 com filtro Lanczos, preservando toda a composição.
+
+Fonte canônica esperada no repositório: `assets/neural-rendering-icon-source.png`. `tools/make_icon.py` falha explicitamente se essa imagem não estiver presente; não produz fallback. O arquivo aprovado foi localizado na Library do projeto como `Medusa Neural Rendering PS4 Pro.png` (1254×1254), mas a integração ainda depende de disponibilizar seus bytes originais no repositório. Nenhum novo PKG com ícone substituto pode ser aprovado.
