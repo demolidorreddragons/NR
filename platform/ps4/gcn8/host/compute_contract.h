@@ -3,7 +3,6 @@
 
 #include <cstddef>
 #include <cstdint>
-#include <cstddef>
 
 namespace pne::gcn8 {
 
@@ -36,7 +35,9 @@ struct GemmDispatch {
 
 enum class ContractError {
     none,
+    null_dispatch,
     zero_output_dimension,
+    shader_index_overflow,
     size_overflow,
     null_buffer,
     buffer_too_small,
