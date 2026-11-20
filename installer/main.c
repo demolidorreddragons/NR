@@ -38,8 +38,10 @@ static ssize_t read_block(int fd, void* buffer, size_t capacity) {
 #define DEST_DIR "/data/GoldHEN/plugins"
 #define DEST_PRX DEST_DIR "/ps4_neural_engine.prx"
 #define DEST_TMP DEST_PRX ".pne-tmp"
+#define DEST_BACKUP DEST_PRX ".pne-backup"
 #define CONFIG "/data/GoldHEN/plugins.ini"
 #define CONFIG_TMP CONFIG ".pne-tmp"
+#define CONFIG_BACKUP CONFIG ".pne-backup"
 #define STATUS "/data/GoldHEN/ps4_neural_engine_install.log"
 #define MAX_CONFIG 65536
 
@@ -175,12 +177,7 @@ static int copy_prx(char* error, size_t error_size) {
                  source_bytes, verified_bytes, saved_errno);
         return 0;
     }
-    if (rename(DEST_TMP, DEST_PRX) != 0) {
-        saved_errno = errno;
-        remove(DEST_TMP);
-        snprintf(error, error_size, "ERROR: cannot activate copied PRX (errno=%d).", saved_errno);
-        return 0;
-    }
+    /* Keep the verified PRX staged; main() commits it with plugins.ini. */
     return 1;
 }
 static void trim_line(char* line) {
@@ -283,13 +280,66 @@ static int configure_loader(char* error, size_t error_size) {
     int ok = fwrite(output, 1, used, out) == used;
     if (fflush(out) != 0 || fsync(fileno(out)) != 0) ok = 0;
     if (fclose(out) != 0) ok = 0;
-    if (!ok || rename(CONFIG_TMP, CONFIG) != 0) {
+    if (!ok) {
         int saved_errno = errno;
         remove(CONFIG_TMP);
-        snprintf(error, error_size, "ERROR: cannot save updated plugins.ini (errno=%d).", saved_errno);
+        snprintf(error, error_size, "ERROR: cannot stage updated plugins.ini (errno=%d).", saved_errno);
         return 0;
     }
     return 1;
+}
+
+/* Commit PRX and loader config with retained recovery copies. */
+static int path_exists(const char* path) {
+    struct stat st;
+    return stat(path, &st) == 0;
+}
+
+static int commit_install(char* error, size_t error_size) {
+    int had_prx = path_exists(DEST_PRX);
+    int had_config = path_exists(CONFIG);
+    int moved_prx = 0, moved_config = 0, installed_prx = 0;
+    int failure = 0;
+
+    if (path_exists(DEST_BACKUP) || path_exists(CONFIG_BACKUP)) {
+        snprintf(error, error_size, "ERROR: existing recovery backup found; refusing to overwrite it.");
+        return 0;
+    }
+    if (had_prx) {
+        if (rename(DEST_PRX, DEST_BACKUP) != 0) {
+            snprintf(error, error_size, "ERROR: cannot back up existing PRX (errno=%d).", errno);
+            return 0;
+        }
+        moved_prx = 1;
+    }
+    if (had_config) {
+        if (rename(CONFIG, CONFIG_BACKUP) != 0) {
+            failure = errno;
+            if (moved_prx) rename(DEST_BACKUP, DEST_PRX);
+            snprintf(error, error_size, "ERROR: cannot back up plugins.ini (errno=%d); previous PRX restore attempted.", failure);
+            return 0;
+        }
+        moved_config = 1;
+    }
+    if (rename(DEST_TMP, DEST_PRX) != 0) {
+        failure = errno;
+        goto rollback;
+    }
+    installed_prx = 1;
+    if (rename(CONFIG_TMP, CONFIG) != 0) {
+        failure = errno;
+        goto rollback;
+    }
+    return 1;
+
+rollback:
+    if (installed_prx) remove(DEST_PRX);
+    if (moved_config && rename(CONFIG_BACKUP, CONFIG) != 0) failure = errno;
+    if (moved_prx && rename(DEST_BACKUP, DEST_PRX) != 0) failure = errno;
+    remove(DEST_TMP);
+    remove(CONFIG_TMP);
+    snprintf(error, error_size, "ERROR: transactional commit failed (errno=%d); rollback attempted, inspect backups.", failure);
+    return 0;
 }
 
 int main(void) {
@@ -316,13 +366,20 @@ int main(void) {
         return 2;
     }
     if (!configure_loader(error, sizeof(error))) {
+        remove(DEST_TMP);
         write_status(error);
-        notify("PNE: PRX copiado, mas plugins.ini nao foi atualizado. Veja install.log.");
+        notify("PNE: falha ao preparar plugins.ini. Arquivos ativos preservados.");
         sceKernelUsleep(3000000);
         return 3;
     }
+    if (!commit_install(error, sizeof(error))) {
+        write_status(error);
+        notify("PNE: falha na transacao. Verifique backups e install.log.");
+        sceKernelUsleep(3000000);
+        return 4;
+    }
 
-    write_status("OK: PRX copied and size-verified; plugins.ini was updated without replacing existing entries. Restart GoldHEN or reboot to load.");
+    write_status("OK: PRX and plugins.ini committed; previous files retained as .pne-backup when present. Restart GoldHEN or reboot to load.");
     notify("PNE instalado automaticamente. Reinicie o GoldHEN/PS4 para carregar.");
     sceKernelUsleep(3000000);
     return 0;
