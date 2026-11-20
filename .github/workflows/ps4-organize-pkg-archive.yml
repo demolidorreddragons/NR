@@ -20,7 +20,7 @@ jobs:
 
           $hostUrl = "ftp://$($env:PS4_IP):2121/"
           $creds = "anonymous:anonymous@example.com"
-          $keep = "PS4-Neural-Engine-003-263D3207F1A6.pkg"
+          $keep = "PS4-Neural-Engine-004-c88da28ad432.pkg"
           $base = "/data/pkg/"
           $archive = "/data/pkg/old_versions/"
 
