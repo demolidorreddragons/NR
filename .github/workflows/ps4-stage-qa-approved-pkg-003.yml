@@ -75,25 +75,11 @@ jobs:
           $rootBefore = @(Get-FtpNames $root)
           if ($rootBefore -contains $name) { throw "Target already exists; refusing to overwrite: $name" }
 
-          $upload = & curl.exe --fail --silent --show-error --ftp-pasv --user $creds --upload-file $pkg $target 2>&1
-          if ($LASTEXITCODE -ne 0) { throw "FTP upload failed: $upload" }
+          # Determine exactly which older Neural Engine packages would move.
+          $oldNeural = @($rootBefore | Where-Object { $_ -match '^PS4-Neural-Engine-.*[.]pkg$' })
+          $preservedOther = @($rootBefore | Where-Object { $_ -notmatch '^PS4-Neural-Engine-.*[.]pkg$' })
 
-          $readback = Join-Path $env:RUNNER_TEMP $name
-          $download = & curl.exe --fail --silent --show-error --ftp-pasv --user $creds --output $readback $target 2>&1
-          if ($LASTEXITCODE -ne 0) { throw "FTP readback failed: $download" }
-          $remoteSize = (Get-Item -LiteralPath $readback).Length
-          $remoteHash = (Get-FileHash -LiteralPath $readback -Algorithm SHA256).Hash.ToLowerInvariant()
-          if ($remoteSize -ne $size -or $remoteHash -ne $hash) {
-            throw "Remote readback mismatch: expected_bytes=$size actual_bytes=$remoteSize expected_sha=$hash actual_sha=$remoteHash"
-          }
-          Write-Host "NEW_PKG_UPLOAD_AND_READBACK_VERIFIED path=$root$name bytes=$remoteSize sha256=$remoteHash"
-
-          # Archive only older Neural Engine PKGs. Third-party packages are never moved.
-          $rootAfterUpload = @(Get-FtpNames $root)
-          if ($rootAfterUpload -notcontains $name) { throw "Uploaded package is not visible in /data/pkg/." }
-          $oldNeural = @($rootAfterUpload | Where-Object { $_ -match '^PS4-Neural-Engine-.*[.]pkg$' -and $_ -ne $name })
-          $preservedOther = @($rootAfterUpload | Where-Object { $_ -notmatch '^PS4-Neural-Engine-.*[.]pkg$' })
-
+          # Prepare the archive and check every collision BEFORE uploading anything.
           $archiveBefore = @()
           $archiveUrl = "ftp://$($env:PS4_IP):2121$archive"
           $archiveListing = & curl.exe --fail --silent --show-error --ftp-pasv --list-only --user $creds $archiveUrl 2>&1
@@ -107,9 +93,25 @@ jobs:
               $archiveBefore = @($retry | ForEach-Object { ([string]$_).Trim() } | Where-Object { $_ })
             }
           }
-
           $collisions = @($oldNeural | Where-Object { $archiveBefore -contains $_ })
-          if ($collisions.Count -gt 0) { throw "Archive name collision; no old package moves started: $($collisions -join ', ')" }
+          if ($collisions.Count -gt 0) { throw "Archive name collision; no upload or old package moves started: $($collisions -join ', ')" }
+
+          # Upload and verify byte-for-byte readback before moving any old packages.
+          $upload = & curl.exe --fail --silent --show-error --ftp-pasv --user $creds --upload-file $pkg $target 2>&1
+          if ($LASTEXITCODE -ne 0) { throw "FTP upload failed: $upload" }
+
+          $readback = Join-Path $env:RUNNER_TEMP $name
+          $download = & curl.exe --fail --silent --show-error --ftp-pasv --user $creds --output $readback $target 2>&1
+          if ($LASTEXITCODE -ne 0) { throw "FTP readback failed: $download" }
+          $remoteSize = (Get-Item -LiteralPath $readback).Length
+          $remoteHash = (Get-FileHash -LiteralPath $readback -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($remoteSize -ne $size -or $remoteHash -ne $hash) {
+            throw "Remote readback mismatch: expected_bytes=$size actual_bytes=$remoteSize expected_sha=$hash actual_sha=$remoteHash"
+          }
+          Write-Host "NEW_PKG_UPLOAD_AND_READBACK_VERIFIED path=$root$name bytes=$remoteSize sha256=$remoteHash"
+
+          $rootAfterUpload = @(Get-FtpNames $root)
+          if ($rootAfterUpload -notcontains $name) { throw "Uploaded package is not visible in /data/pkg/." }
 
           foreach ($oldName in $oldNeural) {
             $move = & curl.exe --fail --silent --show-error --ftp-pasv --user $creds --quote "CWD data" --quote "CWD pkg" --quote "RNFR $oldName" --quote "RNTO old_versions/$oldName" $hostUrl 2>&1
