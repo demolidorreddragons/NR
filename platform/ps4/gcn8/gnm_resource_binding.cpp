@@ -6,7 +6,7 @@
 #include "pm4/pm4_ps4.h"
 #include "pm4/sid.h"
 
-static_assert((PKT3(PKT3_SET_SH_REG, 2, 0) | PKT3_SHADER_TYPE_S(1)) == 0xC0027602u,
+static_assert((PKT3(PKT3_SET_SH_REG, 1, 0) | PKT3_SHADER_TYPE_S(1)) == 0xC0017602u,
               "PM4 compute SET_SH_REG packet encoding changed");
 static_assert(R_00B900_COMPUTE_USER_DATA_0 == 0x0000B900u,
               "GFX8 compute user-data base register changed");
@@ -23,7 +23,7 @@ extern "C" std::int32_t pne_gcn8_set_cs_indirect_resource_table_pointer(
     if (!command_buffer || !command_buffer->cmdptr || !command_buffer->endptr)
         return PNE_GCN8_BINDING_INVALID_ARGUMENT;
 
-    std::uint32_t packet[4]{};
+    std::uint32_t packet[3]{};
     const auto packet_error = pne::gcn8::build_cs_indirect_table_pointer_packet(
         start_register, table_gpu_address, table_bytes, packet);
     if (packet_error == pne::gcn8::ResourceTableError::invalid_user_data_slot)
@@ -35,10 +35,10 @@ extern "C" std::int32_t pne_gcn8_set_cs_indirect_resource_table_pointer(
 
     if (command_buffer->endptr < command_buffer->cmdptr ||
         static_cast<std::uint32_t>(command_buffer->endptr -
-                                   command_buffer->cmdptr) < 4u)
+                                   command_buffer->cmdptr) < 3u)
         return PNE_GCN8_BINDING_COMMAND_BUFFER_FULL;
 
     std::memcpy(command_buffer->cmdptr, packet, sizeof(packet));
-    command_buffer->cmdptr += 4;
+    command_buffer->cmdptr += 3;
     return PNE_GCN8_BINDING_OK;
 }
