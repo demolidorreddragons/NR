@@ -23,7 +23,7 @@ COMMON_FLAGS := --target=x86_64-pc-freebsd12-elf -fPIC -funwind-tables -fno-exce
 CFLAGS := $(COMMON_FLAGS) -std=c11 -c
 CXXFLAGS := $(COMMON_FLAGS) -std=c++17 -isystem $(TOOLCHAIN)/include/c++/v1 -c
 LIBS := -lSceLibcInternal -lSceGnmDriver -lScePad -lGoldHEN_Hook -lkernel -lSceSystemService -lSceUserService -lSceHttp -lSceSsl -lSceNet -lSceSysmodule -lc++
-OBJS := $(OBJDIR)/main.o $(OBJDIR)/plugin_common.o $(OBJDIR)/telemetry.o $(OBJDIR)/telemetry_bridge.o $(OBJDIR)/github_client.o $(OBJDIR)/gnm_resource_binding.o
+OBJS := $(OBJDIR)/main.o $(OBJDIR)/plugin_common.o $(OBJDIR)/telemetry.o $(OBJDIR)/telemetry_bridge.o $(OBJDIR)/github_client.o $(OBJDIR)/gnm_resource_binding.o $(OBJDIR)/resource_table_contract.o
 
 .PHONY: all clean
 all: $(TARGET_PRX)
@@ -43,6 +43,8 @@ $(OBJDIR)/github_client.o: github_client.cpp $(ROOT)/include/pne/github_oauth.hp
 	$(CXX) $(CXXFLAGS) -o $@ $<
 $(OBJDIR)/gnm_resource_binding.o: $(ROOT)/platform/ps4/gcn8/gnm_resource_binding.cpp $(ROOT)/platform/ps4/gcn8/gnm_resource_binding.h | $(OBJDIR)
 	$(CXX) $(CXXFLAGS) -I$(ROOT)/OpenGNM/include -o $@ $<
+$(OBJDIR)/resource_table_contract.o: $(ROOT)/platform/ps4/gcn8/host/resource_table_contract.cpp $(ROOT)/platform/ps4/gcn8/host/resource_table_contract.h | $(OBJDIR)
+	$(CXX) $(CXXFLAGS) -I$(ROOT)/platform/ps4/gcn8/host -o $@ $<
 
 $(TARGET_PRX): $(OBJS) | $(OUTDIR)
 	$(LD) -m elf_x86_64 -pie --script $(TOOLCHAIN)/link.x -e _init --eh-frame-hdr -L$(TOOLCHAIN)/lib -L$(GH_SDK) $(GH_SDK)/build/crtprx.o $(OBJS) -o $(TARGET_ELF) $(LIBS)
