@@ -19,6 +19,7 @@ jobs:
   build-candidate:
     if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
     # Disposable hosted Windows runner only; never execute third-party tools on the PS4 bridge.
+    # The QA workflow checks executable deltas and the exact bundled base/patch pair.
     runs-on: windows-latest
     timeout-minutes: 20
     steps:
