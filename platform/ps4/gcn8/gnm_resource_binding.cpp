@@ -12,7 +12,13 @@ extern "C" std::int32_t pne_gcn8_set_cs_indirect_resource_table_pointer(
         return PNE_GCN8_BINDING_INVALID_ARGUMENT;
 
     // A pointer occupies two consecutive CS user SGPRs (low/high dwords).
-    if (start_register > 14)
+    constexpr std::uint32_t cs_user_data_first =
+        R_00B900_COMPUTE_USER_DATA_0;
+    constexpr std::uint32_t cs_user_data_last =
+        R_00B93C_COMPUTE_USER_DATA_15;
+    constexpr std::uint32_t cs_user_data_count =
+        ((cs_user_data_last - cs_user_data_first) / 4u) + 1u;
+    if (start_register >= cs_user_data_count - 1u)
         return PNE_GCN8_BINDING_INVALID_SLOT;
 
     constexpr std::uint64_t address_space_end = std::uint64_t{1} << 32;
@@ -27,9 +33,9 @@ extern "C" std::int32_t pne_gcn8_set_cs_indirect_resource_table_pointer(
         return PNE_GCN8_BINDING_COMMAND_BUFFER_FULL;
 
     const std::uint32_t register_address =
-        R_00B900_COMPUTE_USER_DATA_0 + (start_register * sizeof(std::uint32_t));
+        cs_user_data_first + (start_register * sizeof(std::uint32_t));
     if (register_address < SI_SH_REG_OFFSET ||
-        register_address + 2u * sizeof(std::uint32_t) > SI_SH_REG_END)
+        register_address + sizeof(std::uint32_t) > cs_user_data_last)
         return PNE_GCN8_BINDING_INVALID_REGISTER_RANGE;
 
     // SET_SH_REG with SHADER_TYPE=1 selects the compute engine (MEC).
