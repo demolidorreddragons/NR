@@ -1,0 +1,44 @@
+name: PS4 installed Neural Engine read-only audit
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/ps4-installed-app-readonly-audit.yml"
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: [self-hosted, Windows, X64, ps4-lan]
+    steps:
+      - name: Read installed app metadata and executable identity over FTP
+        shell: powershell -NoProfile -ExecutionPolicy Bypass -File {0}
+        env:
+          PS4_IP: ${{ vars.PS4_IP }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          if (-not $env:PS4_IP) { throw "PS4_IP variable missing." }
+          $base = "ftp://$($env:PS4_IP):2121/user/app/PNEU00001/"
+          $creds = "anonymous:anonymous@example.com"
+          Write-Host "=== INSTALLED TITLE DIRECTORY ==="
+          $listing = & curl.exe --fail --silent --show-error --ftp-pasv --user $creds $base 2>&1
+          if ($LASTEXITCODE -ne 0) { throw "Cannot list installed PNEU00001 directory." }
+          $listing | ForEach-Object { Write-Host $_ }
+          foreach ($name in @("sce_sys/param.sfo","eboot.bin","ps4_neural_engine.prx")) {
+            $local = Join-Path $env:RUNNER_TEMP ($name.Replace("/","_"))
+            $url = $base + $name
+            $out = & curl.exe --fail --silent --show-error --ftp-pasv --user $creds --output $local $url 2>&1
+            if ($LASTEXITCODE -eq 0 -and (Test-Path -LiteralPath $local)) {
+              $item = Get-Item -LiteralPath $local
+              $hash = (Get-FileHash -LiteralPath $local -Algorithm SHA256).Hash.ToLowerInvariant()
+              Write-Host "INSTALLED_FILE=$name BYTES=$($item.Length) SHA256=$hash"
+              if ($name -eq "sce_sys/param.sfo") {
+                $bytes = [IO.File]::ReadAllBytes($local)
+                Write-Host "PARAM_SFO_HEX=$([BitConverter]::ToString($bytes))"
+              }
+            } else {
+              Write-Host "INSTALLED_FILE_UNAVAILABLE=$name"
+              $out | ForEach-Object { Write-Host $_ }
+            }
+          }
+          Write-Host "READ_ONLY=true"
+          Write-Host "NO_FILES_WRITTEN_OR_DELETED=true"
