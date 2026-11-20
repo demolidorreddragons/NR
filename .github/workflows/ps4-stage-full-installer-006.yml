@@ -47,8 +47,14 @@ jobs:
           if (-not (Test-Path -LiteralPath $pkg)) { throw "Build artifact PKG 006 is missing." }
           if (-not (Test-Path -LiteralPath $report)) { throw "Independent QA report is missing." }
           $reportText = Get-Content -LiteralPath $report -Raw
-          foreach ($required in @("PKG_NUMBER=006","PKG_KIND=FULL_BASE_APPLICATION_NOT_PATCH","CATEGORY=gde","APP_VER = 01.02","VERSION = 01.02","QA_STATUS=PASS_PC_ONLY_NOT_HARDWARE_TESTED")) {
+          foreach ($required in @("PKG_NUMBER=006","PKG_KIND=FULL_BASE_APPLICATION_NOT_PATCH","QA_STATUS=PASS_PC_ONLY_NOT_HARDWARE_TESTED")) {
             if ($reportText -notmatch [regex]::Escape($required)) { throw "QA report missing required identity: $required" }
+          }
+          $sfoReport = Join-Path $env:GITHUB_WORKSPACE "approved/param-sfo.txt"
+          if (-not (Test-Path -LiteralPath $sfoReport)) { throw "Independent PARAM.SFO report is missing." }
+          $sfoText = Get-Content -LiteralPath $sfoReport -Raw
+          foreach ($required in @("CATEGORY = gde","APP_VER = 01.02","VERSION = 01.02","TITLE_ID = PNEU00001","CONTENT_ID = IV0000-PNEU00001_00-PS4NEURALENG0000","st_type=digital50")) {
+            if ($sfoText -notmatch [regex]::Escape($required)) { throw "Independent SFO report missing required identity: $required" }
           }
           $expected = [regex]::Match($reportText, "PKG_SHA256=([A-Fa-f0-9]{64})").Groups[1].Value.ToLowerInvariant()
           if (-not $expected) { throw "QA report package hash missing." }
