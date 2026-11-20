@@ -59,15 +59,14 @@ int main() {
     assert(validate_indirect_resource_table_range(0xfffffff0ULL, 16) == ResourceTableError::none);
     assert(validate_indirect_resource_table_range(0xfffffff0ULL, 32) == ResourceTableError::invalid_table_address);
 
-    std::uint32_t packet[4]{};
+    std::uint32_t packet[3]{};
     assert(build_cs_indirect_table_pointer_packet(2, 0x12340000, 208, packet) == ResourceTableError::none);
-    assert(packet[0] == 0xC0027602u); // SET_SH_REG, 2 dwords, compute engine.
+    assert(packet[0] == 0xC0017602u); // SET_SH_REG, one dword, compute engine.
     assert(packet[1] == 0x242u);      // COMPUTE_USER_DATA_2 relative to SH register base.
-    assert(packet[2] == 0x12340000u);
-    assert(packet[3] == 0u);          // PSBC address32_hi = 0.
-    assert(build_cs_indirect_table_pointer_packet(14, 0x12340000, 208, packet) == ResourceTableError::none);
-    assert(packet[1] == 0x24Eu);
-    assert(build_cs_indirect_table_pointer_packet(15, 0x12340000, 208, packet) == ResourceTableError::invalid_user_data_slot);
+    assert(packet[2] == 0x12340000u); // 32-bit table pointer; do not overwrite SGPR3.
+    assert(build_cs_indirect_table_pointer_packet(15, 0x12340000, 208, packet) == ResourceTableError::none);
+    assert(packet[1] == 0x24Fu);
+    assert(build_cs_indirect_table_pointer_packet(16, 0x12340000, 208, packet) == ResourceTableError::invalid_user_data_slot);
     assert(build_cs_indirect_table_pointer_packet(2, 0x100000000ULL, 208, packet) == ResourceTableError::invalid_table_address);
     assert(build_cs_indirect_table_pointer_packet(2, 0x12340000, 208, nullptr) == ResourceTableError::null_output);
     return 0;
