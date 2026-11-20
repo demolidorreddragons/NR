@@ -58,7 +58,11 @@ ResourceTableError build_resource_table_layout(
         if (have_previous && previous_end > offset)
             return ResourceTableError::overlapping_binding;
 
-        output->bindings[i] = {requirement.binding, offset, descriptor_bytes, requirement.array_count};
+        auto& binding = output->bindings[i];
+        binding.binding = requirement.binding;
+        binding.byte_offset = offset;
+        binding.descriptor_bytes = descriptor_bytes;
+        binding.array_count = requirement.array_count;
         previous_binding = requirement.binding;
         previous_end = end;
         have_previous = true;
