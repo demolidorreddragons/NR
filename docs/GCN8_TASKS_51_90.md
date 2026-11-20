@@ -17,23 +17,23 @@ This ledger records the next 40 work items. A task is **DONE** only when its sta
 | 56 | Resolve compiler/linker errors exposed after C compilation | **PASS — LINKER CLEAN** | Run `44679024542` built the PSBC executable after generated NIR/ACO and format-table sources were added. |
 | 57 | Verify PSBC executable and CLI target selection | **PASS — `-n` TARGET CHECK** | Run `44679024542` passed CLI help and PS4 Pro (NEO/GFX8) target selection; malformed-input handling is tracked separately in task 59. |
 | 58 | Record compiler/dependency provenance | **IMPLEMENTED — CI REVALIDATION PENDING** | GNM report now records PSBC executable SHA-256, host/tool versions, pinned source revisions, shader source/SPIR-V/GNM hashes. |
-| 59 | Exercise compiler positive/negative input tests | **PATCH IMPLEMENTED — REVALIDATION PENDING** | Run `44679024542` revealed the 4-byte malformed SPIR-V input reached NIR and crashed; the workflow now applies a CLI header guard and requires a non-signal rejection. |
-| 60 | Accept reproducible GFX8 toolchain | **PENDING** | All prior gates pass; host build alone is not shader correctness. |
+| 59 | Exercise compiler positive/negative input tests | **PASS — CLI NEGATIVE INPUT REJECTED CLEANLY** | Run `44680087030` built PSBC and passed the truncated-SPIR-V CLI test: normal error exit, expected diagnostic, no output `.sb`; no segmentation fault. |
+| 60 | Accept reproducible GFX8 toolchain | **PARTIAL — TOOLCHAIN + CONVERSION PASS; CONTAINER QA PENDING** | Run `44680087030` built pinned PSBC, passed CLI negative test, compiled and validated five SPIR-V modules, and emitted five non-empty GFX8 `.sb` files. Container/metadata QA is still being corrected. |
 
 ## Phase 12 — Compile and inspect GFX8 shaders
 
 | # | Work item | State | Acceptance evidence |
 |---:|---|---|---|
-| 61 | Compile scalar FP32 GEMM to SPIR-V | **PARTIAL — COMPILE/VALIDATE PASS** | SPIR-V generation and `spirv-val` passed in run `44679024542`; persistent artifact upload is added for the next run. |
-| 62 | Compile tiled FP32 GEMM to SPIR-V | **PARTIAL — COMPILE/VALIDATE PASS** | SPIR-V generation and `spirv-val` passed in run `44679024542`; persistent artifact upload is added for the next run. |
-| 63 | Compile FP16-emulation shader to SPIR-V | **PARTIAL — COMPILE/VALIDATE PASS** | SPIR-V generation and `spirv-val` passed in run `44679024542`; no native FP16 claim. |
-| 64 | Compile E4M3 encode/decode shaders to SPIR-V | **PARTIAL — COMPILE/VALIDATE PASS** | Both SPIR-V modules passed `spirv-val` in run `44679024542`; persistent artifact upload is added for the next run. |
-| 65 | Validate all SPIR-V modules | **PASS — FIVE MODULES VALIDATED** | All five modules passed `spirv-val --target-env vulkan1.1` in run `44679024542`; next run also preserves source/SPIR-V hashes as an artifact. |
-| 66 | Compile all five shaders for PS4 NEO/GFX8 | **PENDING** | Five non-empty GNM shader binaries from pinned PSBC with `-n`. |
-| 67 | Validate GNM containers and CRCs | **IMPLEMENTED — CI REVALIDATION PENDING** | Added code-range/slot bounds checks plus negative controls for truncated header and corrupted CRC; must run on real compiler output. |
-| 68 | Generate immutable shader artifact manifest | **IMPLEMENTED — CI REVALIDATION PENDING** | Container report now records source/SPIR-V/GNM hashes, sizes and pinned compiler/dependency revisions; report is included in uploaded artifact. |
-| 69 | Extract raw OrbShdr metadata | **IMPLEMENTED — CI REVALIDATION PENDING** | Workflow now bounds-checks and records all CS input-usage slots, common shader data, raw CS register words, and static SPIR-V local sizes. |
-| 70 | Decode ISA and resource/register metadata | **PARTIAL — GFX8 ISA + REGISTER FIELD DECODER IMPLEMENTED** | Workflow disassembles code with LLVM MC and decodes raw CS resource fields using pinned Mesa GFX8 definitions; REA-5 independent corroboration remains open. |
+| 61 | Compile scalar FP32 GEMM to SPIR-V | **PASS — SPIR-V + GNM EMISSION** | Run `44680087030` compiled/validated the scalar FP32 SPIR-V and emitted a non-empty PS4 NEO `.sb`; container audit remains separate. |
+| 62 | Compile tiled FP32 GEMM to SPIR-V | **PASS — SPIR-V + GNM EMISSION** | Run `44680087030` compiled/validated the tiled FP32 SPIR-V and emitted a non-empty PS4 NEO `.sb`; container audit remains separate. |
+| 63 | Compile FP16-emulation shader to SPIR-V | **PASS — SPIR-V + GNM EMISSION** | Run `44680087030` compiled/validated the FP16-emulation SPIR-V and emitted a non-empty PS4 NEO `.sb`; no native FP16 claim. |
+| 64 | Compile E4M3 encode/decode shaders to SPIR-V | **PASS — BOTH SPIR-V + GNM EMITTED** | Run `44680087030` compiled/validated both E4M3 modules and emitted non-empty PS4 NEO `.sb` files; container audit remains separate. |
+| 65 | Validate all SPIR-V modules | **PASS — FIVE MODULES VALIDATED + HASHED** | Run `44680087030` passed `spirv-val --target-env vulkan1.1` for all five modules and generated the source/SPIR-V provenance manifest; SPIR-V artifact upload passed. |
+| 66 | Compile all five shaders for PS4 NEO/GFX8 | **PASS — FIVE NON-EMPTY `.sb` FILES** | Run `44680087030` completed PSBC `-n -s compute` for all five modules and passed `test -s` for every output. This is compiler emission, not hardware execution. |
+| 67 | Validate GNM containers and CRCs | **PARTIAL — UPSTREAM CRC PASS; CUSTOM SLOT CHECK CORRECTED** | In run `44680087030`, upstream `verify_shader()` validated the tiled GEMM container and PS4 CRC; custom QA then rejected a valid input-usage slot because it incorrectly expected the slot table directly after the CS header. Corrected to bound the slot table inside the code/chunk region; rerun pending. |
+| 68 | Generate immutable shader artifact manifest | **IMPLEMENTED — CONTAINER REPORT REVALIDATION PENDING** | SPIR-V source/binary provenance manifest generated and uploaded in run `44680087030`; GNM report generation is still blocked by the slot-range false rejection. |
+| 69 | Extract raw OrbShdr metadata | **IMPLEMENTED — REVALIDATION PENDING** | Parser reached the first real OrbShdr record and read its fields; complete multi-shader metadata report awaits corrected slot bounds and rerun. |
+| 70 | Decode ISA and resource/register metadata | **IMPLEMENTED — REVALIDATION PENDING** | GFX8 disassembly and register decoder are in the validator, but the first shader was rejected before a complete report; no register/resource result accepted yet. REA-5 corroboration remains open. |
 
 ## Phase 13 — GNM compute backend
 
