@@ -254,7 +254,7 @@ extern "C" int pne_gcn8_compute_smoke_run(const char* shader_path,
     cmd.cmdptr = dcb + initial_dwords;
 
     uint32_t* before = cmd.cmdptr;
-    sceGnmDrawCmdSetCsShader(&cmd, &cs_registers);
+    pne_gcn8_set_cs_shader(&cmd, &cs_registers);
     if (cmd.cmdptr - before != 25) {
         log.message("RESULT=FAIL; REASON=CS_SHADER_BIND_PACKET");
         return 19;
@@ -267,7 +267,7 @@ extern "C" int pne_gcn8_compute_smoke_run(const char* shader_path,
     }
 
     before = cmd.cmdptr;
-    sceGnmDrawCmdDispatchDirect(&cmd, 1, 1, 1, 0);
+    pne_gcn8_dispatch_direct(&cmd, 1, 1, 1, 0);
     if (cmd.cmdptr - before != 9) {
         log.message("RESULT=FAIL; REASON=DISPATCH_PACKET");
         return 21;
