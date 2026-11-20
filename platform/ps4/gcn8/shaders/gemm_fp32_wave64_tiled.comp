@@ -1,4 +1,5 @@
 #version 450
+#extension GL_EXT_control_flow_attributes : require
 
 // PS4 Pro / AMD GCN8 bring-up kernel.
 // 64 lanes per workgroup (one GCN wave64); each lane computes a 2x2
@@ -61,6 +62,9 @@ void main() {
 
         barrier();
 
+        // Keep the fixed-size reduction loop compact in GCN8 code.
+        // The unrolled form exceeded the 8-bit GNM input-usage pointer range.
+        [[dont_unroll]]
         for (uint k = 0u; k < 16u; ++k) {
             const float a0 = tileA[ly * 2u][k];
             const float a1 = tileA[ly * 2u + 1u][k];
