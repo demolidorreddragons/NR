@@ -9,8 +9,8 @@ This ledger records the next 40 work items. A task is **DONE** only when its sta
 
 | # | Work item | State | Acceptance evidence |
 |---:|---|---|---|
-| 51 | Correct Linux `sysconf` feature detection in host build | **PATCHED — REVALIDATION PENDING** | `HAVE_SYSCONF=1` and a compiled POSIX probe are present; latest workflow has not reached PSBC compilation. |
-| 52 | Audit host OS feature macros against pinned Mesa configuration | **PARTIAL — SYSCONF SOURCE VERIFIED** | Pinned source and Orbis config use `HAVE_SYSCONF`; CI capability probe is implemented but latest run has not executed it. Full `HAVE_*` audit remains open. |
+| 51 | Correct Linux `sysconf` feature detection in host build | **PATCHED — POSIX PROBE PASS; COMPILER BUILD RUNNING** | GCN8 run `44677801306` passed host sysconf probe and Mesa header generation; PSBC host compiler build is still running. |
+| 52 | Audit host OS feature macros against pinned Mesa configuration | **PARTIAL — SYSCONF PROBE PASS** | Pinned source and Orbis config use `HAVE_SYSCONF`; CI compile/run probe passed. Full `HAVE_*` audit remains open. |
 | 53 | Separate host-platform and PS4-target configuration | **DOCUMENTED** | PSBC CLI is built for Linux host; `-n` selects PS4 NEO/GFX8 output. No cross-compile of the CLI is implied. |
 | 54 | Resolve subsequent missing headers or generated files | **PENDING** | Only fix errors reproduced in CI logs; preserve upstream declarations. |
 | 55 | Reproduce clean PSBC build | **BLOCKED BY 51** | Clean runner build completes from pinned revisions. |
@@ -68,7 +68,7 @@ This ledger records the next 40 work items. A task is **DONE** only when its sta
 ## Current concrete progress
 
 - Task 51 patch committed as `cb66861b05fbe9601300b3bce39f99cc212447d4`.
-- The observed failure in run `44676657053` was missing `HAVE_SYSCONF` in the hand-written Linux host build configuration. The pinned Mesa source uses that feature macro to select POSIX `sysconf` for physical-memory and page-size queries. The workflow now checks that capability with a compiled/running probe. Host numeric regression tests on commit `92a3bc3f` passed run `44677189726`; the GCN8 compiler workflow remains queued/cancelled during overlapping CI runs, so task 51 is not yet revalidated.
+- The observed failure in run `44676657053` was missing `HAVE_SYSCONF` in the hand-written Linux host build configuration. The pinned Mesa source uses that feature macro to select POSIX `sysconf` for physical-memory and page-size queries. The workflow now checks that capability with a compiled/running probe. Host numeric regression tests on commit `92a3bc3f` passed run `44677189726`. The latest non-canceled compiler attempt `44677801306` passed dependency checkout, host configuration, the `sysconf` probe and all Mesa header generators; the PSBC build is now running.
 - Revalidation is required. No task from 61 onward is marked complete; no accepted `.sb` artifacts, GNM dispatch, PS4 Pro GPU measurements, model intake, or neural renderer are claimed.
 - REA-5 remains **NOT EXECUTED**. It is a documented independent-review protocol, not a separately instantiated agent.
 - Console installation, plugin activation, `plugins.ini` changes, saves/app-data changes and persistent console modifications remain outside this work.
@@ -112,3 +112,5 @@ Task 69 extraction was expanded in commits `9fdef49f7186e07500596e74b4ab223ac45b
 
 
 Task 70 now has a disassembly pipeline in commit `634bb64c7f7d96e328b69c553706db712cade08b`, with target-probe correction in `3016a8a310143bbef524ebb9c06e936fb43851f2`. CI installs LLVM 18, extracts the exact GCN code range, preserves raw code bytes, and disassembles with the AMDGCN Tonga target. The `.isa` output and hashes are included in the artifact. This is not yet a register-resource audit: VGPR/SGPR/LDS/scratch values still require interpretation of raw CS registers and corroboration against decoded ISA.
+
+- PRX/PKG workflow concurrency was changed in commit `7e7ebe87a4209c350a6efe20c51373506a99d182` to queue later commits rather than cancel an active package build. This protects artifact reproducibility; it does not alter the console or install anything.
