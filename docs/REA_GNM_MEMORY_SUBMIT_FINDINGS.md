@@ -23,7 +23,7 @@ The existing VideoOut helper uses \`GNM_DIRECT_MEMORY_TYPE_WC_GARLIC\` (value 3 
 
 - \`GnmDirectMemory\` retains both a CPU mapping and a direct-memory offset. The helper does not establish a general CPU-pointer-to-GPU-VA translation contract for arbitrary compute buffers.
 - Alignment, address ownership, descriptor address encoding, cache policy and visibility must be validated for the exact compute allocation path.
-- Shader input metadata is still required to distinguish V# from RW# or other resource classes. A 16-byte V# descriptor size is not a complete RW storage-buffer ABI.
+- Run `44739871394` now supplies the first compiler metadata: one `PTR_INDIRECTRESOURCETABLE` slot at start register 2, eight user SGPRs for tiled GEMM, and four SPIR-V storage bindings logged at descriptor-table offsets 0/64/128/192. This still does not distinguish the exact runtime V# vs RW# descriptor encoding or prove a 16-byte V# is the correct storage-buffer ABI.
 - No cache flush/invalidate sequence has been proven for the NR compute buffers.
 
 ## Command recording and submission evidence
@@ -40,6 +40,8 @@ The existence of declarations, wrappers or a successful import-link smoke test i
 
 ## Task status impact
 
+- Task 71: partial compiler evidence now identifies `PTR_INDIRECTRESOURCETABLE` at user-data register 2; descriptor class/encoding and runtime binding remain unresolved.
+- Task 72: blocked until the RW descriptor bytes and GPU address encoding are independently established.
 - Task 73: candidate direct-memory allocation APIs and a VideoOut memory example identified; compute memory type/protection remains unapproved.
 - Task 74: CPU mapping and direct-memory offset are visible in the helper, but GPU VA semantics remain blocked.
 - Task 75: upstream helper offers an allocation/release candidate; no NR compute buffer lifecycle has been implemented or hardware-validated.
