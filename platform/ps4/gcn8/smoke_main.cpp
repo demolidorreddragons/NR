@@ -14,7 +14,7 @@ int main(int argc, char** argv) {
                   "/tmp/pne_gcn8_compute_smoke_%s.log",
                   PNE_GCN8_SMOKE_RUN_ID);
     const int result = pne_gcn8_compute_smoke_run(
-        "app0:/gcn8/compute_smoke_add.sb", log_path);
+        "app0:/compute_smoke_add.sb", log_path);
     std::printf("PNE_GCN8_SMOKE_EXIT=%d\n", result);
     std::fflush(stdout);
     return result;
