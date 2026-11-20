@@ -22,10 +22,10 @@ OPEN_GNM_INCLUDE="${OPEN_GNM_INCLUDE:-$ROOT/OpenGNM/include}"
 test -s "$OPEN_GNM_INCLUDE/gnm_drawcommandbuffer.h"
 mkdir -p "$ROOT/build/gcn8-smoke-stage" "$ROOT/dist/gcn8-smoke"
 rm -rf "$STAGE"
-mkdir -p "$STAGE/sce_sys/about" "$STAGE/sce_module" "$STAGE/gcn8" "$OUT"
+mkdir -p "$STAGE/sce_sys/about" "$STAGE/sce_module" "$OUT"
 
 test -s "$GCN8_SHADER_FILE"
-cp "$GCN8_SHADER_FILE" "$STAGE/gcn8/compute_smoke_add.sb"
+cp "$GCN8_SHADER_FILE" "$STAGE/compute_smoke_add.sb"
 SHADER_SHA256="$(sha256sum "$STAGE/gcn8/compute_smoke_add.sb" | awk '{print $1}')"
 
 for required in "$SAMPLE/sce_module/libc.prx" \
@@ -95,7 +95,7 @@ sfo PUBTOOLINFO Utf8 512 "c_date=$(date -u +%Y%m%d),img0_l0_size=7,img0_l1_size=
 
 cd "$STAGE"
 "$TOOLS/create-gp4" -out package.gp4 --content-id="$CONTENT_ID" \
-  --files "eboot.bin gcn8/compute_smoke_add.sb sce_sys/param.sfo sce_sys/icon0.png sce_sys/about/right.sprx sce_module/libc.prx sce_module/libSceFios2.prx"
+  --files "eboot.bin compute_smoke_add.sb sce_sys/param.sfo sce_sys/icon0.png sce_sys/about/right.sprx sce_module/libc.prx sce_module/libSceFios2.prx"
 "$PKGTOOL" pkg_build package.gp4 "$OUT"
 pkg="$(find "$OUT" -maxdepth 1 -type f -name '*.pkg' -print -quit)"
 test -n "$pkg" && test -s "$pkg"
