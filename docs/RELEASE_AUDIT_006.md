@@ -120,3 +120,8 @@ Evidência QA artifact ID `14603449254`, SHA-256 do ZIP `390a11b6f285def47f8105d
 - QA report: `QA_STATUS=PASS_PC_ONLY_NOT_HARDWARE_TESTED`.
 
 **Interpretação:** aprovado na validação estrutural/criptográfica do PKG e na consistência dos payloads em PC. Isso não prova instalação no PS4, inicialização do EBOOT/PRX, compatibilidade de ABI/runtime GoldHEN, nem funcionamento do renderer/GNM. O pacote permanece **não autorizado para instalação em console** até teste reversível aprovado e validação de ABI/runtime. Também é um full base application, não um patch de atualização PS4.
+
+
+## Strict release-manifest key allowlist
+
+The runtime manifest parser now rejects unknown keys rather than silently ignoring misspellings or unexpected fields. A regression fixture with a misspelled `prx_sha256` key is included. Host suite run `44680540413` passed the manifest/SHA-256 tests, GCN8 numerical reference tests, model-input verifier tests, and the build/test stages. This is host evidence only; the Orbis installer has not been executed on hardware.
