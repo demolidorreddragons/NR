@@ -42,7 +42,8 @@ enum class ContractError {
     null_buffer,
     buffer_too_small,
     output_aliases_input,
-    invalid_scalar
+    invalid_scalar,
+    invalid_workgroup_size
 };
 
 // General contract for a kernel whose workgroup covers tile_width x tile_height outputs.
