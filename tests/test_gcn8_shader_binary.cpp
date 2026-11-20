@@ -152,7 +152,7 @@ int main(int argc, char** argv) {
     assert(parses(broken, ShaderBinaryError::invalid_cs_registers));
 
     broken = valid;
-    broken[kOrb + 7] = 0;
+    broken[kOrb] = 0;
     assert(parses(broken, ShaderBinaryError::missing_or_duplicate_orbshdr));
 
     broken = valid;
