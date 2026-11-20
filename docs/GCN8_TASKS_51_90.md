@@ -107,3 +107,5 @@ The pinned GNM memory/submission investigation is recorded in `docs/REA_GNM_MEMO
 
 
 Task 69 extraction was expanded in commits `9fdef49f7186e07500596e74b4ab223ac45b39bb` and `e3bce82e8261bc7a37db4a7765c39cc091076755`. The report preserves raw register words only; no register bitfield semantics or resource ABI are inferred. It also records SPIR-V LocalSize for each entry point. CI must produce and validate actual compiler output before the task is accepted.
+
+- GNM report validation now cross-checks the three compiled CS thread dimensions against the SPIR-V `LocalSize` and verifies the CS program-code offset against the declared header size (commit `5750d92768846cfea35f0d902a3a024a65cdd432`). This is a consistency check, not ISA register decoding or proof of runtime dispatch.
