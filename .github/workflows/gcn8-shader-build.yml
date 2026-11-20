@@ -235,7 +235,8 @@ jobs:
             dist/ps4/gcn8/gemm_fp32.sb \
             dist/ps4/gcn8/gemm_fp16_accum.sb \
             dist/ps4/gcn8/e4m3_decode.sb \
-            dist/ps4/gcn8/e4m3_encode.sb
+            dist/ps4/gcn8/e4m3_encode.sb \
+            dist/ps4/gcn8/compute_smoke_add.sb
 
       - name: Validate GNM compute containers and record raw metadata (not register decode)
         run: |
