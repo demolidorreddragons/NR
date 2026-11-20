@@ -32,7 +32,12 @@ jobs:
           assert 'O_CREAT | O_EXCL' in installer, 'staging files must be created exclusively'
           assert 'O_TRUNC' not in installer, 'installer must never truncate a pre-existing staging path'
           assert 'fdopen(fd, "wb")' in installer, 'staged config must wrap the exclusively-created descriptor'
-          print('Installer transaction and recovery invariants passed')
+          build_script = Path('tools/build_pkg.sh').read_text()
+          assert 'PRX_SHA256=' in build_script, 'PKG build must calculate the staged PRX SHA-256'
+          assert 'pne-release.ini' in build_script, 'PKG must include the release manifest'
+          assert 'manifest and PRX SHA-256 match' in build_script, 'PKG extraction must verify manifest against PRX'
+          assert 'abi_status=unverified' in build_script and 'hardware_status=not_tested' in build_script, 'manifest must not claim unproven compatibility'
+          print('Installer transaction and release-manifest invariants passed')
           PY
       - name: Configure
         run: cmake -S . -B build
