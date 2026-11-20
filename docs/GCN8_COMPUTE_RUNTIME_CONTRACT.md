@@ -106,6 +106,22 @@ approved defaults for compute buffers. The project compile/link smoke now
 checks the SDK declarations and import symbols for these three functions,
 without invoking them.
 
+OpenGNM's own direct-memory wrapper/reference uses
+`GNM_DIRECT_MEMORY_TYPE_WC_GARLIC` (write-combined Garlic) with
+`GNM_PROT_CPU_GPU_RW` for GPU-visible allocations and documents 64 KiB
+alignment for the display path. This is a concrete allocator candidate, not a
+compute-buffer approval: the sample is a VideoOut/display allocation, not a
+validated CS SSBO allocation. The `GnmMemoryType` values embedded in each
+V# descriptor are a separate cache/access policy from the direct-memory pool
+type; do not conflate them.
+
+The PSBC compiler's indirect resource-table pointer is emitted as a 32-bit
+user-SGPR address (`address32_hi=0`). Therefore the 208-byte table itself must
+reside wholly below the 4 GiB GPU-address boundary, even though the individual
+16-byte V# entries carry a 44-bit base address. The host contract checks this
+range, but no PS4 allocation has yet demonstrated that a suitable low GPU VA
+can be obtained.
+
 Still unresolved before implementing the allocator:
 - which direct-memory type and protections are valid for general compute
   buffers on supported GoldHEN/firmware combinations;
