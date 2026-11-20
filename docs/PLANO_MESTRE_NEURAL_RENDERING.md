@@ -1,0 +1,202 @@
+# Plano mestre de execução — Neural Rendering (PS4 Pro)
+
+**Estado:** plano inicial publicado; execução iniciada pela auditoria da linha de base.  
+**Alvo de hardware:** PS4 Pro, AMD GCN8.  
+**Ambiente de referência informado no projeto:** firmware 14.02 e GoldHEN 2.4b18.14.  
+**Branch de trabalho:** `feature/gcn8-numeric-kernels`.  
+**PR de referência:** #5 — kernels numéricos GCN8 (WIP).
+
+> Este documento é o plano de engenharia e os critérios de saída. Não declara que a equipe é formada por oito agentes autônomos: neste ambiente, as funções são papéis de trabalho coordenados. Teste realmente independente exige executor/contexto separado, acesso somente aos requisitos e artefatos, e relatório próprio.
+
+## 1. Objetivo do produto
+
+Construir e validar um pipeline de renderização neural que possa ser executado no PS4 Pro, com:
+
+- inferência neural efetiva na GPU AMD GCN8;
+- reconstrução/super-resolução com qualidade comparada a uma referência reproduzível;
+- integração segura com o pipeline gráfico de um título-alvo, sem presumir captura universal de framebuffer;
+- desempenho, memória, estabilidade e compatibilidade medidos em hardware;
+- instalação e atualização por pacotes PS4 corretamente identificados e validados.
+
+O repositório atualmente descreve um **scaffold de diagnóstico/captura**, não um renderer neural completo. A existência de shaders de referência ou de um PKG compilado não prova inferência neural nem funcionamento em jogo.
+
+## 2. Equipe e responsabilidades
+
+| Função | Responsabilidade | Não pode aprovar |
+|---|---|---|
+| 1. Arquiteto-chefe / coordenador | Arquitetura, requisitos, interfaces, prioridades e integração entre frentes | Sua própria decisão sem revisão |
+| 2. Engenheiro-chefe de IA neural | Modelo, pesos, grafo, operadores, precisão e qualidade visual | Execução GCN8 ou release |
+| 3. Engenheiro GPU AMD GCN8 | Shaders, kernels, ABI, memória, sincronização e otimização | Correção matemática sem referência |
+| 4. Engenheiro de sistemas PS4 / Orbis | APIs, runtime, firmware, GoldHEN, PRX e integração de sistema | Seu próprio deploy |
+| 5. Engenheiro de integração e release PS4 | SFO, GP4, PKG base/patch, dependências, instalação, atualização e artefatos | O PKG que ele próprio montou |
+| 6. Testador independente | Testes cegos, reprodução, tentativa de reprovação e relatório | Não recebe justificativas internas do desenvolvedor |
+| 7. Auditor técnico | Revisão de código, cadeia de build, hashes, logs, metadados e rastreabilidade | Não substitui teste de hardware |
+| 8. Engenheiro de desempenho e estabilidade | GPU timestamps, latência, FPS, memória, variância e testes prolongados | Resultado sem dados brutos |
+
+### Independência do QA
+
+- O testador recebe apenas requisitos de aceitação, instruções de teste, binários e dados de entrada necessários.
+- Não recebe a narrativa do desenvolvedor nem instruções para aprovar.
+- Registra ambiente, versão, comandos, logs, hashes, resultados e falhas.
+- Pode reprovar qualquer entrega, inclusive a coordenação.
+- Engenharia corrige os defeitos; QA repete os testes sem editar o produto.
+- Se não houver um executor separado disponível, o relatório deve dizer **“revisão interna — não independente”**. Nunca simular independência.
+
+## 3. Fases e marcos
+
+### Fase 0 — Auditoria da linha de base e congelamento de requisitos
+
+**Objetivo:** descobrir exatamente o que existe, o que funciona e o que está bloqueado antes de ampliar o código.
+
+Tarefas:
+1. Registrar branch, commit, PR e workflows relevantes.
+2. Inventariar fontes, shaders, pesos/modelos, ferramentas, scripts, instalador e artefatos.
+3. Executar testes host existentes e registrar logs.
+4. Verificar a disponibilidade e versões do compilador GLSL, PSBC GFX8, validador SPIR-V e toolchain Orbis.
+5. Separar validação host, compilação GFX8, execução GPU no console e teste de instalação.
+6. Documentar lacunas de modelo, pesos, grafo, backend GNM, readback e integração por título.
+
+**Saída obrigatória:** matriz de capacidades com estado *comprovado / parcial / ausente / bloqueado*, hashes e evidências.
+
+### Fase 1 — Toolchain e compilação GCN8 reproduzível
+
+**Objetivo:** compilar os shaders para o alvo GFX8 sem depender de suposições.
+
+Tarefas:
+1. Fixar versões e hashes das ferramentas autorizadas.
+2. Instalar/descobrir ferramentas no runner isolado; não executar binários desconhecidos no runner que alcança o PS4.
+3. Compilar todos os shaders de compute para SPIR-V e binário GFX8.
+4. Validar saída, logs e metadados de recursos: VGPR, SGPR, LDS e scratch, quando reportados.
+5. Guardar artefatos e hashes por commit.
+
+**Gate F1:** todos os shaders aprovados compilam de forma reproduzível; metadados e logs arquivados. Compilar não equivale a executar no console.
+
+### Fase 2 — Backend mínimo de compute no PS4 Pro
+
+**Objetivo:** provar um caminho buffer → compute → buffer no hardware.
+
+Tarefas:
+1. Implementar harness mínimo GNM com alocação, binding/descriptor, dispatch, barreiras/fences e readback.
+2. Validar alinhamento, coerência de cache, sincronização e limites de buffer.
+3. Executar kernel determinístico simples e comparar readback byte a byte.
+4. Testar dimensões alinhadas e de borda, repetição e tratamento de erro.
+
+**Gate F2:** evidência de dispatch real no PS4 Pro, logs, hashes e readback determinístico. Nenhum resultado de host pode substituir este gate.
+
+### Fase 3 — Núcleo numérico e operadores
+
+**Objetivo:** estabelecer correção antes de otimização.
+
+Ordem:
+1. E4M3FN encode/decode e fixtures de todos os 256 códigos.
+2. GEMM FP32 contra referência de precisão dupla.
+3. Semântica FP16 contra referência IEEE-754 binary16.
+4. Testes de dimensões não múltiplas do tile, NaN, infinito, subnormais, overflow e empates.
+5. Só então otimizar GEMM tiled, fusão de operadores e uso de LDS.
+
+**Gate F3:** tolerâncias numéricas aprovadas, resultados repetíveis e comparação host/GPU documentada. Não chamar emulação FP16 de FP16 nativo sem evidência do compilador/hardware.
+
+### Fase 4 — Modelo neural e grafo completo
+
+**Objetivo:** converter o modelo real em um grafo executável no hardware disponível.
+
+Tarefas:
+1. Identificar arquitetura, licença/origem, formato e integridade dos pesos.
+2. Inventariar os 71 blocos mencionados no escopo e mapear operadores, tensores, shapes e precisão.
+3. Criar referência host independente para cada operador e para o grafo.
+4. Implementar operadores GCN8 por prioridade de custo e dependência.
+5. Validar camadas intermediárias, não apenas a imagem final.
+6. Medir memória total, buffers temporários e estratégia de tiling.
+7. Definir política de fallback quando uma operação não couber ou exceder o orçamento.
+
+**Gate F4:** grafo completo executa e suas saídas respeitam tolerâncias previamente definidas. Se os pesos/modelos originais não estiverem disponíveis ou não puderem ser redistribuídos, parar e registrar o bloqueio; não inventar pesos.
+
+### Fase 5 — Integração gráfica por título
+
+**Objetivo:** conectar entrada e saída neural ao renderizador sem presumir acesso universal ao framebuffer.
+
+Tarefas:
+1. Escolher um título de teste e documentar seu pipeline/API.
+2. Criar adaptador específico para obter o input em formato e momento válidos.
+3. Garantir sincronização GPU, cache, dimensões, row pitch e lifetime dos recursos.
+4. Integrar saída neural ao destino de apresentação.
+5. Preservar caminho de bypass e recuperação em caso de erro.
+6. Comparar imagem de entrada, saída e referência em cenas fixas.
+
+**Gate F5:** integração demonstrada no título-alvo, sem corrupção, deadlock ou regressão não explicada.
+
+### Fase 6 — Desempenho, estabilidade e qualidade
+
+Medições mínimas:
+- warm-up e pelo menos 100 dispatches cronometrados por cenário;
+- mediana, p95, variância e tempo por quadro;
+- FPS e impacto no frame budget;
+- uso de memória, VGPR/SGPR/LDS/scratch quando disponível;
+- erro absoluto máximo e RMS contra referência;
+- conjunto fixo de imagens/cenas e métricas de qualidade apropriadas;
+- teste prolongado e registro de travamentos, resets e leaks.
+
+**Gate F6:** metas de qualidade, latência e estabilidade definidas antes do teste e atingidas com dados brutos anexados. Não comparar com DLSS sem mesmo input, resolução, métrica e método de medição.
+
+### Fase 7 — Integração PS4, PKG e release
+
+**Objetivo:** entregar pacote correto, identificável, instalável e recuperável.
+
+Checklist:
+1. Confirmar identidade do produto: TITLE_ID, CONTENT_ID, CATEGORY, APP_VER e SYSTEM_VER.
+2. Distinguir claramente PKG base de PKG patch; patch deve estar associado a base compatível. Não chamar um base de híbrido.
+3. Conferir SFO, GP4, payload, módulos runtime, PRX e dependências.
+4. Executar validação de PKG, extração e comparação de arquivos/hashes.
+5. Verificar upgrade path, instalação limpa, atualização, desinstalação e recuperação em ambiente de teste.
+6. Fazer teste de instalação em console somente após QA do pacote e autorização explícita para a operação.
+7. Manter staging, ativação de PRX e instalação como operações separadas.
+8. Publicar release com changelog, hashes, logs e limitações conhecidas.
+
+**Gate F7:** auditoria de pacote aprovada, QA independente aprovado e instalação/execução real verificadas. Build verde sozinho não libera release.
+
+## 4. Critérios globais de bloqueio
+
+Bloquear a promoção de fase quando houver:
+- ferramenta ou binário sem origem/hash confiável;
+- divergência numérica fora da tolerância;
+- shader sem compilação para GFX8;
+- ausência de prova de dispatch real quando a fase exigir hardware;
+- falha de instalação, atualização, inicialização ou recuperação;
+- alteração de PRX, `plugins.ini`, dados ou saves sem autorização;
+- falta de evidência reproduzível;
+- conflito entre requisitos e comportamento real.
+
+## 5. Estado inicial conhecido ao publicar este plano
+
+Com base na inspeção do branch e da documentação atual:
+
+| Item | Estado inicial |
+|---|---|
+| Scaffold de diagnóstico/captura | Existe; não é renderer neural completo |
+| Kernels E4M3FN / GEMM FP32 / FP16 de referência | Existem como bring-up |
+| Teste host numérico | Existe; deve ser executado novamente na linha de base |
+| Compilador GLSL / PSBC GFX8 no runner | Execução anterior reportou ferramentas ausentes; revalidar |
+| Backend/harness GNM compute | Não identificado na documentação atual |
+| Dispatch/readback compute no PS4 Pro | Não comprovado |
+| Grafo neural de 71 blocos completo | Não implementado/comprovado |
+| Integração temporal e adaptador de título | Não implementados/comprovados |
+| PKG atual com renderer neural completo | Não existe evidência |
+| Firmware 14.02 / GoldHEN runtime | Requer teste real e controlado |
+
+O PR #5 está marcado como WIP e descreve explicitamente os kernels atuais como referências, sem backend GNM ou validação de compute no console.
+
+## 6. Primeira execução iniciada
+
+A primeira frente é a **Fase 0 — auditoria da linha de base**. A sequência de execução é:
+
+1. confirmar o estado do branch e do PR;
+2. executar testes host automatizados;
+3. registrar o estado atual das ferramentas GFX8 e do harness GNM;
+4. produzir uma lista priorizada de bloqueios com evidências;
+5. só então iniciar alterações de implementação na Fase 1.
+
+Nenhuma instalação, ativação de PRX, alteração de `plugins.ini`, remoção de app ou modificação de saves faz parte desta fase.
+
+## 7. Regra de promoção
+
+Uma fase só muda para **APROVADA** quando suas evidências forem anexadas e revisadas. Estados permitidos: **NÃO INICIADA**, **EM EXECUÇÃO**, **BLOQUEADA**, **REPROVADA**, **APROVADA**. Não usar “pronto” como sinônimo de “compilou”.
