@@ -75,6 +75,14 @@ its implementation maps slot 2 to the compute user-data register pair 2:3.
 This gives a concrete command-recording candidate for the table pointer,
 subject to confirming the actual GPU VA and runtime behavior on hardware.
 
+The host-only implementation `platform/ps4/gcn8/host/resource_table_contract.*`
+now mirrors this layout and rejects unsupported sets, unsorted/overlapping
+bindings, size overflow, unaligned pointers, and table ranges crossing 4 GiB.
+For the four GEMM storage bindings it computes offsets 0/64/128/192 and total
+size 208 bytes. Its CTest passed in run `44742071718`. It calculates table
+layout only; it does not create the actual GPU descriptors or allocate the
+table in GPU-visible memory.
+
 OpenGNM's `GnmBuffer` is exactly 16 bytes and exposes base address, stride,
 record count, format and memory-type fields. Its convenience
 `sceGnmCreateConstBuffer` and `sceGnmCreateVertexBuffer` helpers set
