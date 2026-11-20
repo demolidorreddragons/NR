@@ -262,6 +262,15 @@ jobs:
                   "computenumthready": u32(cs_header + 28),
                   "computenumthreadz": u32(cs_header + 32),
               }
+              compiled_local_size = [
+                  cs_registers["computenumthreadx"],
+                  cs_registers["computenumthready"],
+                  cs_registers["computenumthreadz"],
+              ]
+              if compiled_local_size != local_size:
+                  raise SystemExit(f"SPIR-V LocalSize and GNM CS thread dimensions disagree: {shader}")
+              if cs_registers["computepgmlo"] != header_dwords * 4 or cs_registers["computepgmhi"] != 0:
+                  raise SystemExit(f"GNM CS program offset does not match the CS header size: {shader}")
               report.append({
                   "shader": shader,
                   "file": str(path),
