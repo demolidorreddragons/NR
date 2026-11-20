@@ -354,6 +354,13 @@ jobs:
                       "COMPUTE_PGM_RSRC2": rsrc2_fields,
                   },
                   "resource_allocation_derived": register_resources,
+                  "register_decode_basis": {
+                      "field_bit_ranges": "Mesa src/amd/registers/gfx8.json at opengnm-psbc 28697f007862427ebec54388ec972ce6e3545912",
+                      "vgpr_granularity": "GFX6-GFX9: 4 VGPRs per encoded block",
+                      "sgpr_granularity": "GFX6-GFX8: 8 SGPRs per encoded block",
+                      "lds_granularity": "GFX7-GFX9: 128 dwords (512 bytes) per encoded block",
+                      "wavefront": "GFX8 wave64",
+                  },
                   "shader_hash": f"{u32(orb + 20):08x}{u32(orb + 16):08x}",
                   "gcn_code_size": (length_field >> 8) & 0xffffff,
                   "crc32": f"{u32(orb + 24):08x}"
