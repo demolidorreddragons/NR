@@ -35,9 +35,23 @@ metadata, user-data slot mapping, command submission, synchronization, and
 completion handling remain separate responsibilities.
 
 The companion `opengnm-psbc` project documents SPIR-V-to-GNM shader binary
-compilation and lists GFX8/Polaris as a supported target. This is a plausible
-replacement path for the missing shader compiler, but the current NR workflow
-does not yet pin or execute that compiler.
+compilation and lists GFX8/Polaris as a supported target. Its repository head
+was audited and pinned for evaluation at commit
+`28697f007862427ebec54388ec972ce6e3545912` (MIT). The CLI documents compute
+compilation with `-s compute`; `-n` selects PS4 Pro/GFX8. A candidate command
+for the existing tiled shader is therefore:
+
+```sh
+opengnm-psbc -s compute -f platform/ps4/gcn8/shaders/gemm_fp32_wave64_tiled.spv \\
+  -o dist/ps4/gcn8/gemm_fp32_wave64_tiled.sb -n
+```
+
+This is a command template, not a successful build result. The pinned compiler
+has a large vendored Mesa/NIR/ACO build and requires GNU Make, C11/C++17
+compilers, Python 3 with Mako, and its sibling `opengnm`/`SPIRV-Headers`
+sources. NR does not yet provision those dependencies or execute this compiler
+in CI. The next reproducible step is to pin those source revisions and add a
+host build + shader-binary verification job before attempting runtime use.
 
 ## Backend boundary to implement
 
@@ -70,8 +84,12 @@ emission test with a successful PS4 Pro compute dispatch.
 - [ ] Audit runtime symbol availability, firmware delegation, and link behavior;
       header declarations alone do not prove exports.
 - [ ] Build a minimal PS4 PRX link-smoke using the typed GNM declarations.
-- [ ] Compile the existing tiled shader to a GFX8 GNM binary with a pinned
-      opengnm-psbc revision; inspect CS metadata and resource usage.
+- [x] Pin an audited `opengnm-psbc` revision and document its GFX8 CLI/build
+      prerequisites (`28697f007862427ebec54388ec972ce6e3545912`).
+- [ ] Provision the pinned compiler dependencies and build `opengnm-psbc`
+      reproducibly in CI.
+- [ ] Compile the existing tiled shader to a GFX8 GNM binary; inspect CS
+      metadata and resource usage.
 - [ ] Implement buffer allocation, resource binding, user-data constants,
       command submission, synchronization, and readback.
 - [ ] Run a no-op/known-answer compute smoke test on PS4 Pro before GEMM.
