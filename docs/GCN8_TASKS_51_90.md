@@ -32,7 +32,7 @@ This ledger records the next 40 work items. A task is **DONE** only when its sta
 | 66 | Compile all five shaders for PS4 NEO/GFX8 | **PENDING** | Five non-empty GNM shader binaries from pinned PSBC with `-n`. |
 | 67 | Validate GNM containers and CRCs | **IMPLEMENTED — CI REVALIDATION PENDING** | Added code-range/slot bounds checks plus negative controls for truncated header and corrupted CRC; must run on real compiler output. |
 | 68 | Generate immutable shader artifact manifest | **IMPLEMENTED — CI REVALIDATION PENDING** | Container report now records source/SPIR-V/GNM hashes, sizes and pinned compiler/dependency revisions; report is included in uploaded artifact. |
-| 69 | Extract raw OrbShdr metadata | **PENDING** | Offsets/lengths and raw fields preserved with bounds checks. |
+| 69 | Extract raw OrbShdr metadata | **IMPLEMENTED — CI REVALIDATION PENDING** | Workflow now bounds-checks and records all CS input-usage slots, common shader data, raw CS register words, and static SPIR-V local sizes. |
 | 70 | Decode ISA and resource/register metadata | **PENDING** | Disassembly and independently checked VGPR/SGPR/LDS/scratch/wave/resource interpretation. |
 
 ## Phase 13 — GNM compute backend
@@ -104,3 +104,6 @@ The pinned GNM memory/submission investigation is recorded in `docs/REA_GNM_MEMO
 - GFX8 workflow concurrency now queues follow-up commits instead of canceling an active compiler build mid-checkout. Commit: `e9acec50f1b63a1242448b47e4ef240c92a6a27f`. A successful run is still required for tasks 51 and 55–70.
 
 - Tiled GEMM host emulation now runs 40 deterministic randomized shape/value cases (including non-multiple-of-16 boundaries) and verifies that `beta=0` does not propagate NaNs from C. Commit: `8a605b753c20aca544754ca8db461735b4454a9b`. This remains CPU emulation, not GPU shader execution.
+
+
+Task 69 extraction was expanded in commits `9fdef49f7186e07500596e74b4ab223ac45b39bb` and `e3bce82e8261bc7a37db4a7765c39cc091076755`. The report preserves raw register words only; no register bitfield semantics or resource ABI are inferred. It also records SPIR-V LocalSize for each entry point. CI must produce and validate actual compiler output before the task is accepted.
