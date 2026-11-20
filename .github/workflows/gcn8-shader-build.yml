@@ -51,6 +51,17 @@ jobs:
           git -C .deps/SPIRV-Headers checkout 09913f088a1197aba4aefd300a876b2ebbaa3391
           git clone https://github.com/KhronosGroup/Vulkan-Headers.git .deps/Vulkan-Headers
           git -C .deps/Vulkan-Headers checkout v1.4.328
+      - name: Host-test GCN8 resource-table and EOP PM4 packets
+        run: |
+          g++ -std=c++17 -Wall -Wextra -Werror \
+            -I.deps/opengnm/include -Iplatform/ps4/gcn8 \
+            -Iplatform/ps4/gcn8/host \
+            tests/test_gcn8_gnm_packets.cpp \
+            platform/ps4/gcn8/gnm_resource_binding.cpp \
+            platform/ps4/gcn8/host/resource_table_contract.cpp \
+            -o "$RUNNER_TEMP/test_gcn8_gnm_packets"
+          "$RUNNER_TEMP/test_gcn8_gnm_packets"
+          echo "GCN8_PM4_PACKET_TEST=PASS"
       - name: Apply audited PSBC GFX8 and SPIR-V input fixes
         run: |
           python3 tools/apply_psbc_gfx8_fixes.py .deps/opengnm-psbc
