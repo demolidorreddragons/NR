@@ -10,11 +10,11 @@
 static void startup_log(const char* path, const char* message) {
     FILE* f = std::fopen(path, "ab");
     if (f) {
-        std::fprintf(f, "%s\\n", message);
+        std::fprintf(f, "%s\n", message);
         std::fflush(f);
         std::fclose(f);
     }
-    std::printf("%s\\n", message);
+    std::printf("%s\n", message);
     std::fflush(stdout);
 }
 
