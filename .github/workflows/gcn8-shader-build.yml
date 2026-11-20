@@ -59,6 +59,21 @@ jobs:
           test -f ../SPIRV-Headers/include/spirv/spir-v.xml
           test -f ../Vulkan-Headers/include/vulkan/vulkan.h
           test -f ../Vulkan-Headers/include/vk_video/vulkan_video_codec_av1std_encode.h
+      - name: Verify Linux host sysconf feature used by Mesa
+        run: |
+          cat > /tmp/nr-sysconf-probe.c <<'EOF'
+          #include <unistd.h>
+          #include <stdio.h>
+          int main(void) {
+            long page = sysconf(_SC_PAGESIZE);
+            long pages = sysconf(_SC_PHYS_PAGES);
+            if (page <= 0 || pages <= 0) return 1;
+            printf("sysconf page_size=%ld physical_pages=%ld\\n", page, pages);
+            return 0;
+          }
+          EOF
+          gcc -std=gnu11 -D_XOPEN_SOURCE=700 -DHAVE_SYSCONF=1 /tmp/nr-sysconf-probe.c -o /tmp/nr-sysconf-probe
+          /tmp/nr-sysconf-probe
       - name: Generate Mesa headers required by PSBC
         working-directory: .deps/opengnm-psbc
         run: |
