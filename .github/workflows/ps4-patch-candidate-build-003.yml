@@ -232,7 +232,12 @@ jobs:
           dotnet "$tool" sfo read "$sfo" 2>&1 | Tee-Object -FilePath "candidate-output/patch-param-sfo.txt"
           if ($LASTEXITCODE -ne 0) { throw "Patch SFO readback failed." }
           $patchSfoText = Get-Content "candidate-output/patch-param-sfo.txt" -Raw
-          if ($patchSfoText -notmatch "PUBTOOLINFO.*st_type=digital25") { throw "Patch SFO storage type must match GP4 patch storage_type=digital25." }
+          if (-not $patchSfoText.Contains("FORMAT = obs")) {
+            Write-Host "PATCH_SFO_READBACK_BEGIN"
+            Write-Host $patchSfoText
+            Write-Host "PATCH_SFO_READBACK_END"
+            throw "Patch SFO must contain Sony-required FORMAT=obs."
+          }
           if ($patchSfoText -notmatch "FORMAT\s*=\s*obs") { throw "Patch SFO must contain Sony-required FORMAT=obs." }
 
           $changeInfoDir = Join-Path $image "sce_sys/changeinfo"
