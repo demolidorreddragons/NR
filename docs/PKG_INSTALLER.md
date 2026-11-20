@@ -1,6 +1,6 @@
 # PS4 PKG installer
 
-PKG 005 is a full base-application installer (not a patch) intended for a jailbroken PS4. It carries APP_VER/VERSION 01.01 and a freshly built eboot containing the corrected byte-stream PRX copier. This is deliberate: the audited console installation was an older `CATEGORY=gd`, `APP_VER=1.00` base, not the `gde` PKG 002 that patch 003 targeted. Install it through GoldHEN/Debug Package Installer, then launch **PS4 Neural Engine Installer** once.
+PKG 006 is a full base-application installer (not a patch) intended for a jailbroken PS4. It carries APP_VER/VERSION 01.02 and a freshly built eboot containing the corrected byte-stream PRX copier. This is deliberate: the audited console installation was an older `CATEGORY=gd`, `APP_VER=1.00` base, not the `gde` PKG 002 that patch 003 targeted. Install it through GoldHEN/Debug Package Installer, then launch **PS4 Neural Engine Installer** once.
 
 The installer:
 1. Copies `/app0/ps4_neural_engine.prx` to `/data/GoldHEN/plugins/ps4_neural_engine.prx` using a temporary file.
