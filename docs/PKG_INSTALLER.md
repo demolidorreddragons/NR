@@ -14,3 +14,17 @@ This package currently installs the diagnostics/capture scaffold only. It does n
 
 
 For troubleshooting, the installer log records the failing operation and the platform `errno` value (for example, source lookup/open, temporary destination creation, write, verification, or final rename). Capture the log after the latest launch attempt; older log contents do not describe a newer attempt.
+
+## Release 006 — status da auditoria estática (20/11/2026)
+
+O PKG 006 passou pelo build, validação estrutural e extração do pipeline no run [44669637925](https://github.com/demolidorreddragons/NR/actions/runs/44669637925). Isso não é aprovação para instalação.
+
+A auditoria estática identificou dois bloqueios relevantes antes de qualquer teste no console:
+- o workflow de QA independente 006 filtrava somente builds da branch `main`, portanto não inspecionava o artefato produzido na branch `feature/gcn8-numeric-kernels`;
+- o instalador substitui o PRX existente sem manter backup/rollback transacional se a atualização de `plugins.ini` falhar.
+
+O filtro do workflow de QA foi ampliado para incluir a branch de trabalho. A próxima execução do build deverá acionar o inspetor independente para o artefato exato. Isso ainda não executa QA retroativamente no PKG 006 já produzido.
+
+**Decisão atual: NÃO APROVADO PARA INSTALAÇÃO NO PS4 PRO.** Não executar o eboot do instalador: ele grava em `/data/GoldHEN/plugins` e altera `/data/GoldHEN/plugins.ini`. Nenhuma operação no console está autorizada por esta auditoria.
+
+Relatório completo: [docs/RELEASE_AUDIT_006.md](RELEASE_AUDIT_006.md).
