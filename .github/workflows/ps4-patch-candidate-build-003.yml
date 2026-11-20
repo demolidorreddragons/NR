@@ -2,6 +2,10 @@ name: PS4 Patch Candidate Build 003
 
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/ps4-patch-candidate-build-003.yml"
   workflow_run:
     workflows: ["PS4 PRX and PKG build"]
     types: [completed]
@@ -61,7 +65,7 @@ jobs:
           name: ps4-neural-engine-build
           path: base-artifact
           repository: demolidorreddragons/NR
-          run-id: ${{ github.event.workflow_run.id || '44641114863' }}
+          run-id: ${{ github.event.workflow_run.id || '44643472429' }}
           github-token: ${{ github.token }}
 
       - name: Download pinned Fake PKG Tools v7
@@ -142,6 +146,37 @@ jobs:
             if (-not (Test-Path $p)) { throw "Required base payload missing: $p" }
           }
 
+          "=== REBUILD BASE WITH SONY PUBLISHER TOOL ===" | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
+          $sonyBaseGp4 = Join-Path $work "PS4-Neural-Engine-002-SONY-BASE.gp4"
+          $sonyBasePkg = Join-Path $work "PS4-Neural-Engine-002-SONY-BASE.pkg"
+          & $pubCmd gp4_proj_create --volume_type pkg_ps4_app --content_id IV0000-PNEU00001_00-PS4NEURALENG0000 --passcode $zeroKey --entitlement_key $zeroKey --storage_type digital50 $sonyBaseGp4 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
+          if ($LASTEXITCODE -ne 0 -or -not (Test-Path $sonyBaseGp4)) { throw "Sony base GP4 creation failed." }
+          $baseFiles = @(Get-ChildItem $image -Recurse -File | Sort-Object FullName)
+          if ($baseFiles.Count -lt 4) { throw "Sony base GP4 source payload is incomplete: $($baseFiles.Count) files." }
+          foreach ($file in $baseFiles) {
+            $target = $file.FullName.Substring($image.TrimEnd('\').Length + 1).Replace('\','/')
+            & $pubCmd gp4_file_add --force --pfs_compression enable $file.FullName $target $sonyBaseGp4 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
+            if ($LASTEXITCODE -ne 0) { throw "Sony base GP4 add failed for $target." }
+          }
+          [xml]$sonyBaseProject = Get-Content $sonyBaseGp4
+          if ($sonyBaseProject.psproject.volume.volume_type -ne "pkg_ps4_app") { throw "Sony base GP4 volume type mismatch." }
+          if ($sonyBaseProject.psproject.files.file.Count -lt 4) { throw "Sony base GP4 has too few payload entries." }
+          & $pubCmd img_create --no_progress_bar $sonyBaseGp4 $sonyBasePkg 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
+          if ($LASTEXITCODE -ne 0 -or -not (Test-Path $sonyBasePkg)) { throw "Sony publisher failed to rebuild the base application PKG." }
+          dotnet "$tool" validate "$sonyBasePkg" 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
+          if ($LASTEXITCODE -ne 0) { throw "Independent validation of Sony-built base PKG failed." }
+          $sonyBaseVerify = Join-Path $work "sony-base-verify"
+          dotnet "$tool" extract "$sonyBasePkg" "$sonyBaseVerify" --verbose 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
+          if ($LASTEXITCODE -ne 0) { throw "Sony-built base PKG extraction failed." }
+          $sonyBaseSfo = Get-ChildItem $sonyBaseVerify -Recurse -File -Filter "param.sfo" | Select-Object -First 1
+          if (-not $sonyBaseSfo) { throw "Sony-built base PKG has no embedded PARAM.SFO." }
+          $sonyBaseSfoText = dotnet "$tool" sfo read "$($sonyBaseSfo.FullName)" 2>&1
+          $sonyBaseSfoText | Tee-Object -FilePath "candidate-output/sony-base-param-sfo.txt"
+          if ($LASTEXITCODE -ne 0) { throw "Sony-built base SFO readback failed." }
+          if (($sonyBaseSfoText -join "`n") -notmatch "CATEGORY = gde" -or ($sonyBaseSfoText -join "`n") -notmatch "st_type=digital50") { throw "Sony-built base SFO category/storage metadata mismatch." }
+          "SONY_BASE_PKG_BYTES=$((Get-Item $sonyBasePkg).Length)" | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
+          "SONY_BASE_GP4_FILE_COUNT=$($sonyBaseProject.psproject.files.file.Count)" | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
+
           "=== SET PATCH PARAM.SFO ===" | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
           dotnet "$tool" sfo set "$sfo" CATEGORY gpe 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
           if ($LASTEXITCODE -ne 0) { throw "SFO CATEGORY update failed." }
@@ -166,7 +201,7 @@ jobs:
           [IO.File]::WriteAllText($changeInfo, $changeXml, [Text.UTF8Encoding]::new($false))
 
           "=== CREATE ASSOCIATED PATCH GP4 ===" | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
-          & $pubCmd gp4_proj_create --volume_type pkg_ps4_patch --content_id IV0000-PNEU00001_00-PS4NEURALENG0000 --passcode $zeroKey --entitlement_key $zeroKey --storage_type digital25 --app_path $basePkg $gp4 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
+          & $pubCmd gp4_proj_create --volume_type pkg_ps4_patch --content_id IV0000-PNEU00001_00-PS4NEURALENG0000 --passcode $zeroKey --entitlement_key $zeroKey --storage_type digital25 --app_path $sonyBasePkg $gp4 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
           if ($LASTEXITCODE -ne 0 -or -not (Test-Path $gp4)) { throw "Associated patch GP4 creation failed." }
           # Keep Sony's accepted patch storage_type (digital25). The base
           # must be a non-game application package, not GD_AC addon content.
@@ -186,7 +221,7 @@ jobs:
           $appPath = $project.psproject.volume.package.app_path
           if ($volumeType -ne "pkg_ps4_patch") { throw "GP4 volume_type is not pkg_ps4_patch." }
           if (-not $appPath) { throw "GP4 has no Application Package association." }
-          if ($appPath -notmatch "PS4-Neural-Engine-002[.]pkg$") { throw "GP4 association does not point to the original validated PKG 002: $appPath" }
+          if ($appPath -notmatch "PS4-Neural-Engine-002-SONY-BASE[.]pkg$") { throw "GP4 association does not point to the Sony-rebuilt base PKG 002: $appPath" }
           if ($project.psproject.files.file.Count -lt 4) { throw "GP4 has fewer than 3 payload entries." }
           Copy-Item $gp4 "candidate-output/PS4-Neural-Engine-003.gp4"
           "GP4_VOLUME_TYPE=$volumeType" | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
