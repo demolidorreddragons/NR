@@ -31,7 +31,7 @@ This ledger records the next 40 work items. A task is **DONE** only when its sta
 | 65 | Validate all SPIR-V modules | **IMPLEMENTED — CI REVALIDATION PENDING** | Workflow installs `spirv-tools` and runs `spirv-val --target-env vulkan1.1` on all five modules before PSBC conversion. |
 | 66 | Compile all five shaders for PS4 NEO/GFX8 | **PENDING** | Five non-empty GNM shader binaries from pinned PSBC with `-n`. |
 | 67 | Validate GNM containers and CRCs | **PENDING** | Independent structural checks and negative malformed-container tests. |
-| 68 | Generate immutable shader artifact manifest | **PENDING** | SHA-256, sizes, compiler revisions and source hashes. |
+| 68 | Generate immutable shader artifact manifest | **IMPLEMENTED — CI REVALIDATION PENDING** | Container report now records source/SPIR-V/GNM hashes, sizes and pinned compiler/dependency revisions; report is included in uploaded artifact. |
 | 69 | Extract raw OrbShdr metadata | **PENDING** | Offsets/lengths and raw fields preserved with bounds checks. |
 | 70 | Decode ISA and resource/register metadata | **PENDING** | Disassembly and independently checked VGPR/SGPR/LDS/scratch/wave/resource interpretation. |
 
@@ -84,3 +84,6 @@ The scalar FP32 and FP16-emulation GEMM shaders now skip reading C when beta is 
 
 
 Task 65 implementation was added to the shader workflow in commit `1809a26942db7d25f61e4620de0c3e88816d63bf`. It is not marked passed until a run validates all five generated SPIR-V modules.
+
+
+Task 68 provenance fields and report artifact upload were added in commit `5b91e7e0d4c38ccbf64c66641b8611799f3b8656`. Task 69 raw OrbShdr offsets and fields were already collected by the workflow's report code, but their correctness remains subject to a successful build and later independent interpretation.
