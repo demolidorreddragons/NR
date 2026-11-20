@@ -643,7 +643,8 @@ jobs:
           DOTNET_SYSTEM_GLOBALIZATION_INVARIANT: "1"
         run: |
           test -s "$GCN8_SHADER_FILE"
-          bash tools/build_compute_smoke_pkg.sh
+          GCN8_SMOKE_MODE=compute bash tools/build_compute_smoke_pkg.sh
+          GCN8_SMOKE_MODE=startup bash tools/build_compute_smoke_pkg.sh
 
       - name: Upload standalone compute smoke package and audit manifest
         uses: actions/upload-artifact@v4
