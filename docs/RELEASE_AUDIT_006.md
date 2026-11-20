@@ -103,3 +103,20 @@ Evidência do artefato `ps4-neural-engine-build` (artifact ID `14603817345`, ZIP
 - SFO de staging: 1,072 bytes; SHA-256 `80987527aeece05aedc3c5852a4f729fdf5536c139f1fbfd56cafbb68730cec0`.
 
 O GP4 confirma que este artefato é um **full base application**, não um patch de atualização PS4. O comportamento de instalar/atualizar o PRX está dentro do eboot; não se deve apresentá-lo como patch associado. A QA final ainda não é PASS e não houve instalação ou teste no console.
+
+
+## QA independente do PKG 006 — PASS no PC (20/11/2026)
+
+A nova execução `44680087099` concluiu com sucesso tanto o build PRX/PKG quanto o job `independent-pkg-qa`. O inspector independente fixado em `pearlxcore/OrbisPkgTool@3de6da849b64a8ad0d5ba00dd4e8919934b868b0` reportou `Validation: PASS` para cabeçalho, entry table, outer/inner PFS, PFSC, digests, assinaturas PFS e filesystem walk; extraiu 15/15 arquivos. A comparação semântica dos campos de PARAM.SFO passou para ambos os arquivos staged/embutido. O PRX extraído corresponde byte a byte ao PRX standalone, e o manifesto embutido corresponde ao staged.
+
+Evidência QA artifact ID `14603449254`, SHA-256 do ZIP `390a11b6f285def47f8105d5d93267f2c5a737707de50407d66eeef3c4fe64fe`:
+
+- PKG: 6,619,136 bytes; SHA-256 `b45f736fcaf5569bf121385b9810417008050c4b4a51308acf2fde7bc070fb0b`.
+- GP4 SHA-256 `a1dd887e01b783ff21e0e214b3cdc58b8b2e7c7b30427f7861989ed90281d543`.
+- SFO staged SHA-256 `80987527aeece05aedc3c5852a4f729fdf5536c139f1fbfd56cafbb68730cec0`; SFO embutido SHA-256 `1261085e764edc6a475259058824de2208536c3512307820738ee5017bf82c2b`. Bytes diferentes, campos semânticos requeridos idênticos.
+- PRX SHA-256 `7561da3d3b83766becddcb37c1257d83c61009b5e814825ee60694d19f9cf704`.
+- EBOOT extraído: 119,808 bytes.
+- Metadados confirmados: `CATEGORY=gde`, `APP_VER=01.02`, `VERSION=01.02`, `storage=digital50`, CONTENT_ID esperado.
+- QA report: `QA_STATUS=PASS_PC_ONLY_NOT_HARDWARE_TESTED`.
+
+**Interpretação:** aprovado na validação estrutural/criptográfica do PKG e na consistência dos payloads em PC. Isso não prova instalação no PS4, inicialização do EBOOT/PRX, compatibilidade de ABI/runtime GoldHEN, nem funcionamento do renderer/GNM. O pacote permanece **não autorizado para instalação em console** até teste reversível aprovado e validação de ABI/runtime. Também é um full base application, não um patch de atualização PS4.
