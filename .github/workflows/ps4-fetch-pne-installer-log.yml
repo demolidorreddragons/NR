@@ -1,0 +1,32 @@
+name: Fetch PS4 PNE installer log
+
+on:
+  push:
+    branches: [main]
+    paths: [".github/workflows/ps4-fetch-pne-installer-log.yml"]
+
+permissions:
+  contents: read
+
+jobs:
+  fetch-log:
+    if: ${{ github.event.head_commit.message == 'Fetch PS4 PNE installer log' }}
+    runs-on: [self-hosted, Windows, X64, ps4-lan]
+    timeout-minutes: 5
+    steps:
+      - name: Read installer log from PS4 FTP (read-only)
+        shell: powershell -ExecutionPolicy Bypass -File {0}
+        env:
+          PS4_IP: ${{ vars.PS4_IP }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          if (-not $env:PS4_IP) { throw "PS4_IP repository variable is missing." }
+          $url = "ftp://$($env:PS4_IP):2121/data/GoldHEN/ps4_neural_engine_install.log"
+          $out = Join-Path $env:RUNNER_TEMP "ps4_neural_engine_install.log"
+          $result = & curl.exe --fail --silent --show-error --ftp-pasv --user "anonymous:anonymous@example.com" --output $out $url 2>&1
+          if ($LASTEXITCODE -ne 0) { throw "FTP read failed for $url : $result" }
+          if (-not (Test-Path -LiteralPath $out)) { throw "FTP returned no log file." }
+          Write-Host "PNE_INSTALL_LOG_BEGIN"
+          Get-Content -LiteralPath $out -Raw | Write-Host
+          Write-Host "PNE_INSTALL_LOG_END"
+          Write-Host "PNE_LOG_BYTES=$((Get-Item -LiteralPath $out).Length)"
