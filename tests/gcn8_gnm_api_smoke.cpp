@@ -14,6 +14,10 @@ using GnmDispatchDirectSignature =
 using GnmSetCsShaderSignature =
     int32_t (PS4_SYSV_ABI *)(uint32_t*, uint32_t,
                             const uint32_t*);
+using GnmSubmitCommandBuffersSignature =
+    int32_t (PS4_SYSV_ABI *)(uint32_t, void* const[], uint32_t*,
+                            void* const[], uint32_t*);
+using GnmSubmitDoneSignature = int (PS4_SYSV_ABI *)(void);
 using GnmCmdDispatchSignature =
     void (*)(GnmCommandBuffer*, uint32_t, uint32_t, uint32_t, uint32_t);
 using GnmCmdSetCsShaderSignature =
@@ -55,6 +59,12 @@ static_assert(std::is_same<decltype(&sceGnmDispatchDirect),
 static_assert(std::is_same<decltype(&sceGnmSetCsShader),
                            GnmSetCsShaderSignature>::value,
               "unexpected sceGnmSetCsShader signature");
+static_assert(std::is_same<decltype(&sceGnmSubmitCommandBuffers),
+                           GnmSubmitCommandBuffersSignature>::value,
+              "unexpected sceGnmSubmitCommandBuffers signature");
+static_assert(std::is_same<decltype(&sceGnmSubmitDone),
+                           GnmSubmitDoneSignature>::value,
+              "unexpected sceGnmSubmitDone signature");
 static_assert(std::is_same<decltype(&sceGnmDrawCmdDispatchDirect),
                            GnmCmdDispatchSignature>::value,
               "unexpected command-buffer dispatch signature");
@@ -75,6 +85,10 @@ __attribute__((used)) GnmDispatchDirectSignature pne_gcn8_dispatch_direct_import
     &sceGnmDispatchDirect;
 __attribute__((used)) GnmSetCsShaderSignature pne_gcn8_set_cs_shader_import =
     &sceGnmSetCsShader;
+__attribute__((used)) GnmSubmitCommandBuffersSignature
+    pne_gcn8_submit_command_buffers_import = &sceGnmSubmitCommandBuffers;
+__attribute__((used)) GnmSubmitDoneSignature
+    pne_gcn8_submit_done_import = &sceGnmSubmitDone;
 __attribute__((used)) GnmCmdSetPointerSignature
     pne_gcn8_set_indirect_resource_table_import =
         &sceGnmDrawCmdSetPointerUserData;
