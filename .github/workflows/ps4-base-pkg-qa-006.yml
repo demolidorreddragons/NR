@@ -3,7 +3,7 @@ on:
   workflow_run:
     workflows: ["PS4 PRX and PKG build"]
     types: [completed]
-    branches: [main]
+    branches: [main, feature/gcn8-numeric-kernels]
 permissions:
   actions: read
   contents: read

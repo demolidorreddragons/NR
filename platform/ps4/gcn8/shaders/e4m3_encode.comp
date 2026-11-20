@@ -1,0 +1,62 @@
+#version 450
+// Correctness-first E4M3FN quantizer. Intended for model upload / preprocessing,
+// not the per-frame hot path: nearest-code search is deliberately exhaustive.
+layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
+
+layout(std430, binding = 0) readonly buffer FloatInput { float values[]; };
+layout(std430, binding = 1) writeonly buffer PackedOutput { uint packed[]; };
+
+layout(push_constant) uniform Params {
+    uint element_count;
+} params;
+
+float decode_e4m3fn(uint code) {
+    bool negative = (code & 0x80u) != 0u;
+    uint exponent = (code >> 3u) & 0x0fu;
+    uint mantissa = code & 0x07u;
+    if (exponent == 0u && mantissa == 0u) return negative ? -0.0 : 0.0;
+    if (exponent == 0u) {
+        float v = float(mantissa) * (1.0 / 512.0);
+        return negative ? -v : v;
+    }
+    if (exponent == 15u && mantissa == 7u) return uintBitsToFloat(0x7fc00000u);
+    float v = (1.0 + float(mantissa) * 0.125) * exp2(float(int(exponent) - 7));
+    return negative ? -v : v;
+}
+
+uint encode_e4m3fn(float value) {
+    if (isnan(value)) return 0x7fu;
+    if (value == 0.0) return floatBitsToUint(value) >> 24u & 0x80u;
+
+    // Saturate infinities and out-of-range finite values to the largest finite code.
+    if (isinf(value) || abs(value) >= 448.0) return (value < 0.0 ? 0x80u : 0u) | 0x7eu;
+
+    uint best_code = 0u;
+    float best_error = 3.402823466e+38;
+    // 0x7f and 0xff are NaNs and are excluded. Code parity implements ties-to-even.
+    for (uint code = 0u; code < 255u; ++code) {
+        float candidate = decode_e4m3fn(code);
+        float error = abs(value - candidate);
+        if (error < best_error ||
+            (error == best_error && ((code & 1u) == 0u) && ((best_code & 1u) != 0u))) {
+            best_error = error;
+            best_code = code;
+        }
+    }
+    return best_code;
+}
+
+void main() {
+    uint word_index = gl_GlobalInvocationID.x;
+    uint first = word_index * 4u;
+    if (first >= params.element_count) return;
+
+    uint word = 0u;
+    for (uint lane = 0u; lane < 4u; ++lane) {
+        uint index = first + lane;
+        if (index < params.element_count) {
+            word |= (encode_e4m3fn(values[index]) & 0xffu) << (lane * 8u);
+        }
+    }
+    packed[word_index] = word;
+}

@@ -1,0 +1,105 @@
+#version 450
+#extension GL_EXT_control_flow_attributes : require
+
+// PS4 Pro / AMD GCN8 bring-up kernel.
+// 64 lanes per workgroup (one GCN wave64); each lane computes a 2x2
+// output micro-tile. LDS rows are padded from 16 to 17 floats to reduce
+// bank-conflict risk. This is a conservative baseline, not a tuned kernel.
+
+layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+
+layout(std430, binding = 0) readonly buffer ABuffer { float A[]; };
+layout(std430, binding = 1) readonly buffer BBuffer { float B[]; };
+layout(std430, binding = 2) readonly buffer CBuffer { float C[]; };
+layout(std430, binding = 3) writeonly buffer OutBuffer { float Out[]; };
+
+layout(push_constant) uniform Params {
+    uint M;
+    uint N;
+    uint K;
+    float alpha;
+    float beta;
+} pc;
+
+shared float tileA[16][17];
+shared float tileB[16][17];
+
+void main() {
+    const uint lx = gl_LocalInvocationID.x;
+    const uint ly = gl_LocalInvocationID.y;
+    const uint lane = ly * 8u + lx;
+
+    const uint blockRow = gl_WorkGroupID.y * 16u;
+    const uint blockCol = gl_WorkGroupID.x * 16u;
+
+    const uint row0 = blockRow + ly * 2u;
+    const uint row1 = row0 + 1u;
+    const uint col0 = blockCol + lx * 2u;
+    const uint col1 = col0 + 1u;
+
+    float acc00 = 0.0;
+    float acc01 = 0.0;
+    float acc10 = 0.0;
+    float acc11 = 0.0;
+
+    for (uint baseK = 0u; baseK < pc.K; baseK += 16u) {
+        // 64 lanes x 4 values = 256 values, exactly one 16x16 tile.
+        [[dont_unroll]]
+        for (uint item = 0u; item < 4u; ++item) {
+            const uint linear = lane + item * 64u;
+            const uint r = linear >> 4u;
+            const uint c = linear & 15u;
+
+            const uint globalARow = blockRow + r;
+            const uint globalAK = baseK + c;
+            tileA[r][c] = (globalARow < pc.M && globalAK < pc.K)
+                ? A[globalARow * pc.K + globalAK] : 0.0;
+
+            const uint globalBK = baseK + r;
+            const uint globalBCol = blockCol + c;
+            tileB[r][c] = (globalBK < pc.K && globalBCol < pc.N)
+                ? B[globalBK * pc.N + globalBCol] : 0.0;
+        }
+
+        barrier();
+
+        // Keep the fixed-size reduction loop compact in GCN8 code.
+        // The unrolled form exceeded the 8-bit GNM input-usage pointer range.
+        [[dont_unroll]]
+        for (uint k = 0u; k < 16u; ++k) {
+            const float a0 = tileA[ly * 2u][k];
+            const float a1 = tileA[ly * 2u + 1u][k];
+            const float b0 = tileB[k][lx * 2u];
+            const float b1 = tileB[k][lx * 2u + 1u];
+
+            acc00 = fma(a0, b0, acc00);
+            acc01 = fma(a0, b1, acc01);
+            acc10 = fma(a1, b0, acc10);
+            acc11 = fma(a1, b1, acc11);
+        }
+
+        barrier();
+    }
+
+    const uint out00 = row0 * pc.N + col0;
+    const uint out01 = row0 * pc.N + col1;
+    const uint out10 = row1 * pc.N + col0;
+    const uint out11 = row1 * pc.N + col1;
+
+    if (row0 < pc.M && col0 < pc.N) {
+        const float residual = pc.beta == 0.0 ? 0.0 : pc.beta * C[out00];
+        Out[out00] = pc.alpha * acc00 + residual;
+    }
+    if (row0 < pc.M && col1 < pc.N) {
+        const float residual = pc.beta == 0.0 ? 0.0 : pc.beta * C[out01];
+        Out[out01] = pc.alpha * acc01 + residual;
+    }
+    if (row1 < pc.M && col0 < pc.N) {
+        const float residual = pc.beta == 0.0 ? 0.0 : pc.beta * C[out10];
+        Out[out10] = pc.alpha * acc10 + residual;
+    }
+    if (row1 < pc.M && col1 < pc.N) {
+        const float residual = pc.beta == 0.0 ? 0.0 : pc.beta * C[out11];
+        Out[out11] = pc.alpha * acc11 + residual;
+    }
+}

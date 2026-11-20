@@ -1,0 +1,75 @@
+name: GCN8 PS4 Pro compile probe
+
+on:
+  push:
+    branches: [feature/gcn8-numeric-kernels]
+    paths:
+      - ".github/workflows/gcn8-ps4-probe.yml"
+      - "platform/ps4/gcn8/shaders/**"
+      - "platform/ps4/gcn8/README.md"
+
+permissions:
+  contents: read
+
+jobs:
+  compile-gfx8:
+    runs-on: [self-hosted, Windows, X64, ps4-lan]
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Discover GFX8 toolchain and PS4 bridge (read-only)
+        shell: powershell -NoProfile -ExecutionPolicy Bypass -File {0}
+        env:
+          PS4_IP: ${{ vars.PS4_IP }}
+        run: |
+          $ErrorActionPreference = "Continue"
+          Write-Host "RUNNER=$env:COMPUTERNAME"
+          foreach ($name in @("glslangValidator.exe", "opengnm-psbc.exe", "opengnm-psbc", "spirv-val.exe", "spirv-dis.exe")) {
+            $cmd = Get-Command $name -ErrorAction SilentlyContinue
+            if ($cmd) { Write-Host "FOUND $name => $($cmd.Source)" } else { Write-Host "MISSING $name" }
+          }
+          Write-Host "=== common tool roots ==="
+          foreach ($root in @("$env:SystemDrive\tools", "$env:SystemDrive\PS4Tools", "$env:ProgramFiles", "$env:USERPROFILE\Downloads")) {
+            if (Test-Path $root) {
+              Get-ChildItem -LiteralPath $root -Filter "opengnm-psbc.exe" -File -Recurse -Depth 5 -ErrorAction SilentlyContinue |
+                ForEach-Object { Write-Host "FOUND_PSBC=$($_.FullName)" }
+              Get-ChildItem -LiteralPath $root -Filter "glslangValidator.exe" -File -Recurse -Depth 5 -ErrorAction SilentlyContinue |
+                ForEach-Object { Write-Host "FOUND_GLSLANG=$($_.FullName)" }
+            }
+          }
+          if ($env:PS4_IP) {
+            $ok = Test-NetConnection -ComputerName $env:PS4_IP -Port 2121 -InformationLevel Quiet
+            Write-Host "PS4_FTP_2121_REACHABLE=$ok"
+          } else {
+            Write-Host "PS4_IP variable not configured"
+          }
+
+      - name: Compile compute shader to SPIR-V and PS4 Pro GFX8 binary
+        shell: powershell -NoProfile -ExecutionPolicy Bypass -File {0}
+        run: |
+          $ErrorActionPreference = "Stop"
+          $glslang = Get-Command glslangValidator.exe -ErrorAction SilentlyContinue
+          $psbc = Get-Command opengnm-psbc.exe -ErrorAction SilentlyContinue
+          if (-not $glslang -or -not $psbc) {
+            throw "GFX8_COMPILE_BLOCKED: glslangValidator.exe and/or opengnm-psbc.exe missing from PATH. See discovery step."
+          }
+          $src = "platform/ps4/gcn8/shaders/gemm_fp32_wave64_tiled.comp"
+          New-Item -ItemType Directory -Path "build/gcn8" -Force | Out-Null
+          & $glslang.Source -V --target-env vulkan1.1 -S comp $src -o "build/gcn8/gemm.spv"
+          if ($LASTEXITCODE -ne 0) { throw "glslang failed with exit $LASTEXITCODE" }
+          & $psbc.Source -s compute -f "build/gcn8/gemm.spv" -o "build/gcn8/gemm_gfx8.sb" -n -vv 2>&1 |
+            Tee-Object -FilePath "build/gcn8/psbc-gfx8.log"
+          if ($LASTEXITCODE -ne 0) { throw "PSBC GFX8 compile failed with exit $LASTEXITCODE" }
+          Get-Item "build/gcn8/gemm.spv", "build/gcn8/gemm_gfx8.sb", "build/gcn8/psbc-gfx8.log" |
+            ForEach-Object { Write-Host "$($_.Name) SIZE=$($_.Length)" }
+          Get-FileHash "build/gcn8/gemm_gfx8.sb" -Algorithm SHA256
+          Write-Host "GFX8_COMPILE_SUCCESS"
+
+      - name: Upload shader and compiler report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gcn8-gfx8-compile-probe
+          path: build/gcn8/
+          if-no-files-found: warn

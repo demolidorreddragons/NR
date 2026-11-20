@@ -1,0 +1,48 @@
+#version 450
+// E4M3FN unpack kernel. One invocation converts four packed bytes.
+// The shader uses only core GLSL 4.50 operations available to the PSBC path.
+layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
+
+layout(std430, binding = 0) readonly buffer PackedInput { uint packed[]; };
+layout(std430, binding = 1) writeonly buffer FloatOutput { float values[]; };
+
+layout(push_constant) uniform Params {
+    uint element_count;
+} params;
+
+float decode_e4m3fn(uint code) {
+    code &= 0xffu;
+    bool negative = (code & 0x80u) != 0u;
+    uint exponent = (code >> 3u) & 0x0fu;
+    uint mantissa = code & 0x07u;
+
+    // E4M3FN reserves only 0x7f/0xff for NaN. Exponent 15 is finite.
+    if (exponent == 0u && mantissa == 0u) {
+        return negative ? -0.0 : 0.0;
+    }
+    if (exponent == 0u) {
+        float subnormal = float(mantissa) * (1.0 / 512.0);
+        return negative ? -subnormal : subnormal;
+    }
+    if (exponent == 15u && mantissa == 7u) {
+        return uintBitsToFloat(0x7fc00000u);
+    }
+
+    float significand = 1.0 + float(mantissa) * 0.125;
+    float magnitude = significand * exp2(float(int(exponent) - 7));
+    return negative ? -magnitude : magnitude;
+}
+
+void main() {
+    uint word_index = gl_GlobalInvocationID.x;
+    uint first = word_index * 4u;
+    if (first >= params.element_count) return;
+
+    uint word = packed[word_index];
+    for (uint lane = 0u; lane < 4u; ++lane) {
+        uint index = first + lane;
+        if (index < params.element_count) {
+            values[index] = decode_e4m3fn((word >> (lane * 8u)) & 0xffu);
+        }
+    }
+}

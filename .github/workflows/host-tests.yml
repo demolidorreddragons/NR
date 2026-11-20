@@ -1,7 +1,7 @@
 name: host-tests
 on:
   push:
-    branches: [main]
+    branches: [main, feature/gcn8-numeric-kernels]
   pull_request:
   workflow_dispatch:
 jobs:
@@ -23,8 +23,39 @@ jobs:
           assert 'static ssize_t read_retry' in installer, 'installer must retry EINTR independently for each read'
           assert 'static ssize_t read_block' in installer, 'verification must accumulate short reads'
           assert 'read_block(verify_src' in installer and 'read_block(verify_dst' in installer, 'both streams must use full-block reads'
-          print('Installer copy verification checks passed')
+          assert 'DEST_BACKUP' in installer and 'CONFIG_BACKUP' in installer, 'transaction must retain recovery backups'
+          assert 'static int commit_install' in installer, 'PRX/config commit transaction missing'
+          assert 'rollback:' in installer and 'rollback incomplete' in installer and 'previous files restored' in installer, 'transaction rollback path and outcome reporting missing'
+          assert 'rename(DEST_TMP, DEST_PRX)' in installer, 'staged PRX must be committed only in transaction'
+          assert 'rename(CONFIG_TMP, CONFIG)' in installer, 'staged plugins.ini must be committed only in transaction'
+          assert 'if (found_entry)' in installer and 'fopen_staged_file(CONFIG_TMP)' in installer, 'existing loader entry must still stage config'
+          assert 'O_CREAT | O_EXCL' in installer, 'staging files must be created exclusively'
+          assert 'O_TRUNC' not in installer, 'installer must never truncate a pre-existing staging path'
+          assert 'fdopen(fd, "wb")' in installer, 'staged config must wrap the exclusively-created descriptor'
+          assert 'pne_validate_release_manifest(RELEASE_MANIFEST, SOURCE_PRX' in installer, 'installer must verify release identity and PRX hash'
+          assert installer.index('pne_validate_release_manifest(RELEASE_MANIFEST, SOURCE_PRX') < installer.index('mkdir("/data/GoldHEN"'), 'manifest/hash validation must precede destination writes'
+          assert 'RELEASE_MANIFEST "/app0/pne-release.ini"' in installer, 'installer manifest path missing'
+          build_script = Path('tools/build_pkg.sh').read_text()
+          assert 'installer/sha256.c' in build_script and 'installer/release_manifest.c' in build_script, 'installer integrity objects must be linked'
+          assert 'PRX_SHA256=' in build_script, 'PKG build must calculate the staged PRX SHA-256'
+          assert 'pne-release.ini' in build_script, 'PKG must include the release manifest'
+          assert 'manifest and PRX SHA-256 match' in build_script, 'PKG extraction must verify manifest against PRX'
+          assert 'abi_status=unverified' in build_script and 'hardware_status=not_tested' in build_script, 'manifest must not claim unproven compatibility'
+          print('Installer transaction and release-manifest invariants passed')
           PY
+      - name: Test installer release manifest and SHA-256
+        run: |
+          mkdir -p "$RUNNER_TEMP/pne-installer-test"
+          cc -std=c11 -Wall -Wextra -Werror -Iinstaller installer/sha256.c installer/release_manifest.c tests/test_release_manifest.c -o "$RUNNER_TEMP/pne-installer-test/test_release_manifest"
+          "$RUNNER_TEMP/pne-installer-test/test_release_manifest"
+      - name: Validate GCN8 numeric reference and tiled mapping
+        run: python3 tools/test_gcn8_numeric.py
+      - name: Validate GNM input-usage offset arithmetic
+        run: python3 tools/test_gnm_slot_offsets.py
+      - name: Validate DLSS-NR 71-block tensor layout formulas
+        run: python3 tests/test_dlssnr_layout_formulas.py
+      - name: Validate model input intake verifier
+        run: python3 tests/test_verify_model_inputs.py
       - name: Configure
         run: cmake -S . -B build
       - name: Build

@@ -12,6 +12,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include <orbis/libkernel.h>
+#include "release_manifest.h"
 
 /* Retry interrupted reads without advancing only one side of a byte comparison. */
 static ssize_t read_retry(int fd, void* buffer, size_t capacity) {
@@ -35,13 +36,37 @@ static ssize_t read_block(int fd, void* buffer, size_t capacity) {
 
 
 #define SOURCE_PRX "/app0/ps4_neural_engine.prx"
+#define RELEASE_MANIFEST "/app0/pne-release.ini"
 #define DEST_DIR "/data/GoldHEN/plugins"
 #define DEST_PRX DEST_DIR "/ps4_neural_engine.prx"
 #define DEST_TMP DEST_PRX ".pne-tmp"
+#define DEST_BACKUP DEST_PRX ".pne-backup"
 #define CONFIG "/data/GoldHEN/plugins.ini"
 #define CONFIG_TMP CONFIG ".pne-tmp"
+#define CONFIG_BACKUP CONFIG ".pne-backup"
 #define STATUS "/data/GoldHEN/ps4_neural_engine_install.log"
 #define MAX_CONFIG 65536
+
+/* O_EXCL makes stale files and symlinks at staging paths a hard stop, never a target to truncate. */
+static int open_staged_file(const char* path, int* fd_out) {
+    int fd = open(path, O_WRONLY | O_CREAT | O_EXCL, 0600);
+    if (fd < 0) return 0;
+    *fd_out = fd;
+    return 1;
+}
+
+static FILE* fopen_staged_file(const char* path) {
+    int fd = -1;
+    if (!open_staged_file(path, &fd)) return NULL;
+    FILE* stream = fdopen(fd, "wb");
+    if (!stream) {
+        int saved_errno = errno;
+        close(fd);
+        remove(path);
+        errno = saved_errno;
+    }
+    return stream;
+}
 
 static void notify(const char* message) {
     OrbisNotificationRequest request;
@@ -70,7 +95,8 @@ static int copy_prx(char* error, size_t error_size) {
         return 0;
     }
 
-    int out = open(DEST_TMP, O_WRONLY | O_CREAT | O_TRUNC, 0666);
+    int out = -1;
+    if (!open_staged_file(DEST_TMP, &out)) out = -1;
     if (out < 0) {
         int saved_errno = errno;
         close(in);
@@ -175,12 +201,7 @@ static int copy_prx(char* error, size_t error_size) {
                  source_bytes, verified_bytes, saved_errno);
         return 0;
     }
-    if (rename(DEST_TMP, DEST_PRX) != 0) {
-        saved_errno = errno;
-        remove(DEST_TMP);
-        snprintf(error, error_size, "ERROR: cannot activate copied PRX (errno=%d).", saved_errno);
-        return 0;
-    }
+    /* Keep the verified PRX staged; main() commits it with plugins.ini. */
     return 1;
 }
 static void trim_line(char* line) {
@@ -229,7 +250,23 @@ static int configure_loader(char* error, size_t error_size) {
         }
         if (in_default && strcmp(line, DEST_PRX) == 0) found_entry = 1;
     }
-    if (found_entry) return 1;
+    if (found_entry) {
+        FILE* staged = fopen_staged_file(CONFIG_TMP);
+        if (!staged) {
+            snprintf(error, error_size, "ERROR: cannot stage unchanged plugins.ini (errno=%d).", errno);
+            return 0;
+        }
+        int staged_ok = fwrite(input, 1, length, staged) == length;
+        if (fflush(staged) != 0 || fsync(fileno(staged)) != 0) staged_ok = 0;
+        if (fclose(staged) != 0) staged_ok = 0;
+        if (!staged_ok) {
+            int saved_errno = errno;
+            remove(CONFIG_TMP);
+            snprintf(error, error_size, "ERROR: cannot verify staged plugins.ini (errno=%d).", saved_errno);
+            return 0;
+        }
+        return 1;
+    }
 
     in_default = 0;
     pos = 0;
@@ -275,7 +312,7 @@ static int configure_loader(char* error, size_t error_size) {
         used += n;
     }
 
-    FILE* out = fopen(CONFIG_TMP, "wb");
+    FILE* out = fopen_staged_file(CONFIG_TMP);
     if (!out) {
         snprintf(error, error_size, "ERROR: cannot create temporary plugins.ini (errno=%d).", errno);
         return 0;
@@ -283,17 +320,97 @@ static int configure_loader(char* error, size_t error_size) {
     int ok = fwrite(output, 1, used, out) == used;
     if (fflush(out) != 0 || fsync(fileno(out)) != 0) ok = 0;
     if (fclose(out) != 0) ok = 0;
-    if (!ok || rename(CONFIG_TMP, CONFIG) != 0) {
+    if (!ok) {
         int saved_errno = errno;
         remove(CONFIG_TMP);
-        snprintf(error, error_size, "ERROR: cannot save updated plugins.ini (errno=%d).", saved_errno);
+        snprintf(error, error_size, "ERROR: cannot stage updated plugins.ini (errno=%d).", saved_errno);
         return 0;
     }
     return 1;
 }
 
+/* Commit PRX and loader config with retained recovery copies. */
+static int path_exists(const char* path) {
+    struct stat st;
+    return stat(path, &st) == 0;
+}
+
+static int commit_install(char* error, size_t error_size) {
+    int had_prx = path_exists(DEST_PRX);
+    int had_config = path_exists(CONFIG);
+    int moved_prx = 0, moved_config = 0, installed_prx = 0;
+    int failure = 0;
+
+    if (path_exists(DEST_BACKUP) || path_exists(CONFIG_BACKUP)) {
+        snprintf(error, error_size, "ERROR: existing recovery backup found; refusing to overwrite it.");
+        return 0;
+    }
+    if (had_prx) {
+        if (rename(DEST_PRX, DEST_BACKUP) != 0) {
+            snprintf(error, error_size, "ERROR: cannot back up existing PRX (errno=%d).", errno);
+            return 0;
+        }
+        moved_prx = 1;
+    }
+    if (had_config) {
+        if (rename(CONFIG, CONFIG_BACKUP) != 0) {
+            int operation_errno = errno;
+            int restore_errno = 0;
+            if (moved_prx && rename(DEST_BACKUP, DEST_PRX) != 0) restore_errno = errno;
+            if (restore_errno) {
+                snprintf(error, error_size,
+                         "ERROR: cannot back up plugins.ini (errno=%d); PRX restore also failed (errno=%d); inspect .pne-backup.",
+                         operation_errno, restore_errno);
+            } else {
+                snprintf(error, error_size,
+                         "ERROR: cannot back up plugins.ini (errno=%d); previous PRX restored.",
+                         operation_errno);
+            }
+            return 0;
+        }
+        moved_config = 1;
+    }
+    if (rename(DEST_TMP, DEST_PRX) != 0) {
+        failure = errno;
+        goto rollback;
+    }
+    installed_prx = 1;
+    if (rename(CONFIG_TMP, CONFIG) != 0) {
+        failure = errno;
+        goto rollback;
+    }
+    return 1;
+
+rollback:
+    {
+        int rollback_errno = 0;
+        if (installed_prx && remove(DEST_PRX) != 0 && errno != ENOENT) rollback_errno = errno;
+        if (moved_config && rename(CONFIG_BACKUP, CONFIG) != 0 && rollback_errno == 0) rollback_errno = errno;
+        if (moved_prx && rename(DEST_BACKUP, DEST_PRX) != 0 && rollback_errno == 0) rollback_errno = errno;
+        remove(DEST_TMP);
+        remove(CONFIG_TMP);
+        if (rollback_errno) {
+            snprintf(error, error_size,
+                     "ERROR: transactional commit failed (errno=%d); rollback incomplete (errno=%d); inspect .pne-backup.",
+                     failure, rollback_errno);
+        } else {
+            snprintf(error, error_size,
+                     "ERROR: transactional commit failed (errno=%d); previous files restored.",
+                     failure);
+        }
+    }
+    return 0;
+}
+
 int main(void) {
     char error[256];
+    /* Validate immutable package identity and PRX bytes before creating or changing destinations. */
+    if (!pne_validate_release_manifest(RELEASE_MANIFEST, SOURCE_PRX, error, sizeof(error))) {
+        write_status(error);
+        notify("PNE: manifesto/hash do PRX invalido; nenhuma alteracao foi feita.");
+        sceKernelUsleep(3000000);
+        return 5;
+    }
     if (mkdir("/data/GoldHEN", 0777) != 0 && errno != EEXIST) {
         snprintf(error, sizeof(error), "ERROR: cannot create /data/GoldHEN (errno=%d).", errno);
         write_status(error);
@@ -316,13 +433,20 @@ int main(void) {
         return 2;
     }
     if (!configure_loader(error, sizeof(error))) {
+        remove(DEST_TMP);
         write_status(error);
-        notify("PNE: PRX copiado, mas plugins.ini nao foi atualizado. Veja install.log.");
+        notify("PNE: falha ao preparar plugins.ini. Arquivos ativos preservados.");
         sceKernelUsleep(3000000);
         return 3;
     }
+    if (!commit_install(error, sizeof(error))) {
+        write_status(error);
+        notify("PNE: falha na transacao. Verifique backups e install.log.");
+        sceKernelUsleep(3000000);
+        return 4;
+    }
 
-    write_status("OK: PRX copied and size-verified; plugins.ini was updated without replacing existing entries. Restart GoldHEN or reboot to load.");
+    write_status("OK: PRX and plugins.ini committed; previous files retained as .pne-backup when present. Restart GoldHEN or reboot to load.");
     notify("PNE instalado automaticamente. Reinicie o GoldHEN/PS4 para carregar.");
     sceKernelUsleep(3000000);
     return 0;

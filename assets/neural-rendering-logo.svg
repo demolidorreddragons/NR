@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-labelledby="title desc">
+<title id="title">Neural Rendering — PS4 Pro jellyfish UFO</title>
+<desc id="desc">A monochrome jellyfish-shaped UFO with a small PlayStation-inspired mark on its dome, trailing black fading smoke, and Neural Rendering lettering below.</desc>
+<defs>
+  <radialGradient id="dome" cx="48%" cy="24%" r="75%"><stop offset="0" stop-color="#f4f4f4"/><stop offset=".48" stop-color="#aeb3b8"/><stop offset="1" stop-color="#34383d"/></radialGradient>
+  <linearGradient id="bell" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#f1f1f1"/><stop offset=".55" stop-color="#777d83"/><stop offset="1" stop-color="#202328"/></linearGradient>
+  <linearGradient id="smoke" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#050608" stop-opacity=".94"/><stop offset=".55" stop-color="#090b0e" stop-opacity=".62"/><stop offset="1" stop-color="#111318" stop-opacity="0"/></linearGradient>
+  <filter id="blur"><feGaussianBlur stdDeviation="17"/></filter>
+  <filter id="glow"><feGaussianBlur stdDeviation="8" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+</defs>
+<g opacity=".8" filter="url(#blur)" fill="url(#smoke)">
+  <path d="M365 490 C300 580 365 630 310 700 C270 750 330 805 278 865 L430 865 C390 790 455 750 420 690 C395 635 455 575 430 500Z"/>
+  <path d="M650 480 C720 560 650 625 710 690 C755 740 690 800 748 870 L590 870 C630 790 565 745 605 680 C640 620 585 560 610 490Z"/>
+  <path d="M480 500 C445 600 520 650 475 730 C440 790 500 820 480 885 L570 885 C545 810 610 770 555 700 C515 640 575 575 540 500Z"/>
+</g>
+<g fill="none" stroke="#08090b" stroke-linecap="round" opacity=".95">
+ <path d="M410 480 C360 570 410 620 355 710 C330 750 365 785 340 835" stroke-width="20"/>
+ <path d="M455 485 C420 575 470 635 430 720 C405 770 445 810 420 860" stroke-width="15"/>
+ <path d="M570 485 C610 570 555 640 600 720 C630 770 590 815 620 860" stroke-width="15"/>
+ <path d="M615 480 C670 565 620 625 675 710 C700 750 665 790 690 835" stroke-width="20"/>
+ <path d="M495 495 C470 585 525 650 495 735 C475 785 505 820 500 865" stroke-width="12"/>
+ <path d="M530 495 C555 585 500 650 530 735 C550 785 520 820 525 865" stroke-width="12"/>
+</g>
+<path d="M300 390 C315 270 395 175 512 155 C629 175 709 270 724 390 C665 435 590 455 512 455 C434 455 359 435 300 390Z" fill="url(#dome)" stroke="#171a1e" stroke-width="12"/>
+<path d="M300 390 C390 435 634 435 724 390 C695 470 610 500 512 500 C414 500 329 470 300 390Z" fill="url(#bell)" stroke="#171a1e" stroke-width="10"/>
+<path d="M340 390 C425 420 599 420 684 390" fill="none" stroke="#d9dde0" stroke-opacity=".65" stroke-width="8"/>
+<g transform="translate(512 287)" fill="#111418" filter="url(#glow)">
+ <path d="M-42 -42 L-10 -31 L-10 40 L-31 33 L-31 -11 L-42 -15Z"/>
+ <path d="M-2 -29 L23 -21 C40 -15 43 -2 43 11 L43 25 L20 18 L20 6 C20 0 17 -4 11 -6 L-2 -10Z"/>
+ <path d="M-26 49 L-7 39 L18 48 L-2 59Z"/>
+ <path d="M26 34 L48 27 L48 43 L26 50Z"/>
+</g>
+<g fill="#dfe3e6" opacity=".9"><circle cx="365" cy="414" r="7"/><circle cx="425" cy="447" r="6"/><circle cx="599" cy="447" r="6"/><circle cx="659" cy="414" r="7"/></g>
+<text x="512" y="960" text-anchor="middle" fill="#e8eaec" font-family="Arial, Helvetica, sans-serif" font-size="62" font-weight="700" letter-spacing="11">NEURAL RENDERING</text>
+</svg>

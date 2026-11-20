@@ -1,0 +1,500 @@
+name: GCN8 shader compiler and GEMM binary
+
+concurrency:
+  # Keep an active pinned compiler build alive while follow-up commits queue.
+  # The output must correspond to one immutable commit, not a canceled partial run.
+  group: gcn8-shader-build-${{ github.ref }}
+  cancel-in-progress: false
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [feature/gcn8-numeric-kernels]
+    paths:
+      - "platform/ps4/gcn8/shaders/**"
+      - "tools/apply_psbc_gfx8_fixes.py"
+      - ".github/workflows/gcn8-shader-build.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "platform/ps4/gcn8/shaders/**"
+      - "tools/apply_psbc_gfx8_fixes.py"
+      - ".github/workflows/gcn8-shader-build.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  build-gfx8-compute:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install host compiler and shader tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential python3 python3-mako glslang-tools spirv-tools llvm-18
+      - name: Checkout pinned shader compiler and header dependencies
+        run: |
+          git clone https://github.com/PS4-OpenGNM/opengnm-psbc.git .deps/opengnm-psbc
+          git -C .deps/opengnm-psbc checkout 28697f007862427ebec54388ec972ce6e3545912
+          git clone https://github.com/PS4-OpenGNM/opengnm.git .deps/opengnm
+          git -C .deps/opengnm checkout 4b295ca54c82c83acf308d1c646a2dfa9ae57350
+          git clone https://github.com/KhronosGroup/SPIRV-Headers.git .deps/SPIRV-Headers
+          git -C .deps/SPIRV-Headers checkout 09913f088a1197aba4aefd300a876b2ebbaa3391
+          git clone https://github.com/KhronosGroup/Vulkan-Headers.git .deps/Vulkan-Headers
+          git -C .deps/Vulkan-Headers checkout v1.4.328
+      - name: Apply audited PSBC GFX8 and SPIR-V input fixes
+        run: |
+          python3 tools/apply_psbc_gfx8_fixes.py .deps/opengnm-psbc
+          git -C .deps/opengnm-psbc diff --check
+          grep -F "lds_size_per_workgroup = gfxlevel >= GFX7 ? 64 * 1024 : 32 * 1024" .deps/opengnm-psbc/libpsbc/psbc_compile.c
+          grep -F "chunkusageoffset > 0xffu" .deps/opengnm-psbc/libpsbc/psbc_compile.c
+          grep -F "Invalid SPIR-V file size" .deps/opengnm-psbc/cmd/psbc/main.c
+      - name: Configure reproducible host compiler build
+        working-directory: .deps/opengnm-psbc
+        run: |
+          cat > config.mak <<'EOF'
+          CC=gcc
+          CXX=g++
+          LD=g++
+          AR=ar
+          PYTHON=python3
+          DESTDIR=/usr/local
+          BINDIR=/usr/local/bin
+          SHARED_FLAGS=-Iinclude/mesa -Iinclude/ -Ilibpsbc/ -I../opengnm/include -I../SPIRV-Headers/include -I../Vulkan-Headers/include -Isrc/ -Isrc/amd -Isrc/amd/common -Isrc/amd/common/nir -Isrc/amd/compiler -Isrc/amd/vulkan -Isrc/amd/vulkan/nir -Isrc/vulkan/runtime -Isrc/vulkan/runtime/bvh -Isrc/vulkan/util -Isrc/compiler -Isrc/compiler/nir -Isrc/compiler/spirv -Isrc/gallium/include -Isrc/mesa -Isrc/mesa/main -Isrc/util -Icmd/psbc -Iinclude/mesa -D_GNU_SOURCE -D_XOPEN_SOURCE=700 -DUTIL_ARCH_LITTLE_ENDIAN=1 -DUTIL_ARCH_BIG_ENDIAN=0 -DHAVE_STRUCT_TIMESPEC=1 -DHAVE_PTHREAD=1 -DHAVE_SYSCONF=1
+          CFLAGS=-std=gnu11 -O2 -g -Wall -Wno-unused-function -Wno-unused-variable $(SHARED_FLAGS)
+          CXXFLAGS=-std=c++17 -O2 -g -Wall -Wno-unused-function -Wno-unused-variable $(SHARED_FLAGS)
+          LDFLAGS=-lm -pthread -ldl
+          EOF
+          test -f ../SPIRV-Headers/include/spirv/spir-v.xml
+          test -f ../Vulkan-Headers/include/vulkan/vulkan.h
+          test -f ../Vulkan-Headers/include/vk_video/vulkan_video_codec_av1std_encode.h
+      - name: Verify Linux host sysconf feature used by Mesa
+        run: |
+          cat > /tmp/nr-sysconf-probe.c <<'EOF'
+          #include <unistd.h>
+          #include <stdio.h>
+          int main(void) {
+            long page = sysconf(_SC_PAGESIZE);
+            long pages = sysconf(_SC_PHYS_PAGES);
+            if (page <= 0 || pages <= 0) return 1;
+            printf("sysconf page_size=%ld physical_pages=%ld\\n", page, pages);
+            return 0;
+          }
+          EOF
+          gcc -std=gnu11 -D_XOPEN_SOURCE=700 -DHAVE_SYSCONF=1 /tmp/nr-sysconf-probe.c -o /tmp/nr-sysconf-probe
+          /tmp/nr-sysconf-probe
+      - name: Generate Mesa headers required by PSBC
+        working-directory: .deps/opengnm-psbc
+        run: |
+          # Reproduce the generated headers declared by Mesa's pinned meson.build files.
+          python3 src/util/process_shader_stats.py src/util/shader_stats.rnc src/util/shader_stats.xml > src/util/shader_stats.h
+          test -s src/util/shader_stats.h
+          python3 src/util/format/u_format_table.py src/util/format/u_format.yaml --enums > src/util/format/u_format_gen.h
+          test -s src/util/format/u_format_gen.h
+          python3 src/util/format/u_format_table.py src/util/format/u_format.yaml --header > src/util/format/u_format_pack.h
+          test -s src/util/format/u_format_pack.h
+          python3 src/util/format/u_format_table.py src/util/format/u_format.yaml > src/util/format/u_format_table.c
+          test -s src/util/format/u_format_table.c
+          python3 src/compiler/builtin_types_h.py src/compiler/builtin_types.h
+          test -s src/compiler/builtin_types.h
+          python3 src/compiler/builtin_types_c.py src/compiler/builtin_types.c
+          test -s src/compiler/builtin_types.c
+          python3 src/vulkan/util/vk_struct_type_cast_gen.py --xml src/vulkan/registry/vk.xml --out src/vulkan/util/vk_struct_type_cast.h --beta false
+          test -s src/vulkan/util/vk_struct_type_cast.h
+          # Mesa's amd/common/meson.build generates these packet headers from the pinned JSON inputs.
+          for gfx in gfx11 gfx12; do
+            python3 src/amd/packets/parse_cp_pm4_table_data_json.py \
+              src/amd/packets/cp_pm4_table_data_gfx11.json \
+              src/amd/packets/pm4_it_opcodes_gfx11.h \
+              src/amd/packets/cp_pm4_table_data_gfx12.json \
+              src/amd/packets/pm4_it_opcodes_gfx12.h \
+              "$gfx" packets_h > "src/amd/common/amd_cp_packets_${gfx}.h"
+            test -s "src/amd/common/amd_cp_packets_${gfx}.h"
+          done
+      - name: Generate remaining pinned Mesa NIR and ACO sources
+        working-directory: .deps/opengnm-psbc
+        run: |
+          # Make's source wildcards are evaluated before generated .c files exist.
+          # Run the upstream generated target first, then start a fresh make process.
+          make generated
+          python3 src/util/format_srgb.py > src/util/format_srgb.c
+          python3 src/amd/common/gfx10_format_table.py src/util/format/u_format.yaml src/amd/registers/gfx10-rsrc.json src/amd/registers/gfx11-rsrc.json > src/amd/common/gfx10_format_table.c
+          # The standalone Makefile omits Mesa's x86 SIMD assembly objects.
+          # Use upstream BLAKE3's supported portable-only configuration.
+          echo 'CFLAGS += -DBLAKE3_NO_SSE2 -DBLAKE3_NO_SSE41 -DBLAKE3_NO_AVX2 -DBLAKE3_NO_AVX512' >> config.mak
+          test -s src/compiler/nir/nir_opcodes.c
+          test -s src/compiler/nir/nir_intrinsics.c
+          test -s src/util/format_srgb.c
+          test -s src/amd/common/gfx10_format_table.c
+      - name: Build pinned opengnm-psbc host compiler
+        working-directory: .deps/opengnm-psbc
+        run: |
+          make -j2
+          test -x opengnm-psbc
+      - name: Verify PSBC CLI target and reject malformed input
+        working-directory: .deps/opengnm-psbc
+        run: |
+          ./opengnm-psbc -h | tee /tmp/psbc-help.txt
+          grep -F "PS4 Pro (NEO/GFX8)" /tmp/psbc-help.txt
+          mkdir -p /tmp/psbc-negative
+          printf '\003\002\043\007' > /tmp/psbc-negative/invalid.spv
+          set +e
+          ./opengnm-psbc -s compute -f /tmp/psbc-negative/invalid.spv -o /tmp/psbc-negative/invalid.sb -n > /tmp/psbc-negative/invalid.log 2>&1
+          status=$?
+          set -e
+          if [ "$status" -eq 0 ]; then
+            echo "PSBC unexpectedly accepted malformed SPIR-V" >&2
+            exit 1
+          fi
+          if [ "$status" -ge 128 ]; then
+            echo "PSBC crashed instead of rejecting malformed SPIR-V (exit=$status)" >&2
+            cat /tmp/psbc-negative/invalid.log
+            exit 1
+          fi
+          grep -F "Invalid SPIR-V file size" /tmp/psbc-negative/invalid.log
+          test ! -e /tmp/psbc-negative/invalid.sb
+      - name: Compile NR compute shaders to SPIR-V
+        run: |
+          mkdir -p dist/ps4/gcn8
+          for shader in gemm_fp32_wave64_tiled gemm_fp32 gemm_fp16_accum e4m3_decode e4m3_encode; do
+            glslangValidator -V --target-env vulkan1.1 "platform/ps4/gcn8/shaders/${shader}.comp" -o "dist/ps4/gcn8/${shader}.spv"
+            test -s "dist/ps4/gcn8/${shader}.spv"
+          done
+      - name: Validate SPIR-V modules
+        run: |
+          glslangValidator --version
+          spirv-val --version
+          llvm-mc-18 --version | tee /tmp/llvm-mc-version.txt
+          grep -F "amdgcn" /tmp/llvm-mc-version.txt
+          for shader in gemm_fp32_wave64_tiled gemm_fp32 gemm_fp16_accum e4m3_decode e4m3_encode; do
+            spirv-val --target-env vulkan1.1 "dist/ps4/gcn8/${shader}.spv"
+          done
+      - name: Generate SPIR-V provenance manifest
+        run: |
+          python3 - <<'PY'
+          import hashlib, json, platform, subprocess
+          from pathlib import Path
+          shaders = ("gemm_fp32_wave64_tiled", "gemm_fp32", "gemm_fp16_accum", "e4m3_decode", "e4m3_encode")
+          records = []
+          for shader in shaders:
+              source = Path("platform/ps4/gcn8/shaders") / f"{shader}.comp"
+              binary = Path("dist/ps4/gcn8") / f"{shader}.spv"
+              if not source.is_file() or not binary.is_file():
+                  raise SystemExit(f"Missing SPIR-V provenance input for {shader}")
+              records.append({
+                  "shader": shader,
+                  "source_sha256": hashlib.sha256(source.read_bytes()).hexdigest(),
+                  "spirv_sha256": hashlib.sha256(binary.read_bytes()).hexdigest(),
+                  "spirv_bytes": binary.stat().st_size,
+              })
+          report = {
+              "target": "PS4 Pro NEO / GFX8",
+              "validation": "spirv-val --target-env vulkan1.1",
+              "host": platform.platform(),
+              "glslang": subprocess.check_output(["glslangValidator", "--version"], text=True).splitlines()[0],
+              "spirv_val": subprocess.check_output(["spirv-val", "--version"], text=True).splitlines()[0],
+              "shaders": records,
+          }
+          Path("dist/ps4/gcn8/spirv-manifest.json").write_text(json.dumps(report, indent=2))
+          PY
+      - name: Upload validated SPIR-V inputs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nr-gcn8-spirv
+          path: |
+            platform/ps4/gcn8/shaders/*.comp
+            dist/ps4/gcn8/*.spv
+            dist/ps4/gcn8/spirv-manifest.json
+          if-no-files-found: warn
+          retention-days: 30
+      - name: Compile SPIR-V to PS4 Pro GFX8 GNM shader binaries
+        run: |
+          for shader in gemm_fp32_wave64_tiled gemm_fp32 gemm_fp16_accum e4m3_decode e4m3_encode; do
+            .deps/opengnm-psbc/opengnm-psbc -s compute -f "dist/ps4/gcn8/${shader}.spv" -o "dist/ps4/gcn8/${shader}.sb" -n
+            test -s "dist/ps4/gcn8/${shader}.sb"
+          done
+      - name: Validate GNM compute containers and record raw metadata (not register decode)
+        run: |
+          python3 - <<'PY'
+          import hashlib
+          import importlib.util
+          import json
+          import struct
+          import subprocess
+          import platform
+          import re
+          from pathlib import Path
+          spec = importlib.util.spec_from_file_location("verify_sb", ".deps/opengnm-psbc/tests/verify_sb.py")
+          module = importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(module)
+          shaders = ("gemm_fp32_wave64_tiled", "gemm_fp32", "gemm_fp16_accum", "e4m3_decode", "e4m3_encode")
+          report = []
+          gfx8_register_types = json.loads(
+              Path(".deps/opengnm-psbc/src/amd/registers/gfx8.json").read_text()
+          )["register_types"]
+
+          def decode_register_fields(register_value, register_name):
+              decoded = {}
+              for field in gfx8_register_types[register_name]["fields"]:
+                  low, high = field["bits"]
+                  decoded[field["name"]] = (register_value >> low) & ((1 << (high - low + 1)) - 1)
+              return decoded
+
+          tool_versions = {
+              "host": platform.platform(),
+              "python": platform.python_version(),
+              "gcc": subprocess.check_output(["gcc", "--version"], text=True).splitlines()[0],
+              "glslang": subprocess.check_output(["glslangValidator", "--version"], text=True).splitlines()[0],
+              "spirv_val": subprocess.check_output(["spirv-val", "--version"], text=True).splitlines()[0],
+              "spirv_dis": subprocess.check_output(["spirv-dis", "--version"], text=True).splitlines()[0],
+              "llvm_mc": subprocess.check_output(["llvm-mc-18", "--version"], text=True).splitlines()[0],
+              "psbc_cli": subprocess.check_output([".deps/opengnm-psbc/opengnm-psbc", "-h"], text=True).splitlines()[0],
+              "psbc_binary_sha256": hashlib.sha256(Path(".deps/opengnm-psbc/opengnm-psbc").read_bytes()).hexdigest(),
+              "psbc_gfx8_patch_sha256": hashlib.sha256(Path("tools/apply_psbc_gfx8_fixes.py").read_bytes()).hexdigest(),
+          }
+          for shader in shaders:
+              path = Path("dist/ps4/gcn8") / f"{shader}.sb"
+              if not module.verify_shader(str(path), module.GNM_SHADER_COMPUTE):
+                  raise SystemExit(f"GFX8 compute shader container validation failed: {shader}")
+              data = path.read_bytes()
+              orb = data.find(b"OrbShdr")
+              if orb < 0 or orb + module.GNM_BINARY_INFO_SIZE > len(data):
+                  raise SystemExit(f"GNM binary info is truncated: {shader}")
+              u32 = lambda off: struct.unpack_from("<I", data, off)[0]
+              length_field = u32(orb + 8)
+              gcn_code_size = (length_field >> 8) & 0xffffff
+              code_start = orb - gcn_code_size
+              if gcn_code_size == 0 or code_start < module.PSSL_HEADER_SIZE + module.GNM_FILE_HEADER_SIZE:
+                  raise SystemExit(f"GCN code range is invalid: {shader}")
+              chunk_offset = data[orb + 12]
+              num_slots = data[orb + 13]
+              pssl_size = module.PSSL_HEADER_SIZE
+              file_header = pssl_size
+              cs_header = pssl_size + module.GNM_FILE_HEADER_SIZE
+              cs_header_size = 0x24  # sizeof(GnmCsShader) at pinned OpenGNM revision
+              common_word = u32(cs_header)
+              common_shader_size = common_word & 0x7fffff
+              common_is_using_srt = (common_word >> 23) & 1
+              common_num_slots = (common_word >> 24) & 0xff
+              embedded_cb_dqwords = struct.unpack_from("<H", data, cs_header + 4)[0]
+              scratch_dwords_per_thread = struct.unpack_from("<H", data, cs_header + 6)[0]
+              if data[file_header + 8] != 4 or data[file_header + 11] != 2:
+                  raise SystemExit(f"Shader is not a PS4 Pro NEO compute binary: {shader}")
+              if common_num_slots != num_slots:
+                  raise SystemExit(f"CS header and OrbShdr input-slot counts disagree: {shader}")
+              header_dwords = data[file_header + 9]
+              expected_code_start = cs_header + cs_header_size + num_slots * 4
+              if header_dwords * 4 != cs_header_size + num_slots * 4:
+                  raise SystemExit(f"CS header size does not match slot count: {shader}")
+              if code_start != expected_code_start:
+                  raise SystemExit(f"GCN code start does not follow the CS header/slot table: {shader}")
+              if gcn_code_size == 0 or gcn_code_size % 4:
+                  raise SystemExit(f"GCN code size is not a non-zero dword-aligned length: {shader}")
+              if common_shader_size != gcn_code_size + module.GNM_BINARY_INFO_SIZE:
+                  raise SystemExit(f"CS common shader size disagrees with GCN code length: {shader}")
+              first_slot_type = None
+              input_usage_slots = []
+              if num_slots:
+                  # GnmCsShader is followed by the input-usage slots.
+                  # OpenGNM's header comment and the four short emitted
+                  # compute shaders resolve the slot-table START as
+                  # OrbShdr - chunkUsageBaseOffsetDwords*4.
+                  expected_slot_start = cs_header + cs_header_size
+                  expected_offset_bytes = orb - expected_slot_start
+                  if expected_offset_bytes < 0 or expected_offset_bytes % 4:
+                      raise SystemExit(f"Input usage slot offset is not dword aligned: {shader}")
+                  expected_chunk_offset = expected_offset_bytes // 4
+                  if expected_chunk_offset > 0xff:
+                      raise SystemExit(
+                          f"PSBC GNM chunkUsageBaseOffsetDwords overflows its 8-bit field: "
+                          f"{shader} needs {expected_chunk_offset} dwords (max 255)"
+                      )
+                  if chunk_offset != expected_chunk_offset:
+                      raise SystemExit(
+                          f"GNM input-usage offset is invalid/truncated: {shader} "
+                          f"stored={chunk_offset} expected={expected_chunk_offset}"
+                      )
+                  slot_offset = orb - chunk_offset * 4
+                  if slot_offset != expected_slot_start or slot_offset + num_slots * 4 > code_start:
+                      raise SystemExit(f"GNM input-usage slot table location is invalid: {shader}")
+                  usage_names = {
+                      0x00: "IMM_RESOURCE", 0x01: "IMM_SAMPLER",
+                      0x02: "IMM_CONSTBUFFER", 0x03: "IMM_VERTEXBUFFER",
+                      0x04: "IMM_RWRESOURCE", 0x05: "IMM_ALUFLOATCONST",
+                      0x06: "IMM_ALUBOOL32CONST", 0x07: "IMM_GDSCOUNTERRANGE",
+                      0x08: "IMM_GDSMEMORYRANGE", 0x09: "IMM_GWSBASE",
+                      0x0a: "IMM_SRT", 0x0d: "IMM_LDSESGSSIZE",
+                      0x12: "SUBPTR_FETCHSHADER", 0x13: "PTR_RESOURCETABLE",
+                      0x14: "PTR_INTERNALRESOURCETABLE", 0x15: "PTR_SAMPLERTABLE",
+                      0x16: "PTR_CONSTBUFFERTABLE", 0x17: "PTR_VERTEXBUFFERTABLE",
+                      0x18: "PTR_SOBUFFERTABLE", 0x19: "PTR_RWRESOURCETABLE",
+                      0x1a: "PTR_INTERNALGLOBALTABLE", 0x1b: "PTR_EXTENDEDUSERDATA",
+                      0x1c: "PTR_INDIRECTRESOURCETABLE",
+                      0x1d: "PTR_INDIRECTINTERNALRESOURCETABLE",
+                      0x1e: "PTR_INDIRECTRWRESOURCETABLE",
+                  }
+                  for slot_index in range(num_slots):
+                      offset = slot_offset + slot_index * 4
+                      usage_type, api_slot, start_register, control = data[offset:offset + 4]
+                      input_usage_slots.append({
+                          "index": slot_index,
+                          "usage_type": usage_type,
+                          "usage_name": usage_names.get(usage_type, "UNKNOWN"),
+                          "api_slot": api_slot,
+                          "start_register": start_register,
+                          "control_raw": control,
+                          "register_count_bit": control & 1,
+                          "resource_type_bit": (control >> 1) & 1,
+                          "chunk_mask": control >> 4,
+                      })
+                  first_slot_type = input_usage_slots[0]["usage_type"]
+              elif chunk_offset != 0:
+                  raise SystemExit(f"GNM has a chunk offset but zero input-usage slots: {shader}")
+              spirv_path = Path("dist/ps4/gcn8") / f"{shader}.spv"
+              spirv_text = subprocess.check_output(["spirv-dis", str(spirv_path)], text=True)
+              entry = re.search(r'OpEntryPoint\s+GLCompute\s+(%\w+)\s+"main"', spirv_text)
+              if not entry:
+                  raise SystemExit(f"SPIR-V main compute entry point not found: {shader}")
+              local_mode = re.search(
+                  rf'OpExecutionMode\s+{re.escape(entry.group(1))}\s+LocalSize\s+(\d+)\s+(\d+)\s+(\d+)',
+                  spirv_text,
+              )
+              if not local_mode:
+                  raise SystemExit(f"Static SPIR-V LocalSize execution mode not found: {shader}")
+              local_size = [int(value) for value in local_mode.groups()]
+              code_bytes = data[code_start:code_start + gcn_code_size]
+              if len(code_bytes) != gcn_code_size:
+                  raise SystemExit(f"GCN code bytes are truncated: {shader}")
+              raw_code_path = Path("dist/ps4/gcn8") / f"{shader}.gcn.bin"
+              raw_code_path.write_bytes(code_bytes)
+              hex_input = " ".join(f"0x{value:02x}" for value in code_bytes)
+              disassembly = subprocess.run(
+                  ["llvm-mc-18", "--disassemble", "--triple=amdgcn--", "--mcpu=tonga"],
+                  input=hex_input, text=True, capture_output=True, check=True,
+              ).stdout
+              if not disassembly.strip() or "<unknown>" in disassembly or "invalid instruction" in disassembly.lower():
+                  raise SystemExit(f"LLVM GFX8 disassembler could not decode all shader code: {shader}")
+              isa_path = Path("dist/ps4/gcn8") / f"{shader}.isa"
+              isa_path.write_text(disassembly, encoding="utf-8")
+              cs_registers = {
+                  "computepgmlo": u32(cs_header + 8),
+                  "computepgmhi": u32(cs_header + 12),
+                  "computepgmrsrc1": u32(cs_header + 16),
+                  "computepgmrsrc2": u32(cs_header + 20),
+                  "computenumthreadx": u32(cs_header + 24),
+                  "computenumthready": u32(cs_header + 28),
+                  "computenumthreadz": u32(cs_header + 32),
+              }
+              compiled_local_size = [
+                  cs_registers["computenumthreadx"],
+                  cs_registers["computenumthready"],
+                  cs_registers["computenumthreadz"],
+              ]
+              if compiled_local_size != local_size:
+                  raise SystemExit(f"SPIR-V LocalSize and GNM CS thread dimensions disagree: {shader}")
+              if cs_registers["computepgmlo"] != header_dwords * 4 or cs_registers["computepgmhi"] != 0:
+                  raise SystemExit(f"GNM CS program offset does not match the CS header size: {shader}")
+              rsrc1_fields = decode_register_fields(cs_registers["computepgmrsrc1"], "COMPUTE_PGM_RSRC1")
+              rsrc2_fields = decode_register_fields(cs_registers["computepgmrsrc2"], "COMPUTE_PGM_RSRC2")
+              register_resources = {
+                  "vgprs_allocated": (rsrc1_fields["VGPRS"] + 1) * 4,
+                  "sgprs_allocated": (rsrc1_fields["SGPRS"] + 1) * 8,
+                  "lds_allocation_bytes_gfx8": rsrc2_fields["LDS_SIZE"] * 512,
+                  "scratch_bytes_per_thread": scratch_dwords_per_thread * 4,
+                  "scratch_enabled": bool(rsrc2_fields["SCRATCH_EN"]),
+                  "user_sgpr_count": rsrc2_fields["USER_SGPR"],
+                  "trap_present": bool(rsrc2_fields["TRAP_PRESENT"]),
+                  "wavefront_size_gfx8": 64,
+              }
+              report.append({
+                  "shader": shader,
+                  "file": str(path),
+                  "source_sha256": hashlib.sha256((Path("platform/ps4/gcn8/shaders") / f"{shader}.comp").read_bytes()).hexdigest(),
+                  "spirv_sha256": hashlib.sha256((Path("dist/ps4/gcn8") / f"{shader}.spv").read_bytes()).hexdigest(),
+                  "psbc_commit": "28697f007862427ebec54388ec972ce6e3545912",
+                  "opengnm_commit": "4b295ca54c82c83acf308d1c646a2dfa9ae57350",
+                  "spirv_headers_commit": "09913f088a1197aba4aefd300a876b2ebbaa3391",
+                  "vulkan_headers_tag": "v1.4.328",
+                  "tool_versions": tool_versions,
+                  "bytes": len(data),
+                  "sha256": hashlib.sha256(data).hexdigest(),
+                  "pssl_shader_type": data[12],
+                  "pssl_code_type": data[13],
+                  "pssl_code_size": u32(16),
+                  "gnm_stage": data[module.PSSL_HEADER_SIZE + 8],
+                  "gnm_target_gpu_mode": data[module.PSSL_HEADER_SIZE + 11],
+                  "orbshdr_offset": orb,
+                  "chunk_usage_base_offset_dwords": chunk_offset,
+                  "input_usage_slots": num_slots,
+                  "first_input_usage_type": first_slot_type,
+                  "input_usage_slots_raw": input_usage_slots,
+                  "spirv_local_size": local_size,
+                  "gcn_code_file": str(raw_code_path),
+                  "gcn_code_sha256": hashlib.sha256(code_bytes).hexdigest(),
+                  "isa_file": str(isa_path),
+                  "isa_sha256": hashlib.sha256(disassembly.encode("utf-8")).hexdigest(),
+                  "isa_lines": len([line for line in disassembly.splitlines() if line.strip()]),
+                  "cs_common_data": {
+                      "shader_size_raw": common_shader_size,
+                      "is_using_srt": common_is_using_srt,
+                      "num_input_usage_slots": common_num_slots,
+                      "embedded_constant_buffer_dqwords": embedded_cb_dqwords,
+                      "scratch_size_per_thread_dwords": scratch_dwords_per_thread,
+                  },
+                  "cs_registers_raw": cs_registers,
+                  "cs_registers_decoded_gfx8": {
+                      "COMPUTE_PGM_RSRC1": rsrc1_fields,
+                      "COMPUTE_PGM_RSRC2": rsrc2_fields,
+                  },
+                  "resource_allocation_derived": register_resources,
+                  "register_decode_basis": {
+                      "field_bit_ranges": "Mesa src/amd/registers/gfx8.json at opengnm-psbc 28697f007862427ebec54388ec972ce6e3545912",
+                      "vgpr_granularity": "GFX6-GFX9: 4 VGPRs per encoded block",
+                      "sgpr_granularity": "GFX6-GFX8: 8 SGPRs per encoded block",
+                      "lds_granularity": "GFX7-GFX9: 128 dwords (512 bytes) per encoded block",
+                      "wavefront": "GFX8 wave64",
+                  },
+                  "shader_hash": f"{u32(orb + 20):08x}{u32(orb + 16):08x}",
+                  "gcn_code_size": (length_field >> 8) & 0xffffff,
+                  "crc32": f"{u32(orb + 24):08x}"
+              })
+              print(f"VERIFIED {shader}: compute container/CRC valid; register metadata still requires ISA decoding")
+
+          # Negative controls: a truncated header and a corrupted CRC must never pass.
+          import tempfile
+          sample = Path("dist/ps4/gcn8") / "gemm_fp32.sb"
+          original = bytearray(sample.read_bytes())
+          orb = original.find(b"OrbShdr")
+          if orb < 0 or orb + module.GNM_BINARY_INFO_SIZE > len(original):
+              raise SystemExit("Cannot run negative verifier controls: missing OrbShdr")
+          with tempfile.TemporaryDirectory() as temp_dir:
+              truncated = Path(temp_dir) / "truncated.sb"
+              truncated.write_bytes(original[:12])
+              corrupt = Path(temp_dir) / "corrupt-crc.sb"
+              damaged = bytearray(original)
+              damaged[orb + 24] ^= 0x01
+              corrupt.write_bytes(damaged)
+              for invalid_path in (truncated, corrupt):
+                  try:
+                      accepted = module.verify_shader(str(invalid_path), module.GNM_SHADER_COMPUTE)
+                  except (AssertionError, IndexError, struct.error, ValueError):
+                      accepted = False
+                  if accepted:
+                      raise SystemExit(f"Negative container test unexpectedly accepted {invalid_path.name}")
+                  print(f"REJECTED malformed container as expected: {invalid_path.name}")
+
+          Path("dist/ps4/gcn8/gnm-container-report.json").write_text(json.dumps(report, indent=2))
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: nr-gcn8-compute-shaders-gfx8
+          path: |
+            dist/ps4/gcn8/*.spv
+            dist/ps4/gcn8/*.sb
+            dist/ps4/gcn8/*.gcn.bin
+            dist/ps4/gcn8/*.isa
+            dist/ps4/gcn8/gnm-container-report.json
+          if-no-files-found: warn

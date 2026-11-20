@@ -27,6 +27,19 @@ rm -rf "$STAGE"
 mkdir -p "$STAGE/sce_sys/about" "$STAGE/sce_module" "$OUT"
 test -s "$ROOT/dist/ps4/ps4_neural_engine.prx"
 cp "$ROOT/dist/ps4/ps4_neural_engine.prx" "$STAGE/ps4_neural_engine.prx"
+PRX_SHA256="$(sha256sum "$STAGE/ps4_neural_engine.prx" | awk '{print $1}')"
+cat > "$STAGE/pne-release.ini" <<EOF
+schema=1
+release_number=$PKG_NUMBER
+installer_version=1
+app_version=$APP_VERSION
+title_id=$TITLE_ID
+content_id=$CONTENT_ID
+prx_file=ps4_neural_engine.prx
+prx_sha256=$PRX_SHA256
+abi_status=unverified
+hardware_status=not_tested
+EOF
 python3 "$ROOT/tools/make_icon.py" "$STAGE/sce_sys/icon0.png"
 
 # OpenOrbis homebrew packages need these runtime support modules in app0.
@@ -45,14 +58,16 @@ cp "$SAMPLE/sce_module/libc.prx" "$STAGE/sce_module/libc.prx"
 cp "$SAMPLE/sce_module/libSceFios2.prx" "$STAGE/sce_module/libSceFios2.prx"
 cp "$SAMPLE/sce_sys/about/right.sprx" "$STAGE/sce_sys/about/right.sprx"
 
-clang --target=x86_64-pc-freebsd12-elf -fPIC -funwind-tables \
+INSTALLER_CFLAGS=(--target=x86_64-pc-freebsd12-elf -std=gnu11 -fPIC -funwind-tables \
   -isysroot "$OO_PS4_TOOLCHAIN" -isystem "$OO_PS4_TOOLCHAIN/include" \
-  -isystem /usr/include/x86_64-linux-gnu -I"$GOLDHEN_SDK/include" \
-  -c "$ROOT/installer/main.c" -o "$STAGE/installer.o"
+  -isystem /usr/include/x86_64-linux-gnu -I"$GOLDHEN_SDK/include" -I"$ROOT/installer")
+clang "${INSTALLER_CFLAGS[@]}" -c "$ROOT/installer/main.c" -o "$STAGE/installer.o"
+clang "${INSTALLER_CFLAGS[@]}" -c "$ROOT/installer/sha256.c" -o "$STAGE/sha256.o"
+clang "${INSTALLER_CFLAGS[@]}" -c "$ROOT/installer/release_manifest.c" -o "$STAGE/release_manifest.o"
 
 # Match the OpenOrbis sample linker flags: let link.x/crt1.o define startup.
 ld.lld -m elf_x86_64 -pie --script "$OO_PS4_TOOLCHAIN/link.x" \
-  --eh-frame-hdr -L"$OO_PS4_TOOLCHAIN/lib" "$STAGE/installer.o" \
+  --eh-frame-hdr -L"$OO_PS4_TOOLCHAIN/lib" "$STAGE/installer.o" "$STAGE/sha256.o" "$STAGE/release_manifest.o" \
   -lc -lkernel -lSceSystemService "$OO_PS4_TOOLCHAIN/lib/crt1.o" \
   -o "$STAGE/installer.elf"
 test -s "$STAGE/installer.elf"
@@ -93,7 +108,7 @@ sfo PUBTOOLINFO Utf8 512 "c_date=$(date -u +%Y%m%d),img0_l0_size=7,img0_l1_size=
 
 # Validate all staged files before building. param.sfo and icon0.png are
 # PKG metadata entries; pkg_extract exposes the uroot payload, not those entries.
-for required in "$STAGE/ps4_neural_engine.prx" "$STAGE/eboot.bin" \
+for required in "$STAGE/ps4_neural_engine.prx" "$STAGE/pne-release.ini" "$STAGE/eboot.bin" \
                 "$STAGE/sce_sys/param.sfo" "$STAGE/sce_sys/icon0.png" \
                 "$STAGE/sce_sys/about/right.sprx" \
                 "$STAGE/sce_module/libc.prx" "$STAGE/sce_module/libSceFios2.prx"; do
@@ -102,7 +117,7 @@ done
 
 cd "$STAGE"
 "$TOOLS/create-gp4" -out package.gp4 --content-id="$CONTENT_ID" \
-  --files "eboot.bin ps4_neural_engine.prx sce_sys/param.sfo sce_sys/icon0.png sce_sys/about/right.sprx sce_module/libc.prx sce_module/libSceFios2.prx"
+  --files "eboot.bin ps4_neural_engine.prx pne-release.ini sce_sys/param.sfo sce_sys/icon0.png sce_sys/about/right.sprx sce_module/libc.prx sce_module/libSceFios2.prx"
 "$PKGTOOL" pkg_build package.gp4 "$OUT"
 pkg="$(find "$OUT" -maxdepth 1 -type f -name '*.pkg' -print -quit)"
 test -n "$pkg" && test -s "$pkg"
@@ -120,24 +135,32 @@ echo "EXTRACTION_STAGE: extracting PKG payload for file-level verification"
 echo "EXTRACTION_STAGE: PKG payload extraction completed"
 echo "VERIFY_STAGE: checking extracted uroot payload"
 find "$VERIFY" -maxdepth 5 -type f -printf '%p (%s bytes)\\n' | sort
-python3 - "$VERIFY" <<'PY'
+python3 - "$VERIFY" "$PRX_SHA256" <<'PY'
+import hashlib
 import os
 import sys
 
-root = sys.argv[1]
-required = {"ps4_neural_engine.prx", "eboot.bin", "keystone", "libc.prx", "libSceFios2.prx", "right.sprx"}
-found = set()
+root, expected_prx_sha256 = sys.argv[1:]
+required = {"ps4_neural_engine.prx", "pne-release.ini", "eboot.bin", "keystone", "libc.prx", "libSceFios2.prx", "right.sprx"}
+found = {}
 for current, _, files in os.walk(root):
     for name in files:
         path = os.path.join(current, name)
         size = os.path.getsize(path)
         if name in required and size > 0:
-            found.add(name)
+            found[name] = path
             print(f"VERIFY_STAGE: found {name} ({size} bytes)")
-missing = sorted(required - found)
+missing = sorted(required - found.keys())
 if missing:
     print("VERIFY_STAGE: missing or empty extracted payload: " + ", ".join(missing), file=sys.stderr)
     raise SystemExit(1)
+actual = hashlib.sha256(open(found["ps4_neural_engine.prx"], "rb").read()).hexdigest()
+if actual != expected_prx_sha256:
+    raise SystemExit(f"VERIFY_STAGE: PRX SHA-256 mismatch: expected {expected_prx_sha256}, got {actual}")
+manifest = open(found["pne-release.ini"], encoding="ascii").read().splitlines()
+if f"prx_sha256={actual}" not in manifest or "schema=1" not in manifest:
+    raise SystemExit("VERIFY_STAGE: release manifest does not describe the extracted PRX")
+print(f"VERIFY_STAGE: manifest and PRX SHA-256 match ({actual})")
 print("VERIFY_STAGE: extracted executable payload is complete")
 PY
 sha256sum "$pkg"
