@@ -110,6 +110,50 @@ def test_tiled_gemm_mapping() -> None:
                 )
 
 
+
+def scalar_gemm_beta_zero(a, b, c, m: int, n: int, k: int, alpha: float, beta: float):
+    """Reference the shader's contract that beta=0 does not consume C."""
+    out = [0.0] * (m * n)
+    for row in range(m):
+        for col in range(n):
+            acc = 0.0
+            for inner in range(k):
+                acc += a[row * k + inner] * b[inner * n + col]
+            residual = 0.0 if beta == 0.0 else beta * c[row * n + col]
+            out[row * n + col] = alpha * acc + residual
+    return out
+
+
+def fp16_gemm_beta_zero(a, b, c, alpha: float, beta: float) -> float:
+    """Single-element reference for the shader's rounded-binary16 path."""
+    acc = 0.0
+    for lhs, rhs in zip(a, b):
+        acc = half(half(lhs) * half(rhs) + acc)
+    scaled = half(alpha * acc)
+    residual = 0.0 if beta == 0.0 else half(beta * half(c[0]))
+    return half(scaled + residual)
+
+
+def test_beta_zero_does_not_consume_nan_c() -> None:
+    nan_c = [math.nan]
+    assert scalar_gemm_beta_zero([2.0], [3.0], nan_c, 1, 1, 1, 1.0, 0.0) == [6.0]
+    assert fp16_gemm_beta_zero([2.0], [3.0], nan_c, 1.0, 0.0) == 6.0
+
+
+def test_e4m3fn_edge_rounding() -> None:
+    assert encode_e4m3fn(math.inf) == 0x7E
+    assert encode_e4m3fn(-math.inf) == 0xFE
+    assert encode_e4m3fn(math.nan) == 0x7F
+    assert encode_e4m3fn(-math.nan) == 0x7F
+    # Midpoints round to the code with an even least-significant bit.
+    assert encode_e4m3fn(1.0625) == 0x38
+    assert encode_e4m3fn(1.1875) == 0x3A
+    assert encode_e4m3fn(-1.0625) == 0xB8
+    assert encode_e4m3fn(-1.1875) == 0xBA
+    assert decode_e4m3fn(0x80) == 0.0
+    assert math.copysign(1.0, decode_e4m3fn(0x80)) < 0
+
+
 def main() -> None:
     # Every finite encoding round-trips through decode -> encode exactly.
     for code in range(256):
@@ -129,6 +173,8 @@ def main() -> None:
     assert encode_e4m3fn(-0.0) == 0x80
 
     test_tiled_gemm_mapping()
+    test_beta_zero_does_not_consume_nan_c()
+    test_e4m3fn_edge_rounding()
 
     # Binary16 conversion must preserve representative normal/subnormal values.
     assert half(1.0) == 1.0
@@ -136,7 +182,7 @@ def main() -> None:
     assert half(65504.0) == 65504.0
     assert half(1.00048828125) == 1.0  # ties-to-even
 
-    print("PASS: E4M3FN 256-code round-trip, binary16 fixtures, tiled GEMM mapping and edge dimensions")
+    print("PASS: E4M3FN round-trip/edge rounding, binary16 fixtures, beta=0 NaN isolation, tiled GEMM mapping and edge dimensions")
 
 
 if __name__ == "__main__":
