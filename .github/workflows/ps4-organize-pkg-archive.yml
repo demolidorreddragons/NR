@@ -44,7 +44,7 @@ jobs:
 
           # Create archive folder if absent; if it exists, retain its contents.
           $archiveBefore = @()
-          $archiveCheck = & curl.exe --fail --silent --show-error --ftp-pasv --list-only --user $creds "ftp://$($env:PS4_IP):2121$archive" 2>&1
+          $archiveCheck = & curl.exe --fail --silent --show-error --ftp-pasv --list-only --user $creds "ftp://$($env:PS4_IP):2121$archive" 2>$null
           if ($LASTEXITCODE -eq 0) {
             $archiveBefore = @($archiveCheck | ForEach-Object { ([string]$_).Trim() } | Where-Object { $_ })
           } else {
