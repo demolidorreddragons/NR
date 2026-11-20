@@ -296,11 +296,13 @@ jobs:
               first_slot_type = None
               input_usage_slots = []
               if num_slots:
-                  # The input-usage table follows GnmCsShader in the header.
-                  # chunkUsageBaseOffsetDwords is an 8-bit dword offset back
-                  # from OrbShdr; do not accept a wrapped/truncated pointer.
-                  expected_slot_offset = cs_header + cs_header_size
-                  expected_offset_bytes = orb - expected_slot_offset
+                  # GnmCsShader is followed by the input-usage slots. The
+                  # independent fpPS4 parser resolves the slot table as:
+                  # OrbShdr - chunkUsageBaseOffsetDwords*4 - numSlots*4.
+                  # The 8-bit offset therefore points to the END of the table.
+                  expected_slot_start = cs_header + cs_header_size
+                  expected_slot_end = expected_slot_start + num_slots * 4
+                  expected_offset_bytes = orb - expected_slot_end
                   if expected_offset_bytes < 0 or expected_offset_bytes % 4:
                       raise SystemExit(f"Input usage slot offset is not dword aligned: {shader}")
                   expected_chunk_offset = expected_offset_bytes // 4
@@ -311,14 +313,12 @@ jobs:
                       )
                   if chunk_offset != expected_chunk_offset:
                       raise SystemExit(
-                          f"GNM input-usage offset was truncated: {shader} "
+                          f"GNM input-usage offset is invalid/truncated: {shader} "
                           f"stored={chunk_offset} expected={expected_chunk_offset}"
                       )
-                  slot_offset = orb - chunk_offset * 4
-                  if slot_offset != expected_slot_offset:
-                      raise SystemExit(f"GNM input-usage slot pointer mismatch: {shader}")
-                  if slot_offset + num_slots * 4 > code_start:
-                      raise SystemExit(f"Input usage slot table overlaps GCN code: {shader}")
+                  slot_offset = orb - chunk_offset * 4 - num_slots * 4
+                  if slot_offset != expected_slot_start or expected_slot_end > code_start:
+                      raise SystemExit(f"GNM input-usage slot table location is invalid: {shader}")
                   usage_names = {
                       0x00: "IMM_RESOURCE", 0x01: "IMM_SAMPLER",
                       0x02: "IMM_CONSTBUFFER", 0x03: "IMM_VERTEXBUFFER",
