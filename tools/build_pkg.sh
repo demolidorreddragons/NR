@@ -7,6 +7,7 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 STAGE="$ROOT/build/pkg-stage"
 OUT="$ROOT/dist/pkg"
 TOOLS="$OO_PS4_TOOLCHAIN/bin/linux"
+PKGTOOL="${PKGTOOL_CORE:-$TOOLS/PkgTool.Core}"
 TITLE_ID="PNEU00001"
 CONTENT_ID="IV0000-PNEU00001_00-PS4NEURALENG0000"
 # Release number is embedded in the user-facing PKG filename and preserved by the PS4 bridge.
@@ -63,9 +64,9 @@ readelf -h "$STAGE/installer.elf" | grep -Eq 'Entry point address:[[:space:]]+0x
 )
 test -s "$STAGE/eboot.bin"
 
-"$TOOLS/PkgTool.Core" sfo_new "$STAGE/sce_sys/param.sfo"
+"$PKGTOOL" sfo_new "$STAGE/sce_sys/param.sfo"
 sfo() {
-  "$TOOLS/PkgTool.Core" sfo_setentry "$STAGE/sce_sys/param.sfo" "$1" \
+  "$PKGTOOL" sfo_setentry "$STAGE/sce_sys/param.sfo" "$1" \
     --type "$2" --maxsize "$3" --value "$4"
 }
 sfo APP_TYPE Integer 4 1
@@ -97,7 +98,7 @@ done
 cd "$STAGE"
 "$TOOLS/create-gp4" -out package.gp4 --content-id="$CONTENT_ID" \
   --files "eboot.bin ps4_neural_engine.prx sce_sys/param.sfo sce_sys/icon0.png sce_sys/about/right.sprx sce_module/libc.prx sce_module/libSceFios2.prx"
-"$TOOLS/PkgTool.Core" pkg_build package.gp4 "$OUT"
+"$PKGTOOL" pkg_build package.gp4 "$OUT"
 pkg="$(find "$OUT" -maxdepth 1 -type f -name '*.pkg' -print -quit)"
 test -n "$pkg" && test -s "$pkg"
 numbered_pkg="$OUT/PS4-Neural-Engine-${PKG_NUMBER}.pkg"
@@ -105,12 +106,12 @@ cp "$pkg" "$numbered_pkg"
 pkg="$numbered_pkg"
 echo "PKG_NUMBER: $PKG_NUMBER"
 echo "VALIDATION_STAGE: checking PKG hashes and signatures"
-"$TOOLS/PkgTool.Core" pkg_validate --verbose "$pkg"
+"$PKGTOOL" pkg_validate --verbose "$pkg"
 echo "VALIDATION_STAGE: PKG hash/signature check passed"
 VERIFY="$STAGE/pkg-verify"
 rm -rf "$VERIFY" && mkdir -p "$VERIFY"
 echo "EXTRACTION_STAGE: extracting PKG payload for file-level verification"
-"$TOOLS/PkgTool.Core" pkg_extract --verbose "$pkg" "$VERIFY"
+"$PKGTOOL" pkg_extract --verbose "$pkg" "$VERIFY"
 echo "EXTRACTION_STAGE: PKG payload extraction completed"
 echo "VERIFY_STAGE: checking extracted uroot payload"
 find "$VERIFY" -maxdepth 5 -type f -printf '%p (%s bytes)\\n' | sort
