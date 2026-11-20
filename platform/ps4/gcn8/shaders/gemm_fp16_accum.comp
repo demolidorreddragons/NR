@@ -36,6 +36,9 @@ void main() {
 
     uint output_index = row * params.columns + column;
     float scaled = round_to_half(params.alpha * accumulator);
-    float residual = round_to_half(params.beta * round_to_half(c[output_index]));
+    // Match GEMM beta=0 semantics without propagating NaNs from unused C.
+    float residual = params.beta == 0.0
+        ? 0.0
+        : round_to_half(params.beta * round_to_half(c[output_index]));
     d[output_index] = round_to_half(scaled + residual);
 }
