@@ -151,3 +151,14 @@ No `.sb` file was emitted. The GNM diagnostic artifact (ID `14605031783`, ZIP SH
 ## Tiled GEMM code-size reduction experiment — run 44739274959
 
 The first targeted source experiment added GLSL `[[dont_unroll]]` to the 16-iteration LDS reduction loop. The pinned PSBC compiler rebuilt successfully, all five SPIR-V modules validated, and GNM conversion refused the tiled shader at **400 dwords** rather than the prior **590 dwords**. The 8-bit field maximum remains 255 dwords, so the shader is still correctly rejected and no invalid tiled `.sb` is accepted. The source was then updated to also prevent unrolling the four-iteration cooperative tile-load loop (commit `cf2f737ab42be937941ede74256e5706b29775e8`); its CI revalidation is pending. This is a code-size experiment only and does not yet validate GNM metadata or GPU semantics.
+
+
+## First successful five-shader GFX8 conversion and metadata pass — run 44739871394
+
+The second loop-compaction change added `[[dont_unroll]]` to the cooperative tile-load loop as well as the fixed 16-iteration reduction loop. The pinned host compiler then emitted all five PS4 NEO/GFX8 compute binaries. Run `44739871394` passed the upstream structural/CRC verifier and NR's stricter metadata checks for every binary, including exact resolution of the 8-bit input-usage pointer to the slot table at `0x58`. The tiled shader is 948 bytes of GCN code, offset 238 dwords (maximum 255), so it now fits with 17 dwords/68 bytes of margin.
+
+The workflow also matched SPIR-V `LocalSize` against the GNM CS thread dimensions, extracted the exact code ranges, disassembled all five using LLVM 18.1.3 for AMDGCN Tonga, and generated the GFX8 register-field report. The full artifact, hashes and per-shader metrics are recorded in `docs/GCN8_GFX8_ARTIFACT_44739871394.md` (artifact ID `14630496349`, ZIP SHA-256 `058f96b86356391653effb744aaec367859245d10de48ac7f93f2b3a02e534f8`).
+
+For the tiled kernel, compiler metadata reports 16 VGPRs, 32 SGPRs, 2,048 bytes LDS, zero scratch, 8 user SGPRs and wave64. The input-usage slot is `PTR_INDIRECTRESOURCETABLE`, API slot 0, start register 2. This is the first concrete descriptor-table clue, not a complete RW descriptor ABI: exact descriptor bytes, GPU VA encoding, memory class and runtime binding remain unverified. Register field decoding is based on pinned Mesa GFX8 JSON and has not been independently reviewed by REA-5.
+
+**Acceptance boundary:** tasks 60 and 66–69 now pass in the host/compiler scope. Task 70 is partial pending REA-5 review. No dispatch, allocation, submission, cache operation, numerical GPU readback or PS4 Pro execution occurred.
