@@ -132,7 +132,9 @@ def validate(manifest_path: Path, inventory_path: Path | None = None,
             "tensor_count":len(tensors),"stage_count":len(stage_map),"tensor_payload_bytes":total,
             "stages":{k:{"bytes":v["size"],"sha256":v["sha256"],**coverage[k]} for k,v in stage_map.items()},
             "inventory_compared":bool(inventory_path),"full_coverage_required":full_coverage,
-            "reference_layout_checked":reference_layout,"reference_layout_records":reference_layout_count,\n            "reference_consumed_records":reference_consumed_count,"reference_unread_records":len(reference_unread_names),\n            "reference_unread_names":reference_unread_names,
+            "reference_layout_checked":reference_layout,"reference_layout_records":reference_layout_count,
+            "reference_consumed_records":reference_consumed_count,"reference_unread_records":len(reference_unread_names),
+            "reference_unread_names":reference_unread_names,
             "scope":"Container/slice integrity only; no semantic shapes, version parity, or inference validation."}
 
 def reference_layout_sizes() -> dict[str, int]:
