@@ -18,7 +18,7 @@ This ledger records the next 40 work items. A task is **DONE** only when its sta
 | 57 | Verify PSBC executable and CLI target selection | **PASS — `-n` TARGET CHECK** | Run `44679024542` passed CLI help and PS4 Pro (NEO/GFX8) target selection; malformed-input handling is tracked separately in task 59. |
 | 58 | Record compiler/dependency provenance | **IMPLEMENTED — CI REVALIDATION PENDING** | GNM report now records PSBC executable SHA-256, host/tool versions, pinned source revisions, shader source/SPIR-V/GNM hashes. |
 | 59 | Exercise compiler positive/negative input tests | **PASS — CLI NEGATIVE INPUT REJECTED CLEANLY** | Run `44680087030` built PSBC and passed the truncated-SPIR-V CLI test: normal error exit, expected diagnostic, no output `.sb`; no segmentation fault. |
-| 60 | Accept reproducible GFX8 toolchain | **PARTIAL — HOST/SPIR-V PASS; TILED CODE SIZE STILL EXCEEDS GNM OFFSET** | Run `44739274959` rebuilt patched PSBC and validated all five SPIR-V modules; one `[[dont_unroll]]` reduction lowered tiled GEMM's required pointer from 590 to 400 dwords, still above the 255 maximum. A second loop-compaction experiment is running in `44739871394`; no tiled `.sb` is accepted. |
+| 60 | Accept reproducible GFX8 toolchain | **PASS — FIVE PS4 NEO/GFX8 CONVERSIONS + VALIDATION** | Run `44739871394` built pinned PSBC, validated all five SPIR-V modules, emitted five non-empty GNM `.sb` files, and passed structural/CRC, slot-pointer, LocalSize, and LLVM Tonga disassembly checks. Full provenance and metrics: `docs/GCN8_GFX8_ARTIFACT_44739871394.md`. |
 
 ## Phase 12 — Compile and inspect GFX8 shaders
 
@@ -29,17 +29,17 @@ This ledger records the next 40 work items. A task is **DONE** only when its sta
 | 63 | Compile FP16-emulation shader to SPIR-V | **PASS — SPIR-V GENERATED + VALIDATED** | Run `44680087030` generated the FP16-emulation module and passed `spirv-val --target-env vulkan1.1`; no native FP16 claim. |
 | 64 | Compile E4M3 encode/decode shaders to SPIR-V | **PASS — BOTH SPIR-V MODULES GENERATED + VALIDATED** | Run `44680087030` generated and validated both E4M3 modules with `spirv-val --target-env vulkan1.1`. |
 | 65 | Validate all SPIR-V modules | **PASS — FIVE MODULES VALIDATED + HASHED** | Run `44680087030` passed `spirv-val --target-env vulkan1.1` for all five modules and generated the source/SPIR-V provenance manifest; SPIR-V artifact upload passed. |
-| 66 | Compile all five shaders for PS4 NEO/GFX8 | **BLOCKED — FAIL-CLOSED GUARD PREVENTS INVALID `.sb`** | Run `44682060810` verified the PSBC guard refuses the tiled shader at 590 dwords; no GNM `.sb` was emitted/uploaded. Five SPIR-V modules remain available. Earlier five `.sb` files from `44681174240` are diagnostic only and invalid for runtime. |
-| 67 | Validate GNM containers and CRCs | **BLOCKED — OFFSET OVERFLOW CONFIRMED; FAIL-CLOSED GUARD PASS** | Artifact `44681174240` shows four short binaries resolve their slot table at `0x58`; tiled GEMM needs 590 dwords but stores 78. Host arithmetic tests passed, and run `44682060810` confirmed patched PSBC rejects overflow without emitting `.sb`. The long-shader layout fix remains open in issue [#8](https://github.com/demolidorreddragons/NR/issues/8). |
-| 68 | Generate immutable shader artifact manifest | **PARTIAL — SPIR-V PROVENANCE PASS; GNM REPORT BLOCKED** | Run `44682060810` uploaded all five source/SPIR-V modules and the provenance manifest (artifact ID `14604462717`); no GNM binaries/report are produced while the offset guard blocks conversion. |
-| 69 | Extract raw OrbShdr metadata | **BLOCKED — SLOT POINTER DOES NOT RESOLVE TO HEADER TABLE** | The raw OrbShdr fields were read, but `chunkUsageBaseOffsetDwords` does not resolve to the input-usage table at the end of `GnmCsShader`; full metadata acceptance is blocked. |
-| 70 | Decode ISA and resource/register metadata | **BLOCKED — INVALID GNM METADATA** | LLVM GFX8 disassembly and register decoding remain gated until the slot pointer is valid; no register/resource result accepted. REA-5 corroboration remains open. |
+| 66 | Compile all five shaders for PS4 NEO/GFX8 | **PASS — FIVE `.sb` BINARIES EMITTED** | Run `44739871394` converted all five compute modules with PSBC `-s compute -n`; tiled GEMM code is 948 bytes and its valid slot offset is 238 dwords (max 255). |
+| 67 | Validate GNM containers and CRCs | **PASS — ALL FIVE STRUCTURAL/CRC + SLOT-POINTER CHECKS** | Run `44739871394` passed upstream `verify_sb.py` and NR's stricter check for all five binaries, including exact slot-table resolution to `0x58`, dword alignment, valid code range, CRC32, and negative corrupted-CRC rejection. |
+| 68 | Generate immutable shader artifact manifest | **PASS — SPIR-V + GNM/ISA PROVENANCE UPLOADED** | Run `44739871394` uploaded artifact `14630496349` (ZIP SHA-256 `058f96b86356391653effb744aaec367859245d10de48ac7f93f2b3a02e534f8`) with five `.sb`, five SPIR-V modules, five raw GCN code files, five `.isa` files and `gnm-container-report.json`. |
+| 69 | Extract raw OrbShdr metadata | **PASS — FIVE BINARIES' RAW METADATA EXTRACTED** | Run `44739871394` records OrbShdr offset, code length, slot pointer/count/type, raw CS register words, CRC, shader hash and SPIR-V LocalSize for all five outputs. |
+| 70 | Decode ISA and resource/register metadata | **PARTIAL — LLVM TONGA ISA + GFX8 REGISTER FIELDS DECODED; REA-5 OPEN** | Run `44739871394` disassembled all five code ranges and decoded `COMPUTE_PGM_RSRC1/2` from pinned Mesa GFX8 field definitions. Tiled kernel metadata: 16 VGPRs, 32 SGPRs, 2,048 B LDS, zero scratch, 8 user SGPRs, wave64. This is compiler-side interpretation, not measured occupancy; REA-5 remains NOT EXECUTED. |
 
 ## Phase 13 — GNM compute backend
 
 | # | Work item | State | Acceptance evidence |
 |---:|---|---|---|
-| 71 | Determine actual shader resource ABI | **BLOCKED BY 70** | Emitted metadata and ISA identify resource classes and user-data mapping. |
+| 71 | Determine actual shader resource ABI | **PARTIAL — INDIRECT RESOURCE TABLE POINTER IDENTIFIED** | All five metadata records declare `PTR_INDIRECTRESOURCETABLE`, API slot 0, start register 2; tiled CS uses 8 user SGPRs. The precise RW descriptor class/byte layout and binding path remain unproven. |
 | 72 | Validate read/write descriptor representation | **BLOCKED BY 71** | Descriptor bytes independently checked against shader ABI. |
 | 73 | Establish supported GPU memory type/protection | **PARTIAL — API CANDIDATE IDENTIFIED** | Pinned OpenGNM VideoOut helper uses WC_GARLIC + CPU/GPU RW; compute-buffer suitability is not established. |
 | 74 | Establish CPU/GPU address mapping | **PARTIAL — DIRECT-MEMORY OFFSET FOUND** | Helper retains CPU mapping and direct-memory offset; generic compute GPU-VA translation remains unproven. |
@@ -69,7 +69,7 @@ This ledger records the next 40 work items. A task is **DONE** only when its sta
 
 - Task 51 patch committed as `cb66861b05fbe9601300b3bce39f99cc212447d4`.
 - The observed failure in run `44676657053` was missing `HAVE_SYSCONF` in the hand-written Linux host build configuration. The pinned Mesa source uses that feature macro to select POSIX `sysconf` for physical-memory and page-size queries. The workflow now checks that capability with a compiled/running probe. Host numeric regression tests on commit `92a3bc3f` passed run `44677189726`. The latest non-canceled compiler attempt `44677801306` passed dependency checkout, host configuration, the `sysconf` probe and all Mesa header generators; the PSBC build is now running.
-- Revalidation is required. Tasks 61–65 (SPIR-V) and 85 (model intake) have verified host-side evidence. No accepted tiled `.sb`, GNM dispatch, PS4 Pro GPU measurements, or operational neural renderer are claimed.
+- Revalidation is required. Tasks 61–69 (SPIR-V, five GFX8 binaries, container/CRC validation, provenance and raw metadata) now have CI evidence; task 70 has compiler-side ISA/register decoding but awaits REA-5. Task 85 (model intake) is PASS. No GNM dispatch, PS4 Pro GPU measurements, or operational neural renderer are claimed.
 - REA-5 remains **NOT EXECUTED**. It is a documented independent-review protocol, not a separately instantiated agent.
 - Console installation, plugin activation, `plugins.ini` changes, saves/app-data changes and persistent console modifications remain outside this work.
 
@@ -128,3 +128,6 @@ The next PSBC link attempt `44678629656` passed all generated-source steps and c
 ## PSBC first valid-shader conversion attempt — run 44679024542
 
 The pinned PSBC host compiler now builds and links on Ubuntu after generating NIR/ACO sources, sRGB and GFX10/11 format tables, and using BLAKE3 portable mode for the standalone Makefile. All five NR compute shaders compile to SPIR-V and pass `spirv-val --target-env vulkan1.1`. The first GNM conversion then aborts on the tiled GEMM shader at `assert(config->lds_size <= compiler_info->ac->lds_size_per_workgroup)`: the pinned standalone `setup_ac_info()` never initialized this field, unlike Mesa's `ac_fill_compiler_info()`. Source review of `src/amd/common/ac_gpu_info.c` confirms GFX7+ workgroups may use 64 KiB LDS. A narrow patch now sets the documented limit and the CLI rejects truncated SPIR-V headers before entering NIR/ACO. This is not yet validated by a new run; no `.sb` is accepted. The same run also showed the old malformed-input test had incorrectly treated a segmentation fault as a successful rejection; the new gate rejects signal exits.
+
+
+Task 60 and 66–69 passed in GFX8 workflow run `44739871394`. The artifact and per-shader metrics are recorded in `docs/GCN8_GFX8_ARTIFACT_44739871394.md`; this is host/compiler evidence only, not a PS4 Pro runtime result.
