@@ -13,12 +13,14 @@ on:
     paths:
       - "platform/ps4/gcn8/shaders/**"
       - "tools/apply_psbc_gfx8_fixes.py"
+      - "tools/verify_gfx8_report.py"
       - ".github/workflows/gcn8-shader-build.yml"
   pull_request:
     branches: [main]
     paths:
       - "platform/ps4/gcn8/shaders/**"
       - "tools/apply_psbc_gfx8_fixes.py"
+      - "tools/verify_gfx8_report.py"
       - ".github/workflows/gcn8-shader-build.yml"
 
 permissions:
