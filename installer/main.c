@@ -12,6 +12,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include <orbis/libkernel.h>
+#include "release_manifest.h"
 
 /* Retry interrupted reads without advancing only one side of a byte comparison. */
 static ssize_t read_retry(int fd, void* buffer, size_t capacity) {
@@ -35,6 +36,7 @@ static ssize_t read_block(int fd, void* buffer, size_t capacity) {
 
 
 #define SOURCE_PRX "/app0/ps4_neural_engine.prx"
+#define RELEASE_MANIFEST "/app0/pne-release.ini"
 #define DEST_DIR "/data/GoldHEN/plugins"
 #define DEST_PRX DEST_DIR "/ps4_neural_engine.prx"
 #define DEST_TMP DEST_PRX ".pne-tmp"
@@ -402,6 +404,13 @@ rollback:
 
 int main(void) {
     char error[256];
+    /* Validate immutable package identity and PRX bytes before creating or changing destinations. */
+    if (!pne_validate_release_manifest(RELEASE_MANIFEST, SOURCE_PRX, error, sizeof(error))) {
+        write_status(error);
+        notify("PNE: manifesto/hash do PRX invalido; nenhuma alteracao foi feita.");
+        sceKernelUsleep(3000000);
+        return 5;
+    }
     if (mkdir("/data/GoldHEN", 0777) != 0 && errno != EEXIST) {
         snprintf(error, sizeof(error), "ERROR: cannot create /data/GoldHEN (errno=%d).", errno);
         write_status(error);
