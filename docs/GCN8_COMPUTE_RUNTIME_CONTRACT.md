@@ -83,6 +83,8 @@ its implementation maps slot 2 to the compute user-data register pair 2:3.
 This gives a concrete command-recording candidate for the table pointer,
 subject to confirming the actual GPU VA and runtime behavior on hardware.
 
+The same host contract now constructs the exact four-dword compute `SET_SH_REG` packet. For start register 2 it expects header `0xC0027602`, register offset `0x242`, low address dword and zero high dword; its tests cover slot 14/15 boundaries and invalid table ranges. `gnm_resource_binding.cpp` statically asserts that the pinned OpenGNM PM4 macros and GFX8 register definitions match these constants, then copies the tested packet into the command buffer. Host CTest passed run `44744971532`; PRX compile/link revalidation is pending. This still does not prove that a real command buffer is accepted by the GPU.
+
 The host-only implementation `platform/ps4/gcn8/host/resource_table_contract.*`
 now mirrors this layout and rejects unsupported sets, unsorted/overlapping
 bindings, size overflow, unaligned pointers, and table ranges crossing 4 GiB.
