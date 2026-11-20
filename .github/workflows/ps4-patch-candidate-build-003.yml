@@ -206,15 +206,66 @@ jobs:
           "PATCH_SOURCE_PRX_BYTES=$((Get-Item $patchPrx).Length)" | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
           if ($basePrxHash -eq $patchPrxHash) { throw "Current PRX payload is byte-identical to baseline PKG 002; no functional patch delta exists." }
 
-          # Use the byte-exact installed app.pkg as the patch association target.
-          # Rebuilding the base through orbis-pub-cmd fails on its original SFO
-          # (FORMAT parsing); no base rebuild is necessary for an associated patch.
-          $baseHash = (Get-FileHash -Algorithm SHA256 $basePkg).Hash
-          "PATCH_ASSOCIATED_BASE_PKG=$basePkg" | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
+          # Sony's patch builder needs an application base with publisher storage metadata.
+          # Rebuild a disposable association base from the exact installed app contents.
+          "=== REBUILD EXACT INSTALLED BASE WITH SONY PUBLISHER TOOL ===" | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
+          dotnet "$tool" sfo set "$sfo" CATEGORY gd 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
+          if ($LASTEXITCODE -ne 0) { throw "Sony-base CATEGORY normalization failed." }
+          dotnet "$tool" sfo set "$sfo" APP_VER 01.00 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
+          if ($LASTEXITCODE -ne 0) { throw "Sony-base APP_VER normalization failed." }
+          dotnet "$tool" sfo set "$sfo" VERSION 01.00 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
+          if ($LASTEXITCODE -ne 0) { throw "Sony-base VERSION normalization failed." }
+          dotnet "$tool" sfo set "$sfo" FORMAT obs --max-length 4 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
+          if ($LASTEXITCODE -ne 0) { throw "Sony-base FORMAT field creation failed." }
+          dotnet "$tool" sfo set "$sfo" PUBTOOLINFO "c_date=20261120,img0_l0_size=7,img0_l1_size=0,img0_sc_ksize=512,img0_pc_ksize=832,st_type=digital50" 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
+          if ($LASTEXITCODE -ne 0) { throw "Sony-base digital50 publisher metadata update failed." }
+          $sonyInputSfoText = (dotnet "$tool" sfo read "$sfo" 2>&1) -join "`n"
+          if ($LASTEXITCODE -ne 0 -or $sonyInputSfoText -notmatch "CATEGORY = gd" -or $sonyInputSfoText -notmatch "APP_VER = 01[.]00" -or $sonyInputSfoText -notmatch "VERSION = 01[.]00" -or $sonyInputSfoText -notmatch "FORMAT = obs" -or $sonyInputSfoText -notmatch "st_type=digital50") { throw "Sony-base SFO normalization readback failed." }
+
+          $sonyBaseGp4 = Join-Path $work "PS4-Neural-Engine-Installed-Base.gp4"
+          $sonyBasePkg = Join-Path $work "PS4-Neural-Engine-Installed-Base.pkg"
+          & $pubCmd gp4_proj_create --volume_type pkg_ps4_app --content_id IV0000-PNEU00001_00-PS4NEURALENG0000 --passcode $zeroKey --entitlement_key $zeroKey --storage_type digital50 $sonyBaseGp4 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
+          if ($LASTEXITCODE -ne 0 -or -not (Test-Path $sonyBaseGp4)) { throw "Sony base GP4 creation failed." }
+          $publisherAbout = Join-Path $image "sce_sys/about"
+          if (Test-Path $publisherAbout) {
+            Remove-Item -LiteralPath $publisherAbout -Recurse -Force
+            "SONY_REGENERATED_DIRECTORY_EXCLUDED=sce_sys/about" | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
+          }
+          foreach ($publisherFile in @("sce_sys/license.dat","sce_sys/license.info","sce_sys/psreserved.dat","sce_sys/playgo-chunk.dat","sce_sys/playgo-chunk.sha","sce_sys/playgo-manifest.xml")) {
+            $publisherPath = Join-Path $image $publisherFile
+            if (Test-Path $publisherPath) {
+              Remove-Item -LiteralPath $publisherPath -Force
+              "SONY_REGENERATED_FILE_EXCLUDED=$publisherFile" | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
+            }
+          }
+          $baseFiles = @(Get-ChildItem $image -Recurse -File | Sort-Object FullName)
+          if ($baseFiles.Count -lt 4) { throw "Sony base GP4 source payload is incomplete: $($baseFiles.Count) files." }
+          foreach ($file in $baseFiles) {
+            $target = $file.FullName.Substring($image.TrimEnd('\').Length + 1).Replace('\','/')
+            & $pubCmd gp4_file_add --force --pfs_compression enable $file.FullName $target $sonyBaseGp4 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
+            if ($LASTEXITCODE -ne 0) { throw "Sony base GP4 add failed for $target." }
+          }
+          [xml]$sonyBaseProject = Get-Content $sonyBaseGp4
+          if ($sonyBaseProject.psproject.volume.volume_type -ne "pkg_ps4_app" -or $sonyBaseProject.psproject.files.file.Count -lt 4) { throw "Sony base GP4 metadata or payload is incomplete." }
+          & $pubCmd img_create --no_progress_bar $sonyBaseGp4 $sonyBasePkg 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
+          if ($LASTEXITCODE -ne 0 -or -not (Test-Path $sonyBasePkg)) { throw "Sony publisher failed to rebuild the installed base application PKG." }
+          dotnet "$tool" validate "$sonyBasePkg" 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
+          if ($LASTEXITCODE -ne 0) { throw "Independent validation of Sony-built base PKG failed." }
+          $sonyBaseVerify = Join-Path $work "sony-base-verify"
+          dotnet "$tool" extract "$sonyBasePkg" "$sonyBaseVerify" --verbose 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
+          if ($LASTEXITCODE -ne 0) { throw "Sony-built base PKG extraction failed." }
+          $sonyBaseSfo = Get-ChildItem $sonyBaseVerify -Recurse -File -Filter "param.sfo" | Select-Object -First 1
+          if (-not $sonyBaseSfo) { throw "Sony-built base PKG has no embedded PARAM.SFO." }
+          $sonyBaseSfoText = (dotnet "$tool" sfo read "$($sonyBaseSfo.FullName)" 2>&1) -join "`n"
+          if ($LASTEXITCODE -ne 0 -or $sonyBaseSfoText -notmatch "CATEGORY = gd" -or $sonyBaseSfoText -notmatch "st_type=digital50") { throw "Sony-built base SFO category/storage metadata mismatch." }
+          Copy-Item $sonyBasePkg "candidate-output/PS4-Neural-Engine-Installed-Base.pkg"
+          Copy-Item $basePkg "candidate-output/PS4-Neural-Engine-Installed-Original.pkg"
+          $baseHash = (Get-FileHash -Algorithm SHA256 $sonyBasePkg).Hash
+          "PATCH_ASSOCIATED_BASE_PKG=$sonyBasePkg" | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
           "PATCH_ASSOCIATED_BASE_PKG_SHA256=$baseHash" | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
           "PATCH_ASSOCIATED_BASE_CATEGORY=gd" | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
-          "PATCH_ASSOCIATED_BASE_APP_VER=1.00" | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
-          Copy-Item $basePkg "candidate-output/PS4-Neural-Engine-Installed-Original.pkg"
+          "PATCH_ASSOCIATED_BASE_APP_VER=01.00" | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
+          "SONY_ASSOCIATION_BASE_BYTES=$((Get-Item $sonyBasePkg).Length)" | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
 
           "=== SET PATCH PARAM.SFO ===" | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
           dotnet "$tool" sfo set "$sfo" CATEGORY gp 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
@@ -248,7 +299,7 @@ jobs:
           [IO.File]::WriteAllText($changeInfo, $changeXml, [Text.UTF8Encoding]::new($false))
 
           "=== CREATE ASSOCIATED PATCH GP4 ===" | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
-          & $pubCmd gp4_proj_create --volume_type pkg_ps4_patch --content_id IV0000-PNEU00001_00-PS4NEURALENG0000 --passcode $zeroKey --entitlement_key $zeroKey --storage_type digital25 --app_path $basePkg $gp4 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
+          & $pubCmd gp4_proj_create --volume_type pkg_ps4_patch --content_id IV0000-PNEU00001_00-PS4NEURALENG0000 --passcode $zeroKey --entitlement_key $zeroKey --storage_type digital25 --app_path $sonyBasePkg $gp4 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
           if ($LASTEXITCODE -ne 0 -or -not (Test-Path $gp4)) { throw "Associated patch GP4 creation failed." }
           # Keep Sony's accepted patch storage_type (digital25), associated with the exact installed gd base.
 
