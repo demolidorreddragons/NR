@@ -29,6 +29,7 @@ struct CsShaderBinaryView {
     std::uint32_t code_size = 0;
     std::uint32_t slot_table_offset = 0;
     std::uint32_t slot_count = 0;
+    std::uint32_t chunk_usage_base_offset_dwords = 0;
     std::uint32_t crc32 = 0;
     std::uint16_t version_major = 0;
     std::uint16_t version_minor = 0;
