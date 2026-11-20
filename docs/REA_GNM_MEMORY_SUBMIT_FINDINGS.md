@@ -23,7 +23,7 @@ The existing VideoOut helper uses \`GNM_DIRECT_MEMORY_TYPE_WC_GARLIC\` (value 3 
 
 - \`GnmDirectMemory\` retains both a CPU mapping and a direct-memory offset. The helper does not establish a general CPU-pointer-to-GPU-VA translation contract for arbitrary compute buffers.
 - Alignment, address ownership, descriptor address encoding, cache policy and visibility must be validated for the exact compute allocation path.
-- Run `44739871394` now supplies the first compiler metadata: one `PTR_INDIRECTRESOURCETABLE` slot at start register 2, eight user SGPRs for tiled GEMM, and four SPIR-V storage bindings logged at descriptor-table offsets 0/64/128/192. This still does not distinguish the exact runtime V# vs RW# descriptor encoding or prove a 16-byte V# is the correct storage-buffer ABI.
+- Run `44739871394` supplies the first compiler metadata: one `PTR_INDIRECTRESOURCETABLE` slot at start register 2, eight user SGPRs for tiled GEMM, and four SPIR-V storage bindings at table offsets 0/64/128/192. Pinned PSBC source explicitly defines storage-buffer entries as 16-byte V# descriptors, with binding N at N×64 and the table pointer in a 32-bit user SGPR. This closes the compiler-side descriptor class/layout question; writable V# field policy, GPU VA encoding and runtime visibility remain open.
 - No cache flush/invalidate sequence has been proven for the NR compute buffers.
 
 ## Command recording and submission evidence
@@ -40,8 +40,8 @@ The existence of declarations, wrappers or a successful import-link smoke test i
 
 ## Task status impact
 
-- Task 71: partial compiler evidence now identifies `PTR_INDIRECTRESOURCETABLE` at user-data register 2; descriptor class/encoding and runtime binding remain unresolved.
-- Task 72: blocked until the RW descriptor bytes and GPU address encoding are independently established.
+- Task 71: PASS at compiler-ABI scope: PSBC source defines 16-byte V# storage descriptors in a 64-byte binding stride; compiled metadata identifies the indirect table pointer at user register 2, and OpenGNM pointer-user-data maps slot 2 to CS registers 2:3.
+- Task 72: partial: `GnmBuffer` is 16 bytes and its fields are known, but writable raw-dword format, memory/cache policy, GPU VA encoding and hardware visibility remain unvalidated.
 - Task 73: candidate direct-memory allocation APIs and a VideoOut memory example identified; compute memory type/protection remains unapproved.
 - Task 74: CPU mapping and direct-memory offset are visible in the helper, but GPU VA semantics remain blocked.
 - Task 75: upstream helper offers an allocation/release candidate; no NR compute buffer lifecycle has been implemented or hardware-validated.
@@ -57,3 +57,9 @@ The existence of declarations, wrappers or a successful import-link smoke test i
 - \`docs/guides/rendering-pipeline.md\`
 
 All references above are from the pinned OpenGNM revision stated at the top.
+
+## PSBC descriptor-table contract — source-level confirmation
+
+The pinned `opengnm-psbc/libpsbc/psbc_compile.c` defines the descriptor layout used by the NR SPIR-V shaders: descriptor set 0 only; binding N at byte offset N×64; storage/uniform buffer and texel-buffer entries are 16-byte V#; sampled/storage images are 32-byte T#; samplers are 16-byte S#; combined image samplers are 48 bytes. It sets `address32_hi=0` for the indirect table pointer, requiring the table GPU address below 4 GiB. For the four GEMM SSBOs, PSBC logs table size 208 bytes and offsets 0, 64, 128 and 192. The GNM metadata declares `PTR_INDIRECTRESOURCETABLE` at user register 2; OpenGNM's pointer-user-data helper maps slot 2 to the CS register pair 2:3.
+
+This is sufficient to specify the compiler-side V# table layout. It does not validate the writable V# descriptor fields/cache policy or GPU memory visibility. The convenience `sceGnmCreateConstBuffer` and `sceGnmCreateVertexBuffer` helpers set `GNM_MEMORY_READONLY`; neither is approved for writable SSBO output without further proof.
