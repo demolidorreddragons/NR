@@ -90,11 +90,13 @@ emission test with a successful PS4 Pro compute dispatch.
 - opengnm-psbc compiler:
   https://github.com/PS4-OpenGNM/opengnm-psbc
 
-The compile-only smoke test checks function-pointer signatures and the sizes
+The compile/link smoke checks function-pointer signatures and the sizes
 of `GnmBuffer`, `GnmCommandBuffer`, `GnmCsStageRegisters`, and `GnmCsShader`
 against the pinned headers. `GnmBuffer` is a 16-byte V# descriptor; its
 presence does not prove it is the correct descriptor type for the compiler's
-RW storage-buffer lowering. The test does not link against or call firmware
-exports.
+RW storage-buffer lowering. The link stage attempts to resolve the two firmware imports against the
+pinned OpenOrbis libraries. A successful link would establish import-library
+resolution only, not that the functions are safe to call on a given firmware.
+Neither function is invoked.
 No external runtime code has been vendored, no firmware function was called,
 and no console state was changed.
