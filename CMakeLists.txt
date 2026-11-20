@@ -27,3 +27,12 @@ target_include_directories(pne_gcn8_contract PUBLIC platform/ps4/gcn8/host)
 add_executable(test_gcn8_contract tests/test_gcn8_contract.cpp)
 target_link_libraries(test_gcn8_contract PRIVATE pne_gcn8_contract)
 add_test(NAME gcn8_compute_contract COMMAND test_gcn8_contract)
+
+add_library(pne_gcn8_resource_table
+    platform/ps4/gcn8/host/resource_table_contract.cpp
+)
+target_include_directories(pne_gcn8_resource_table PUBLIC platform/ps4/gcn8/host)
+
+add_executable(test_gcn8_resource_table tests/test_gcn8_resource_table.cpp)
+target_link_libraries(test_gcn8_resource_table PRIVATE pne_gcn8_resource_table)
+add_test(NAME gcn8_resource_table_contract COMMAND test_gcn8_resource_table)
