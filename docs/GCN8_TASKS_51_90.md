@@ -9,9 +9,9 @@ This ledger records the next 40 work items. A task is **DONE** only when its sta
 
 | # | Work item | State | Acceptance evidence |
 |---:|---|---|---|
-| 51 | Correct Linux `sysconf` feature detection in host build | **PATCHED — CI REVALIDATION PENDING** | Workflow commit `cb66861b05fbe9601300b3bce39f99cc212447d4` defines `HAVE_SYSCONF=1`; rerun must pass C compilation. |
-| 52 | Audit host OS feature macros against pinned Mesa configuration | **IN PROGRESS** | Compare all required `HAVE_*` macros with the pinned source's Meson/configure definitions; do not guess additional defines. |
-| 53 | Separate host-platform and PS4-target configuration | **PENDING** | Explicitly document which flags affect compiler host versus emitted target. |
+| 51 | Correct Linux `sysconf` feature detection in host build | **PATCHED — REVALIDATION RUNNING** | Workflow commit `cb66861b05fbe9601300b3bce39f99cc212447d4` defines `HAVE_SYSCONF=1`; rerun must pass C compilation. |
+| 52 | Audit host OS feature macros against pinned Mesa configuration | **PARTIAL — HOST SYSCONF VERIFIED BY PROBE PENDING** | Pinned `config.orbis.mak` also defines `HAVE_SYSCONF=1`; Linux CI now compiles/runs a `sysconf` probe before PSBC. Full `HAVE_*` audit remains open. |
+| 53 | Separate host-platform and PS4-target configuration | **DOCUMENTED** | PSBC CLI is built for Linux host; `-n` selects PS4 NEO/GFX8 output. No cross-compile of the CLI is implied. |
 | 54 | Resolve subsequent missing headers or generated files | **PENDING** | Only fix errors reproduced in CI logs; preserve upstream declarations. |
 | 55 | Reproduce clean PSBC build | **BLOCKED BY 51** | Clean runner build completes from pinned revisions. |
 | 56 | Resolve compiler/linker errors exposed after C compilation | **PENDING** | Successful final link with no suppressed errors. |
@@ -68,7 +68,7 @@ This ledger records the next 40 work items. A task is **DONE** only when its sta
 ## Current concrete progress
 
 - Task 51 patch committed as `cb66861b05fbe9601300b3bce39f99cc212447d4`.
-- The observed failure in run `44676657053` was missing `HAVE_SYSCONF` in the hand-written Linux host build configuration. The pinned Mesa source uses that feature macro to select POSIX `sysconf` for physical-memory and page-size queries.
+- The observed failure in run `44676657053` was missing `HAVE_SYSCONF` in the hand-written Linux host build configuration. The pinned Mesa source uses that feature macro to select POSIX `sysconf` for physical-memory and page-size queries. The workflow now checks that capability with a compiled/running probe.
 - Revalidation is required. No task from 61 onward is marked complete; no accepted `.sb` artifacts, GNM dispatch, PS4 Pro GPU measurements, model intake, or neural renderer are claimed.
 - REA-5 remains **NOT EXECUTED**. It is a documented independent-review protocol, not a separately instantiated agent.
 - Console installation, plugin activation, `plugins.ini` changes, saves/app-data changes and persistent console modifications remain outside this work.
