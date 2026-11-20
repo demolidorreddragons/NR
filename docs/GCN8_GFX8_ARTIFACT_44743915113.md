@@ -1,7 +1,7 @@
 # GFX8 compute artifact — run 44743915113
 
 **Workflow:** [GCN8 shader compiler and GEMM binary](https://github.com/demolidorreddragons/NR/actions/runs/44743915113)  
-**Commit:** `5141ed44fe` (workflow head)  
+**Commit:** `5141ed44fe3202dbdec78f0a69700d34ef76e039` (workflow head)  
 **Artifact:** `nr-gcn8-compute-shaders-gfx8`, ID `14631648737`  
 **Artifact ZIP SHA-256:** `a722c2e67e8138b086cd8c6569850bb054277298339b4a23ea8e45d9ce337586`  
 **Compiler pins:** PSBC `28697f007862427ebec54388ec972ce6e3545912`; OpenGNM `4b295ca54c82c83acf308d1c646a2dfa9ae57350`; SPIRV-Headers `09913f088a1197aba4aefd300a876b2ebbaa3391`; Vulkan-Headers `v1.4.328`.
