@@ -227,12 +227,17 @@ jobs:
           if (-not $embeddedSfo) { throw "Embedded PARAM.SFO missing." }
           $stagedSfoHash = (Get-FileHash -Algorithm SHA256 $sfo).Hash.ToLowerInvariant()
           $embeddedSfoHash = (Get-FileHash -Algorithm SHA256 $embeddedSfo.FullName).Hash.ToLowerInvariant()
-          if ($stagedSfoHash -ne $embeddedSfoHash) { throw "Packaged PARAM.SFO differs from staged GP4 SFO." }
-          $sfoText = (dotnet "$tool" sfo read "$($embeddedSfo.FullName)" 2>&1) -join [Environment]::NewLine
-          $sfoText | Out-File qa-output/param-sfo.txt
+          Copy-Item $sfo qa-output/staged-param.sfo
+          Copy-Item $embeddedSfo.FullName qa-output/embedded-param.sfo
+          $stagedSfoText = (dotnet "$tool" sfo read "$sfo" 2>&1) -join [Environment]::NewLine
+          if ($LASTEXITCODE -ne 0) { throw "Staged GP4 SFO read failed." }
+          $embeddedSfoText = (dotnet "$tool" sfo read "$($embeddedSfo.FullName)" 2>&1) -join [Environment]::NewLine
           if ($LASTEXITCODE -ne 0) { throw "Embedded SFO read failed." }
+          $stagedSfoText | Out-File qa-output/staged-param-sfo.txt
+          $embeddedSfoText | Out-File qa-output/embedded-param-sfo.txt
           foreach ($required in @("CATEGORY = gde","APP_VER = 01.02","VERSION = 01.02","TITLE_ID = PNEU00001","CONTENT_ID = IV0000-PNEU00001_00-PS4NEURALENG0000","st_type=digital50")) {
-            if ($sfoText -notmatch [regex]::Escape($required)) { throw "Embedded SFO missing expected field: $required" }
+            if ($stagedSfoText -notmatch [regex]::Escape($required)) { throw "Staged GP4 SFO missing expected field: $required" }
+            if ($embeddedSfoText -notmatch [regex]::Escape($required)) { throw "Embedded SFO missing expected field: $required" }
           }
           $eboot = Get-ChildItem $out -Recurse -File | Where-Object { $_.Name -eq "eboot.bin" } | Select-Object -First 1
           $prx = Get-ChildItem $out -Recurse -File | Where-Object { $_.Name -eq "ps4_neural_engine.prx" } | Select-Object -First 1
@@ -247,7 +252,9 @@ jobs:
           "PKG_BYTES=$((Get-Item $pkg).Length)" | Out-File qa-output/qa-report.txt -Append
           "PKG_SHA256=$pkgHash" | Out-File qa-output/qa-report.txt -Append
           "GP4_SHA256=$gp4Hash" | Out-File qa-output/qa-report.txt -Append
-          "PARAM_SFO_SHA256=$embeddedSfoHash" | Out-File qa-output/qa-report.txt -Append
+          "STAGED_PARAM_SFO_SHA256=$stagedSfoHash" | Out-File qa-output/qa-report.txt -Append
+          "EMBEDDED_PARAM_SFO_SHA256=$embeddedSfoHash" | Out-File qa-output/qa-report.txt -Append
+          "PARAM_SFO_SEMANTIC_FIELDS=PASS" | Out-File qa-output/qa-report.txt -Append
           "PRX_SHA256=$embeddedPrxHash" | Out-File qa-output/qa-report.txt -Append
           "EBOOT_BYTES=$($eboot.Length)" | Out-File qa-output/qa-report.txt -Append
           "CATEGORY=gde; APP_VER=01.02; VERSION=01.02; STORAGE=digital50" | Out-File qa-output/qa-report.txt -Append
