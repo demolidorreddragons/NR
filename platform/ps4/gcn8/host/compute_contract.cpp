@@ -28,13 +28,16 @@ bool ranges_overlap(const void* lhs, std::size_t lhs_size,
 
 } // namespace
 
-ContractError make_gemm_dispatch(const GemmParams& p,
+ContractError make_gemm_dispatch_for_tile(const GemmParams& p,
                                  const BufferView& a,
                                  const BufferView& b,
                                  const BufferView& c,
                                  const BufferView& out,
+                                 std::uint32_t tile_width,
+                                 std::uint32_t tile_height,
                                  GemmDispatch* dispatch) {
     if (!dispatch) return ContractError::null_dispatch;
+    if (tile_width == 0 || tile_height == 0) return ContractError::invalid_workgroup_size;
     if (p.m == 0 || p.n == 0) return ContractError::zero_output_dimension;
     if (!std::isfinite(p.alpha) || !std::isfinite(p.beta))
         return ContractError::invalid_scalar;
@@ -53,11 +56,13 @@ ContractError make_gemm_dispatch(const GemmParams& p,
     // increments. Reject dimensions that could wrap before a GPU dispatch.
     const auto shader_index_limit =
         static_cast<std::size_t>(std::numeric_limits<std::uint32_t>::max());
-    const auto tile_edge_limit =
-        std::numeric_limits<std::uint32_t>::max() - 15u;
+    const auto max_u32 = std::numeric_limits<std::uint32_t>::max();
+    const auto row_edge_limit = max_u32 - (tile_height - 1u);
+    const auto col_edge_limit = max_u32 - (tile_width - 1u);
+    // K advances in 16-element chunks in the current GEMM kernels.
     if (mn > shader_index_limit || mk > shader_index_limit ||
-        kn > shader_index_limit || p.m > tile_edge_limit ||
-        p.n > tile_edge_limit || p.k > tile_edge_limit) {
+        kn > shader_index_limit || p.m > row_edge_limit ||
+        p.n > col_edge_limit || p.k > max_u32 - 15u) {
         return ContractError::shader_index_overflow;
     }
 
@@ -73,13 +78,22 @@ ContractError make_gemm_dispatch(const GemmParams& p,
         return ContractError::output_aliases_input;
 
     dispatch->params = p;
-    dispatch->groups_x = p.n / 16u + (p.n % 16u != 0u);
-    dispatch->groups_y = p.m / 16u + (p.m % 16u != 0u);
+    dispatch->groups_x = p.n / tile_width + (p.n % tile_width != 0u);
+    dispatch->groups_y = p.m / tile_height + (p.m % tile_height != 0u);
     dispatch->a_required_bytes = a_bytes;
     dispatch->b_required_bytes = b_bytes;
     dispatch->c_required_bytes = c_bytes;
     dispatch->out_required_bytes = c_bytes;
     return ContractError::none;
+}
+
+ContractError make_gemm_dispatch(const GemmParams& p,
+                                 const BufferView& a,
+                                 const BufferView& b,
+                                 const BufferView& c,
+                                 const BufferView& out,
+                                 GemmDispatch* dispatch) {
+    return make_gemm_dispatch_for_tile(p, a, b, c, out, 16u, 16u, dispatch);
 }
 
 const char* contract_error_string(ContractError error) noexcept {
@@ -93,6 +107,7 @@ const char* contract_error_string(ContractError error) noexcept {
     case ContractError::buffer_too_small: return "buffer too small";
     case ContractError::output_aliases_input: return "output aliases input";
     case ContractError::invalid_scalar: return "alpha/beta must be finite";
+    case ContractError::invalid_workgroup_size: return "workgroup tile dimensions must be non-zero";
     }
     return "unknown contract error";
 }
