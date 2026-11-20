@@ -32,7 +32,11 @@ int main() {
     p.alpha = std::numeric_limits<float>::infinity();
     assert(make_gemm_dispatch(p, av, bv, cv, ov, &d) == ContractError::invalid_scalar);
     assert(make_gemm_dispatch({17, 31, 19, 1.0f, 0.0f}, av, bv, cv, ov, nullptr)
-           == ContractError::null_buffer);
+           == ContractError::null_dispatch);
+    assert(make_gemm_dispatch({65536u, 65536u, 1u, 1.0f, 0.0f},
+                              av, bv, cv, ov, &d) == ContractError::shader_index_overflow);
+    assert(make_gemm_dispatch({1u, 1u, UINT32_MAX, 1.0f, 0.0f},
+                              av, bv, cv, ov, &d) == ContractError::shader_index_overflow);
     assert(make_gemm_dispatch({UINT32_MAX, UINT32_MAX, 1, 1.0f, 0.0f},
                               av, bv, cv, ov, &d) == ContractError::size_overflow);
     return 0;
