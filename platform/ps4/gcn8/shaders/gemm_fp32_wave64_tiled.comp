@@ -39,7 +39,7 @@ void main() {
     for (uint baseK = 0u; baseK < pc.K; baseK += 16u) {
         // 64 lanes x 4 values = 256 values, exactly one 16x16 tile.
         for (uint item = 0u; item < 4u; ++item) {
-            const uint linear = lane * 4u + item;
+            const uint linear = lane + item * 64u;
             const uint r = linear >> 4u;
             const uint c = linear & 15u;
 
