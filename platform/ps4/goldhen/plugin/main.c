@@ -78,13 +78,25 @@ static void *input_thread(void *arg) {
     }
    }
    was_down = down;
+   const uint32_t disconnect_chord = ORBIS_PAD_BUTTON_L3 | ORBIS_PAD_BUTTON_L1 |
+    ORBIS_PAD_BUTTON_R3 | ORBIS_PAD_BUTTON_CIRCLE;
+   const bool disconnect_down = (data.buttons & disconnect_chord) == disconnect_chord;
+   if (disconnect_down && !disconnect_was_down) {
+    pne_github_disconnect();
+    NotifyStatic(TEX_ICON_SYSTEM, "PNE: GitHub desconectado; token removido da memoria");
+   }
+   disconnect_was_down = disconnect_down;
+
    const uint32_t auth_chord = ORBIS_PAD_BUTTON_L3 | ORBIS_PAD_BUTTON_L1 | ORBIS_PAD_BUTTON_CIRCLE;
    const bool auth_down = (data.buttons & auth_chord) == auth_chord;
-   if (auth_down && !auth_was_down) {
+   if (auth_down && !auth_was_down && !disconnect_down) {
     if (pne_github_begin_authorization()) NotifyStatic(TEX_ICON_SYSTEM, "PNE: abra a URL e informe o codigo GitHub");
     else NotifyStatic(TEX_ICON_SYSTEM, "PNE: nao foi possivel iniciar OAuth");
    }
-   auth_was_down = auth_down;
+   // The disconnect chord contains the authorization chord. Keep the latter
+   // latched until all buttons are released, preventing accidental OAuth start
+   // when R3 is released while L3+L1+Circle remain held.
+   auth_was_down = auth_down || disconnect_down;
    const uint32_t upload_chord = ORBIS_PAD_BUTTON_L3 | ORBIS_PAD_BUTTON_L1 | ORBIS_PAD_BUTTON_CROSS;
    const bool upload_down = (data.buttons & upload_chord) == upload_chord;
    if (upload_down && !upload_was_down) {
