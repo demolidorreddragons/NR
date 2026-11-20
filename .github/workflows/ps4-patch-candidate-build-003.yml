@@ -151,10 +151,12 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "SFO VERSION update failed." }
           dotnet "$tool" sfo set "$sfo" ATTRIBUTE 8388610 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
           if ($LASTEXITCODE -ne 0) { throw "SFO ATTRIBUTE update failed." }
-          dotnet "$tool" sfo set "$sfo" PUBTOOLINFO "c_date=20261119,img0_l0_size=7,img0_l1_size=0,img0_sc_ksize=512,img0_pc_ksize=832,st_type=digital50" 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
+          dotnet "$tool" sfo set "$sfo" PUBTOOLINFO "c_date=20261120,img0_l0_size=7,img0_l1_size=0,img0_sc_ksize=512,img0_pc_ksize=832,st_type=digital25" 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
           if ($LASTEXITCODE -ne 0) { throw "SFO PUBTOOLINFO update failed." }
           dotnet "$tool" sfo read "$sfo" 2>&1 | Tee-Object -FilePath "candidate-output/patch-param-sfo.txt"
           if ($LASTEXITCODE -ne 0) { throw "Patch SFO readback failed." }
+          $patchSfoText = Get-Content "candidate-output/patch-param-sfo.txt" -Raw
+          if ($patchSfoText -notmatch "PUBTOOLINFO.*st_type=digital25") { throw "Patch SFO storage type must match GP4 patch storage_type=digital25." }
 
           $changeInfoDir = Join-Path $image "sce_sys/changeinfo"
           New-Item -ItemType Directory -Force -Path $changeInfoDir | Out-Null
