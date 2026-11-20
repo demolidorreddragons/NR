@@ -149,6 +149,7 @@ jobs:
           import struct
           import subprocess
           import platform
+          import re
           from pathlib import Path
           spec = importlib.util.spec_from_file_location("verify_sb", ".deps/opengnm-psbc/tests/verify_sb.py")
           module = importlib.util.module_from_spec(spec)
@@ -180,12 +181,86 @@ jobs:
                   raise SystemExit(f"GCN code range is invalid: {shader}")
               chunk_offset = data[orb + 12]
               num_slots = data[orb + 13]
+              pssl_size = module.PSSL_HEADER_SIZE
+              file_header = pssl_size
+              cs_header = pssl_size + module.GNM_FILE_HEADER_SIZE
+              cs_header_size = 0x24  # sizeof(GnmCsShader) at pinned OpenGNM revision
+              common_word = u32(cs_header)
+              common_shader_size = common_word & 0x7fffff
+              common_is_using_srt = (common_word >> 23) & 1
+              common_num_slots = (common_word >> 24) & 0xff
+              embedded_cb_dqwords = struct.unpack_from("<H", data, cs_header + 4)[0]
+              scratch_dwords_per_thread = struct.unpack_from("<H", data, cs_header + 6)[0]
+              if data[file_header + 8] != 4 or data[file_header + 11] != 2:
+                  raise SystemExit(f"Shader is not a PS4 Pro NEO compute binary: {shader}")
+              if common_num_slots != num_slots:
+                  raise SystemExit(f"CS header and OrbShdr input-slot counts disagree: {shader}")
+              header_dwords = data[file_header + 9]
+              expected_code_start = cs_header + cs_header_size + num_slots * 4
+              if header_dwords * 4 != cs_header_size + num_slots * 4:
+                  raise SystemExit(f"CS header size does not match slot count: {shader}")
+              if code_start != expected_code_start:
+                  raise SystemExit(f"GCN code start does not follow the CS header/slot table: {shader}")
+              if common_shader_size != gcn_code_size + module.GNM_BINARY_INFO_SIZE:
+                  raise SystemExit(f"CS common shader size disagrees with GCN code length: {shader}")
               first_slot_type = None
+              input_usage_slots = []
               if num_slots:
                   slot_offset = orb - chunk_offset * 4
-                  if chunk_offset == 0 or slot_offset < module.PSSL_HEADER_SIZE + module.GNM_FILE_HEADER_SIZE or slot_offset + num_slots > orb:
+                  if chunk_offset == 0 or slot_offset != cs_header + cs_header_size or slot_offset + num_slots * 4 > code_start:
                       raise SystemExit(f"Input usage slot range is out of bounds: {shader}")
-                  first_slot_type = data[slot_offset]
+                  usage_names = {
+                      0x00: "IMM_RESOURCE", 0x01: "IMM_SAMPLER",
+                      0x02: "IMM_CONSTBUFFER", 0x03: "IMM_VERTEXBUFFER",
+                      0x04: "IMM_RWRESOURCE", 0x05: "IMM_ALUFLOATCONST",
+                      0x06: "IMM_ALUBOOL32CONST", 0x07: "IMM_GDSCOUNTERRANGE",
+                      0x08: "IMM_GDSMEMORYRANGE", 0x09: "IMM_GWSBASE",
+                      0x0a: "IMM_SRT", 0x0d: "IMM_LDSESGSSIZE",
+                      0x12: "SUBPTR_FETCHSHADER", 0x13: "PTR_RESOURCETABLE",
+                      0x14: "PTR_INTERNALRESOURCETABLE", 0x15: "PTR_SAMPLERTABLE",
+                      0x16: "PTR_CONSTBUFFERTABLE", 0x17: "PTR_VERTEXBUFFERTABLE",
+                      0x18: "PTR_SOBUFFERTABLE", 0x19: "PTR_RWRESOURCETABLE",
+                      0x1a: "PTR_INTERNALGLOBALTABLE", 0x1b: "PTR_EXTENDEDUSERDATA",
+                      0x1c: "PTR_INDIRECTRESOURCETABLE",
+                      0x1d: "PTR_INDIRECTINTERNALRESOURCETABLE",
+                      0x1e: "PTR_INDIRECTRWRESOURCETABLE",
+                  }
+                  for slot_index in range(num_slots):
+                      offset = slot_offset + slot_index * 4
+                      usage_type, api_slot, start_register, control = data[offset:offset + 4]
+                      input_usage_slots.append({
+                          "index": slot_index,
+                          "usage_type": usage_type,
+                          "usage_name": usage_names.get(usage_type, "UNKNOWN"),
+                          "api_slot": api_slot,
+                          "start_register": start_register,
+                          "control_raw": control,
+                          "register_count_bit": control & 1,
+                          "resource_type_bit": (control >> 1) & 1,
+                          "chunk_mask": control >> 4,
+                      })
+                  first_slot_type = input_usage_slots[0]["usage_type"]
+              spirv_path = Path("dist/ps4/gcn8") / f"{shader}.spv"
+              spirv_text = subprocess.check_output(["spirv-dis", str(spirv_path)], text=True)
+              entry = re.search(r'OpEntryPoint\s+GLCompute\s+(%\w+)\s+"main"', spirv_text)
+              if not entry:
+                  raise SystemExit(f"SPIR-V main compute entry point not found: {shader}")
+              local_mode = re.search(
+                  rf'OpExecutionMode\s+{re.escape(entry.group(1))}\s+LocalSize\s+(\d+)\s+(\d+)\s+(\d+)',
+                  spirv_text,
+              )
+              if not local_mode:
+                  raise SystemExit(f"Static SPIR-V LocalSize execution mode not found: {shader}")
+              local_size = [int(value) for value in local_mode.groups()]
+              cs_registers = {
+                  "computepgmlo": u32(cs_header + 8),
+                  "computepgmhi": u32(cs_header + 12),
+                  "computepgmrsrc1": u32(cs_header + 16),
+                  "computepgmrsrc2": u32(cs_header + 20),
+                  "computenumthreadx": u32(cs_header + 24),
+                  "computenumthready": u32(cs_header + 28),
+                  "computenumthreadz": u32(cs_header + 32),
+              }
               report.append({
                   "shader": shader,
                   "file": str(path),
@@ -207,6 +282,16 @@ jobs:
                   "chunk_usage_base_offset_dwords": chunk_offset,
                   "input_usage_slots": num_slots,
                   "first_input_usage_type": first_slot_type,
+                  "input_usage_slots_raw": input_usage_slots,
+                  "spirv_local_size": local_size,
+                  "cs_common_data": {
+                      "shader_size_raw": common_shader_size,
+                      "is_using_srt": common_is_using_srt,
+                      "num_input_usage_slots": common_num_slots,
+                      "embedded_constant_buffer_dqwords": embedded_cb_dqwords,
+                      "scratch_size_per_thread_dwords": scratch_dwords_per_thread,
+                  },
+                  "cs_registers_raw": cs_registers,
                   "shader_hash": f"{u32(orb + 20):08x}{u32(orb + 16):08x}",
                   "gcn_code_size": (length_field >> 8) & 0xffffff,
                   "crc32": f"{u32(orb + 24):08x}"
