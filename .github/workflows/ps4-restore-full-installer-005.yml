@@ -28,7 +28,7 @@ jobs:
           $oldPatch = "PS4-Neural-Engine-003-7338CBFE82EA.pkg"
           $targetName = "PS4-Neural-Engine-INSTALL-005-86248BC8F6E3.pkg"
           $expectedBytes = 6619136L
-          $expectedHash = "86248bc8f6e393c6c6db3ac69821f928ee5c743a1f30b0770b25b24088228ece"
+          $expectedHash = "86248bc8f6e393c6b6db3ac69821f928ee5c743a1f30b0770b25b24088228ece"
           $sourceUrl = "ftp://$($env:PS4_IP):2121/data/pkg/old_versions/$archiveName"
           $targetUrl = "ftp://$($env:PS4_IP):2121/data/pkg/$targetName"
 
