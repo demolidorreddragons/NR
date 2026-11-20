@@ -47,8 +47,14 @@ int main(int argc, char** argv) {
     }
     startup_log(persistent_log ? log_path : nullptr, "PNE_GCN8_APP_MAIN_ENTERED");
     startup_log(persistent_log ? log_path : nullptr, "STAGE=BEFORE_COMPUTE_SMOKE");
+#ifdef PNE_GCN8_STARTUP_ONLY
+    const int result = 0;
+    startup_log(persistent_log ? log_path : nullptr,
+                "RESULT=PASS; MODE=STARTUP_ONLY; GNM_NOT_LINKED");
+#else
     const int result = pne_gcn8_compute_smoke_run(
         "app0:/compute_smoke_add.sb", persistent_log ? log_path : nullptr);
+#endif
     char exit_line[64]{};
     std::snprintf(exit_line, sizeof(exit_line), "PNE_GCN8_SMOKE_EXIT=%d", result);
     startup_log(persistent_log ? log_path : nullptr, exit_line);
