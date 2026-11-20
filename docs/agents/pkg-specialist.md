@@ -169,3 +169,10 @@ Source artifact: build run 44623808730, artifact 14578192913.
 - The next explicit publisher error was: `Could not create system directory. (sce_sys/about)`. The restructure log shows that OrbisPkgTool retained the original `Image0/sce_sys/about/right.sprx` and then carried that directory into the Sony GP4. This directly identifies a collision with the publisher-managed `sce_sys/about` directory.
 - Engineering commit 470ea26c35c61f03a9e7cce26723d217e261d523 removes only `sce_sys/about` from the disposable extracted copy before creating the Sony base GP4, asserts the directory is absent, and records the exclusion. The original PKG 002 artifact and PS4 state are untouched.
 - This is a targeted response to the exact publisher error, not a validated fix. Next gates remain Sony base creation, independent base validation and SFO readback, real patch association, patch build, independent validation, and QA.
+
+
+### Sony publisher rejects extracted PlayGo metadata (2026-11-20, run 44647270045)
+- The disposable base SFO now passes the prior APP_VER/VERSION checks, and the earlier `sce_sys/about` collision was removed from the Sony GP4 input.
+- Sony `img_create` advanced to the next exact error: `The file name is not valid. (sce_sys/playgo-chunk.dat)`. OrbisPkgTool's restructure log confirms that it moved the original Sc0 PlayGo files into Image0/sce_sys and retained them as publisher-regeneration files.
+- Engineering commit `573df16b5984a39bc5927718808e356e70ae91e8` excludes only `sce_sys/playgo-chunk.dat`, `sce_sys/playgo-chunk.sha`, and `sce_sys/playgo-manifest.xml` from the disposable Sony base-rebuild tree, records each exclusion, and leaves the original PKG 002 untouched.
+- This addresses the exact filename rejection but is not yet a proven fix. Continue only through Sony base creation, independent validation/readback, associated patch creation, independent patch validation, and QA. No PS4 deployment or installation.
