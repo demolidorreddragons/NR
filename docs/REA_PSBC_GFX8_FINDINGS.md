@@ -107,3 +107,8 @@ The NR validator now uses the independent end-of-table formula, rejects overflow
 ## Fail-closed compiler guard added
 
 The PSBC integration patch now computes the offset to the **end** of the input-usage slot table, matching the independent resolver formula, and returns `PSBC_RESULT_INTERNAL_ERROR` instead of narrowing a value greater than `0xff` into the 8-bit field. The NR workflow also asserts that this guard is present in the patched compiler. This is a fail-closed safety fix, not a layout solution: the current five shaders still exceed the representable range, so the compiler is expected to refuse them until the GNM binary layout is corrected. CI revalidation is pending (workflow patch commit `7aea386791dd4d712640239414281450c2031190`). Tracking issue: [#8](https://github.com/demolidorreddragons/NR/issues/8).
+
+
+### Offset interpretation caveat
+
+The independent sources are not fully consistent: the OpenGNM header comment says `chunkusagebaseoffsetdwords` points to `OrbShdr - offset*4`, while fpPS4's `_calc_shader_slot()` subtracts `numInputUsageSlots` additional dwords to obtain the slot start. Therefore the expected offset is 590 dwords under the start-pointer interpretation or 589 under the end-pointer interpretation. Both are outside the 8-bit field and both conflict with the emitted value 78, which resolves to 0x858 or 0x854 respectively instead of the slot table written at 0x58..0x5c. The fail-closed guard uses the fpPS4 end-pointer formula, but the exact field semantics still require confirmation from a real PS4 sample or another independent parser. This uncertainty is part of blocker issue [#8](https://github.com/demolidorreddragons/NR/issues/8).
