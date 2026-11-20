@@ -36,7 +36,7 @@ Relatório completo: [docs/RELEASE_AUDIT_006.md](RELEASE_AUDIT_006.md).
 O instalador foi alterado para não ativar o PRX imediatamente após a cópia:
 1. O PRX novo é copiado para `DEST_TMP` e verificado byte a byte, mas permanece em staging.
 2. A nova configuração `plugins.ini` também é preparada em `CONFIG_TMP`, inclusive quando a entrada do plugin já existe.
-3. Antes do commit, arquivos existentes são movidos para `*.pne-backup`. Se já houver qualquer backup, a instalação aborta sem sobrescrevê-lo.
+3. Antes do commit, arquivos existentes são movidos para `*.pne-backup`. Se esse nome já existir, a nova cópia recebe um sufixo numérico (`.001`, `.002` etc.); backups anteriores nunca são apagados nem sobrescritos. O instalador aborta somente se não conseguir reservar um nome livre ou mover os arquivos com segurança.
 4. O PRX staged e a configuração staged são promovidos. Se uma promoção falhar, o instalador tenta remover o PRX novo e restaurar os arquivos anteriores.
 5. Backups anteriores são retidos mesmo após sucesso; não são apagados automaticamente.
 
@@ -44,7 +44,11 @@ O instalador foi alterado para não ativar o PRX imediatamente após a cópia:
 
 **Recuperação manual:** antes de nova tentativa, verificar `/data/GoldHEN/plugins/ps4_neural_engine.prx.pne-backup` e `/data/GoldHEN/plugins.ini.pne-backup`. Não apagar backups automaticamente. Restaurar somente após identificar qual versão está ativa e preservar uma cópia dos logs.
 
-A revisão estática não substitui compilação, testes de falha em filesystem compatível, QA independente do PKG, nem teste de hardware. O instalador continua **não aprovado para instalação** até esses gates passarem.
+A revisão estática não substitui compilação, testes de falha em filesystem compatível, QA independente do PKG, nem teste de hardware.
+
+### Correção de colisão de backups (2026-11-20)
+
+O commit `d8c55173e4324dbf66e882d82c18a2be039aa7ce` corrige o bloqueio em que a existência de `*.pne-backup` impedia permanentemente uma atualização subsequente. Agora o instalador reserva nomes de backup exclusivos com sufixo numérico e preserva integralmente os backups anteriores. O rollback usa os caminhos efetivamente reservados. Nenhum backup existente é removido ou sobrescrito. A correção precisa passar pelo build/QA do PKG e continua sem autorização para instalação no console. O instalador continua **não aprovado para instalação** até esses gates passarem.
 
 A verificação automatizada de invariantes do instalador foi adicionada ao workflow `host-tests` e está sendo executada também na branch `feature/gcn8-numeric-kernels`. A aprovação desse teste de host não representa execução do binário no FreeBSD/Orbis nem validação de operações `rename` no filesystem do PS4.
 
