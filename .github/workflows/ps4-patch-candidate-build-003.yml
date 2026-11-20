@@ -59,7 +59,7 @@ jobs:
           $tool = "OrbisPkgTool-src/OrbisPkgTool/bin/Release/net10.0-windows/OrbisPkgTool.dll"
           if (-not (Test-Path $tool)) { throw "OrbisPkgTool DLL missing: $tool" }
 
-      - name: Download rebuilt base PKG 002 with explicit PUBTOOLINFO storage type
+      - name: Download exact validated base PKG 002
         uses: actions/download-artifact@v4
         with:
           name: ps4-neural-engine-build
@@ -132,7 +132,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "Original base SFO readback failed." }
           $baseStorage = ($baseSfoText -join "`n") -match "PUBTOOLINFO.*st_type="
           "BASE_SFO_HAS_STORAGE_TYPE=$baseStorage" | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
-          if (-not $baseStorage) { throw "Base PKG PARAM.SFO PUBTOOLINFO has no st_type; Sony img_create resolves app:unknown. Rebuild and validate the base package with explicit storage metadata before patch generation." }
+          if (-not $baseStorage) { throw "Base PKG PARAM.SFO PUBTOOLINFO has no st_type; Sony img_create resolves app:unknown. Use the exact validated base PKG 002 artifact with explicit storage metadata before patch generation." }
 
           "=== RESTRUCTURE IMAGE0 + SC0 ===" | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
           dotnet "$tool" restructure "$extract" --verbose 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
