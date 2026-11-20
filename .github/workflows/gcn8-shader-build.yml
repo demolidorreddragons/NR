@@ -29,7 +29,7 @@ jobs:
       - name: Install host compiler and shader tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential python3 python3-mako glslang-tools
+          sudo apt-get install -y build-essential python3 python3-mako glslang-tools spirv-tools
       - name: Checkout pinned shader compiler and header dependencies
         run: |
           git clone https://github.com/PS4-OpenGNM/opengnm-psbc.git .deps/opengnm-psbc
@@ -113,6 +113,11 @@ jobs:
           for shader in gemm_fp32_wave64_tiled gemm_fp32 gemm_fp16_accum e4m3_decode e4m3_encode; do
             glslangValidator -V --target-env vulkan1.1 "platform/ps4/gcn8/shaders/${shader}.comp" -o "dist/ps4/gcn8/${shader}.spv"
             test -s "dist/ps4/gcn8/${shader}.spv"
+          done
+      - name: Validate SPIR-V modules
+        run: |
+          for shader in gemm_fp32_wave64_tiled gemm_fp32 gemm_fp16_accum e4m3_decode e4m3_encode; do
+            spirv-val --target-env vulkan1.1 "dist/ps4/gcn8/\${shader}.spv"
           done
       - name: Compile SPIR-V to PS4 Pro GFX8 GNM shader binaries
         run: |
