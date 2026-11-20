@@ -162,6 +162,7 @@ jobs:
               "gcc": subprocess.check_output(["gcc", "--version"], text=True).splitlines()[0],
               "glslang": subprocess.check_output(["glslangValidator", "--version"], text=True).splitlines()[0],
               "spirv_val": subprocess.check_output(["spirv-val", "--version"], text=True).splitlines()[0],
+              "spirv_dis": subprocess.check_output(["spirv-dis", "--version"], text=True).splitlines()[0],
               "psbc_cli": subprocess.check_output([".deps/opengnm-psbc/opengnm-psbc", "-h"], text=True).splitlines()[0],
               "psbc_binary_sha256": hashlib.sha256(Path(".deps/opengnm-psbc/opengnm-psbc").read_bytes()).hexdigest(),
           }
