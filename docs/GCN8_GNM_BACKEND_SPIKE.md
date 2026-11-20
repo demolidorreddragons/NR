@@ -118,3 +118,25 @@ resolution only, not that the functions are safe to call on a given firmware.
 Neither function is invoked.
 No external runtime code has been vendored, no firmware function was called,
 and no console state was changed.
+
+
+## CI evidence update — 2026-11-20
+
+The PS4 PRX/PKG workflow now completes the GNM API/ABI compile smoke and the
+firmware-import link smoke. Run
+[44673126332](https://github.com/demolidorreddragons/NR/actions/runs/44673126332)
+completed successfully on commit `df22fe1453cdb98b7fd9d6f7bf6388e3b614968e`.
+The earlier link failure was caused by referencing the GoldHEN SDK's
+`build/crtprx.o` before that object existed. The smoke ELF now links the
+GNM import library without that unrelated startup object.
+
+This verifies compile-time declarations and link-time import resolution only.
+It does not prove firmware runtime availability on a particular console,
+valid resource binding, command submission, synchronization, or GPU execution.
+
+A separate workflow, `.github/workflows/gcn8-shader-build.yml`, now pins
+`opengnm-psbc` and its header dependencies, builds the host compiler, compiles
+the NR tiled GEMM shader for the GFX8/NEO target, and runs the upstream shader
+container verifier. Its first CI run is the acceptance gate; no shader binary
+is considered delivered until that workflow succeeds and the artifact is
+inspected.
