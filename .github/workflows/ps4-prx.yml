@@ -59,12 +59,25 @@ jobs:
           s = p.read_text(encoding="utf-8-sig")
           old = 'sfo["PUBTOOLINFO"] = new SFO.Utf8Value("PUBTOOLINFO", date+time+sizeInfo, 0x200);'
           new = 'sfo["PUBTOOLINFO"] = new SFO.Utf8Value("PUBTOOLINFO", date+time+sizeInfo+",st_type=digital50", 0x200);'
-          if s.count(old) != 1:
-              raise SystemExit("Expected unique upstream PUBTOOLINFO assignment was not found; refusing an ambiguous patch.")
-          p.write_text(s.replace(old, new), encoding="utf-8")
-          if new not in p.read_text(encoding="utf-8"):
-              raise SystemExit("Patched PkgBuilder source verification failed.")
-          print("PKG_BUILDER_PATCH=verified; st_type=digital50 is appended after calculated sizes")
+          copy_before = '        pkg.ParamSfo = new SfoEntry(sfo);'
+          copy_after = '        pkg.ParamSfo = new SfoEntry(sfo);'
+          if s.count(old) != 1 or s.count(copy_before) != 1:
+              raise SystemExit("Expected unique upstream SFO metadata/copy anchors were not found; refusing an ambiguous patch.")
+          s = s.replace(old, new)
+          # Upstream copied the SFO into pkg.ParamSfo before changing PUBTOOLINFO.
+          # Move that copy after both metadata fields are finalized, or the PKG still embeds the stale SFO.
+          s = s.replace(copy_before + "\\n", "", 1)
+          marker = '        sfo["PUBTOOLVER"] = new SFO.IntegerValue("PUBTOOLVER", 0x02890000);'
+          if s.count(marker) != 1:
+              raise SystemExit("Expected unique PUBTOOLVER finalization anchor was not found.")
+          s = s.replace(marker, marker + "\\n" + copy_after, 1)
+          p.write_text(s, encoding="utf-8")
+          check = p.read_text(encoding="utf-8")
+          if new not in check or check.index(new) > check.index(copy_after):
+              raise SystemExit("PUBTOOLINFO storage metadata is not copied into the final package SFO.")
+          if check.index(copy_after) < check.index(marker):
+              raise SystemExit("SFO copy still occurs before PUBTOOLVER finalization.")
+          print("PKG_BUILDER_PATCH=verified; final SFO copy now occurs after PUBTOOLINFO/PUBTOOLVER updates")
           PY
           dotnet publish LibOrbisPkg-src/PkgTool.Core/PkgTool.Core.csproj -c Release -r linux-x64 --self-contained false -o "$RUNNER_TEMP/pkgtool-patched"
           test -x "$RUNNER_TEMP/pkgtool-patched/PkgTool.Core"
