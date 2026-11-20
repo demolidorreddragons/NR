@@ -10,7 +10,8 @@ renderer or a tuned production backend.
 |---|---|---|
 | `shaders/e4m3_decode.comp` | E4M3FN byte stream to FP32 | Model upload / validation |
 | `shaders/e4m3_encode.comp` | FP32 to nearest E4M3FN code, ties-to-even | Offline quantization / fixtures |
-| `shaders/gemm_fp32.comp` | Row-major GEMM, FP32 FMA accumulation | Scalar correctness baseline |\n| `shaders/gemm_fp32_wave64_tiled.comp` | 16x16 output tile, 64 lanes, LDS staging, 2x2 outputs/lane | GCN8-oriented FP32 bring-up baseline |
+| `shaders/gemm_fp32.comp` | Row-major GEMM, FP32 FMA accumulation | Scalar correctness baseline |
+| `shaders/gemm_fp32_wave64_tiled.comp` | 16x16 output tile, 64 lanes, LDS staging, 2x2 outputs/lane | GCN8-oriented FP32 bring-up baseline |
 | `shaders/gemm_fp16_accum.comp` | FP16-rounded operands and accumulator | Numerical emulation / parity |
 
 The E4M3 format is finite-only E4M3FN: exponent bias 7, subnormals at
@@ -58,11 +59,12 @@ record VGPR/SGPR/LDS and scratch metadata, then run warm-up plus at least 100
 timed dispatches on PS4 Pro using GPU timestamps. Report median, p95, variance,
 effective GFLOP/s, and max absolute/RMS error against a double-precision
 reference for aligned and edge dimensions.
-\n## ABI
+
+## ABI
 
 All kernels use GLSL 4.50 compute, std430 storage buffers, and a small push
 constant block. The host must bind four-byte-aligned buffers and dispatch
-ceil(N/8) x ceil(M/8) for GEMM, and ceil(element_count/256) groups for E4M3
+ceil(N/16) x ceil(M/16) for the 16x16 tiled GEMM; scalar kernels must use their own local size and dispatch contract, and ceil(element_count/256) groups for E4M3
 conversion (64 workgroups lanes, four values per invocation).
 
 The host must provide valid C storage even when beta is zero; a later optimized
