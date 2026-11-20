@@ -57,6 +57,12 @@ jobs:
           EOF
           test -f ../SPIRV-Headers/include/spirv/spir-v.xml
           test -f ../Vulkan-Headers/include/vulkan/vulkan.h
+      - name: Generate Mesa format enum header required by PSBC
+        working-directory: .deps/opengnm-psbc
+        run: |
+          mkdir -p src/util/format
+          python3 src/util/format/u_format_table.py src/util/format/u_format.yaml --enums > src/util/format/u_format_gen.h
+          test -s src/util/format/u_format_gen.h
       - name: Build pinned opengnm-psbc host compiler
         working-directory: .deps/opengnm-psbc
         run: |
