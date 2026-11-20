@@ -62,8 +62,8 @@ ContractError make_gemm_dispatch(const GemmParams& p,
         return ContractError::output_aliases_input;
 
     dispatch->params = p;
-    dispatch->groups_x = (p.n + 15u) / 16u;
-    dispatch->groups_y = (p.m + 15u) / 16u;
+    dispatch->groups_x = p.n / 16u + (p.n % 16u != 0u);
+    dispatch->groups_y = p.m / 16u + (p.m % 16u != 0u);
     dispatch->a_required_bytes = a_bytes;
     dispatch->b_required_bytes = b_bytes;
     dispatch->c_required_bytes = c_bytes;
