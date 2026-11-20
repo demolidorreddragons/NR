@@ -47,6 +47,28 @@ static_assert(kOutputOffset + kElementCount * sizeof(float) <= kFenceOffset,
 static_assert(kFenceOffset + sizeof(uint32_t) <= kDirectBytes,
               "fence exceeds direct allocation");
 
+struct Logger {
+    FILE* file = nullptr;
+    FILE* fallback = stdout;
+
+    explicit Logger(const char* path) {
+        if (path && path[0]) file = std::fopen(path, "ab");
+    }
+    ~Logger() { if (file) std::fclose(file); }
+
+    void line(const char* key, uint64_t value) {
+        FILE* out = file ? file : fallback;
+        std::fprintf(out, "%s=0x%llx\n", key,
+                     static_cast<unsigned long long>(value));
+        std::fflush(out);
+    }
+    void message(const char* text) {
+        FILE* out = file ? file : fallback;
+        std::fprintf(out, "%s\n", text);
+        std::fflush(out);
+    }
+};
+
 struct DirectAllocation {
     off_t direct_offset = 0;
     void* mapped = nullptr;
@@ -82,28 +104,6 @@ struct DirectAllocation {
         if (keep_until_process_exit) return;
         if (mapped) sceKernelMunmap(mapped, kDirectBytes);
         if (allocated) sceKernelReleaseDirectMemory(direct_offset, kDirectBytes);
-    }
-};
-
-struct Logger {
-    FILE* file = nullptr;
-    FILE* fallback = stdout;
-
-    explicit Logger(const char* path) {
-        if (path && path[0]) file = std::fopen(path, "ab");
-    }
-    ~Logger() { if (file) std::fclose(file); }
-
-    void line(const char* key, uint64_t value) {
-        FILE* out = file ? file : fallback;
-        std::fprintf(out, "%s=0x%llx\n", key,
-                     static_cast<unsigned long long>(value));
-        std::fflush(out);
-    }
-    void message(const char* text) {
-        FILE* out = file ? file : fallback;
-        std::fprintf(out, "%s\n", text);
-        std::fflush(out);
     }
 };
 
