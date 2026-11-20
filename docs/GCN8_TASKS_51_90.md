@@ -33,7 +33,7 @@ This ledger records the next 40 work items. A task is **DONE** only when its sta
 | 67 | Validate GNM containers and CRCs | **IMPLEMENTED — CI REVALIDATION PENDING** | Added code-range/slot bounds checks plus negative controls for truncated header and corrupted CRC; must run on real compiler output. |
 | 68 | Generate immutable shader artifact manifest | **IMPLEMENTED — CI REVALIDATION PENDING** | Container report now records source/SPIR-V/GNM hashes, sizes and pinned compiler/dependency revisions; report is included in uploaded artifact. |
 | 69 | Extract raw OrbShdr metadata | **IMPLEMENTED — CI REVALIDATION PENDING** | Workflow now bounds-checks and records all CS input-usage slots, common shader data, raw CS register words, and static SPIR-V local sizes. |
-| 70 | Decode ISA and resource/register metadata | **PENDING** | Disassembly and independently checked VGPR/SGPR/LDS/scratch/wave/resource interpretation. |
+| 70 | Decode ISA and resource/register metadata | **PARTIAL — LLVM GFX8 DISASSEMBLY GATE IMPLEMENTED** | Workflow extracts raw code and runs LLVM MC for Tonga/GFX8; VGPR/SGPR/LDS/scratch/resource interpretation and independent review remain open. |
 
 ## Phase 13 — GNM compute backend
 
@@ -109,3 +109,6 @@ The pinned GNM memory/submission investigation is recorded in `docs/REA_GNM_MEMO
 Task 69 extraction was expanded in commits `9fdef49f7186e07500596e74b4ab223ac45b39bb` and `e3bce82e8261bc7a37db4a7765c39cc091076755`. The report preserves raw register words only; no register bitfield semantics or resource ABI are inferred. It also records SPIR-V LocalSize for each entry point. CI must produce and validate actual compiler output before the task is accepted.
 
 - GNM report validation now cross-checks the three compiled CS thread dimensions against the SPIR-V `LocalSize` and verifies the CS program-code offset against the declared header size (commit `5750d92768846cfea35f0d902a3a024a65cdd432`). This is a consistency check, not ISA register decoding or proof of runtime dispatch.
+
+
+Task 70 now has a disassembly pipeline in commit `634bb64c7f7d96e328b69c553706db712cade08b`, with target-probe correction in `3016a8a310143bbef524ebb9c06e936fb43851f2`. CI installs LLVM 18, extracts the exact GCN code range, preserves raw code bytes, and disassembles with the AMDGCN Tonga target. The `.isa` output and hashes are included in the artifact. This is not yet a register-resource audit: VGPR/SGPR/LDS/scratch values still require interpretation of raw CS registers and corroboration against decoded ISA.
