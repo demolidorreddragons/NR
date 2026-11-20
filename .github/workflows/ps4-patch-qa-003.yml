@@ -1,0 +1,131 @@
+name: PS4 Patch QA 003
+
+on:
+  workflow_run:
+    workflows: ["PS4 Patch Candidate Build 003"]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  independent-package-audit:
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: windows-latest
+    steps:
+      - name: Checkout Neural Engine
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - name: Checkout independent package inspector
+        uses: actions/checkout@v4
+        with:
+          repository: pearlxcore/OrbisPkgTool
+          ref: 3de6da849b64a8ad0d5ba00dd4e8919934b868b0
+          path: OrbisPkgTool-src
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Download candidate from completed build
+        uses: actions/download-artifact@v4
+        with:
+          name: PS4-Neural-Engine-003-patch-candidate
+          path: qa-candidate
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+
+      - name: Download exact base PKG 002 artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ps4-neural-engine-build
+          path: qa-base
+          run-id: 44644315395
+          github-token: ${{ github.token }}
+
+      - name: Build independent inspector
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          dotnet build OrbisPkgTool-src/OrbisPkgTool/OrbisPkgTool.csproj --configuration Release
+          if ($LASTEXITCODE -ne 0) { throw "Independent inspector build failed." }
+          $tool = "OrbisPkgTool-src/OrbisPkgTool/bin/Release/net10.0-windows/OrbisPkgTool.dll"
+          if (-not (Test-Path $tool)) { throw "Independent inspector DLL missing." }
+          "TOOL=$tool" | Out-File "$env:RUNNER_TEMP\qa-tool.txt"
+
+      - name: Independently audit patch relationship, metadata, payload and hashes
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $tool = (Get-Content "$env:RUNNER_TEMP\qa-tool.txt" | Select-Object -First 1).Substring(5)
+          $pkg = Join-Path $env:GITHUB_WORKSPACE "qa-candidate/PS4-Neural-Engine-003-CANDIDATE.pkg"
+          $gp4 = Join-Path $env:GITHUB_WORKSPACE "qa-candidate/PS4-Neural-Engine-003.gp4"
+          $report = Join-Path $env:GITHUB_WORKSPACE "qa-candidate/build-report.txt"
+          $base = Join-Path $env:GITHUB_WORKSPACE "qa-base/pkg/PS4-Neural-Engine-002.pkg"
+          if (-not (Test-Path $pkg) -or -not (Test-Path $gp4) -or -not (Test-Path $base)) { throw "Required candidate, GP4, or exact base artifact missing." }
+          New-Item -ItemType Directory -Force -Path qa-output | Out-Null
+
+          $baseHash = (Get-FileHash -Algorithm SHA256 $base).Hash
+          $candidateHash = (Get-FileHash -Algorithm SHA256 $pkg).Hash
+          $reportText = Get-Content $report -Raw
+          $expectedHash = [regex]::Match($reportText, "CANDIDATE_PKG_SHA256=([A-Fa-f0-9]{64})").Groups[1].Value
+          if (-not $expectedHash -or $candidateHash -ne $expectedHash) { throw "Candidate SHA-256 does not match engineering report." }
+          "BASE_PKG_SHA256=$baseHash" | Out-File qa-output/qa-report.txt
+          "CANDIDATE_PKG_SHA256=$candidateHash" | Out-File qa-output/qa-report.txt -Append
+
+          [xml]$project = Get-Content $gp4
+          $volume = $project.psproject.volume.volume_type
+          $storage = $project.psproject.volume.package.storage_type
+          $appPath = $project.psproject.volume.package.app_path
+          if ($volume -ne "pkg_ps4_patch") { throw "GP4 is not pkg_ps4_patch." }
+          if ($storage -ne "digital25") { throw "Patch GP4 storage type mismatch." }
+          if ([IO.Path]::GetFileName($appPath) -ne "PS4-Neural-Engine-002.pkg") { throw "GP4 does not reference the exact original PKG 002: $appPath" }
+          "GP4_VOLUME_TYPE=$volume" | Out-File qa-output/qa-report.txt -Append
+          "GP4_STORAGE_TYPE=$storage" | Out-File qa-output/qa-report.txt -Append
+          "GP4_APP_PATH=$appPath" | Out-File qa-output/qa-report.txt -Append
+          "GP4_FILE_COUNT=$($project.psproject.files.file.Count)" | Out-File qa-output/qa-report.txt -Append
+          if ($project.psproject.files.file.Count -lt 3) { throw "GP4 payload is incomplete." }
+
+          dotnet "$tool" validate "$base" 2>&1 | Tee-Object qa-output/base-validation.txt
+          if ($LASTEXITCODE -ne 0) { throw "Independent base PKG validation failed." }
+          dotnet "$tool" validate "$pkg" 2>&1 | Tee-Object qa-output/candidate-validation.txt
+          if ($LASTEXITCODE -ne 0) { throw "Independent candidate PKG validation failed." }
+
+          $baseOut = Join-Path $env:RUNNER_TEMP "qa-base-extracted"
+          $patchOut = Join-Path $env:RUNNER_TEMP "qa-patch-extracted"
+          dotnet "$tool" extract "$base" "$baseOut" --verbose 2>&1 | Tee-Object qa-output/base-extract.txt
+          if ($LASTEXITCODE -ne 0) { throw "Base extraction failed." }
+          dotnet "$tool" extract "$pkg" "$patchOut" --verbose 2>&1 | Tee-Object qa-output/candidate-extract.txt
+          if ($LASTEXITCODE -ne 0) { throw "Candidate extraction failed." }
+
+          $baseSfo = Get-ChildItem $baseOut -Recurse -File -Filter param.sfo | Select-Object -First 1
+          $patchSfo = Get-ChildItem $patchOut -Recurse -File -Filter param.sfo | Select-Object -First 1
+          if (-not $baseSfo -or -not $patchSfo) { throw "Base or patch PARAM.SFO missing." }
+          $baseText = (dotnet "$tool" sfo read "$($baseSfo.FullName)" 2>&1) -join "`n"
+          $patchText = (dotnet "$tool" sfo read "$($patchSfo.FullName)" 2>&1) -join "`n"
+          if ($baseText -notmatch "CATEGORY = gde" -or $baseText -notmatch "st_type=digital50") { throw "Base metadata is not the expected gde/digital50 app." }
+          foreach ($required in @("CATEGORY = gpe","APP_VER = 01.01","CONTENT_ID = IV0000-PNEU00001_00-PS4NEURALENG0000","TITLE_ID = PNEU00001","st_type=digital25")) {
+            if ($patchText -notmatch [regex]::Escape($required)) { throw "Patch SFO missing expected metadata: $required" }
+          }
+          foreach ($relative in @("eboot.bin","ps4_neural_engine.prx","sce_sys/changeinfo/changeinfo.xml")) {
+            if (-not (Get-ChildItem $patchOut -Recurse -File | Where-Object { $_.FullName.EndsWith($relative,[StringComparison]::OrdinalIgnoreCase) })) { throw "Patch payload missing: $relative" }
+          }
+          "BASE_CATEGORY=gde" | Out-File qa-output/qa-report.txt -Append
+          "PATCH_CATEGORY=gpe" | Out-File qa-output/qa-report.txt -Append
+          "PATCH_APP_VER=01.01" | Out-File qa-output/qa-report.txt -Append
+          "QA_STATUS=PASS_PC_ONLY_NOT_HARDWARE_TESTED" | Out-File qa-output/qa-report.txt -Append
+          Get-Content qa-output/qa-report.txt | Out-File $env:GITHUB_STEP_SUMMARY -Append
+
+      - name: Upload independent QA evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: PS4-Neural-Engine-003-independent-QA
+          path: qa-output/*
+          if-no-files-found: warn
+          retention-days: 30
