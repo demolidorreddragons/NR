@@ -68,6 +68,20 @@ class GnmSlotOffsetTests(unittest.TestCase):
         with self.assertRaises(OverflowError):
             expected_offset(0x990, 0x58, 1)
 
+    def test_maximum_code_size_with_one_header_slot(self):
+        # The slot starts at 0x58; code starts immediately after its 4-byte entry.
+        # OrbShdr must remain within 255 dwords of the slot-table start.
+        max_code_bytes = 0xff * 4 - 4
+        self.assertEqual(max_code_bytes, 1016)
+        orb = 0x5c + max_code_bytes
+        self.assertEqual(expected_offset(orb, 0x58, 1), 0xff)
+
+    def test_code_size_one_dword_over_limit_is_rejected(self):
+        max_code_bytes = 0xff * 4 - 4
+        orb = 0x5c + max_code_bytes + 4
+        with self.assertRaises(OverflowError):
+            expected_offset(orb, 0x58, 1)
+
     def test_zero_slots_use_zero_offset(self):
         self.assertEqual(expected_offset(0x990, 0x58, 0), 0)
 
