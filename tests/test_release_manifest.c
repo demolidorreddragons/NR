@@ -126,6 +126,16 @@ int main(void) {
     assert(pne_validate_release_manifest(manifest_path, prx_path, error, sizeof(error)) == 0);
     assert(strstr(error, "malformed") != NULL);
 
+    const char unknown_key[] =
+        "schema=1\nrelease_number=006\ninstaller_version=1\napp_version=01.02\n"
+        "title_id=PNEU00001\ncontent_id=IV0000-PNEU00001_00-PS4NEURALENG0000\n"
+        "prx_file=ps4_neural_engine.prx\nprx_sha256=ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad\n"
+        "abi_status=unverified\nhardware_status=not_tested\n"
+        "prx_shaa256=ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad\n";
+    write_text(manifest_path, unknown_key);
+    assert(pne_validate_release_manifest(manifest_path, prx_path, error, sizeof(error)) == 0);
+    assert(strstr(error, "unknown manifest key") != NULL);
+
     unlink(manifest_path);
     unlink(prx_path);
     rmdir(directory);
