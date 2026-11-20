@@ -1,9 +1,10 @@
 name: GCN8 shader compiler and GEMM binary
 
 concurrency:
-  # Push and pull_request events for the same commit must not cancel each other.
-  group: gcn8-shader-build-${{ github.event_name }}-${{ github.ref }}
-  cancel-in-progress: true
+  # Keep an active pinned compiler build alive while follow-up commits queue.
+  # The output must correspond to one immutable commit, not a canceled partial run.
+  group: gcn8-shader-build-${{ github.ref }}
+  cancel-in-progress: false
 
 on:
   workflow_dispatch:
