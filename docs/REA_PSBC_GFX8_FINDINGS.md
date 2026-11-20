@@ -169,3 +169,10 @@ For the tiled kernel, compiler metadata reports 16 VGPRs, 32 SGPRs, 2,048 bytes 
 The GFX8 workflow now passes a second verification path after compilation. The NR C++ parser accepted all five real `.sb` files, checking NEO compute stage, CS header/slot-table sizes, indirect resource-table slot, code range and raw register block. The Python verifier then compared each report record with actual source, SPIR-V, container, extracted GCN code and ISA bytes; it independently decoded the raw `COMPUTE_PGM_RSRC1/2` words using the pinned Mesa GFX8 register database and compared derived VGPR/SGPR/LDS/scratch/user-SGPR fields. The previously missing `spirv_bytes` field is now emitted and included in `spirv-manifest.json` provenance.
 
 Run `44743915113` passed every step. Artifact `14631648737`, ZIP SHA-256 `a722c2e67e8138b086cd8c6569850bb054277298339b4a23ea8e45d9ce337586`; detailed report: `docs/GCN8_GFX8_ARTIFACT_44743915113.md`. This is independent host-side byte/register cross-checking, not a clean-room REA-5 review or hardware test. REA-5 remains **NOT EXECUTED**.
+
+
+## Corrected indirect resource-table pointer width
+
+The raw GNM input-usage slot for all five shaders has control byte `0x00`; in the pinned OpenGNM definition this leaves `GnmInputUsageSlot.registercount=0`. PSBC's `libpsbc/psbc_compile.c` emits the indirect table slot by setting only `usagetype` and `startregister`, and its descriptor ABI comment explicitly says `address32_hi=0`. The tiled GEMM ISA loads the table base from SGPR `s2`; SGPR `s3` is used by the shader for scalar values. Therefore the table pointer is one 32-bit CS user SGPR at register 2. A two-dword pointer write would overwrite SGPR3 and is incorrect.
+
+The local PM4 writer and host packet contract were corrected to emit a three-dword `SET_SH_REG` packet (`0xC0017602`, offset `0x242`, low address only). The earlier two-dword test is superseded; corrected host/PRX CI revalidation is pending. No GPU dispatch has occurred.
