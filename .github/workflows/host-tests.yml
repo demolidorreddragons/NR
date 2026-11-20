@@ -21,7 +21,8 @@ jobs:
           assert 'fstat(' not in installer, 'installer must not trust PS4 fstat size values'
           assert 'PRX read-back verification failed' in installer, 'installer must verify copied PRX bytes'
           assert 'static ssize_t read_retry' in installer, 'installer must retry EINTR independently for each read'
-          assert 'read_retry(verify_src' in installer and 'read_retry(verify_dst' in installer, 'both verification streams must use EINTR-safe reads'
+          assert 'static ssize_t read_block' in installer, 'verification must accumulate short reads'
+          assert 'read_block(verify_src' in installer and 'read_block(verify_dst' in installer, 'both streams must use full-block reads'
           print('Installer copy verification checks passed')
           PY
       - name: Configure
