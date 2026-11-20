@@ -71,7 +71,7 @@ struct Logger {
     FILE* fallback = stdout;
 
     explicit Logger(const char* path) {
-        if (path && path[0]) file = std::fopen(path, "wb");
+        if (path && path[0]) file = std::fopen(path, "ab");
     }
     ~Logger() { if (file) std::fclose(file); }
 
