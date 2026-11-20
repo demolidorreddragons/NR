@@ -78,3 +78,5 @@ jobs:
           Write-Host "PLUGIN_FILE_COUNT=$($pluginFiles.Count)"
           Write-Host "GOLDHEN_FILE_COUNT=$($goldhenFiles.Count)"
           Write-Host "PNE_TRANSACTION_DIAGNOSTICS_READ_ONLY_COMPLETE"
+
+# Re-run read-only PS4 transaction diagnostics.
