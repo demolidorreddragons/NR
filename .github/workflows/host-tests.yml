@@ -32,13 +32,22 @@ jobs:
           assert 'O_CREAT | O_EXCL' in installer, 'staging files must be created exclusively'
           assert 'O_TRUNC' not in installer, 'installer must never truncate a pre-existing staging path'
           assert 'fdopen(fd, "wb")' in installer, 'staged config must wrap the exclusively-created descriptor'
+          assert 'pne_validate_release_manifest(RELEASE_MANIFEST, SOURCE_PRX' in installer, 'installer must verify release identity and PRX hash'
+          assert installer.index('pne_validate_release_manifest(RELEASE_MANIFEST, SOURCE_PRX') < installer.index('mkdir("/data/GoldHEN"'), 'manifest/hash validation must precede destination writes'
+          assert 'RELEASE_MANIFEST "/app0/pne-release.ini"' in installer, 'installer manifest path missing'
           build_script = Path('tools/build_pkg.sh').read_text()
+          assert 'installer/sha256.c' in build_script and 'installer/release_manifest.c' in build_script, 'installer integrity objects must be linked'
           assert 'PRX_SHA256=' in build_script, 'PKG build must calculate the staged PRX SHA-256'
           assert 'pne-release.ini' in build_script, 'PKG must include the release manifest'
           assert 'manifest and PRX SHA-256 match' in build_script, 'PKG extraction must verify manifest against PRX'
           assert 'abi_status=unverified' in build_script and 'hardware_status=not_tested' in build_script, 'manifest must not claim unproven compatibility'
           print('Installer transaction and release-manifest invariants passed')
           PY
+      - name: Test installer release manifest and SHA-256
+        run: |
+          mkdir -p "$RUNNER_TEMP/pne-installer-test"
+          cc -std=c11 -Wall -Wextra -Werror -Iinstaller installer/sha256.c installer/release_manifest.c tests/test_release_manifest.c -o "$RUNNER_TEMP/pne-installer-test/test_release_manifest"
+          "$RUNNER_TEMP/pne-installer-test/test_release_manifest"
       - name: Validate GCN8 numeric reference and tiled mapping
         run: python3 tools/test_gcn8_numeric.py
       - name: Validate model input intake verifier
