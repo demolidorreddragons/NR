@@ -161,6 +161,32 @@ jobs:
           "QA_STATUS=PASS_PC_ONLY_NOT_HARDWARE_TESTED" | Out-File qa-output/qa-report.txt -Append
           Get-Content qa-output/qa-report.txt | Out-File $env:GITHUB_STEP_SUMMARY -Append
 
+      - name: Prepare QA-approved package artifact
+        if: success()
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $pkg = Join-Path $env:GITHUB_WORKSPACE "qa-candidate/PS4-Neural-Engine-003-CANDIDATE.pkg"
+          if (-not (Test-Path $pkg)) { throw "QA-approved candidate package is missing." }
+          $report = Join-Path $env:GITHUB_WORKSPACE "qa-output/qa-report.txt"
+          if (-not (Test-Path $report)) { throw "Independent QA report is missing." }
+          $candidateHash = (Get-FileHash -Algorithm SHA256 $pkg).Hash
+          $reportText = Get-Content $report -Raw
+          if ($reportText -notmatch [regex]::Escape("CANDIDATE_PKG_SHA256=$candidateHash")) { throw "QA report does not attest to the candidate package hash." }
+          Copy-Item $pkg "qa-output/PS4-Neural-Engine-003-QA-APPROVED.pkg"
+          Write-Host "QA_APPROVED_PACKAGE_SHA256=$candidateHash"
+
+      - name: Upload QA-approved package for PS4 staging
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: PS4-Neural-Engine-003-QA-APPROVED
+          path: |
+            qa-output/PS4-Neural-Engine-003-QA-APPROVED.pkg
+            qa-output/qa-report.txt
+          if-no-files-found: error
+          retention-days: 7
+
       - name: Upload independent QA evidence
         if: always()
         uses: actions/upload-artifact@v4
