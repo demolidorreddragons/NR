@@ -52,6 +52,8 @@ jobs:
         run: python3 tools/test_gcn8_numeric.py
       - name: Validate GNM input-usage offset arithmetic
         run: python3 tools/test_gnm_slot_offsets.py
+      - name: Validate DLSS-NR 71-block tensor layout formulas
+        run: python3 tests/test_dlssnr_layout_formulas.py
       - name: Validate model input intake verifier
         run: python3 tests/test_verify_model_inputs.py
       - name: Configure
