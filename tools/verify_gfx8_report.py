@@ -18,6 +18,7 @@ EXPECTED_SHADERS = {
     "gemm_fp16_accum",
     "e4m3_decode",
     "e4m3_encode",
+    "compute_smoke_add",
 }
 EXPECTED_COMMITS = {
     "psbc_commit": "28697f007862427ebec54388ec972ce6e3545912",
@@ -53,8 +54,8 @@ def require(condition: bool, message: str) -> None:
 def verify(artifact_dir: Path) -> dict:
     report_path = artifact_dir / "gnm-container-report.json"
     report = json.loads(report_path.read_text(encoding="utf-8"))
-    require(isinstance(report, list) and len(report) == 5,
-            "report must contain exactly five shader records")
+    require(isinstance(report, list) and len(report) == 6,
+            "report must contain exactly six shader records")
     names = {record.get("shader") for record in report}
     require(names == EXPECTED_SHADERS,
             f"shader set mismatch: {sorted(names)}")
