@@ -37,6 +37,10 @@ int main() {
                               av, bv, cv, ov, &d) == ContractError::shader_index_overflow);
     assert(make_gemm_dispatch({1u, 1u, UINT32_MAX, 1.0f, 0.0f},
                               av, bv, cv, ov, &d) == ContractError::shader_index_overflow);
+    assert(make_gemm_dispatch({UINT32_MAX - 14u, 1u, 1u, 1.0f, 0.0f},
+                              av, bv, cv, ov, &d) == ContractError::shader_index_overflow);
+    assert(make_gemm_dispatch({1u, UINT32_MAX - 14u, 1u, 1.0f, 0.0f},
+                              av, bv, cv, ov, &d) == ContractError::shader_index_overflow);
     assert(make_gemm_dispatch({UINT32_MAX, UINT32_MAX, 1, 1.0f, 0.0f},
                               av, bv, cv, ov, &d) == ContractError::size_overflow);
     return 0;
