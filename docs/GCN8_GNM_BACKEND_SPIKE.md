@@ -24,11 +24,15 @@ include:
 - `include/gnm_shaderbinary.h`: shader binary container definitions.
 - `include/gnm_helpers.h`: helper APIs, including direct-memory utilities.
 
-The documented direct dispatch entry point accepts a command buffer, its
-available DWORD count, thread-group dimensions, and flags. It only emits a
-dispatch packet; it does not allocate GPU memory, create resource descriptors,
-bind storage buffers, set push constants, submit the command buffer, or wait
-for GPU completion. Those remain separate backend responsibilities.
+The pinned headers provide two layers: the low-level runtime declarations in
+`gnmdriver.h` and typed command-buffer helpers in
+`gnm_drawcommandbuffer.h`. The latter exposes `sceGnmDrawCmdSetCsShader`,
+`sceGnmDrawCmdSetVsharpUserData`, `sceGnmDrawCmdSetPointerUserData`, and
+`sceGnmDrawCmdDispatchDirect`. These are enough to type-check a first command
+recording path, but not to claim a working compute backend. Dispatch only emits
+a packet; memory allocation, descriptor construction, shader register
+metadata, user-data slot mapping, command submission, synchronization, and
+completion handling remain separate responsibilities.
 
 The companion `opengnm-psbc` project documents SPIR-V-to-GNM shader binary
 compilation and lists GFX8/Polaris as a supported target. This is a plausible
@@ -58,8 +62,10 @@ emission test with a successful PS4 Pro compute dispatch.
 
 ## Integration gates
 
-- [ ] Pin and vendor or fetch the exact opengnm revision; audit its build flags,
-      exported symbols, and firmware delegation path.
+- [x] Pin the exact opengnm header revision and compile a PS4-targeted,
+      compile-only API/ABI smoke test (`tests/gcn8_gnm_api_smoke.cpp`).
+- [ ] Audit runtime symbol availability, firmware delegation, and link behavior;
+      header declarations alone do not prove exports.
 - [ ] Build a minimal PS4 PRX link-smoke using the typed GNM declarations.
 - [ ] Compile the existing tiled shader to a GFX8 GNM binary with a pinned
       opengnm-psbc revision; inspect CS metadata and resource usage.
@@ -81,5 +87,8 @@ emission test with a successful PS4 Pro compute dispatch.
 - opengnm-psbc compiler:
   https://github.com/PS4-OpenGNM/opengnm-psbc
 
-This audit is a design input only. No external code has been vendored, no
-firmware function was called, and no console state was changed.
+The compile-only smoke test checks function-pointer signatures and the sizes
+of `GnmBuffer`, `GnmCommandBuffer`, `GnmCsStageRegisters`, and `GnmCsShader`
+against the pinned headers. It does not link against or call firmware exports.
+No external runtime code has been vendored, no firmware function was called,
+and no console state was changed.
