@@ -1,0 +1,90 @@
+name: Restore audited PS4 Neural Engine full installer 005
+
+on:
+  push:
+    branches: [main]
+    paths: [".github/workflows/ps4-restore-full-installer-005.yml"]
+
+permissions:
+  contents: read
+
+jobs:
+  restore-installer:
+    if: ${{ github.event.head_commit.message == 'Restore audited full installer 005 to package folder' }}
+    runs-on: [self-hosted, Windows, X64, ps4-lan]
+    timeout-minutes: 10
+    steps:
+      - name: Restore archived full installer and verify FTP readback
+        shell: powershell -ExecutionPolicy Bypass -File {0}
+        env:
+          PS4_IP: ${{ vars.PS4_IP }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          if (-not $env:PS4_IP) { throw "PS4_IP repository variable is missing." }
+
+          $creds = "anonymous:anonymous@example.com"
+          $hostUrl = "ftp://$($env:PS4_IP):2121/"
+          $archiveName = "PS4-Neural-Engine-005-86248bc8f6e3.pkg"
+          $oldPatch = "PS4-Neural-Engine-003-7338CBFE82EA.pkg"
+          $targetName = "PS4-Neural-Engine-INSTALL-005-86248BC8F6E3.pkg"
+          $expectedBytes = 6619136L
+          $expectedHash = "86248bc8f6e393c6c6db3ac69821f928ee5c743a1f30b0770b25b24088228ece"
+          $sourceUrl = "ftp://$($env:PS4_IP):2121/data/pkg/old_versions/$archiveName"
+          $targetUrl = "ftp://$($env:PS4_IP):2121/data/pkg/$targetName"
+
+          function Get-FtpNames([string]$path) {
+            $url = "ftp://$($env:PS4_IP):2121$path"
+            $result = & curl.exe --fail --silent --show-error --ftp-pasv --list-only --user $creds $url 2>&1
+            if ($LASTEXITCODE -ne 0) { throw "Cannot list $path; no files changed. $result" }
+            return @($result | ForEach-Object { ([string]$_).Trim() } | Where-Object { $_ })
+          }
+
+          $rootBefore = @(Get-FtpNames "/data/pkg/")
+          $archiveBefore = @(Get-FtpNames "/data/pkg/old_versions/")
+          if ($rootBefore -contains $targetName) { throw "Destination already exists; refusing to overwrite $targetName" }
+          if ($archiveBefore -notcontains $archiveName) { throw "Audited installer source is missing from old_versions: $archiveName" }
+          if ($rootBefore -contains $oldPatch -and $archiveBefore -contains $oldPatch) {
+            throw "Patch archive collision; refusing to move or overwrite $oldPatch"
+          }
+
+          $localPkg = Join-Path $env:RUNNER_TEMP $archiveName
+          $download = & curl.exe --fail --silent --show-error --ftp-pasv --user $creds --output $localPkg $sourceUrl 2>&1
+          if ($LASTEXITCODE -ne 0) { throw "Could not download archived installer. $download" }
+          $localBytes = (Get-Item -LiteralPath $localPkg).Length
+          $localHash = (Get-FileHash -LiteralPath $localPkg -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($localBytes -ne $expectedBytes -or $localHash -ne $expectedHash) {
+            throw "Archived source failed identity check: bytes=$localBytes sha256=$localHash"
+          }
+          Write-Host "ARCHIVED_SOURCE_VERIFIED bytes=$localBytes sha256=$localHash"
+
+          # Preserve the rejected patch in old_versions; never delete or overwrite it.
+          if ($rootBefore -contains $oldPatch) {
+            $move = & curl.exe --fail --silent --show-error --ftp-pasv --user $creds --quote "CWD data" --quote "CWD pkg" --quote "RNFR $oldPatch" --quote "RNTO old_versions/$oldPatch" $hostUrl 2>&1
+            if ($LASTEXITCODE -ne 0) { throw "Could not archive obsolete patch $oldPatch. $move" }
+          }
+
+          $upload = & curl.exe --fail --silent --show-error --ftp-pasv --user $creds --upload-file $localPkg $targetUrl 2>&1
+          if ($LASTEXITCODE -ne 0) { throw "Installer upload failed. $upload" }
+
+          $readback = Join-Path $env:RUNNER_TEMP "readback-$targetName"
+          $download = & curl.exe --fail --silent --show-error --ftp-pasv --user $creds --output $readback $targetUrl 2>&1
+          if ($LASTEXITCODE -ne 0) { throw "Installer FTP readback failed. $download" }
+          $remoteBytes = (Get-Item -LiteralPath $readback).Length
+          $remoteHash = (Get-FileHash -LiteralPath $readback -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($remoteBytes -ne $expectedBytes -or $remoteHash -ne $expectedHash) {
+            throw "FTP readback mismatch: bytes=$remoteBytes sha256=$remoteHash"
+          }
+
+          $rootFinal = @(Get-FtpNames "/data/pkg/")
+          $archiveFinal = @(Get-FtpNames "/data/pkg/old_versions/")
+          if ($rootFinal -notcontains $targetName) { throw "Restored installer is not visible in /data/pkg/." }
+          if ($archiveFinal -notcontains $archiveName) { throw "Original archived installer was not preserved." }
+          if ($rootFinal -contains $oldPatch) { throw "Obsolete patch remains in the root package folder." }
+          if ($rootFinal.Count -ne (($rootBefore | Where-Object { $_ -ne $oldPatch }).Count + 1)) {
+            throw "Unexpected change in /data/pkg/ listing; inspect before further action."
+          }
+          Write-Host "RESTORE_AND_FTP_READBACK_VERIFIED=true"
+          Write-Host "PKG_PATH=/data/pkg/$targetName"
+          Write-Host "PKG_BYTES=$remoteBytes"
+          Write-Host "PKG_SHA256=$remoteHash"
+          Write-Host "CATEGORY=gde APP_VER=01.01 VERSION=01.01 (independently audited full base installer)"
