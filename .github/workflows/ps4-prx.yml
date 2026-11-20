@@ -12,6 +12,7 @@ on:
       - "src/**"
       - "include/**"
       - "platform/ps4/**"
+      - "tests/gcn8_gnm_api_smoke.cpp"
       - "installer/**"
       - "assets/**"
       - "tools/**"
