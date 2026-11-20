@@ -1,35 +1,50 @@
 #!/usr/bin/env python3
-"""Rasterize the official Neural Rendering SVG into the PS4 PKG icon0.png."""
+"""Build icon0.png only from the exact, approved Neural Rendering artwork.
+
+The source image is intentionally not recreated from SVG or vector primitives.
+Place the approved original at assets/neural-rendering-icon-source.png.
+"""
 from pathlib import Path
 import sys
 
-ROOT = Path(__file__).resolve().parents[1]
-SOURCE = ROOT / "assets" / "neural-rendering-logo.svg"
-OUTPUT = Path(sys.argv[1]) if len(sys.argv) > 1 else Path("sce_sys/icon0.png")
-PNG_SIGNATURE = bytes.fromhex("89504e470d0a1a0a")
-
 try:
-    import cairosvg
+    from PIL import Image
 except ImportError as exc:
-    raise SystemExit(
-        "Missing dependency cairosvg. Install it with: "
-        "python3 -m pip install cairosvg"
-    ) from exc
+    raise SystemExit("Missing Pillow. Install python3-pil before building icon0.png.") from exc
+
+ROOT = Path(__file__).resolve().parents[1]
+SOURCE = ROOT / "assets" / "neural-rendering-icon-source.png"
+OUTPUT = Path(sys.argv[1]) if len(sys.argv) > 1 else Path("sce_sys/icon0.png")
+EXPECTED_SIZE = (512, 512)
 
 if not SOURCE.is_file():
-    raise SystemExit(f"Official logo SVG not found: {SOURCE}")
+    raise SystemExit(
+        "APPROVED_ICON_SOURCE_MISSING: refusing to generate a substitute. "
+        f"Add the exact approved image at {SOURCE}."
+    )
+
+with Image.open(SOURCE) as original:
+    original.verify()
+
+with Image.open(SOURCE) as original:
+    if original.width < 512 or original.height < 512:
+        raise SystemExit(
+            f"Approved source is too small ({original.width}x{original.height}); "
+            "refusing an upscaled icon."
+        )
+    if original.width != original.height:
+        raise SystemExit(
+            f"Approved icon source must be square to preserve its exact composition; "
+            f"got {original.width}x{original.height}."
+        )
+    icon = original.convert("RGB").resize(EXPECTED_SIZE, Image.Resampling.LANCZOS)
 
 OUTPUT.parent.mkdir(parents=True, exist_ok=True)
-cairosvg.svg2png(
-    url=str(SOURCE),
-    write_to=str(OUTPUT),
-    output_width=512,
-    output_height=512,
-)
-if not OUTPUT.is_file() or OUTPUT.stat().st_size < 1024:
-    raise SystemExit("Generated icon0.png is missing or unexpectedly small.")
-
-with OUTPUT.open("rb") as stream:
-    if stream.read(8) != PNG_SIGNATURE:
-        raise SystemExit("Generated icon0.png is not a valid PNG.")
-print(f"ICON0_GENERATED={OUTPUT} ({OUTPUT.stat().st_size} bytes)")
+icon.save(OUTPUT, format="PNG", optimize=True)
+with Image.open(OUTPUT) as check:
+    check.verify()
+with Image.open(OUTPUT) as check:
+    if check.size != EXPECTED_SIZE or check.mode != "RGB":
+        raise SystemExit("Generated icon0.png failed 512x512 RGB validation.")
+print(f"ICON0_SOURCE={SOURCE}")
+print(f"ICON0_GENERATED={OUTPUT} ({OUTPUT.stat().st_size} bytes, 512x512 RGB)")
