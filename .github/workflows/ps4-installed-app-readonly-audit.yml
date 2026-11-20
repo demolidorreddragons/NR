@@ -19,6 +19,8 @@ jobs:
           if (-not $env:PS4_IP) { throw "PS4_IP variable missing." }
           $base = "ftp://$($env:PS4_IP):2121/user/app/PNEU00001/"
           $creds = "anonymous:anonymous@example.com"
+          $capture = Join-Path $env:RUNNER_TEMP "pne-installed-app-capture"
+          New-Item -ItemType Directory -Force -Path $capture | Out-Null
           Write-Host "=== INSTALLED TITLE DIRECTORY ==="
           $listing = & curl.exe --fail --silent --show-error --ftp-pasv --user $creds $base 2>&1
           if ($LASTEXITCODE -ne 0) { throw "Cannot list installed PNEU00001 directory." }
@@ -31,6 +33,8 @@ jobs:
               $item = Get-Item -LiteralPath $local
               $hash = (Get-FileHash -LiteralPath $local -Algorithm SHA256).Hash.ToLowerInvariant()
               Write-Host "INSTALLED_FILE=$name BYTES=$($item.Length) SHA256=$hash"
+              $destination = Join-Path $capture ($name.Replace("/","_"))
+              Copy-Item -LiteralPath $local -Destination $destination -Force
               if ($name -eq "sce_sys/param.sfo") {
                 $bytes = [IO.File]::ReadAllBytes($local)
                 Write-Host "PARAM_SFO_HEX=$([BitConverter]::ToString($bytes))"
@@ -42,3 +46,12 @@ jobs:
           }
           Write-Host "READ_ONLY=true"
           Write-Host "NO_FILES_WRITTEN_OR_DELETED=true"
+
+      - name: Preserve read-only installed-app evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: installed-app-files-readonly
+          path: ${{ runner.temp }}/pne-installed-app-capture/*
+          if-no-files-found: warn
+          retention-days: 3
