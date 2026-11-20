@@ -165,7 +165,7 @@ jobs:
       - name: Compile NR compute shaders to SPIR-V
         run: |
           mkdir -p dist/ps4/gcn8
-          for shader in gemm_fp32_wave64_tiled gemm_fp32 gemm_fp16_accum e4m3_decode e4m3_encode; do
+          for shader in gemm_fp32_wave64_tiled gemm_fp32 gemm_fp16_accum e4m3_decode e4m3_encode compute_smoke_add; do
             glslangValidator -V --target-env vulkan1.1 "platform/ps4/gcn8/shaders/${shader}.comp" -o "dist/ps4/gcn8/${shader}.spv"
             test -s "dist/ps4/gcn8/${shader}.spv"
           done
@@ -175,7 +175,7 @@ jobs:
           spirv-val --version
           llvm-mc-18 --version | tee /tmp/llvm-mc-version.txt
           grep -F "amdgcn" /tmp/llvm-mc-version.txt
-          for shader in gemm_fp32_wave64_tiled gemm_fp32 gemm_fp16_accum e4m3_decode e4m3_encode; do
+          for shader in gemm_fp32_wave64_tiled gemm_fp32 gemm_fp16_accum e4m3_decode e4m3_encode compute_smoke_add; do
             spirv-val --target-env vulkan1.1 "dist/ps4/gcn8/${shader}.spv"
           done
       - name: Generate SPIR-V provenance manifest
@@ -183,7 +183,7 @@ jobs:
           python3 - <<'PY'
           import hashlib, json, platform, subprocess
           from pathlib import Path
-          shaders = ("gemm_fp32_wave64_tiled", "gemm_fp32", "gemm_fp16_accum", "e4m3_decode", "e4m3_encode")
+          shaders = ("gemm_fp32_wave64_tiled", "gemm_fp32", "gemm_fp16_accum", "e4m3_decode", "e4m3_encode", "compute_smoke_add")
           records = []
           for shader in shaders:
               source = Path("platform/ps4/gcn8/shaders") / f"{shader}.comp"
@@ -219,7 +219,7 @@ jobs:
           retention-days: 30
       - name: Compile SPIR-V to PS4 Pro GFX8 GNM shader binaries
         run: |
-          for shader in gemm_fp32_wave64_tiled gemm_fp32 gemm_fp16_accum e4m3_decode e4m3_encode; do
+          for shader in gemm_fp32_wave64_tiled gemm_fp32 gemm_fp16_accum e4m3_decode e4m3_encode compute_smoke_add; do
             .deps/opengnm-psbc/opengnm-psbc -s compute -f "dist/ps4/gcn8/${shader}.spv" -o "dist/ps4/gcn8/${shader}.sb" -n
             test -s "dist/ps4/gcn8/${shader}.sb"
           done
@@ -251,7 +251,7 @@ jobs:
           spec = importlib.util.spec_from_file_location("verify_sb", ".deps/opengnm-psbc/tests/verify_sb.py")
           module = importlib.util.module_from_spec(spec)
           spec.loader.exec_module(module)
-          shaders = ("gemm_fp32_wave64_tiled", "gemm_fp32", "gemm_fp16_accum", "e4m3_decode", "e4m3_encode")
+          shaders = ("gemm_fp32_wave64_tiled", "gemm_fp32", "gemm_fp16_accum", "e4m3_decode", "e4m3_encode", "compute_smoke_add")
           report = []
           gfx8_register_types = json.loads(
               Path(".deps/opengnm-psbc/src/amd/registers/gfx8.json").read_text()
