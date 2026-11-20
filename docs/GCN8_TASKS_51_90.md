@@ -33,7 +33,7 @@ This ledger records the next 40 work items. A task is **DONE** only when its sta
 | 67 | Validate GNM containers and CRCs | **IMPLEMENTED — CI REVALIDATION PENDING** | Added code-range/slot bounds checks plus negative controls for truncated header and corrupted CRC; must run on real compiler output. |
 | 68 | Generate immutable shader artifact manifest | **IMPLEMENTED — CI REVALIDATION PENDING** | Container report now records source/SPIR-V/GNM hashes, sizes and pinned compiler/dependency revisions; report is included in uploaded artifact. |
 | 69 | Extract raw OrbShdr metadata | **IMPLEMENTED — CI REVALIDATION PENDING** | Workflow now bounds-checks and records all CS input-usage slots, common shader data, raw CS register words, and static SPIR-V local sizes. |
-| 70 | Decode ISA and resource/register metadata | **PARTIAL — LLVM GFX8 DISASSEMBLY GATE IMPLEMENTED** | Workflow extracts raw code and runs LLVM MC for Tonga/GFX8; VGPR/SGPR/LDS/scratch/resource interpretation and independent review remain open. |
+| 70 | Decode ISA and resource/register metadata | **PARTIAL — GFX8 ISA + REGISTER FIELD DECODER IMPLEMENTED** | Workflow disassembles code with LLVM MC and decodes raw CS resource fields using pinned Mesa GFX8 definitions; REA-5 independent corroboration remains open. |
 
 ## Phase 13 — GNM compute backend
 
@@ -114,3 +114,6 @@ Task 69 extraction was expanded in commits `9fdef49f7186e07500596e74b4ab223ac45b
 Task 70 now has a disassembly pipeline in commit `634bb64c7f7d96e328b69c553706db712cade08b`, with target-probe correction in `3016a8a310143bbef524ebb9c06e936fb43851f2`. CI installs LLVM 18, extracts the exact GCN code range, preserves raw code bytes, and disassembles with the AMDGCN Tonga target. The `.isa` output and hashes are included in the artifact. This is not yet a register-resource audit: VGPR/SGPR/LDS/scratch values still require interpretation of raw CS registers and corroboration against decoded ISA.
 
 - PRX/PKG workflow concurrency was changed in commit `7e7ebe87a4209c350a6efe20c51373506a99d182` to queue later commits rather than cancel an active package build. This protects artifact reproducibility; it does not alter the console or install anything.
+
+
+Task 70 resource decoding was added in commits `085c3ba230d53ac9d40f54709fa9ad513ff09d9b` and `ce12f02886dccb496ba97603c97de80a173028fc`. The report decodes COMPUTE_PGM_RSRC1/2 field boundaries from the pinned Mesa GFX8 register JSON and derives VGPR/SGPR allocation granules, LDS allocation units, scratch bytes/thread, user SGPR count and wave64 target. The report preserves raw register words alongside the decoded fields and records the basis used. This remains a compiler-side interpretation; REA-5 has not independently verified it and no GPU runtime allocation/occupancy measurement is claimed.
