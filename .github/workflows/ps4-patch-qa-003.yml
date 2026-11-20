@@ -109,6 +109,23 @@ jobs:
           foreach ($relative in @("eboot.bin","ps4_neural_engine.prx","sce_sys/changeinfo/changeinfo.xml")) {
             if (-not (Get-ChildItem $patchOut -Recurse -File | Where-Object { $_.FullName.EndsWith($relative,[StringComparison]::OrdinalIgnoreCase) })) { throw "Patch payload missing: $relative" }
           }
+
+          $baseEboot = Get-ChildItem $baseOut -Recurse -File | Where-Object { $_.Name -eq "eboot.bin" } | Select-Object -First 1
+          $patchEboot = Get-ChildItem $patchOut -Recurse -File | Where-Object { $_.Name -eq "eboot.bin" } | Select-Object -First 1
+          $basePrx = Get-ChildItem $baseOut -Recurse -File | Where-Object { $_.Name -eq "ps4_neural_engine.prx" } | Select-Object -First 1
+          $patchPrx = Get-ChildItem $patchOut -Recurse -File | Where-Object { $_.Name -eq "ps4_neural_engine.prx" } | Select-Object -First 1
+          foreach ($item in @($baseEboot,$patchEboot,$basePrx,$patchPrx)) { if (-not $item) { throw "Executable payload comparison input missing." } }
+          $baseEbootHash = (Get-FileHash -Algorithm SHA256 $baseEboot.FullName).Hash
+          $patchEbootHash = (Get-FileHash -Algorithm SHA256 $patchEboot.FullName).Hash
+          $basePrxHash = (Get-FileHash -Algorithm SHA256 $basePrx.FullName).Hash
+          $patchPrxHash = (Get-FileHash -Algorithm SHA256 $patchPrx.FullName).Hash
+          "BASE_EBOOT_SHA256=$baseEbootHash" | Out-File qa-output/qa-report.txt -Append
+          "PATCH_EBOOT_SHA256=$patchEbootHash" | Out-File qa-output/qa-report.txt -Append
+          "BASE_PRX_SHA256=$basePrxHash" | Out-File qa-output/qa-report.txt -Append
+          "PATCH_PRX_SHA256=$patchPrxHash" | Out-File qa-output/qa-report.txt -Append
+          if ($baseEbootHash -eq $patchEbootHash -and $basePrxHash -eq $patchPrxHash) {
+            throw "Patch contains no executable payload change; eboot.bin and ps4_neural_engine.prx are byte-identical to the bundled base. Metadata-only version bump is not approved as a functional update."
+          }
           "BASE_CATEGORY=gde" | Out-File qa-output/qa-report.txt -Append
           "PATCH_CATEGORY=gpe" | Out-File qa-output/qa-report.txt -Append
           "PATCH_APP_VER=01.01" | Out-File qa-output/qa-report.txt -Append
