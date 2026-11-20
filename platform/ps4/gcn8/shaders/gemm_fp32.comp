@@ -28,5 +28,7 @@ void main() {
                           accumulator);
     }
     uint output_index = row * params.columns + column;
-    d[output_index] = fma(params.alpha, accumulator, params.beta * c[output_index]);
+    // BLAS-style beta=0 must not read C: C may be uninitialized/NaN.
+    float residual = params.beta == 0.0 ? 0.0 : params.beta * c[output_index];
+    d[output_index] = fma(params.alpha, accumulator, residual);
 }
