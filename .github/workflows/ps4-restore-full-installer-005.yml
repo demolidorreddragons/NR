@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   restore-installer:
-    if: ${{ github.event.head_commit.message == 'Restore audited full installer 005 to package folder' }}
+    if: ${{ github.event_name == 'push' }}
     runs-on: [self-hosted, Windows, X64, ps4-lan]
     timeout-minutes: 10
     steps:
