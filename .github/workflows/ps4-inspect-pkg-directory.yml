@@ -1,0 +1,28 @@
+name: Inspect PS4 PKG staging directory
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/ps4-inspect-pkg-directory.yml"
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: [self-hosted, Windows, X64, ps4-lan]
+    steps:
+      - name: Read-only FTP listing of /data/pkg
+        shell: powershell -NoProfile -ExecutionPolicy Bypass -File {0}
+        env:
+          PS4_IP: ${{ vars.PS4_IP }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          if (-not $env:PS4_IP) { throw "PS4_IP variable missing." }
+          $url = "ftp://$($env:PS4_IP):2121/data/pkg/"
+          $creds = "anonymous:anonymous@example.com"
+          $listing = & curl.exe --fail --silent --show-error --ftp-pasv --user $creds $url 2>&1
+          if ($LASTEXITCODE -ne 0) { throw "FTP listing failed; no changes made." }
+          Write-Host "REMOTE_DIRECTORY=/data/pkg"
+          Write-Host "=== EXACT LISTING ==="
+          $listing | ForEach-Object { Write-Host ([string]$_) }
+          Write-Host "=== END LISTING ==="
+          Write-Host "READ_ONLY=true"
