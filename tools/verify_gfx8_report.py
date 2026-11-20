@@ -186,6 +186,39 @@ def verify(artifact_dir: Path) -> dict:
         actual_registers = dict(zip(CS_REGISTER_NAMES, register_words))
         require(actual_registers == record.get("cs_registers_raw"),
                 f"{name}: raw CS register words differ from report")
+
+        register_db_path = Path(".deps/opengnm-psbc/src/amd/registers/gfx8.json")
+        require(register_db_path.is_file(), "pinned Mesa GFX8 register database is missing")
+        register_db = json.loads(register_db_path.read_text(encoding="utf-8"))["register_types"]
+
+        def decode_fields(value: int, register_name: str) -> dict:
+            decoded = {}
+            for field in register_db[register_name]["fields"]:
+                low, high = field["bits"]
+                decoded[field["name"]] = (value >> low) & ((1 << (high - low + 1)) - 1)
+            return decoded
+
+        decoded_rsrc1 = decode_fields(actual_registers["computepgmrsrc1"], "COMPUTE_PGM_RSRC1")
+        decoded_rsrc2 = decode_fields(actual_registers["computepgmrsrc2"], "COMPUTE_PGM_RSRC2")
+        reported_decoded = record.get("cs_registers_decoded_gfx8", {})
+        require(decoded_rsrc1 == reported_decoded.get("COMPUTE_PGM_RSRC1"),
+                f"{name}: COMPUTE_PGM_RSRC1 decoded fields differ from raw bits")
+        require(decoded_rsrc2 == reported_decoded.get("COMPUTE_PGM_RSRC2"),
+                f"{name}: COMPUTE_PGM_RSRC2 decoded fields differ from raw bits")
+
+        common = record.get("cs_common_data", {})
+        expected_allocation = {
+            "vgprs_allocated": (decoded_rsrc1["VGPRS"] + 1) * 4,
+            "sgprs_allocated": (decoded_rsrc1["SGPRS"] + 1) * 8,
+            "lds_allocation_bytes_gfx8": decoded_rsrc2["LDS_SIZE"] * 512,
+            "scratch_bytes_per_thread": common.get("scratch_size_per_thread_dwords", -1) * 4,
+            "scratch_enabled": bool(decoded_rsrc2["SCRATCH_EN"]),
+            "user_sgpr_count": decoded_rsrc2["USER_SGPR"],
+            "trap_present": bool(decoded_rsrc2["TRAP_PRESENT"]),
+            "wavefront_size_gfx8": 64,
+        }
+        require(expected_allocation == record.get("resource_allocation_derived"),
+                f"{name}: derived GFX8 allocation differs from raw register bits")
         local = record.get("spirv_local_size")
         compiled = [
             actual_registers["computenumthreadx"],
