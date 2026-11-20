@@ -131,3 +131,11 @@ Source artifact: build run 44623808730, artifact 14578192913.
 - Do not patch the SFO before `pkg_build` and assume it survives. The next engineering route must use a builder that preserves the field, or a controlled source-level change to the package builder followed by full rebuild and final-PKG SFO readback. Do not hand-edit the built PKG's SFO without rebuilding all dependent PKG hashes/signatures.
 - The candidate artifact from run `44641439173` is a 1,318-byte diagnostic report only; it contains no PKG. It is not installable.
 - No PKG was installed, the PS4 was not contacted, and PRX activation, plugins.ini, saves, and app data remain untouched.
+
+
+### Follow-up: exact SFO copy-order defect in LibOrbisPkg (2026-11-20)
+- The first source-level correction appended `,st_type=digital50` to the local parsed SFO and compiled successfully, but patch run 44642976292 still extracted PKG 002 with no `st_type`. That candidate was rejected by the preflight; artifact 14586768216 is diagnostic only.
+- Further source inspection found the decisive ordering bug in `LibOrbisPkg/PKG/PkgBuilder.cs`: `pkg.ParamSfo = new SfoEntry(sfo)` copied the parsed SFO **before** the subsequent PUBTOOLINFO and PUBTOOLVER assignments. The builder therefore serialized the stale copy even though its log showed the modified local SFO.
+- Engineering commits 7dc31f39, 942db1f3, and 625611db refine the build-time patch. The final patch removes the early SFO copy and inserts exactly one `pkg.ParamSfo` construction after both metadata fields are finalized. The workflow script also verifies the copy-order transformation before compiling the tool.
+- The next build gate is not merely a successful compiler or a staged-SFO log: extract the completed PKG 002 and confirm its embedded `PUBTOOLINFO` contains `st_type=digital50`. Then rerun the associated non-game patch build against that exact artifact and inspect its PKG, GP4 association, SFO, hashes, and independent validation.
+- No patch candidate from runs 44642976292 or earlier is installable. No PS4 installation or PRX activation occurred.
