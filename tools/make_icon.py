@@ -6,6 +6,7 @@ import sys
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / "assets" / "neural-rendering-logo.svg"
 OUTPUT = Path(sys.argv[1]) if len(sys.argv) > 1 else Path("sce_sys/icon0.png")
+PNG_SIGNATURE = bytes.fromhex("89504e470d0a1a0a")
 
 try:
     import cairosvg
@@ -29,6 +30,6 @@ if not OUTPUT.is_file() or OUTPUT.stat().st_size < 1024:
     raise SystemExit("Generated icon0.png is missing or unexpectedly small.")
 
 with OUTPUT.open("rb") as stream:
-    if stream.read(8) != b"\\x89PNG\\r\\n\\x1a\\n":
+    if stream.read(8) != PNG_SIGNATURE:
         raise SystemExit("Generated icon0.png is not a valid PNG.")
 print(f"ICON0_GENERATED={OUTPUT} ({OUTPUT.stat().st_size} bytes)")
