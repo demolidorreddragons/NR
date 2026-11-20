@@ -32,12 +32,17 @@ class GnmSlotOffsetTests(unittest.TestCase):
 
         # OpenGNM's header comment describes a start pointer; fpPS4 subtracts
         # num_slots after resolving the base pointer (end-pointer convention).
-        start_pointer = expected_offset(orb, slot_start, num_slots, False)
-        end_pointer = expected_offset(orb, slot_start, num_slots, True)
+        # Compute raw candidates before applying the 8-bit field guard.
+        start_pointer = (orb - slot_start) // 4
+        end_pointer = (orb - (slot_start + num_slots * 4)) // 4
         self.assertEqual(start_pointer, 590)
         self.assertEqual(end_pointer, 589)
         self.assertGreater(start_pointer, 0xff)
         self.assertGreater(end_pointer, 0xff)
+        with self.assertRaises(OverflowError):
+            expected_offset(orb, slot_start, num_slots, False)
+        with self.assertRaises(OverflowError):
+            expected_offset(orb, slot_start, num_slots, True)
 
     def test_emitted_wrapped_value_does_not_resolve_to_header_table(self):
         orb = 0x990
