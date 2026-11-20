@@ -243,3 +243,15 @@ Source artifact: build run 44623808730, artifact 14578192913.
   - The updated PRX is downloaded separately from current build run `44649084819` and used only as the patch's `ps4_neural_engine.prx` payload.
   - The workflow compares the baseline PRX hash with the new PRX hash and stops if identical; the independent QA then compares the extracted Sony-rebuilt base with the patch payload.
 - Corrected candidate build run `44649537623` is in progress. Do not call PKG 003 approved until its resulting pair passes the separate QA workflow. The bridge workflow only staged the validated PKG 002 in `/data/pkg`; no package was installed and no PRX was activated.
+
+
+### PKG 003 real-delta candidate passed independent PC QA (2026-11-20)
+- Corrected candidate build run `44649537623` completed successfully. Artifact `14590460632` contains the Sony-rebuilt replacement base, associated patch GP4, candidate patch PKG, and build evidence.
+- Independent QA run `44649641730` completed **success**. QA artifact `14590361204` records:
+  - Base package SHA-256 `A86E7C0CB54D8F1A92F3D2D761F4D063F5FDDAC63CC36A79CCCABFBF8751D437`; candidate patch SHA-256 `DF343A34B1F5DA7B35A3B8F50E5D98AAD43C6052ADC8EBDF984F735ACB7DC2B8`.
+  - Both packages independently passed all eight OrbisPkgTool structural validation stages.
+  - GP4 is `pkg_ps4_patch`, `digital25`, explicitly associated to `PS4-Neural-Engine-002.pkg`; four payload entries.
+  - Base SFO `CATEGORY=gde`; patch SFO `CATEGORY=gpe`, `APP_VER=01.01`, same TITLE_ID and CONTENT_ID.
+  - Base PRX SHA-256 `531E41AA3F4535E6004D47900F636D6E2A4B1CE2B2709F165DB77EBEF7E0A3F0`; patch PRX SHA-256 `7561DA3D3B83766BECDDCB37C1257D83C61009B5E814825EE60694D19F9CF704`. The executable delta is real; eboot remains unchanged.
+- This is a **PC-QA-approved candidate pair only**, not hardware-tested or installation-approved. The delivered base 002 is a Sony-rebuilt replacement, not byte-identical to the original base. Do not install the patch over the original base; a controlled console test must first validate the replacement-base/patch pair and the disconnect behavior while preserving saves and app data.
+- The PS4 bridge workflow `44649324552` succeeded in staging the current build's base PKG 002 in `/data/pkg` only. No installation, app replacement, PRX activation, `plugins.ini` edit, save-data change, or app-data change occurred.
