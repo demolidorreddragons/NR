@@ -27,7 +27,7 @@
 | `e4m3_decode` | 1,004 | 856 | 215 | `ffb3f51a` | 8 | 32 | 0 B | 0 B |
 | `e4m3_encode` | 688 | 540 | 136 | `c3e62f64` | 8 | 32 | 0 B | 0 B |
 
-All five binaries declare `PTR_INDIRECTRESOURCETABLE`, API slot 0, start register 2. For tiled GEMM, the code occupies 948 bytes and the slot pointer is 238 dwords, below the 255-dword limit by 17 dwords (68 bytes). The workgroup LocalSize is 8×8×1.
+All five binaries declare `PTR_INDIRECTRESOURCETABLE`, API slot 0, start register 2, with raw slot control byte `0x00` (`registercount=0`). This is a single 32-bit user SGPR; `address32_hi=0`, so register 3 must remain available to scalar shader parameters. For tiled GEMM, the code occupies 948 bytes and the slot pointer is 238 dwords, below the 255-dword limit by 17 dwords (68 bytes). The workgroup LocalSize is 8×8×1.
 
 ## Tiled GEMM register snapshot
 
