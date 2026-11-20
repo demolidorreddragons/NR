@@ -1,5 +1,7 @@
 name: PS4 PRX and PKG build
 
+# Trigger a fresh artifact for the configured PS4 Windows bridge.
+
 concurrency:
   # Keep a reproducible PRX/PKG build running while later commits queue.
   group: ps4-prx-pkg-build-${{ github.ref }}
