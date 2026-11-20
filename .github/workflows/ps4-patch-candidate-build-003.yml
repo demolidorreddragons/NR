@@ -147,6 +147,13 @@ jobs:
           }
 
           "=== REBUILD BASE WITH SONY PUBLISHER TOOL ===" | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
+          # Sony img_create rejected the base SFO's legacy APP_VER "1.00".
+          # Normalize only the disposable Sony-rebuild copy to the documented XX.YY form.
+          dotnet "$tool" sfo set "$sfo" APP_VER 01.00 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
+          if ($LASTEXITCODE -ne 0) { throw "Sony-base APP_VER normalization failed." }
+          $sonyInputSfoText = dotnet "$tool" sfo read "$sfo" 2>&1
+          $sonyInputSfoText | Tee-Object -FilePath "candidate-output/sony-base-input-param-sfo.txt"
+          if ($LASTEXITCODE -ne 0 -or ($sonyInputSfoText -join "`n") -notmatch "APP_VER = 01[.]00") { throw "Sony-base input SFO APP_VER is not normalized to 01.00." }
           $sonyBaseGp4 = Join-Path $work "PS4-Neural-Engine-002-SONY-BASE.gp4"
           $sonyBasePkg = Join-Path $work "PS4-Neural-Engine-002-SONY-BASE.pkg"
           & $pubCmd gp4_proj_create --volume_type pkg_ps4_app --content_id IV0000-PNEU00001_00-PS4NEURALENG0000 --passcode $zeroKey --entitlement_key $zeroKey --storage_type digital50 $sonyBaseGp4 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
