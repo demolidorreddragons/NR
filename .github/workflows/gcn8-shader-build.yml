@@ -32,7 +32,7 @@ jobs:
           git clone https://github.com/PS4-OpenGNM/opengnm.git .deps/opengnm
           git -C .deps/opengnm checkout 4b295ca54c82c83acf308d1c646a2dfa9ae57350
           git clone https://github.com/KhronosGroup/SPIRV-Headers.git .deps/SPIRV-Headers
-          git -C .deps/SPIRV-Headers checkout 1.4.309.0
+          git -C .deps/SPIRV-Headers checkout 09913f088a1197aba4aefd300a876b2ebbaa3391
           git clone https://github.com/KhronosGroup/Vulkan-Headers.git .deps/Vulkan-Headers
           git -C .deps/Vulkan-Headers checkout v1.3.296
       - name: Configure reproducible host compiler build
