@@ -26,7 +26,7 @@ jobs:
           github-token: ${{ github.token }}
 
       - name: Verify QA report and exact package identity
-        shell: powershell
+        shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
           $pkg = Join-Path $env:GITHUB_WORKSPACE "approved/PS4-Neural-Engine-003-QA-APPROVED.pkg"
@@ -48,7 +48,7 @@ jobs:
           Write-Host "QA_APPROVED_IDENTITY_VERIFIED bytes=$size sha256=$actual"
 
       - name: Upload, read back, and archive only older Neural Engine PKGs
-        shell: powershell
+        shell: pwsh
         env:
           PS4_IP: ${{ vars.PS4_IP }}
         run: |
