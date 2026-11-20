@@ -12,14 +12,14 @@
 - LocalSize 8×8×1; each workgroup covers a 16×16 output tile.
 - Dispatch grid: `ceil(N/16) × ceil(M/16) × 1` workgroups.
 - Resource ABI: set 0 indirect table; four 16-byte V# entries at offsets 0, 64, 128, 192; table size 208 bytes.
-- Table pointer: CS user-data register 2; PSBC sets `address32_hi=0`, so the entire table must fit below 4 GiB.
+- Table pointer: one 32-bit CS user-data SGPR at register 2 (`registercount=0`, `address32_hi=0`); register 3 must remain untouched for scalar shader parameters, and the entire table must fit below 4 GiB.
 
 ## Hard gates — no dispatch until all pass
 
 1. **Artifact integrity:** verify `.sb` and code hashes; run the independent byte-level verifier and C++ parser against the exact binary to be loaded.
 2. **CS registers:** parse the seven `GnmCsStageRegisters` words, copy code to GPU-visible memory, then patch `computepgmlo/hi` using `sceGnmCsRegsSetAddress` with a 256-byte-aligned GPU code address below 48 bits.
 3. **Memory mapping:** prove CPU mapping versus GPU-visible VA. Record physical allocation offset, mapped pointer, size, alignment and protection. Do not pass the physical allocation offset as a V# base address without proof.
-4. **Low-address table:** demonstrate a 208-byte GPU-visible table whose complete range is non-zero, 4-byte aligned and below 4 GiB. If unavailable, stop; never truncate a 64-bit pointer.
+4. **Low-address table:** demonstrate a 208-byte GPU-visible table whose complete range is non-zero, 4-byte aligned and below 4 GiB. Emit only the low address dword into CS user register 2; never write register 3 or truncate a 64-bit pointer.
 5. **Writable V# descriptors:** independently establish base address, stride, record count, data format, number format and descriptor memory/cache type. `sceGnmCreateConstBuffer` and `sceGnmCreateVertexBuffer` set `GNM_MEMORY_READONLY`; they are not approved for writable output without proof.
 6. **Cache visibility:** validate the exact CPU→GPU flush and GPU→CPU invalidate/barrier sequence for the selected memory pool.
 7. **Submission/completion:** prove command-buffer ownership, submit return contract, completion signal/wait, timeout and recovery. Imports link, but NR has not called them.
