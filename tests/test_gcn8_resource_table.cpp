@@ -23,6 +23,15 @@ int main() {
     for (std::size_t i = 0; i < layout.binding_count; ++i)
         assert(layout.bindings[i].descriptor_bytes == 16 && layout.bindings[i].array_count == 1);
 
+    const BindingRequirement smoke[] = {
+        {0, 0, 1, DescriptorKind::buffer},
+        {0, 1, 1, DescriptorKind::buffer},
+    };
+    assert(build_resource_table_layout(smoke, 2, &layout) == ResourceTableError::none);
+    assert(layout.binding_count == 2 && layout.byte_size == 80);
+    assert(layout.bindings[0].byte_offset == 0 && layout.bindings[1].byte_offset == 64);
+    assert(validate_indirect_resource_table_range(0x1000, 80) == ResourceTableError::none);
+
     assert(descriptor_size_bytes(DescriptorKind::sampled_image) == 32);
     assert(descriptor_size_bytes(DescriptorKind::storage_image) == 32);
     assert(descriptor_size_bytes(DescriptorKind::sampler) == 16);
@@ -60,7 +69,7 @@ int main() {
     assert(validate_indirect_resource_table_range(0xfffffff0ULL, 32) == ResourceTableError::invalid_table_address);
 
     std::uint32_t packet[3]{};
-    assert(build_cs_indirect_table_pointer_packet(2, 0x12340000, 208, packet) == ResourceTableError::none);
+    assert(build_cs_indirect_table_pointer_packet(2, 0x12340000, 80, packet) == ResourceTableError::none);
     assert(packet[0] == 0xC0017602u); // SET_SH_REG, one dword, compute engine.
     assert(packet[1] == 0x242u);      // COMPUTE_USER_DATA_2 relative to SH register base.
     assert(packet[2] == 0x12340000u); // 32-bit table pointer; do not overwrite SGPR3.
