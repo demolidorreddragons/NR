@@ -114,6 +114,8 @@ def validate(manifest_path: Path, inventory_path: Path | None = None,
         if expected != actual: raise ValidationError("manifest tensor names/byte lengths differ from source inventory")
 
     reference_layout_count = 0
+    reference_consumed_count = 0
+    reference_unread_names = []
     if reference_layout:
         expected_layout = reference_layout_sizes()
         actual_layout = {t["name"]: t["byteLength"] for t in tensors}
@@ -123,11 +125,14 @@ def validate(manifest_path: Path, inventory_path: Path | None = None,
             mismatch = sorted(n for n in set(expected_layout) & set(actual_layout) if expected_layout[n] != actual_layout[n])[:5]
             raise ValidationError(f"reference layout mismatch: missing={missing}, extra={extra}, sizes={mismatch}")
         reference_layout_count = len(expected_layout)
+        consumed_names = reference_consumed_names()
+        reference_consumed_count = len(consumed_names)
+        reference_unread_names = sorted(set(actual_layout) - consumed_names)
     return {"status":"PASS","block_count":blocks,"blocks_present":len(present),
             "tensor_count":len(tensors),"stage_count":len(stage_map),"tensor_payload_bytes":total,
             "stages":{k:{"bytes":v["size"],"sha256":v["sha256"],**coverage[k]} for k,v in stage_map.items()},
             "inventory_compared":bool(inventory_path),"full_coverage_required":full_coverage,
-            "reference_layout_checked":reference_layout,"reference_layout_records":reference_layout_count,
+            "reference_layout_checked":reference_layout,"reference_layout_records":reference_layout_count,\n            "reference_consumed_records":reference_consumed_count,"reference_unread_records":len(reference_unread_names),\n            "reference_unread_names":reference_unread_names,
             "scope":"Container/slice integrity only; no semantic shapes, version parity, or inference validation."}
 
 def reference_layout_sizes() -> dict[str, int]:
@@ -194,6 +199,14 @@ def reference_layout_sizes() -> dict[str, int]:
     sizes["block70.layer0.layer"] = 21808
     sizes["block70.layer0.blend_scale"] = 2
     return sizes
+
+
+def reference_consumed_names() -> set[str]:
+    """Names read by the reference graph; ViT layer3 contains 2 unread bytes."""
+    names = set(reference_layout_sizes())
+    for block in range(31, 39):
+        names.remove(f"block{block}.layer3.layer")
+    return names
 
 
 def main():
