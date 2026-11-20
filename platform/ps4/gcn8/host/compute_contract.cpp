@@ -53,9 +53,11 @@ ContractError make_gemm_dispatch(const GemmParams& p,
     // increments. Reject dimensions that could wrap before a GPU dispatch.
     const auto shader_index_limit =
         static_cast<std::size_t>(std::numeric_limits<std::uint32_t>::max());
+    const auto tile_edge_limit =
+        std::numeric_limits<std::uint32_t>::max() - 15u;
     if (mn > shader_index_limit || mk > shader_index_limit ||
-        kn > shader_index_limit ||
-        p.k > std::numeric_limits<std::uint32_t>::max() - 15u) {
+        kn > shader_index_limit || p.m > tile_edge_limit ||
+        p.n > tile_edge_limit || p.k > tile_edge_limit) {
         return ContractError::shader_index_overflow;
     }
 
