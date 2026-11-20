@@ -326,8 +326,11 @@ extern "C" int pne_gcn8_compute_smoke_run(const char* shader_path,
         const float expected = input[i] + 1.0f;
         if (output[i] != expected) {
             log.line("MISMATCH_INDEX", i);
-            log.line("EXPECTED_BITS", *reinterpret_cast<const uint32_t*>(&expected));
-            log.line("ACTUAL_BITS", *reinterpret_cast<const uint32_t*>(&output[i]));
+            uint32_t expected_bits = 0, actual_bits = 0;
+            std::memcpy(&expected_bits, &expected, sizeof(expected_bits));
+            std::memcpy(&actual_bits, &output[i], sizeof(actual_bits));
+            log.line("EXPECTED_BITS", expected_bits);
+            log.line("ACTUAL_BITS", actual_bits);
             log.message("RESULT=FAIL; REASON=READBACK_MISMATCH");
             return 26;
         }
