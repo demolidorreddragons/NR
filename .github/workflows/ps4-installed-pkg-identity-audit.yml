@@ -1,0 +1,47 @@
+name: PS4 installed PKG and patch read-only identity audit
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/ps4-installed-pkg-identity-audit.yml"
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: [self-hosted, Windows, X64, ps4-lan]
+    steps:
+      - name: Retrieve installed base PKG and inspect patch directory without changes
+        shell: powershell -NoProfile -ExecutionPolicy Bypass -File {0}
+        env:
+          PS4_IP: ${{ vars.PS4_IP }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          if (-not $env:PS4_IP) { throw "PS4_IP variable missing." }
+          $base = "ftp://$($env:PS4_IP):2121"
+          $creds = "anonymous:anonymous@example.com"
+          foreach ($path in @("/user/app/PNEU00001/","/user/patch/","/user/patch/PNEU00001/")) {
+            Write-Host "=== LIST $path ==="
+            $out = & curl.exe --fail --silent --show-error --ftp-pasv --ftp-method nocwd --user $creds ($base + $path) 2>&1
+            if ($LASTEXITCODE -eq 0) { $out | ForEach-Object { Write-Host $_ } }
+            else { Write-Host "LIST_UNAVAILABLE path=$path exit=$LASTEXITCODE"; $out | ForEach-Object { Write-Host $_ } }
+          }
+          $local = Join-Path $env:RUNNER_TEMP "PNEU00001-installed-app.pkg"
+          $url = $base + "/user/app/PNEU00001/app.pkg"
+          Write-Host "=== RETR INSTALLED APP.PKG ==="
+          $out = & curl.exe --fail --silent --show-error --ftp-pasv --ftp-method nocwd --user $creds --output $local $url 2>&1
+          if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $local)) {
+            Write-Host "INSTALLED_APP_PKG_RETR_FAILED exit=$LASTEXITCODE"
+            $out | ForEach-Object { Write-Host $_ }
+          } else {
+            $item = Get-Item -LiteralPath $local
+            $hash = (Get-FileHash -LiteralPath $local -Algorithm SHA256).Hash.ToLowerInvariant()
+            Write-Host "INSTALLED_APP_PKG_BYTES=$($item.Length)"
+            Write-Host "INSTALLED_APP_PKG_SHA256=$hash"
+            if ($item.Length -eq 6619136 -and $hash -eq "ac7069625c6b8a1fceb6acfd37c27d19ed28ece19e8753ee5b6dc54226c24f07") {
+              Write-Host "INSTALLED_APP_PKG_MATCHES_KNOWN_BASE_002=true"
+            } else {
+              Write-Host "INSTALLED_APP_PKG_MATCHES_KNOWN_BASE_002=false"
+            }
+          }
+          Write-Host "READ_ONLY=true"
+          Write-Host "NO_FILES_WRITTEN_OR_DELETED_ON_PS4=true"
