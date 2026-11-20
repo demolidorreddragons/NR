@@ -19,7 +19,7 @@ jobs:
     runs-on: [self-hosted, Windows, X64, ps4-lan]
     timeout-minutes: 15
     steps:
-      - name: Download QA-approved artifact only
+      - name: Download independent QA evidence
         uses: actions/download-artifact@v4
         with:
           name: PS4-Neural-Engine-006-independent-QA
@@ -27,7 +27,7 @@ jobs:
           repository: demolidorreddragons/NR
           run-id: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.id || '44663222188' }}
           github-token: ${{ github.token }}
-      - name: Download exact PKG from same build run
+      - name: Download exact PKG 006 build artifact
         uses: actions/download-artifact@v4
         with:
           name: ps4-neural-engine-build
@@ -35,32 +35,34 @@ jobs:
           repository: demolidorreddragons/NR
           run-id: 44662999645
           github-token: ${{ github.token }}
-      - name: Verify independent QA identity and stage with FTP readback
+      - name: Verify QA and stage exact package with FTP readback
         shell: powershell -ExecutionPolicy Bypass -File {0}
         env:
           PS4_IP: ${{ vars.PS4_IP }}
         run: |
           $ErrorActionPreference = "Stop"
-          if (-not $env:PS4_IP) { throw "PS4_IP repository variable is missing." }
+          if (-not $env:PS4_IP) { throw "PS4_IP is missing." }
           $pkg = Join-Path $env:GITHUB_WORKSPACE "build-artifact/pkg/PS4-Neural-Engine-006.pkg"
           $report = Join-Path $env:GITHUB_WORKSPACE "approved/qa-report.txt"
-          if (-not (Test-Path -LiteralPath $pkg)) { throw "Build artifact PKG 006 is missing." }
-          if (-not (Test-Path -LiteralPath $report)) { throw "Independent QA report is missing." }
+          $sfoReport = Join-Path $env:GITHUB_WORKSPACE "approved/param-sfo.txt"
+          if (-not (Test-Path -LiteralPath $pkg)) { throw "PKG 006 build artifact missing." }
+          if (-not (Test-Path -LiteralPath $report)) { throw "Independent QA report missing." }
+          if (-not (Test-Path -LiteralPath $sfoReport)) { throw "Independent SFO report missing." }
+
           $reportText = Get-Content -LiteralPath $report -Raw
           foreach ($required in @("PKG_NUMBER=006","PKG_KIND=FULL_BASE_APPLICATION_NOT_PATCH","QA_STATUS=PASS_PC_ONLY_NOT_HARDWARE_TESTED")) {
-            if ($reportText -notmatch [regex]::Escape($required)) { throw "QA report missing required identity: $required" }
+            if ($reportText -notmatch [regex]::Escape($required)) { throw "QA report missing: $required" }
           }
-          $sfoReport = Join-Path $env:GITHUB_WORKSPACE "approved/param-sfo.txt"
-          if (-not (Test-Path -LiteralPath $sfoReport)) { throw "Independent PARAM.SFO report is missing." }
           $sfoText = Get-Content -LiteralPath $sfoReport -Raw
           foreach ($required in @("CATEGORY = gde","APP_VER = 01.02","VERSION = 01.02","TITLE_ID = PNEU00001","CONTENT_ID = IV0000-PNEU00001_00-PS4NEURALENG0000","st_type=digital50")) {
-            if ($sfoText -notmatch [regex]::Escape($required)) { throw "Independent SFO report missing required identity: $required" }
+            if ($sfoText -notmatch [regex]::Escape($required)) { throw "SFO report missing: $required" }
           }
+
           $expected = [regex]::Match($reportText, "PKG_SHA256=([A-Fa-f0-9]{64})").Groups[1].Value.ToLowerInvariant()
-          if (-not $expected) { throw "QA report package hash missing." }
+          if (-not $expected) { throw "QA report hash missing." }
           $actual = (Get-FileHash -LiteralPath $pkg -Algorithm SHA256).Hash.ToLowerInvariant()
           $size = (Get-Item -LiteralPath $pkg).Length
-          if ($actual -ne $expected) { throw "PKG differs from independently audited artifact: expected=$expected actual=$actual" }
+          if ($actual -ne $expected) { throw "Build PKG differs from QA-approved hash." }
 
           $name = "PS4-Neural-Engine-006-$($actual.Substring(0,12)).pkg"
           $creds = "anonymous:anonymous@example.com"
@@ -68,77 +70,54 @@ jobs:
           $root = "/data/pkg/"
           $archive = "/data/pkg/old_versions/"
           $target = "ftp://$($env:PS4_IP):2121$root$name"
+
           function Get-FtpNames([string]$path) {
             $url = "ftp://$($env:PS4_IP):2121$path"
             $result = & curl.exe --fail --silent --show-error --ftp-pasv --list-only --user $creds $url 2>&1
-            if ($LASTEXITCODE -ne 0) { throw "Cannot list $path; refusing changes. $result" }
+            if ($LASTEXITCODE -ne 0) { throw "Cannot list $path. $result" }
             return @($result | ForEach-Object { ([string]$_).Trim() } | Where-Object { $_ })
           }
+
           $rootBefore = @(Get-FtpNames $root)
           $targetAlreadyPresent = $rootBefore -contains $name
-          if ($targetAlreadyPresent) { Write-Host "Existing target found; verifying exact bytes instead of overwriting: $name" }
-          $oldNeural = @($rootBefore | Where-Object { $_ -match '^PS4-Neural-Engine-.*[.]pkg
+          $oldNeural = @($rootBefore | Where-Object { $_ -match '^PS4-Neural-Engine-.*[.]pkg$' -and $_ -ne $name })
           $thirdParty = @($rootBefore | Where-Object { $_ -notmatch '^PS4-Neural-Engine-.*[.]pkg$' })
           $archiveBefore = @(Get-FtpNames $archive)
           $collisions = @($oldNeural | Where-Object { $archiveBefore -contains $_ })
-          if ($collisions.Count -gt 0) { throw "Archive collision; no files changed: $($collisions -join ', ')" }
+          if ($collisions.Count -gt 0) { throw "Archive collisions: $($collisions -join ', ')" }
 
           if (-not $targetAlreadyPresent) {
             $upload = & curl.exe --fail --silent --show-error --ftp-pasv --user $creds --upload-file $pkg $target 2>&1
             if ($LASTEXITCODE -ne 0) { throw "FTP upload failed: $upload" }
+          } else {
+            Write-Host "Existing target will be verified, not overwritten: $name"
           }
+
           $readback = Join-Path $env:RUNNER_TEMP $name
           $download = & curl.exe --fail --silent --show-error --ftp-pasv --user $creds --output $readback $target 2>&1
           if ($LASTEXITCODE -ne 0) { throw "FTP readback failed: $download" }
           $remoteSize = (Get-Item -LiteralPath $readback).Length
           $remoteHash = (Get-FileHash -LiteralPath $readback -Algorithm SHA256).Hash.ToLowerInvariant()
-          if ($remoteSize -ne $size -or $remoteHash -ne $actual) { throw "FTP readback mismatch." }
+          if ($remoteSize -ne $size -or $remoteHash -ne $actual) { throw "FTP readback identity mismatch." }
           Write-Host "QA_APPROVED_PKG_UPLOAD_READBACK_VERIFIED bytes=$remoteSize sha256=$remoteHash"
 
           foreach ($oldName in $oldNeural) {
             $move = & curl.exe --fail --silent --show-error --ftp-pasv --user $creds --quote "CWD data" --quote "CWD pkg" --quote "RNFR $oldName" --quote "RNTO old_versions/$oldName" $hostUrl 2>&1
-            if ($LASTEXITCODE -ne 0) { throw "Could not archive older Neural Engine package $oldName. $move" }
+            if ($LASTEXITCODE -ne 0) { throw "Could not archive $oldName. $move" }
           }
+
           $rootFinal = @(Get-FtpNames $root)
           $archiveFinal = @(Get-FtpNames $archive)
-          if ($rootFinal -notcontains $name) { throw "New package missing from root after staging." }
-          foreach ($other in $thirdParty) { if ($rootFinal -notcontains $other) { throw "Third-party package unexpectedly moved: $other" } }
-          foreach ($oldName in $oldNeural) { if ($archiveFinal -notcontains $oldName) { throw "Archive verification failed for $oldName" } }
-          $remaining = @($rootFinal | Where-Object { $_ -match '^PS4-Neural-Engine-.*[.]pkg$' })
-          if ($remaining.Count -ne 1 -or $remaining[0] -ne $name) { throw "Unexpected Neural Engine PKG set in root: $($remaining -join ', ')" }
-          Write-Host "STAGING_AND_READBACK_SUCCESS=true"
-          Write-Host "PKG_PATH=/data/pkg/$name"
-          Write-Host "PKG_BYTES=$remoteSize"
-          Write-Host "PKG_SHA256=$remoteHash"
-          Write-Host "ARCHIVED_OLD_NEURAL_COUNT=$($oldNeural.Count)"
-          Write-Host "PRESERVED_THIRD_PARTY_COUNT=$($thirdParty.Count)"
- -and $_ -ne $name })
-          $thirdParty = @($rootBefore | Where-Object { $_ -notmatch '^PS4-Neural-Engine-.*[.]pkg$' })
-          $archiveBefore = @(Get-FtpNames $archive)
-          $collisions = @($oldNeural | Where-Object { $archiveBefore -contains $_ })
-          if ($collisions.Count -gt 0) { throw "Archive collision; no files changed: $($collisions -join ', ')" }
-
-          $upload = & curl.exe --fail --silent --show-error --ftp-pasv --user $creds --upload-file $pkg $target 2>&1
-          if ($LASTEXITCODE -ne 0) { throw "FTP upload failed: $upload" }
-          $readback = Join-Path $env:RUNNER_TEMP $name
-          $download = & curl.exe --fail --silent --show-error --ftp-pasv --user $creds --output $readback $target 2>&1
-          if ($LASTEXITCODE -ne 0) { throw "FTP readback failed: $download" }
-          $remoteSize = (Get-Item -LiteralPath $readback).Length
-          $remoteHash = (Get-FileHash -LiteralPath $readback -Algorithm SHA256).Hash.ToLowerInvariant()
-          if ($remoteSize -ne $size -or $remoteHash -ne $actual) { throw "FTP readback mismatch." }
-          Write-Host "QA_APPROVED_PKG_UPLOAD_READBACK_VERIFIED bytes=$remoteSize sha256=$remoteHash"
-
+          if ($rootFinal -notcontains $name) { throw "New PKG missing from /data/pkg/." }
+          foreach ($other in $thirdParty) {
+            if ($rootFinal -notcontains $other) { throw "Third-party PKG unexpectedly moved: $other" }
+          }
           foreach ($oldName in $oldNeural) {
-            $move = & curl.exe --fail --silent --show-error --ftp-pasv --user $creds --quote "CWD data" --quote "CWD pkg" --quote "RNFR $oldName" --quote "RNTO old_versions/$oldName" $hostUrl 2>&1
-            if ($LASTEXITCODE -ne 0) { throw "Could not archive older Neural Engine package $oldName. $move" }
+            if ($archiveFinal -notcontains $oldName) { throw "Archive verification failed: $oldName" }
           }
-          $rootFinal = @(Get-FtpNames $root)
-          $archiveFinal = @(Get-FtpNames $archive)
-          if ($rootFinal -notcontains $name) { throw "New package missing from root after staging." }
-          foreach ($other in $thirdParty) { if ($rootFinal -notcontains $other) { throw "Third-party package unexpectedly moved: $other" } }
-          foreach ($oldName in $oldNeural) { if ($archiveFinal -notcontains $oldName) { throw "Archive verification failed for $oldName" } }
           $remaining = @($rootFinal | Where-Object { $_ -match '^PS4-Neural-Engine-.*[.]pkg$' })
-          if ($remaining.Count -ne 1 -or $remaining[0] -ne $name) { throw "Unexpected Neural Engine PKG set in root: $($remaining -join ', ')" }
+          if ($remaining.Count -ne 1 -or $remaining[0] -ne $name) { throw "Unexpected Neural Engine PKGs in root: $($remaining -join ', ')" }
+
           Write-Host "STAGING_AND_READBACK_SUCCESS=true"
           Write-Host "PKG_PATH=/data/pkg/$name"
           Write-Host "PKG_BYTES=$remoteSize"
