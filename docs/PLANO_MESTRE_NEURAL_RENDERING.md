@@ -246,3 +246,44 @@ O PRX foi compilado com sucesso. A geração do pacote parou na validação da a
 
 **Estado após correção:** correção de código publicada no branch; ainda não há build PKG pós-correção confirmado. O próximo gate é executar novamente o workflow de PRX/PKG e inspecionar a validação e extração do pacote. Até esse resultado, não declarar o bloqueio B0 resolvido nem afirmar que existe um novo PKG funcional.
 
+## 9. Resultado do primeiro build pós-correção — 20/11/2026
+
+**Workflow:** [PS4 PRX and PKG build — run 44669637925](https://github.com/demolidorreddragons/NR/actions/runs/44669637925)  
+**Commit de origem:** `a14bb99dd9eef131f3768cd2c9beca0fb3a08119`  
+**Resultado do job:** SUCCESS.
+
+### Evidências observadas no log
+
+- Compilação do `PkgTool.Core`: concluída.
+- Build da biblioteca de hooks GoldHEN: concluído.
+- Build do PRX: concluído.
+- Build do arquivo de fontes GoldHEN: concluído.
+- Build do PKG: concluído.
+- Verificação de hashes e assinaturas do PKG: aprovada em todos os itens reportados pelo validador.
+- Extração do PKG: concluída.
+- Verificação de presença dos arquivos extraídos: aprovada para `eboot.bin`, `ps4_neural_engine.prx`, `keystone`, `right.sprx`, `libc.prx` e `libSceFios2.prx`.
+- Upload do artefato: concluído.
+
+**PKG produzido:** `PS4-Neural-Engine-006.pkg`  
+**SHA-256 do PKG, conforme log do build:** `7bd4b2b31fcadcc549ccb81186cad56dca515a02bb3384a53d09f5b7799d6422`  
+**Artefato GitHub Actions:** [ps4-neural-engine-build — artifact 14599800224](https://github.com/demolidorreddragons/NR/actions/runs/44669637925/artifacts/14599800224)  
+**SHA-256 do ZIP do artefato:** `e00172c21c2afee6a60fb1a999273028500afeedf1376ac28813288207ad77c5`
+
+### Interpretação correta
+
+A correção do gerador de ícone e o bloqueio de geração/validação estrutural do PKG estão resolvidos para este commit: o pacote foi criado, seus hashes/assinaturas foram aceitos pelo validador utilizado, seu payload foi extraído e os arquivos esperados foram encontrados.
+
+Isto **não** comprova instalação, atualização, inicialização ou execução no PS4 Pro. Também não comprova que o PRX foi carregado pelo GoldHEN nem que existe inferência neural/GPU compute funcional. Nenhuma instalação ou ativação no console foi realizada nesta etapa.
+
+### Atualização dos gates
+
+| Item | Estado após run 44669637925 |
+|---|---|
+| B0 — geração, integridade e extração estrutural do PKG | **RESOLVIDO para o commit testado** |
+| Instalação/atualização no PS4 Pro | **PENDENTE — teste controlado e autorização explícita** |
+| B1 — toolchain GFX8 | **BLOQUEADO — ainda sem compilação de shaders GFX8 comprovada** |
+| B2 — backend GNM compute | **AUSENTE / NÃO COMPROVADO** |
+| B3 — modelo, pesos e grafo neural completo | **PENDENTE de inventário e validação** |
+| B4 — executor de QA realmente independente | **PENDENTE** |
+
+A Fase 0 permanece **EM EXECUÇÃO**. O build PKG bem-sucedido fecha somente a verificação estrutural do pacote; não promove o produto a release aprovada.
