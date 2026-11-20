@@ -72,3 +72,15 @@ O build é aprovado somente no escopo de geração e validação estrutural feit
 5. Só depois apresentar um plano separado de teste de console para autorização explícita.
 
 **Regra:** nenhum workflow de staging, instalação, PRX deployment, alteração de `plugins.ini` ou reinício do GoldHEN será disparado como parte desta auditoria.
+
+
+## Reavaliação incremental — 20/11/2026
+
+O relatório acima permanece válido para o artefato antigo (run `44669637925`, SHA-256 `7bd4b2b31fcadcc549ccb81186cad56dca515a02bb3384a53d09f5b7799d6422`). Foram feitas correções de engenharia posteriores, ainda sem autorização para instalação:
+
+- **R1 — QA independente:** foi adicionado ao workflow de build um job separado em runner Windows que baixa o artefato do mesmo run e usa OrbisPkgTool fixado em commit imutável. O job verifica GP4/CONTENT_ID/arquivos associados, PKG, SFO, manifesto, hash do PRX e extração. A primeira execução sobre o build atualizado ainda está pendente; R1 não é considerado PASS.
+- **R2 — rollback:** o instalador agora mantém backups de PRX e `plugins.ini`, prepara ambos os arquivos e tenta restaurá-los em falhas de promoção. A transação ainda não é atômica entre dois caminhos e não foi submetida a fault injection no filesystem Orbis; R2 está parcialmente mitigado, não fechado.
+- **R4 — manifesto/hash:** o eboot valida schema, TITLE_ID, CONTENT_ID, nome do PRX e SHA-256 do PRX antes de criar diretórios ou alterar destinos. Testes host de vetores SHA-256 e casos inválidos passaram no run `44678921838`. Isso autentica a integridade/identidade declarada, não a ABI nem a compatibilidade de carregamento.
+- **R3/R5/R6:** permanecem inalterados. Executar o eboot continua sendo uma operação persistente; não há prova de carregamento no GoldHEN nem renderer neural operacional.
+
+**Decisão permanece: NÃO APROVADO PARA INSTALAÇÃO NO PS4 PRO.** O artefato do run `44677990694` foi construído antes da nova validação SHA-256 no eboot e antes do novo job QA; não o tratar como substituto do próximo build auditado. Nenhuma operação no console foi realizada.
