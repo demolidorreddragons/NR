@@ -266,8 +266,9 @@ jobs:
           "=== ADD PATCH PAYLOAD ===" | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
           "PATCH_SOURCE_EBOOT_SHA256=$((Get-FileHash -Algorithm SHA256 $eboot).Hash)" | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
           "PATCH_SOURCE_PRX_SHA256=$((Get-FileHash -Algorithm SHA256 $patchPrx).Hash)" | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
-          & $pubCmd gp4_file_add --force --pfs_compression enable $eboot "eboot.bin" $gp4 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
-          if ($LASTEXITCODE -ne 0) { throw "Adding eboot.bin to GP4 failed." }
+          # eboot.bin is byte-identical to the base application. Omit it from
+          # the patch payload so the update contains only the changed PRX and metadata.
+          "UNCHANGED_EBOOT_OMITTED_FROM_PATCH=True" | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
           & $pubCmd gp4_file_add --force --pfs_compression enable $patchPrx "ps4_neural_engine.prx" $gp4 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
           if ($LASTEXITCODE -ne 0) { throw "Adding PRX to GP4 failed." }
           & $pubCmd gp4_file_add --force --pfs_compression enable $sfo "sce_sys/param.sfo" $gp4 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
@@ -281,7 +282,7 @@ jobs:
           if ($volumeType -ne "pkg_ps4_patch") { throw "GP4 volume_type is not pkg_ps4_patch." }
           if (-not $appPath) { throw "GP4 has no Application Package association." }
           if ($appPath -notmatch "PS4-Neural-Engine-002[.]pkg$") { throw "GP4 association does not point to the exact delivered Sony-built base PKG 002: $appPath" }
-          if ($project.psproject.files.file.Count -lt 4) { throw "GP4 has fewer than 3 payload entries." }
+          if ($project.psproject.files.file.Count -lt 3) { throw "GP4 has fewer than 3 payload entries." }
           Copy-Item $gp4 "candidate-output/PS4-Neural-Engine-003.gp4"
           "GP4_VOLUME_TYPE=$volumeType" | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
           "GP4_APP_PATH=$appPath" | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
