@@ -67,3 +67,26 @@ The model directory uses one packed stage `s00` with 153 manifest slices. This i
 ## Licensing and handling
 
 The NVIDIA DLL and extracted weights remain proprietary. Do not commit `nvngx_dlssnr.dll`, `weights_ht.bin`, or `s00.bin` to the public repository. Keep only hashes, inventory metadata, extraction code and reproducible test instructions here. The OpenDLSS-NR layout formulas are MIT-licensed and attributed in `THIRD_PARTY_NOTICES.md`.
+
+
+## Semantic tensor-layout reconciliation against the 71-block reference graph
+
+A second validation pass now checks every manifest tensor's **expected byte length** against the actual layout formulas in the pinned OpenDLSS-NR reference graph `9d08f4184bbcb9d858e2fb7a7834ec0837a9d2f1` (310.8.0), using `FusedLayout`, `upsampleFusedLayout`, the 512-channel split blocks, the eight 1024-channel ViT blocks, and the pre/post heads.
+
+Reproduction command when the model directory is available:
+
+```sh
+python3 tools/verify_dlssnr_tensor_layout.py /path/to/DLSS-NR-model-directory
+python3 tests/test_dlssnr_layout_formulas.py
+```
+
+Verified results:
+
+- Exact tensor-name set: 153/153.
+- Expected byte length: 153/153 match the reference graph layout formulas.
+- Block IDs: all 71, from 0 through 70.
+- Stage slices: contiguous, non-overlapping, no gaps, all 147,683,778 bytes accounted for.
+- Eight 2-byte records `block31.layer3.layer` through `block38.layer3.layer` are present but unread by the current reference graph.
+- The separate 2-byte `block70.layer0.blend_scale` record is consumed by the demo composition path, not by the graph's neural block schedule.
+
+The host-only formula regression suite passed in GitHub Actions run `44682885720` (also run `44682843012` on the PR). The full pinned manifest/stage audit passed locally against the recovered Library files. This reconciles all packed tensor record sizes and names with the 310.8.0 graph; it does not decode the E4M3/FP16 payload values or prove that the 310.8.3 DLL's non-weight graph/runtime code is identical.
