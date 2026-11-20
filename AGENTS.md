@@ -45,6 +45,6 @@ Be concise and factual. State exactly what changed and cite the commit or workfl
 
 ## Official Neural Rendering artwork — immutable project identity
 
-The user's approved application artwork is the exact 1536×1536 RGB PNG supplied in the project conversation on 2026-11-20. It depicts a luminous translucent white/blue smoke jellyfish/UFO on a black background, the PlayStation logo and `PS4 Pro` on the dome, and `NEURAL RENDERING` across the bottom. Its source SHA-256 is `3559eba63add88b4145982d99a6d696719e4a76bb4f3d08c26a02c89fc4fcbf5`.
+The user's approved application artwork is the exact 1536×1536 RGB PNG supplied in the project conversation on 2026-11-20. It depicts a luminous monochrome silver/white smoke jellyfish/UFO on a black background, the PlayStation logo and `PS4 Pro` on the dome, and `NEURAL RENDERING` across the bottom. Its source SHA-256 is `3559eba63add88b4145982d99a6d696719e4a76bb4f3d08c26a02c89fc4fcbf5`.
 
 This is the permanent, canonical Neural Rendering identity. Always reuse the exact original artwork; never substitute a generated image, simplified SVG, recreated logo, alternate composition, or merely similar image. The only permitted icon processing is proportional Lanczos resizing to 512×512 for `icon0.png`, preserving the full square composition. Canonical repository asset path: `assets/neural-rendering-icon-source.png`. A PKG must not be approved while this exact source asset is absent or its SHA-256 differs from the approved source.
