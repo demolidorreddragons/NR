@@ -21,7 +21,7 @@ jobs:
           github-token: ${{ github.token }}
 
       - name: Verify package identity before transfer
-        shell: powershell
+        shell: powershell -NoProfile -ExecutionPolicy Bypass -File {0}
         run: |
           $ErrorActionPreference = "Stop"
           $pkg = Join-Path $env:GITHUB_WORKSPACE "candidate/PS4-Neural-Engine-003-CANDIDATE.pkg"
@@ -35,7 +35,7 @@ jobs:
           Write-Host "SOURCE_IDENTITY_VERIFIED bytes=$size sha256=$hash"
 
       - name: Check destination and upload without overwriting
-        shell: powershell
+        shell: powershell -NoProfile -ExecutionPolicy Bypass -File {0}
         env:
           PS4_IP: ${{ vars.PS4_IP }}
         run: |
