@@ -556,3 +556,101 @@ jobs:
             dist/ps4/gcn8/gnm-container-report.json
             dist/ps4/gcn8/spirv-manifest.json
           if-no-files-found: warn
+
+  build-ps4-smoke-pkg:
+    name: Build standalone PS4 GCN8 compute smoke PKG
+    needs: build-gfx8-compute
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download validated GFX8 shader binaries from this run
+        uses: actions/download-artifact@v4
+        with:
+          name: nr-gcn8-compute-shaders-gfx8
+          path: dist/ps4/gcn8
+
+      - name: Install OpenOrbis build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang-18 lld-18 llvm-18 make libc6-dev python3-cairosvg
+          echo "$(dirname "$(readlink -f "$(command -v clang-18)")")" >> "$GITHUB_PATH"
+          sudo ln -sf "$(command -v clang-18)" /usr/local/bin/clang
+          sudo ln -sf "$(command -v clang++-18)" /usr/local/bin/clang++
+          sudo ln -sf "$(command -v ld.lld-18)" /usr/local/bin/ld.lld
+          echo "deb [arch=amd64] https://archive.ubuntu.com/ubuntu focal-updates main" | sudo tee /etc/apt/sources.list.d/focal-updates.list
+          sudo apt-get update
+          sudo apt-get install -y libssl1.1=1.1.1f-1ubuntu2.24 libicu66=66.1-2ubuntu2.1
+
+      - name: Download and verify pinned OpenOrbis toolchain
+        run: |
+          curl -fL --retry 3 -o /tmp/openorbis.tar.gz https://github.com/OpenOrbis/OpenOrbis-PS4-Toolchain/releases/download/v0.5.4/toolchain-llvm-18.tar.gz
+          echo "3c7cd5bb593ca74fa1c13fd59f3938dc0fc07985167f7275063019e63abe4526  /tmp/openorbis.tar.gz" | sha256sum -c -
+          tar -xzf /tmp/openorbis.tar.gz -C "$GITHUB_WORKSPACE"
+          echo "OO_PS4_TOOLCHAIN=$GITHUB_WORKSPACE/OpenOrbis/PS4Toolchain" >> "$GITHUB_ENV"
+
+      - name: Checkout pinned OpenGNM headers
+        uses: actions/checkout@v4
+        with:
+          repository: PS4-OpenGNM/opengnm
+          ref: 4b295ca54c82c83acf308d1c646a2dfa9ae57350
+          path: OpenGNM
+
+      - name: Build patched LibOrbisPkg for deterministic SFO metadata
+        uses: actions/checkout@v4
+        with:
+          repository: OpenOrbis/LibOrbisPkg
+          ref: 92a4e7f8e5914cb06b52ba3ae6b0675da438a051
+          path: LibOrbisPkg-src
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Compile patched PkgTool.Core
+        env:
+          DOTNET_SYSTEM_GLOBALIZATION_INVARIANT: "1"
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path("LibOrbisPkg-src/LibOrbisPkg/PKG/PkgBuilder.cs")
+          s = p.read_text(encoding="utf-8-sig")
+          old = 'sfo["PUBTOOLINFO"] = new SFO.Utf8Value("PUBTOOLINFO", date+time+sizeInfo, 0x200);'
+          new = 'sfo["PUBTOOLINFO"] = new SFO.Utf8Value("PUBTOOLINFO", date+time+sizeInfo+",st_type=digital50", 0x200);'
+          copy = '        pkg.ParamSfo = new SfoEntry(sfo);'
+          marker = '        sfo["PUBTOOLVER"] = new SFO.IntegerValue("PUBTOOLVER", 0x02890000);'
+          if s.count(old) != 1 or s.count(copy) != 1 or s.count(marker) != 1:
+              raise SystemExit("Pinned LibOrbisPkg patch anchors changed; refusing ambiguous patch")
+          s = s.replace(old, new).replace(copy + "\n", "", 1)
+          s = s.replace(marker, marker + "\n" + copy, 1)
+          p.write_text(s, encoding="utf-8")
+          check = p.read_text(encoding="utf-8")
+          if check.count(copy) != 1 or check.index(copy) < check.index(marker) or new not in check:
+              raise SystemExit("Patched SFO metadata finalization order is invalid")
+          PY
+          dotnet publish LibOrbisPkg-src/PkgTool.Core/PkgTool.Core.csproj -c Release -r linux-x64 --self-contained false -o "$RUNNER_TEMP/pkgtool-patched"
+          test -x "$RUNNER_TEMP/pkgtool-patched/PkgTool.Core"
+          mkdir -p "$OO_PS4_TOOLCHAIN/bin/linux/pkgtool-patched"
+          cp -a "$RUNNER_TEMP/pkgtool-patched/." "$OO_PS4_TOOLCHAIN/bin/linux/pkgtool-patched/"
+          echo "PKGTOOL_CORE=$OO_PS4_TOOLCHAIN/bin/linux/pkgtool-patched/PkgTool.Core" >> "$GITHUB_ENV"
+
+      - name: Build and independently self-validate compute smoke PKG
+        env:
+          GCN8_SHADER_FILE: ${{ github.workspace }}/dist/ps4/gcn8/compute_smoke_add.sb
+          OPEN_GNM_INCLUDE: ${{ github.workspace }}/OpenGNM/include
+          DOTNET_SYSTEM_GLOBALIZATION_INVARIANT: "1"
+        run: |
+          test -s "$GCN8_SHADER_FILE"
+          bash tools/build_compute_smoke_pkg.sh
+
+      - name: Upload standalone compute smoke package and audit manifest
+        uses: actions/upload-artifact@v4
+        with:
+          name: nr-gcn8-compute-smoke-ps4-pkg
+          path: |
+            dist/gcn8-smoke/**/*.pkg
+            dist/gcn8-smoke/**/SMOKE_PKG_MANIFEST.txt
+            dist/gcn8-smoke/**/package.gp4
+            dist/gcn8-smoke/**/param.sfo
+          if-no-files-found: error
+          retention-days: 30
