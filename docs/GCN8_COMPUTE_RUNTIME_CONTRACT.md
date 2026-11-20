@@ -118,9 +118,12 @@ first, then patch the register block; the parser itself never submits or
 dispatches a shader.
 
 The C++ test covers malformed headers, wrong stage/target, slot pointer/count,
-code range, resource slot, CS registers and address alignment. The GFX8 CI
-workflow also runs this parser against all five emitted `.sb` files before
-the byte-level Python report verifier. This remains host-side evidence.
+code range, resource slot, CS registers and address alignment. Run
+`44743915113` passed this parser against all five emitted `.sb` files and then
+passed the byte-level Python report verifier. That verifier compared actual
+source/SPIR-V/container/GCN/ISA bytes and re-decoded raw CS register fields via
+the pinned Mesa GFX8 register database. The upstream `verify_sb.py` remains
+the CRC verifier. This is host-side evidence only; no GPU load or dispatch.
 
 ## Memory-management boundary
 
