@@ -9,6 +9,11 @@ OUT="$ROOT/dist/pkg"
 TOOLS="$OO_PS4_TOOLCHAIN/bin/linux"
 PKGTOOL="${PKGTOOL_CORE:-$TOOLS/PkgTool.Core}"
 TITLE_ID="PNEU00001"
+APP_VERSION="${APP_VERSION:-01.01}"
+if [[ ! "$APP_VERSION" =~ ^[0-9]{2}\.[0-9]{2}$ ]]; then
+  echo "APP_VERSION must use Sony XX.YY format (for example 01.01)." >&2
+  exit 1
+fi
 CONTENT_ID="IV0000-PNEU00001_00-PS4NEURALENG0000"
 # Release number is embedded in the user-facing PKG filename and preserved by the PS4 bridge.
 # The bridge clears its persistent workspace before downloading this build's artifact.
@@ -70,7 +75,7 @@ sfo() {
     --type "$2" --maxsize "$3" --value "$4"
 }
 sfo APP_TYPE Integer 4 1
-sfo APP_VER Utf8 8 1.00
+sfo APP_VER Utf8 8 "$APP_VERSION"
 sfo ATTRIBUTE Integer 18 0
 sfo CATEGORY Utf8 4 gde
 sfo FORMAT Utf8 4 obs
@@ -79,7 +84,7 @@ sfo DOWNLOAD_DATA_SIZE Integer 4 0
 sfo SYSTEM_VER Integer 4 1020
 sfo TITLE Utf8 128 "PS4 Neural Engine Installer"
 sfo TITLE_ID Utf8 12 "$TITLE_ID"
-sfo VERSION Utf8 8 1.00
+sfo VERSION Utf8 8 "$APP_VERSION"
 
 # Fake PKG Tools resolves an associated base package's storage type from
 # PARAM.SFO PUBTOOLINFO. Keep it explicit in the base PKG (GP4 storage_type
