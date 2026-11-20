@@ -79,3 +79,24 @@ This is the next concrete build-system/dependency-layout blocker for REA-3 to re
 - **Performance gate:** only then collect GPU latency, occupancy/register and throughput measurements.
 
 No source/host test, compiler build, SPIR-V validation, or container check by itself proves execution on PS4 Pro. No PKG installation, plugin activation, or persistent console modification is authorized by these workstreams.
+
+
+### REA-5 — Independent GCN8 validation specialist (clean-room reviewer)
+
+**Mission:** independently decide whether each shader artifact is correct and safe to advance, without inheriting the project's assumptions, prior conclusions, or implementation bias.
+
+**Independence protocol (mandatory):**
+1. Start from the test specification and acceptance criteria, not the implementation team's status report or claimed conclusions.
+2. Receive artifacts by immutable commit SHA and SHA-256, plus only the minimum interface/specification needed to test them. Do not use REA-1..4 conclusions as evidence.
+3. Reconstruct expected results independently from shader specifications and CPU reference equations; write or select independent test vectors before inspecting implementation output.
+4. Review source, SPIR-V, GNM containers and ISA artifacts independently. Record every assumption and distinguish observed facts, derived conclusions and unknowns.
+5. Run negative tests: malformed/truncated containers, invalid dimensions, boundary tiles, overflow, misalignment, unsupported capabilities and corrupted artifacts.
+6. Differential-test numerical outputs against independently calculated expected values, including tolerances, NaN/Inf, signed zero, subnormals and rounding behavior where applicable.
+7. Do not accept CI green, compiler success, a container CRC, or a developer-provided report as proof of semantic correctness or hardware execution.
+8. Issue a signed-off-by report with PASS / FAIL / BLOCKED per artifact and reproducible commands, tool versions, input hashes, output hashes and logs. A blocked test is not a pass.
+9. The reviewer must not modify the implementation under review. Defects go back to the owning REA workstream; retesting uses a new immutable artifact hash.
+10. No console dispatch is required or authorized by this role until a separately approved, reversible test plan exists.
+
+**Required outputs:** independent test plan; test-vector corpus; machine-readable results; defect list; final per-shader verdict. The reviewer has veto authority over advancement to GNM runtime testing when evidence is incomplete.
+
+**Independence limitation:** this is a separately defined review workstream and protocol, not a claim that an external human contractor or autonomous agent has been hired. The review must be performed in a clean context without relying on the implementation narrative; until that independent execution occurs, REA-5 remains NOT EXECUTED.
