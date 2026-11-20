@@ -330,9 +330,18 @@ static int commit_install(char* error, size_t error_size) {
     }
     if (had_config) {
         if (rename(CONFIG, CONFIG_BACKUP) != 0) {
-            failure = errno;
-            if (moved_prx) rename(DEST_BACKUP, DEST_PRX);
-            snprintf(error, error_size, "ERROR: cannot back up plugins.ini (errno=%d); previous PRX restore attempted.", failure);
+            int operation_errno = errno;
+            int restore_errno = 0;
+            if (moved_prx && rename(DEST_BACKUP, DEST_PRX) != 0) restore_errno = errno;
+            if (restore_errno) {
+                snprintf(error, error_size,
+                         "ERROR: cannot back up plugins.ini (errno=%d); PRX restore also failed (errno=%d); inspect .pne-backup.",
+                         operation_errno, restore_errno);
+            } else {
+                snprintf(error, error_size,
+                         "ERROR: cannot back up plugins.ini (errno=%d); previous PRX restored.",
+                         operation_errno);
+            }
             return 0;
         }
         moved_config = 1;
@@ -349,12 +358,23 @@ static int commit_install(char* error, size_t error_size) {
     return 1;
 
 rollback:
-    if (installed_prx) remove(DEST_PRX);
-    if (moved_config && rename(CONFIG_BACKUP, CONFIG) != 0) failure = errno;
-    if (moved_prx && rename(DEST_BACKUP, DEST_PRX) != 0) failure = errno;
-    remove(DEST_TMP);
-    remove(CONFIG_TMP);
-    snprintf(error, error_size, "ERROR: transactional commit failed (errno=%d); rollback attempted, inspect backups.", failure);
+    {
+        int rollback_errno = 0;
+        if (installed_prx && remove(DEST_PRX) != 0 && errno != ENOENT) rollback_errno = errno;
+        if (moved_config && rename(CONFIG_BACKUP, CONFIG) != 0 && rollback_errno == 0) rollback_errno = errno;
+        if (moved_prx && rename(DEST_BACKUP, DEST_PRX) != 0 && rollback_errno == 0) rollback_errno = errno;
+        remove(DEST_TMP);
+        remove(CONFIG_TMP);
+        if (rollback_errno) {
+            snprintf(error, error_size,
+                     "ERROR: transactional commit failed (errno=%d); rollback incomplete (errno=%d); inspect .pne-backup.",
+                     failure, rollback_errno);
+        } else {
+            snprintf(error, error_size,
+                     "ERROR: transactional commit failed (errno=%d); previous files restored.",
+                     failure);
+        }
+    }
     return 0;
 }
 
