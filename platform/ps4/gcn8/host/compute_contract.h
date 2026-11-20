@@ -1,0 +1,54 @@
+#ifndef PNE_GCN8_COMPUTE_CONTRACT_H
+#define PNE_GCN8_COMPUTE_CONTRACT_H
+
+#include <cstddef>
+#include <cstdint>
+
+namespace pne::gcn8 {
+
+struct GemmParams {
+    std::uint32_t m;
+    std::uint32_t n;
+    std::uint32_t k;
+    float alpha;
+    float beta;
+};
+
+struct BufferView {
+    const void* data;
+    std::size_t size_bytes;
+};
+
+struct GemmDispatch {
+    GemmParams params;
+    std::uint32_t groups_x;
+    std::uint32_t groups_y;
+    std::size_t a_required_bytes;
+    std::size_t b_required_bytes;
+    std::size_t c_required_bytes;
+    std::size_t out_required_bytes;
+};
+
+enum class ContractError {
+    none,
+    zero_output_dimension,
+    size_overflow,
+    null_buffer,
+    buffer_too_small,
+    output_aliases_input,
+    invalid_scalar
+};
+
+ContractError make_gemm_dispatch(
+    const GemmParams& params,
+    const BufferView& a,
+    const BufferView& b,
+    const BufferView& c,
+    const BufferView& out,
+    GemmDispatch* dispatch);
+
+const char* contract_error_string(ContractError error) noexcept;
+
+} // namespace pne::gcn8
+
+#endif
