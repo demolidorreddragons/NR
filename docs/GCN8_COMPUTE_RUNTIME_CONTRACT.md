@@ -27,14 +27,32 @@ header compatibility and import-library symbol resolution in the CI toolchain;
 it does not prove runtime behavior or firmware availability on every supported
 firmware.
 
+## First compiled GFX8 metadata evidence — run 44739871394
+
+The first successful five-shader compiler artifact is recorded in
+`docs/GCN8_GFX8_ARTIFACT_44739871394.md`. For the tiled FP32 shader, the
+compiler emits one `PTR_INDIRECTRESOURCETABLE` input-usage slot at API slot 0,
+starting at user-data register 2. `COMPUTE_PGM_RSRC2` reports 8 user SGPRs,
+wave64, LDS allocation 2,048 bytes, and no scratch. The compiled workgroup is
+8×8×1, matching SPIR-V LocalSize.
+
+PSBC's compiler log maps SPIR-V storage bindings 0–3 to descriptor-table byte
+offsets 0, 64, 128 and 192 (16-byte descriptor payloads reported for each
+binding). The emitted ISA uses scalar loads from the table pointer and buffer
+load/store instructions. This is useful ABI evidence, but it does not yet
+prove the exact Orbis runtime descriptor class, descriptor encoding, GPU VA
+semantics or the setter API. In particular, do not equate
+`PTR_INDIRECTRESOURCETABLE` with four directly bound V# descriptors.
+
+The resource-allocation fields are decoded from the pinned Mesa GFX8 register
+JSON. They are compile-time allocations, not runtime occupancy measurements.
+REA-5 has not independently reviewed these artifacts.
+
 ## Resource-binding constraint
 
 `GnmBuffer` is a 16-byte V# descriptor. The presence of a V# setter does not
 prove that GLSL `std430` storage-buffer variables emitted by the shader
-compiler are represented by V# descriptors. Before implementing binding,
-inspect the generated GFX8 compute shader's user-SGPR/resource metadata and
-confirm the expected descriptor kind, slot numbering, and register layout.
-Do not bind the four GEMM buffers by assumption.
+compiler are represented by V# descriptors. The first compiler artifact now identifies the indirect resource-table pointer (start register 2), user-SGPR count, and four SPIR-V binding offsets. Before implementing binding, independently confirm the descriptor kind, descriptor bytes, address encoding, slot numbering and register layout against an authoritative GNM parser or real PS4 sample. Do not bind the four GEMM buffers by assumption.
 
 ## Memory-management boundary
 
