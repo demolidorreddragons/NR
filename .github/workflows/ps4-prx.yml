@@ -107,6 +107,18 @@ jobs:
           repository: GoldHEN/GoldHEN_Plugins_SDK
           ref: bcea3c7ef01dac6d7f9f49ebf9e90fe66d86f5f7
           path: GoldHEN_Plugins_SDK
+      - name: Checkout pinned OpenGNM API headers
+        uses: actions/checkout@v4
+        with:
+          repository: PS4-OpenGNM/opengnm
+          ref: 4b295ca54c82c83acf308d1c646a2dfa9ae57350
+          path: OpenGNM
+      - name: Compile GCN8 GNM API and ABI smoke test
+        run: |
+          mkdir -p "$RUNNER_TEMP/gcnm-smoke"
+          clang++ --target=x86_64-pc-freebsd12-elf -std=c++17 -fPIC -fno-exceptions -fno-rtti -DOPENGNM_REQUIRE_ABI=1 -isysroot "$OO_PS4_TOOLCHAIN" -isystem "$OO_PS4_TOOLCHAIN/include" -isystem /usr/include/x86_64-linux-gnu -isystem "$OO_PS4_TOOLCHAIN/include/c++/v1" -IOpenGNM/include -c tests/gcn8_gnm_api_smoke.cpp -o "$RUNNER_TEMP/gcnm-smoke/gcn8_gnm_api_smoke.o"
+          test -s "$RUNNER_TEMP/gcnm-smoke/gcn8_gnm_api_smoke.o"
+          echo "GCN8_GNM_API_SMOKE=compiled; no firmware calls or GPU dispatch executed"
       - name: Build GoldHEN hook library
         run: |
           echo "GOLDHEN_SDK=$GITHUB_WORKSPACE/GoldHEN_Plugins_SDK" >> "$GITHUB_ENV"
