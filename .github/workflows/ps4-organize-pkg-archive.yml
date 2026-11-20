@@ -10,7 +10,7 @@ jobs:
   organize:
     runs-on: [self-hosted, Windows, X64, ps4-lan]
     steps:
-      - name: Move every older Neural Engine PKG into archive folder
+      - name: Move only older Neural Engine PKGs into archive folder
         shell: powershell -NoProfile -ExecutionPolicy Bypass -File {0}
         env:
           PS4_IP: ${{ vars.PS4_IP }}
@@ -33,9 +33,216 @@ jobs:
 
           $rootBefore = @(Get-FtpNames $base)
           if ($rootBefore -notcontains $keep) { throw "The exact current PKG 003 is missing from /data/pkg; no files moved." }
-          $unexpected = @($rootBefore | Where-Object { $_ -notmatch '^PS4-Neural-Engine-.*[.]pkg$' })
-          if ($unexpected.Count -gt 0) { throw "Unexpected files exist in /data/pkg; refusing to move or leave an ambiguous root: $($unexpected -join ', ')" }
-          $old = @($rootBefore | Where-Object { $_ -ne $keep })
+          # Preserve every non-Neural-Engine package in the root directory.
+          $neuralPackages = @($rootBefore | Where-Object { $_ -match '^PS4-Neural-Engine-.*[.]pkg
+          Write-Host "KEEP_AT_ROOT=$keep"
+          Write-Host "OLD_PACKAGE_COUNT=$($old.Count)"
+
+          # Create the archive directory only if it does not already exist.
+          $archiveBefore = @()
+          $archiveCheck = & curl.exe --fail --silent --show-error --ftp-pasv --list-only --user $creds "ftp://$($env:PS4_IP):2121$archive" 2>&1
+          if ($LASTEXITCODE -eq 0) {
+            $archiveBefore = @($archiveCheck | ForEach-Object { ([string]$_).Trim() } | Where-Object { $_ })
+          } else {
+            $mkd = & curl.exe --fail --silent --show-error --ftp-pasv --user $creds --quote "CWD data" --quote "CWD pkg" --quote "MKD old_versions" $hostUrl 2>&1
+            if ($LASTEXITCODE -ne 0) {
+              $archiveRetry = & curl.exe --fail --silent --show-error --ftp-pasv --list-only --user $creds "ftp://$($env:PS4_IP):2121$archive" 2>&1
+              if ($LASTEXITCODE -ne 0) { throw "Could not create or access /data/pkg/old_versions. $mkd" }
+              $archiveBefore = @($archiveRetry | ForEach-Object { ([string]$_).Trim() } | Where-Object { $_ })
+            }
+          }
+
+          $collisions = @($old | Where-Object { $archiveBefore -contains $_ })
+          if ($collisions.Count -gt 0) { throw "Archive name collision; no moves started: $($collisions -join ', ')" }
+
+          foreach ($name in $old) {
+            # GoldHEN FTP requires explicit CWD steps before RNFR/RNTO.
+            $move = & curl.exe --fail --silent --show-error --ftp-pasv --user $creds --quote "CWD data" --quote "CWD pkg" --quote "RNFR $name" --quote "RNTO old_versions/$name" $hostUrl 2>&1
+            if ($LASTEXITCODE -ne 0) { throw "FTP rename failed for $name. $move" }
+            Write-Host "ARCHIVED=$name"
+          }
+
+          $rootAfter = @(Get-FtpNames $base)
+          $archiveAfter = @(Get-FtpNames $archive)
+          $neuralRemaining = @($rootAfter | Where-Object { $_ -match '^PS4-Neural-Engine-.*[.]pkg
+          foreach ($name in $old) {
+            if ($archiveAfter -notcontains $name) { throw "Archive verification failed; missing $name" }
+          }
+          if ($archiveAfter.Count -ne ($archiveBefore.Count + $old.Count)) {
+            throw "Archive count mismatch. Before=$($archiveBefore.Count) After=$($archiveAfter.Count) Moved=$($old.Count)"
+          }
+
+          Write-Host "ORGANIZATION_SUCCESS=true"
+          Write-Host "ROOT_ONLY=$keep"
+          Write-Host "ARCHIVE_PATH=/data/pkg/old_versions/"
+          Write-Host "ARCHIVED_COUNT=$($old.Count)"
+          Write-Host "ARCHIVE_TOTAL=$($archiveAfter.Count)"
+          Write-Host "PRESERVED_NON_NEURAL_COUNT=$($preservedOther.Count)`n          Write-Host "FINAL_ROOT=$($rootAfter -join ', ')"
+ })
+          $old = @($neuralPackages | Where-Object { $_ -ne $keep })
+          $preservedOther = @($rootBefore | Where-Object { $_ -notmatch '^PS4-Neural-Engine-.*[.]pkg
+          Write-Host "KEEP_AT_ROOT=$keep"
+          Write-Host "OLD_PACKAGE_COUNT=$($old.Count)"
+
+          # Create the archive directory only if it does not already exist.
+          $archiveBefore = @()
+          $archiveCheck = & curl.exe --fail --silent --show-error --ftp-pasv --list-only --user $creds "ftp://$($env:PS4_IP):2121$archive" 2>&1
+          if ($LASTEXITCODE -eq 0) {
+            $archiveBefore = @($archiveCheck | ForEach-Object { ([string]$_).Trim() } | Where-Object { $_ })
+          } else {
+            $mkd = & curl.exe --fail --silent --show-error --ftp-pasv --user $creds --quote "CWD data" --quote "CWD pkg" --quote "MKD old_versions" $hostUrl 2>&1
+            if ($LASTEXITCODE -ne 0) {
+              $archiveRetry = & curl.exe --fail --silent --show-error --ftp-pasv --list-only --user $creds "ftp://$($env:PS4_IP):2121$archive" 2>&1
+              if ($LASTEXITCODE -ne 0) { throw "Could not create or access /data/pkg/old_versions. $mkd" }
+              $archiveBefore = @($archiveRetry | ForEach-Object { ([string]$_).Trim() } | Where-Object { $_ })
+            }
+          }
+
+          $collisions = @($old | Where-Object { $archiveBefore -contains $_ })
+          if ($collisions.Count -gt 0) { throw "Archive name collision; no moves started: $($collisions -join ', ')" }
+
+          foreach ($name in $old) {
+            # GoldHEN FTP requires explicit CWD steps before RNFR/RNTO.
+            $move = & curl.exe --fail --silent --show-error --ftp-pasv --user $creds --quote "CWD data" --quote "CWD pkg" --quote "RNFR $name" --quote "RNTO old_versions/$name" $hostUrl 2>&1
+            if ($LASTEXITCODE -ne 0) { throw "FTP rename failed for $name. $move" }
+            Write-Host "ARCHIVED=$name"
+          }
+
+          $rootAfter = @(Get-FtpNames $base)
+          $archiveAfter = @(Get-FtpNames $archive)
+          if ($rootAfter.Count -ne 1 -or $rootAfter[0] -ne $keep) {
+            throw "Root verification failed. Remaining root entries: $($rootAfter -join ', ')"
+          }
+          foreach ($name in $old) {
+            if ($archiveAfter -notcontains $name) { throw "Archive verification failed; missing $name" }
+          }
+          if ($archiveAfter.Count -ne ($archiveBefore.Count + $old.Count)) {
+            throw "Archive count mismatch. Before=$($archiveBefore.Count) After=$($archiveAfter.Count) Moved=$($old.Count)"
+          }
+
+          Write-Host "ORGANIZATION_SUCCESS=true"
+          Write-Host "ROOT_ONLY=$keep"
+          Write-Host "ARCHIVE_PATH=/data/pkg/old_versions/"
+          Write-Host "ARCHIVED_COUNT=$($old.Count)"
+          Write-Host "ARCHIVE_TOTAL=$($archiveAfter.Count)"
+          Write-Host "FINAL_ROOT=$($rootAfter -join ', ')"
+ })
+          Write-Host "PRESERVE_NON_NEURAL_COUNT=$($preservedOther.Count)"
+          Write-Host "KEEP_AT_ROOT=$keep"
+          Write-Host "OLD_PACKAGE_COUNT=$($old.Count)"
+
+          # Create the archive directory only if it does not already exist.
+          $archiveBefore = @()
+          $archiveCheck = & curl.exe --fail --silent --show-error --ftp-pasv --list-only --user $creds "ftp://$($env:PS4_IP):2121$archive" 2>&1
+          if ($LASTEXITCODE -eq 0) {
+            $archiveBefore = @($archiveCheck | ForEach-Object { ([string]$_).Trim() } | Where-Object { $_ })
+          } else {
+            $mkd = & curl.exe --fail --silent --show-error --ftp-pasv --user $creds --quote "CWD data" --quote "CWD pkg" --quote "MKD old_versions" $hostUrl 2>&1
+            if ($LASTEXITCODE -ne 0) {
+              $archiveRetry = & curl.exe --fail --silent --show-error --ftp-pasv --list-only --user $creds "ftp://$($env:PS4_IP):2121$archive" 2>&1
+              if ($LASTEXITCODE -ne 0) { throw "Could not create or access /data/pkg/old_versions. $mkd" }
+              $archiveBefore = @($archiveRetry | ForEach-Object { ([string]$_).Trim() } | Where-Object { $_ })
+            }
+          }
+
+          $collisions = @($old | Where-Object { $archiveBefore -contains $_ })
+          if ($collisions.Count -gt 0) { throw "Archive name collision; no moves started: $($collisions -join ', ')" }
+
+          foreach ($name in $old) {
+            # GoldHEN FTP requires explicit CWD steps before RNFR/RNTO.
+            $move = & curl.exe --fail --silent --show-error --ftp-pasv --user $creds --quote "CWD data" --quote "CWD pkg" --quote "RNFR $name" --quote "RNTO old_versions/$name" $hostUrl 2>&1
+            if ($LASTEXITCODE -ne 0) { throw "FTP rename failed for $name. $move" }
+            Write-Host "ARCHIVED=$name"
+          }
+
+          $rootAfter = @(Get-FtpNames $base)
+          $archiveAfter = @(Get-FtpNames $archive)
+          if ($rootAfter.Count -ne 1 -or $rootAfter[0] -ne $keep) {
+            throw "Root verification failed. Remaining root entries: $($rootAfter -join ', ')"
+          }
+          foreach ($name in $old) {
+            if ($archiveAfter -notcontains $name) { throw "Archive verification failed; missing $name" }
+          }
+          if ($archiveAfter.Count -ne ($archiveBefore.Count + $old.Count)) {
+            throw "Archive count mismatch. Before=$($archiveBefore.Count) After=$($archiveAfter.Count) Moved=$($old.Count)"
+          }
+
+          Write-Host "ORGANIZATION_SUCCESS=true"
+          Write-Host "ROOT_ONLY=$keep"
+          Write-Host "ARCHIVE_PATH=/data/pkg/old_versions/"
+          Write-Host "ARCHIVED_COUNT=$($old.Count)"
+          Write-Host "ARCHIVE_TOTAL=$($archiveAfter.Count)"
+          Write-Host "FINAL_ROOT=$($rootAfter -join ', ')"
+ })
+          if ($neuralRemaining.Count -ne 1 -or $neuralRemaining[0] -ne $keep) {
+            throw "Neural Engine root verification failed. Remaining Neural Engine entries: $($neuralRemaining -join ', ')"
+          }
+          foreach ($name in $preservedOther) {
+            if ($rootAfter -notcontains $name) { throw "A non-Neural Engine package was unexpectedly moved or removed: $name" }
+          }
+          foreach ($name in $old) {
+            if ($archiveAfter -notcontains $name) { throw "Archive verification failed; missing $name" }
+          }
+          if ($archiveAfter.Count -ne ($archiveBefore.Count + $old.Count)) {
+            throw "Archive count mismatch. Before=$($archiveBefore.Count) After=$($archiveAfter.Count) Moved=$($old.Count)"
+          }
+
+          Write-Host "ORGANIZATION_SUCCESS=true"
+          Write-Host "ROOT_ONLY=$keep"
+          Write-Host "ARCHIVE_PATH=/data/pkg/old_versions/"
+          Write-Host "ARCHIVED_COUNT=$($old.Count)"
+          Write-Host "ARCHIVE_TOTAL=$($archiveAfter.Count)"
+          Write-Host "FINAL_ROOT=$($rootAfter -join ', ')"
+ })
+          $old = @($neuralPackages | Where-Object { $_ -ne $keep })
+          $preservedOther = @($rootBefore | Where-Object { $_ -notmatch '^PS4-Neural-Engine-.*[.]pkg
+          Write-Host "KEEP_AT_ROOT=$keep"
+          Write-Host "OLD_PACKAGE_COUNT=$($old.Count)"
+
+          # Create the archive directory only if it does not already exist.
+          $archiveBefore = @()
+          $archiveCheck = & curl.exe --fail --silent --show-error --ftp-pasv --list-only --user $creds "ftp://$($env:PS4_IP):2121$archive" 2>&1
+          if ($LASTEXITCODE -eq 0) {
+            $archiveBefore = @($archiveCheck | ForEach-Object { ([string]$_).Trim() } | Where-Object { $_ })
+          } else {
+            $mkd = & curl.exe --fail --silent --show-error --ftp-pasv --user $creds --quote "CWD data" --quote "CWD pkg" --quote "MKD old_versions" $hostUrl 2>&1
+            if ($LASTEXITCODE -ne 0) {
+              $archiveRetry = & curl.exe --fail --silent --show-error --ftp-pasv --list-only --user $creds "ftp://$($env:PS4_IP):2121$archive" 2>&1
+              if ($LASTEXITCODE -ne 0) { throw "Could not create or access /data/pkg/old_versions. $mkd" }
+              $archiveBefore = @($archiveRetry | ForEach-Object { ([string]$_).Trim() } | Where-Object { $_ })
+            }
+          }
+
+          $collisions = @($old | Where-Object { $archiveBefore -contains $_ })
+          if ($collisions.Count -gt 0) { throw "Archive name collision; no moves started: $($collisions -join ', ')" }
+
+          foreach ($name in $old) {
+            # GoldHEN FTP requires explicit CWD steps before RNFR/RNTO.
+            $move = & curl.exe --fail --silent --show-error --ftp-pasv --user $creds --quote "CWD data" --quote "CWD pkg" --quote "RNFR $name" --quote "RNTO old_versions/$name" $hostUrl 2>&1
+            if ($LASTEXITCODE -ne 0) { throw "FTP rename failed for $name. $move" }
+            Write-Host "ARCHIVED=$name"
+          }
+
+          $rootAfter = @(Get-FtpNames $base)
+          $archiveAfter = @(Get-FtpNames $archive)
+          if ($rootAfter.Count -ne 1 -or $rootAfter[0] -ne $keep) {
+            throw "Root verification failed. Remaining root entries: $($rootAfter -join ', ')"
+          }
+          foreach ($name in $old) {
+            if ($archiveAfter -notcontains $name) { throw "Archive verification failed; missing $name" }
+          }
+          if ($archiveAfter.Count -ne ($archiveBefore.Count + $old.Count)) {
+            throw "Archive count mismatch. Before=$($archiveBefore.Count) After=$($archiveAfter.Count) Moved=$($old.Count)"
+          }
+
+          Write-Host "ORGANIZATION_SUCCESS=true"
+          Write-Host "ROOT_ONLY=$keep"
+          Write-Host "ARCHIVE_PATH=/data/pkg/old_versions/"
+          Write-Host "ARCHIVED_COUNT=$($old.Count)"
+          Write-Host "ARCHIVE_TOTAL=$($archiveAfter.Count)"
+          Write-Host "FINAL_ROOT=$($rootAfter -join ', ')"
+ })
+          Write-Host "PRESERVE_NON_NEURAL_COUNT=$($preservedOther.Count)"
           Write-Host "KEEP_AT_ROOT=$keep"
           Write-Host "OLD_PACKAGE_COUNT=$($old.Count)"
 
