@@ -37,3 +37,12 @@ add_executable(test_gcn8_resource_table tests/test_gcn8_resource_table.cpp)
 target_link_libraries(test_gcn8_resource_table PRIVATE pne_gcn8_resource_table)
 add_test(NAME gcn8_resource_table_contract COMMAND test_gcn8_resource_table)
 
+add_library(pne_gcn8_shader_binary
+    platform/ps4/gcn8/host/shader_binary_contract.cpp
+)
+target_include_directories(pne_gcn8_shader_binary PUBLIC platform/ps4/gcn8/host)
+
+add_executable(test_gcn8_shader_binary tests/test_gcn8_shader_binary.cpp)
+target_link_libraries(test_gcn8_shader_binary PRIVATE pne_gcn8_shader_binary)
+add_test(NAME gcn8_shader_binary_contract COMMAND test_gcn8_shader_binary)
+
