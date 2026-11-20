@@ -58,7 +58,7 @@ jobs:
           $pkg = Join-Path $env:GITHUB_WORKSPACE "qa-candidate/PS4-Neural-Engine-003-CANDIDATE.pkg"
           $gp4 = Join-Path $env:GITHUB_WORKSPACE "qa-candidate/PS4-Neural-Engine-003.gp4"
           $report = Join-Path $env:GITHUB_WORKSPACE "qa-candidate/build-report.txt"
-          $base = Join-Path $env:GITHUB_WORKSPACE "qa-candidate/PS4-Neural-Engine-Installed-Original.pkg"
+          $base = Join-Path $env:GITHUB_WORKSPACE "qa-candidate/PS4-Neural-Engine-Installed-Base.pkg"
           $originalBase = Join-Path $env:GITHUB_WORKSPACE "qa-candidate/PS4-Neural-Engine-Installed-Original.pkg"
           if (-not (Test-Path $pkg) -or -not (Test-Path $gp4) -or -not (Test-Path $base) -or -not (Test-Path $originalBase)) { throw "Required patch, GP4, or exact installed original base PKG missing." }
           New-Item -ItemType Directory -Force -Path qa-output | Out-Null
@@ -94,7 +94,7 @@ jobs:
           $appPath = $project.psproject.volume.package.app_path
           if ($volume -ne "pkg_ps4_patch") { throw "GP4 is not pkg_ps4_patch." }
           if ($storage -ne "digital25") { throw "Patch GP4 storage type mismatch." }
-          if ([IO.Path]::GetFileName($appPath) -ne "installed-app.pkg") { throw "GP4 does not reference the exact installed base app.pkg: $appPath" }
+          if ([IO.Path]::GetFileName($appPath) -ne "PS4-Neural-Engine-Installed-Base.pkg") { throw "GP4 does not reference the Sony-rebuilt installed base association package: $appPath" }
           "GP4_VOLUME_TYPE=$volume" | Out-File qa-output/qa-report.txt -Append
           "GP4_STORAGE_TYPE=$storage" | Out-File qa-output/qa-report.txt -Append
           "GP4_APP_PATH=$appPath" | Out-File qa-output/qa-report.txt -Append
@@ -118,7 +118,7 @@ jobs:
           if (-not $baseSfo -or -not $patchSfo) { throw "Base or patch PARAM.SFO missing." }
           $baseText = (dotnet "$tool" sfo read "$($baseSfo.FullName)" 2>&1) -join "`n"
           $patchText = (dotnet "$tool" sfo read "$($patchSfo.FullName)" 2>&1) -join "`n"
-          foreach ($required in @("CATEGORY = gd","APP_VER = 1.00","CONTENT_ID = IV0000-PNEU00001_00-PS4NEURALENG0000","TITLE_ID = PNEU00001")) {
+          foreach ($required in @("CATEGORY = gd","APP_VER = 01.00","CONTENT_ID = IV0000-PNEU00001_00-PS4NEURALENG0000","TITLE_ID = PNEU00001","st_type=digital50")) {
             if ($baseText -notmatch [regex]::Escape($required)) { throw "Exact installed base SFO missing expected metadata: $required" }
           }
           foreach ($required in @("CATEGORY = gp","APP_VER = 01.01","CONTENT_ID = IV0000-PNEU00001_00-PS4NEURALENG0000","TITLE_ID = PNEU00001","st_type=digital25")) {
