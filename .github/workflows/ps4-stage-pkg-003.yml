@@ -1,0 +1,67 @@
+name: PS4 Stage QA-Approved PKG 003
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/ps4-stage-pkg-003.yml"
+permissions:
+  actions: read
+  contents: read
+jobs:
+  stage-package:
+    runs-on: [self-hosted, Windows, X64, ps4-lan]
+    steps:
+      - name: Download exact PC-QA-approved candidate artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: PS4-Neural-Engine-003-patch-candidate
+          path: candidate
+          repository: demolidorreddragons/NR
+          run-id: 44650571301
+          github-token: ${{ github.token }}
+
+      - name: Verify package identity before transfer
+        shell: powershell
+        run: |
+          $ErrorActionPreference = "Stop"
+          $pkg = Join-Path $env:GITHUB_WORKSPACE "candidate/PS4-Neural-Engine-003-CANDIDATE.pkg"
+          if (-not (Test-Path -LiteralPath $pkg)) { throw "Candidate PKG missing from approved artifact." }
+          $size = (Get-Item -LiteralPath $pkg).Length
+          $hash = (Get-FileHash -LiteralPath $pkg -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($size -ne 4784128 -or $hash -ne "263d3207f1a67a9055adf97b8ae85187b63620e979fa4b4aa55e9733f3f7e694") {
+            throw "Candidate identity mismatch: bytes=$size sha256=$hash"
+          }
+          "PKG=$pkg" | Out-File "$env:RUNNER_TEMP\pne-stage-003.env"
+          Write-Host "SOURCE_IDENTITY_VERIFIED bytes=$size sha256=$hash"
+
+      - name: Check destination and upload without overwriting
+        shell: powershell
+        env:
+          PS4_IP: ${{ vars.PS4_IP }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          if (-not $env:PS4_IP) { throw "PS4_IP variable missing." }
+          $pkg = (Get-Content "$env:RUNNER_TEMP\pne-stage-003.env" | Select-Object -First 1).Substring(4)
+          $name = "PS4-Neural-Engine-003-263D3207F1A6.pkg"
+          $dir = "ftp://$($env:PS4_IP):2121/data/pkg/"
+          $url = $dir + $name
+          $creds = "anonymous:anonymous@example.com"
+          $listing = & curl.exe --fail --silent --show-error --ftp-pasv --user $creds $dir 2>&1
+          if ($LASTEXITCODE -ne 0) { throw "Cannot list /data/pkg; refusing to upload." }
+          if (@($listing | Where-Object { ([string]$_).Trim() -eq $name }).Count -gt 0) {
+            throw "Destination already exists; refusing to overwrite."
+          }
+          $upload = & curl.exe --fail --silent --show-error --ftp-pasv --user $creds --upload-file $pkg $url 2>&1
+          if ($LASTEXITCODE -ne 0) { $upload | ForEach-Object { Write-Host $_ }; throw "FTP upload failed." }
+          $readback = Join-Path $env:RUNNER_TEMP "PS4-Neural-Engine-003-readback.pkg"
+          $download = & curl.exe --fail --silent --show-error --ftp-pasv --user $creds --output $readback $url 2>&1
+          if ($LASTEXITCODE -ne 0) { $download | ForEach-Object { Write-Host $_ }; throw "FTP readback failed." }
+          $remoteSize = (Get-Item -LiteralPath $readback).Length
+          $remoteHash = (Get-FileHash -LiteralPath $readback -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($remoteSize -ne 4784128 -or $remoteHash -ne "263d3207f1a67a9055adf97b8ae85187b63620e979fa4b4aa55e9733f3f7e694") {
+            throw "Remote package verification failed: bytes=$remoteSize sha256=$remoteHash"
+          }
+          Write-Host "PS4_PKG_STAGED_AND_READBACK_VERIFIED"
+          Write-Host "REMOTE_PATH=/data/pkg/$name"
+          Write-Host "BYTES=$remoteSize"
+          Write-Host "SHA256=$remoteHash"
