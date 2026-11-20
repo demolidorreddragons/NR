@@ -172,7 +172,7 @@ extern "C" int pne_gcn8_compute_smoke_run(const char* shader_path,
              shader_view.chunk_usage_base_offset_dwords);
     log.line("INPUT_USAGE_SLOT_COUNT", shader_view.slot_count);
     log.line("INPUT_USAGE_SLOT_TABLE_OFFSET", shader_view.slot_table_offset);
-    log.message("SLOT_POINTER_SEMANTICS=OPEN_GNM_START_POINTER_ASSUMPTION; FPPS4_ALTERNATIVE_UNRESOLVED");
+    log.message("SLOT_POINTER_SEMANTICS=PSBC_CONFIRMED_ORBSHDR_MINUS_CHUNKUSAGEBASEOFFSET_DWORDS");
 
     DirectAllocation memory;
     log.message("STAGE=BEFORE_DIRECT_MEMORY_ALLOCATE");
