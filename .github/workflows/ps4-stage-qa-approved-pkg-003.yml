@@ -5,6 +5,9 @@ on:
     workflows: ["PS4 Patch QA 003"]
     types: [completed]
     branches: [main]
+  push:
+    branches: [main]
+    paths: [".github/workflows/ps4-stage-qa-approved-pkg-003.yml"]
 
 permissions:
   actions: read
@@ -12,7 +15,7 @@ permissions:
 
 jobs:
   stage-package:
-    if: ${{ github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main' && github.event.workflow_run.head_repository.full_name == github.repository }}
+    if: ${{ (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main' && github.event.workflow_run.head_repository.full_name == github.repository) || (github.event_name == 'push' && github.event.head_commit.message == 'Run approved PS4 stage') }}
     runs-on: [self-hosted, Windows, X64, ps4-lan]
     timeout-minutes: 15
     steps:
@@ -22,7 +25,7 @@ jobs:
           name: PS4-Neural-Engine-003-QA-APPROVED
           path: approved
           repository: demolidorreddragons/NR
-          run-id: ${{ github.event.workflow_run.id }}
+          run-id: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.id || '44660263531' }}
           github-token: ${{ github.token }}
 
       - name: Verify QA report and exact package identity
