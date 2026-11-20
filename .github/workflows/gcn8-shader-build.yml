@@ -158,6 +158,17 @@ jobs:
           spec.loader.exec_module(module)
           shaders = ("gemm_fp32_wave64_tiled", "gemm_fp32", "gemm_fp16_accum", "e4m3_decode", "e4m3_encode")
           report = []
+          gfx8_register_types = json.loads(
+              Path(".deps/opengnm-psbc/src/amd/registers/gfx8.json").read_text()
+          )["register_types"]
+
+          def decode_register_fields(register_value, register_name):
+              decoded = {}
+              for field in gfx8_register_types[register_name]["fields"]:
+                  low, high = field["bits"]
+                  decoded[field["name"]] = (register_value >> low) & ((1 << (high - low + 1)) - 1)
+              return decoded
+
           tool_versions = {
               "host": platform.platform(),
               "python": platform.python_version(),
@@ -290,6 +301,18 @@ jobs:
                   raise SystemExit(f"SPIR-V LocalSize and GNM CS thread dimensions disagree: {shader}")
               if cs_registers["computepgmlo"] != header_dwords * 4 or cs_registers["computepgmhi"] != 0:
                   raise SystemExit(f"GNM CS program offset does not match the CS header size: {shader}")
+              rsrc1_fields = decode_register_fields(cs_registers["computepgmrsrc1"], "COMPUTE_PGM_RSRC1")
+              rsrc2_fields = decode_register_fields(cs_registers["computepgmrsrc2"], "COMPUTE_PGM_RSRC2")
+              register_resources = {
+                  "vgprs_allocated": (rsrc1_fields["VGPRS"] + 1) * 4,
+                  "sgprs_allocated": (rsrc1_fields["SGPRS"] + 1) * 8,
+                  "lds_allocation_bytes_gfx8": rsrc2_fields["LDS_SIZE"] * 512,
+                  "scratch_bytes_per_thread": scratch_dwords_per_thread * 4,
+                  "scratch_enabled": bool(rsrc2_fields["SCRATCH_EN"]),
+                  "user_sgpr_count": rsrc2_fields["USER_SGPR"],
+                  "trap_present": bool(rsrc2_fields["TRAP_PRESENT"]),
+                  "wavefront_size_gfx8": 64,
+              }
               report.append({
                   "shader": shader,
                   "file": str(path),
@@ -326,6 +349,11 @@ jobs:
                       "scratch_size_per_thread_dwords": scratch_dwords_per_thread,
                   },
                   "cs_registers_raw": cs_registers,
+                  "cs_registers_decoded_gfx8": {
+                      "COMPUTE_PGM_RSRC1": rsrc1_fields,
+                      "COMPUTE_PGM_RSRC2": rsrc2_fields,
+                  },
+                  "resource_allocation_derived": register_resources,
                   "shader_hash": f"{u32(orb + 20):08x}{u32(orb + 16):08x}",
                   "gcn_code_size": (length_field >> 8) & 0xffffff,
                   "crc32": f"{u32(orb + 24):08x}"
