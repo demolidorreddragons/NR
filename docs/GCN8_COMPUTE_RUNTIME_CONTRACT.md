@@ -122,6 +122,18 @@ reside wholly below the 4 GiB GPU-address boundary, even though the individual
 range, but no PS4 allocation has yet demonstrated that a suitable low GPU VA
 can be obtained.
 
+The pinned OpenGNM helper implementation `src/helpers.c` allocates with
+`sceKernelAllocateDirectMemory`, then maps the returned physical allocation
+offset with `sceKernelMapDirectMemory`. Its `GnmDirectMemory` structure keeps
+both the mapped virtual pointer and the allocation offset. The OpenOrbis
+libkernel reference describes the first output as a physical address and the
+second call as mapping that physical range into virtual memory. A separate
+Vulkan-on-PS4 implementation uses the mapped pointer as the `GnmBuffer`
+base-address input, while retaining the physical offset for release. This is
+a useful implementation candidate, not a verified NR compute result; do not
+pass the allocation offset directly to `sceGnmBufSetBaseAddress` without
+proving its address semantics.
+
 Still unresolved before implementing the allocator:
 - which direct-memory type and protections are valid for general compute
   buffers on supported GoldHEN/firmware combinations;
