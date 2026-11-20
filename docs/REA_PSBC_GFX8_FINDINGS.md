@@ -84,3 +84,12 @@ Inspection of the pinned `libpsbc/psbc_compile.c` showed that its standalone `se
 The same run showed the negative CLI test's 4-byte SPIR-V fixture reached NIR/ACO and caused a process crash; the previous shell gate accepted any nonzero exit and therefore misclassified the crash as rejection. The integration script now validates SPIR-V file length and the 5-word header before calling libpsbc, and the workflow requires a normal nonzero exit (not a signal/segfault) with no output file. The script hash is recorded in the GNM provenance report.
 
 **Validation state:** the host compiler and SPIR-V gates passed in run `44679024542`; the LDS and CLI patches have not yet been revalidated. No GNM `.sb` artifact, ISA, register report, or hardware dispatch is accepted.
+
+
+## First five PS4 NEO/GFX8 shader binaries emitted (run 44680087030)
+
+The pinned PSBC host compiler now builds after the LDS metadata correction. The truncated-SPIR-V CLI negative test passes (normal diagnostic exit, no output binary, no signal crash). All five NR compute shaders compile to SPIR-V, pass `spirv-val --target-env vulkan1.1`, and are converted by PSBC `-n -s compute` into five non-empty `.sb` outputs. The SPIR-V provenance manifest and artifact upload also pass.
+
+The next custom container/metadata step failed on the first tiled GEMM binary after the upstream pinned `tests/verify_sb.py` had already reported the GNM container structure and PS4 CRC valid. The failure was in NR's additional assertion: it assumed `chunkUsageBaseOffsetDwords` points immediately after the `GnmCsShader` header and before the GCN code range. Actual emitted metadata was `OrbShdr=0x990`, `chunkoff=78 dwords`, `numslots=1`, so the slot table offset is `0x858`, inside the code/chunk region. The format's offset is relative to OrbShdr; the correct bounds are `code_start <= slot_offset` and `slot_offset + num_slots*4 <= orbshdr_offset`. The workflow now uses those bounds and uploads available shader artifacts even if later QA fails.
+
+**What this proves:** PSBC can emit five non-empty PS4 NEO/GFX8 compute shader containers from the five NR SPIR-V inputs; one actual container passed the upstream structural/CRC verifier. **What it does not prove:** complete validation of all five containers, independent register/ISA correctness, GNM resource binding, runtime dispatch, GPU execution, numerical correctness on PS4 Pro, or renderer integration. The corrected custom validator awaits CI rerun.
