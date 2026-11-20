@@ -1,6 +1,14 @@
 # PS4 Neural Engine — diagnostics and integration scaffold
 
+<p align="center">
+  <img src="assets/neural-rendering-logo.svg" alt="Neural Rendering — PS4 Pro jellyfish UFO logo" width="420">
+</p>
+
 Public source repository for the PS4 Neural Engine project. The currently implemented runtime is the **GoldHEN diagnostics/capture scaffold**, not a completed neural renderer.
+
+## Official project identity
+
+The official Neural Rendering mark is the monochrome jellyfish-shaped UFO, with a small PlayStation-inspired mark on its dome, fading black smoke/tentacles, and the **NEURAL RENDERING** wordmark beneath it. The source artwork is maintained at [assets/neural-rendering-logo.svg](assets/neural-rendering-logo.svg).
 
 ## Implemented
 
@@ -34,6 +42,7 @@ No generic framebuffer interception, GNM compute backend, neural inference runti
 
 ## Layout
 
+- `assets/neural-rendering-logo.svg`: official project logo (editable vector source).
 - `src/telemetry.cpp`: CSV/BMP writer.
 - `src/telemetry_bridge.cpp`: bounded producer queue and worker.
 - `include/pne/telemetry.hpp`: telemetry API.
