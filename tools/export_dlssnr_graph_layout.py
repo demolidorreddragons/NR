@@ -5,7 +5,10 @@ import argparse
 import json
 from pathlib import Path
 
-from verify_dlssnr_tensor_layout import expected_lengths
+try:
+    from .verify_dlssnr_tensor_layout import expected_lengths
+except ImportError:  # direct script execution
+    from verify_dlssnr_tensor_layout import expected_lengths
 
 REFERENCE_COMMIT = "9d08f4184bbcb9d858e2fb7a7834ec0837a9d2f1"
 
@@ -75,10 +78,9 @@ def build_graph_layout() -> dict:
                     "unused_by_current_graph" if 31 <= block <= 38 and layer == 3 else "graph"
                 )
                 records.append({
-                    "name": name,
                     "layer": layer,
                     "parameter": parameter,
-                    "expected_bytes": size,
+                    "bytes": size,
                     "consumer": consumed,
                 })
         blocks.append({"id": block, **descriptor, "tensor_records": records})
