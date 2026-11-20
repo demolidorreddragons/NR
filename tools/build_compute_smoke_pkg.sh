@@ -26,7 +26,7 @@ mkdir -p "$STAGE/sce_sys/about" "$STAGE/sce_module" "$OUT"
 
 test -s "$GCN8_SHADER_FILE"
 cp "$GCN8_SHADER_FILE" "$STAGE/compute_smoke_add.sb"
-SHADER_SHA256="$(sha256sum "$STAGE/gcn8/compute_smoke_add.sb" | awk '{print $1}')"
+SHADER_SHA256="$(sha256sum "$STAGE/compute_smoke_add.sb" | awk '{print $1}')"
 
 for required in "$SAMPLE/sce_module/libc.prx" \
                 "$SAMPLE/sce_module/libSceFios2.prx" \
