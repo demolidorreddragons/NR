@@ -39,8 +39,8 @@ This ledger records the next 40 work items. A task is **DONE** only when its sta
 
 | # | Work item | State | Acceptance evidence |
 |---:|---|---|---|
-| 71 | Determine actual shader resource ABI | **PARTIAL — INDIRECT RESOURCE TABLE POINTER IDENTIFIED** | All five metadata records declare `PTR_INDIRECTRESOURCETABLE`, API slot 0, start register 2; tiled CS uses 8 user SGPRs. The precise RW descriptor class/byte layout and binding path remain unproven. |
-| 72 | Validate read/write descriptor representation | **BLOCKED BY 71** | Descriptor bytes independently checked against shader ABI. |
+| 71 | Determine actual shader resource ABI | **PASS — COMPILER-SIDE INDIRECT V# TABLE ABI IDENTIFIED** | Pinned PSBC source defines storage-buffer descriptors as 16-byte V# entries, binding N at N×64, set 0 only, and a 32-bit `PTR_INDIRECTRESOURCETABLE` pointer. GNM metadata places it at user register 2; OpenGNM `SetPointerUserData` maps slot 2 to CS registers 2:3. Four GEMM entries occupy offsets 0/64/128/192. Runtime use remains untested. |
+| 72 | Validate read/write descriptor representation | **PARTIAL — V# CLASS/SIZE CONFIRMED; WRITABLE FIELD POLICY OPEN** | `GnmBuffer` is 16 bytes with base address, stride, record count, format and memory-type fields. PSBC expects 16-byte V# storage-buffer entries, but writable raw-dword format, cache/memory policy, GPU address encoding and hardware visibility are not yet validated. |
 | 73 | Establish supported GPU memory type/protection | **PARTIAL — API CANDIDATE IDENTIFIED** | Pinned OpenGNM VideoOut helper uses WC_GARLIC + CPU/GPU RW; compute-buffer suitability is not established. |
 | 74 | Establish CPU/GPU address mapping | **PARTIAL — DIRECT-MEMORY OFFSET FOUND** | Helper retains CPU mapping and direct-memory offset; generic compute GPU-VA translation remains unproven. |
 | 75 | Implement bounded GPU buffer lifecycle | **PARTIAL — UPSTREAM CANDIDATE REVIEWED** | OpenGNM helper checks alignment/overflow and rolls back map failure; NR compute lifecycle not implemented. |
