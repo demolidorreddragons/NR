@@ -52,3 +52,10 @@ This is a missing code-generation step, not evidence of a GFX8 ISA incompatibili
 The NR workflow was amended in commit `9a02161f1ea2ebb297609acbdbb9163b86510e98` to reproduce those two upstream Meson code-generation targets before `make`, and assert both outputs are non-empty. This is a targeted build-system correction based on the pinned source's own Meson definition; it does not patch compiler semantics or remove GFX11/GFX12 declarations.
 
 **Validation state:** the correction has been committed, but no workflow run on this new commit has yet been observed. Therefore the PSBC host compiler build remains **BLOCKED / NOT YET REVALIDATED**. No SPIR-V-to-GFX8 compilation, `.sb` artifact, GNM metadata inspection, or PS4 Pro GPU execution is claimed.
+
+
+## Build blocker: host sysconf feature detection (2026-11-20)
+
+The GCN8 compiler workflow run `44676657053` reached C compilation after all Mesa generated-header steps passed, then failed in `src/util/os_misc.c` and `src/util/os_misc.c`'s page-size code path with `#error unexpected platform`. Inspection of the pinned source shows both branches are guarded by `HAVE_SYSCONF`; the Linux host provides POSIX `sysconf(_SC_PHYS_PAGES/_SC_PAGESIZE)`, but the manually-authored Makefile configuration did not define the feature macro that Meson's generated configuration normally supplies.
+
+The NR workflow now defines `HAVE_SYSCONF=1` in its Linux-host compiler flags (commit `cb66861b05fbe9601300b3bce39f99cc212447d4`). This is scoped to the Linux CI host configuration; it does not change the PS4 target's runtime ABI or claim that PS4 supports the same host feature. The next workflow run must verify the correction and reveal any subsequent build blockers. No PSBC executable or shader binary is yet accepted.
