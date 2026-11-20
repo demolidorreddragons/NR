@@ -74,4 +74,11 @@ NR now implements `pne_gcn8_set_cs_indirect_resource_table_pointer` in `platform
 
 ## Host-tested exact CS pointer packet
 
-The host resource-table contract now builds the exact four-dword PM4 packet for the PSBC indirect-table pointer. For CS user register 2, the expected words are: header `0xC0027602` (`SET_SH_REG`, two dwords, compute shader type), register offset `0x242`, low 32-bit table address and high dword zero. Host tests also cover slot 14/15 boundaries, unaligned/high table addresses and 4-GiB range crossing; run `44744971532` passed. The PS4 wrapper statically asserts that OpenGNM's PM4 macros and GFX8 register definitions match these constants. PRX compile/link revalidation of the wrapper plus shared packet builder is pending; no packet has been submitted.
+The host resource-table contract now builds the exact four-dword PM4 packet for the PSBC indirect-table pointer. For CS user register 2, the earlier two-dword expectation was incorrect and is superseded below. Host tests also cover slot 14/15 boundaries, unaligned/high table addresses and 4-GiB range crossing; run `44744971532` passed. The PS4 wrapper statically asserts that OpenGNM's PM4 macros and GFX8 register definitions match these constants. PRX compile/link revalidation of the wrapper plus shared packet builder is pending; no packet has been submitted.
+
+
+## Correction: indirect table pointer occupies one CS user SGPR
+
+A follow-up cross-check against the pinned PSBC source and the actual Tonga ISA corrected the packet width. PSBC's `libpsbc/psbc_compile.c` creates the `GnmInputUsageSlot` by setting only `usagetype` and `startregister`; the raw control byte is `0x00` (`registercount=0`). The same source documents `address32_hi=0`. In the emitted ISA, the table base is loaded from SGPR `s2` and the high address word is explicitly zero; SGPR `s3` is used by the shader for scalar parameters/control. Writing a high pointer dword to register 3 would overwrite live shader data.
+
+The corrected packet is **three dwords total**: header `0xC0017602` (`SET_SH_REG`, one data dword, compute shader type), register offset `0x242` (CS user register 2), and the low 32-bit table address. No high dword is emitted. The host packet builder/tests and PS4 wrapper were corrected; the previous two-dword packet test is superseded. New host/PRX CI revalidation is pending. This is still not a hardware execution result.
