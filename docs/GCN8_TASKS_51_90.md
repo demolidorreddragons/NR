@@ -9,26 +9,26 @@ This ledger records the next 40 work items. A task is **DONE** only when its sta
 
 | # | Work item | State | Acceptance evidence |
 |---:|---|---|---|
-| 51 | Correct Linux `sysconf` feature detection in host build | **PATCHED — POSIX PROBE PASS; COMPILER BUILD RUNNING** | GCN8 run `44677801306` passed host sysconf probe and Mesa header generation; PSBC host compiler build is still running. |
+| 51 | Correct Linux `sysconf` feature detection in host build | **PASS — POSIX PROBE + HOST BUILD** | Run `44679024542` passed the sysconf probe and linked the pinned Linux PSBC compiler. |
 | 52 | Audit host OS feature macros against pinned Mesa configuration | **PARTIAL — SYSCONF PROBE PASS** | Pinned source and Orbis config use `HAVE_SYSCONF`; CI compile/run probe passed. Full `HAVE_*` audit remains open. |
 | 53 | Separate host-platform and PS4-target configuration | **DOCUMENTED** | PSBC CLI is built for Linux host; `-n` selects PS4 NEO/GFX8 output. No cross-compile of the CLI is implied. |
-| 54 | Resolve subsequent missing headers or generated files | **PATCHED — CI REVALIDATION PENDING** | Latest linker log showed missing generated NIR opcode/intrinsic tables and sRGB lookup tables; workflow now runs upstream `make generated` before a fresh build and generates `format_srgb.c`. |
-| 55 | Reproduce clean PSBC build | **BLOCKED BY 51** | Clean runner build completes from pinned revisions. |
-| 56 | Resolve compiler/linker errors exposed after C compilation | **PATCHED — CI REVALIDATION PENDING** | Linker errors `nir_op_infos`, `nir_intrinsic_infos` and `util_format_*_table` traced to generated `.c` files omitted from the initial Make wildcard expansion; generation-order fix added. |
-| 57 | Verify PSBC executable and CLI target selection | **IMPLEMENTED — CI REVALIDATION PENDING** | New gate runs `-h` and checks the documented PS4 Pro (NEO/GFX8) target before shader compilation. |
+| 54 | Resolve subsequent missing headers or generated files | **PASS — GENERATED SOURCES PRESENT** | Run `44679024542` passed all generated Mesa/NIR/ACO source steps and the compiler link. |
+| 55 | Reproduce clean PSBC build | **PASS — HOST COMPILER BUILT** | Pinned PSBC host compiler linked successfully in run `44679024542`; valid shader conversion remains a separate gate. |
+| 56 | Resolve compiler/linker errors exposed after C compilation | **PASS — LINKER CLEAN** | Run `44679024542` built the PSBC executable after generated NIR/ACO and format-table sources were added. |
+| 57 | Verify PSBC executable and CLI target selection | **PASS — `-n` TARGET CHECK** | Run `44679024542` passed CLI help and PS4 Pro (NEO/GFX8) target selection; malformed-input handling is tracked separately in task 59. |
 | 58 | Record compiler/dependency provenance | **IMPLEMENTED — CI REVALIDATION PENDING** | GNM report now records PSBC executable SHA-256, host/tool versions, pinned source revisions, shader source/SPIR-V/GNM hashes. |
-| 59 | Exercise compiler positive/negative input tests | **IMPLEMENTED — CI REVALIDATION PENDING** | Added CLI help/target check and malformed 4-byte SPIR-V rejection test; host numerical regression suite already passes. |
+| 59 | Exercise compiler positive/negative input tests | **PATCH IMPLEMENTED — REVALIDATION PENDING** | Run `44679024542` revealed the 4-byte malformed SPIR-V input reached NIR and crashed; the workflow now applies a CLI header guard and requires a non-signal rejection. |
 | 60 | Accept reproducible GFX8 toolchain | **PENDING** | All prior gates pass; host build alone is not shader correctness. |
 
 ## Phase 12 — Compile and inspect GFX8 shaders
 
 | # | Work item | State | Acceptance evidence |
 |---:|---|---|---|
-| 61 | Compile scalar FP32 GEMM to SPIR-V | **BLOCKED BY 60** | Validated SPIR-V artifact and hash. |
-| 62 | Compile tiled FP32 GEMM to SPIR-V | **BLOCKED BY 60** | Validated SPIR-V artifact and hash. |
-| 63 | Compile FP16-emulation shader to SPIR-V | **BLOCKED BY 60** | Validated artifact; no native FP16 claim. |
-| 64 | Compile E4M3 encode/decode shaders to SPIR-V | **BLOCKED BY 60** | Both artifacts validated; software conversion semantics documented. |
-| 65 | Validate all SPIR-V modules | **IMPLEMENTED — CI REVALIDATION PENDING** | Workflow installs `spirv-tools`; corrected shell expansion now validates each of the five module paths using `spirv-val --target-env vulkan1.1`. |
+| 61 | Compile scalar FP32 GEMM to SPIR-V | **PARTIAL — COMPILE/VALIDATE PASS** | SPIR-V generation and `spirv-val` passed in run `44679024542`; persistent artifact upload is added for the next run. |
+| 62 | Compile tiled FP32 GEMM to SPIR-V | **PARTIAL — COMPILE/VALIDATE PASS** | SPIR-V generation and `spirv-val` passed in run `44679024542`; persistent artifact upload is added for the next run. |
+| 63 | Compile FP16-emulation shader to SPIR-V | **PARTIAL — COMPILE/VALIDATE PASS** | SPIR-V generation and `spirv-val` passed in run `44679024542`; no native FP16 claim. |
+| 64 | Compile E4M3 encode/decode shaders to SPIR-V | **PARTIAL — COMPILE/VALIDATE PASS** | Both SPIR-V modules passed `spirv-val` in run `44679024542`; persistent artifact upload is added for the next run. |
+| 65 | Validate all SPIR-V modules | **PASS — FIVE MODULES VALIDATED** | All five modules passed `spirv-val --target-env vulkan1.1` in run `44679024542`; next run also preserves source/SPIR-V hashes as an artifact. |
 | 66 | Compile all five shaders for PS4 NEO/GFX8 | **PENDING** | Five non-empty GNM shader binaries from pinned PSBC with `-n`. |
 | 67 | Validate GNM containers and CRCs | **IMPLEMENTED — CI REVALIDATION PENDING** | Added code-range/slot bounds checks plus negative controls for truncated header and corrupted CRC; must run on real compiler output. |
 | 68 | Generate immutable shader artifact manifest | **IMPLEMENTED — CI REVALIDATION PENDING** | Container report now records source/SPIR-V/GNM hashes, sizes and pinned compiler/dependency revisions; report is included in uploaded artifact. |
@@ -123,3 +123,8 @@ The first non-canceled PSBC build attempt `44677801306` passed host setup, sysco
 
 
 The next PSBC link attempt `44678629656` passed all generated-source steps and compiled the large Mesa/NIR/ACO object set, then exposed two further Makefile integration gaps: missing `gfx10_format_table`/`gfx11_format_table` generated definitions and unresolved BLAKE3 x86 SIMD functions (the standalone Makefile lists dispatch/portable sources but omits the upstream assembly objects). The workflow now generates `gfx10_format_table.c` using the pinned Mesa generator and configures BLAKE3's documented portable-only build macros for this host compiler. This does not affect PS4 GPU shader code. Commit: `c379045aa03e4ad48b8d5cb812375395e77e93aa`; awaiting revalidation.
+
+
+## PSBC first valid-shader conversion attempt — run 44679024542
+
+The pinned PSBC host compiler now builds and links on Ubuntu after generating NIR/ACO sources, sRGB and GFX10/11 format tables, and using BLAKE3 portable mode for the standalone Makefile. All five NR compute shaders compile to SPIR-V and pass `spirv-val --target-env vulkan1.1`. The first GNM conversion then aborts on the tiled GEMM shader at `assert(config->lds_size <= compiler_info->ac->lds_size_per_workgroup)`: the pinned standalone `setup_ac_info()` never initialized this field, unlike Mesa's `ac_fill_compiler_info()`. Source review of `src/amd/common/ac_gpu_info.c` confirms GFX7+ workgroups may use 64 KiB LDS. A narrow patch now sets the documented limit and the CLI rejects truncated SPIR-V headers before entering NIR/ACO. This is not yet validated by a new run; no `.sb` is accepted. The same run also showed the old malformed-input test had incorrectly treated a segmentation fault as a successful rejection; the new gate rejects signal exits.
