@@ -61,20 +61,20 @@ Tasks:
 
 ## Current verified compiler blocker
 
-The PSBC build in run `44675286673` (commit `ddd8ce6bf3509440079502485ab9bc600439dd0e`) passed dependency checkout, compiler configuration and all explicit Mesa code-generation steps. Compilation then failed because the Mesa-maintained Vulkan header includes:
+The pinned PSBC host compiler now builds and links on a clean CI runner. Run `44680087030` passed the host compiler build, the malformed-SPIR-V CLI rejection test, generation of all five NR SPIR-V modules, and `spirv-val --target-env vulkan1.1`. PSBC emitted five non-empty PS4 NEO/GFX8 `.sb` files.
 
-```
-vk_video/vulkan_video_codec_av1std_encode.h: No such file or directory
-```
+The current blocker is no longer host compilation. It is GNM input-usage metadata: the first real container stores `chunkUsageBaseOffsetDwords=78`, which resolves into the code bytes rather than the slot table written immediately after `GnmCsShader`. OpenGNM's header comment and the independent fpPS4 parser differ on whether the offset points to the table start or end, but both expected offsets for this shader exceed the 8-bit field (590 or 589 dwords). The upstream container verifier's CRC/structure pass does not validate that pointer. Issue [#8](https://github.com/demolidorreddragons/NR/issues/8) tracks the format resolution.
 
-This is the next concrete build-system/dependency-layout blocker for REA-3 to resolve from the pinned Mesa/Vulkan source manifests. The compiler build did not complete; shader compilation and GNM binary generation were skipped.
+The integration script now patches PSBC to use the fpPS4 end-of-table calculation and fail closed when the 8-bit offset would overflow. This guard has not yet been revalidated by CI. No emitted `.sb` is accepted for runtime or hardware dispatch.
 
 ## Acceptance gates
 
-- **Host-build gate:** pinned PSBC builds successfully from a clean CI runner with all dependencies and generators accounted for.
-- **Shader gate:** all five SPIR-V inputs compile to GFX8 GNM compute binaries and pass container validation.
-- **Semantic gate:** source/SPIR-V/lowered ISA behavior is cross-checked against CPU references for each supported kernel.
-- **Metadata gate:** actual emitted register/resource metadata is decoded and reviewed; container validity alone is insufficient.
+- **Host-build gate:** PASS in run `44680087030`; pinned PSBC builds from the clean CI runner.
+- **SPIR-V gate:** PASS for all five modules in run `44680087030`, including `spirv-val --target-env vulkan1.1`.
+- **GNM emission gate:** partial only; five non-empty `.sb` files were emitted, but their input-usage pointer metadata is not accepted.
+- **Shader gate:** BLOCKED until all five GNM binaries pass structural and slot-pointer validation.
+- **Semantic gate:** source/SPIR-V/lowered ISA behavior remains unverified against CPU references for the emitted GFX8 code.
+- **Metadata gate:** BLOCKED; actual register/resource metadata cannot be accepted until the input-usage pointer format is resolved and decoded.
 - **Runtime gate:** a minimal, reversible GNM dispatch completes on PS4 Pro and returns a verified result.
 - **Performance gate:** only then collect GPU latency, occupancy/register and throughput measurements.
 
@@ -93,6 +93,7 @@ No source/host test, compiler build, SPIR-V validation, or container check by it
 5. Run negative tests: malformed/truncated containers, invalid dimensions, boundary tiles, overflow, misalignment, unsupported capabilities and corrupted artifacts.
 6. Differential-test numerical outputs against independently calculated expected values, including tolerances, NaN/Inf, signed zero, subnormals and rounding behavior where applicable.
 7. Do not accept CI green, compiler success, a container CRC, or a developer-provided report as proof of semantic correctness or hardware execution.
+7a. Independently resolve `GnmShaderBinaryInfo.chunkUsageBaseOffsetDwords` to the actual input-usage slot table. Compare the raw pointer target with the table bytes after `GnmCsShader`; reject a pointer that lands in GCN instruction bytes even if the outer container and CRC pass. Record the start-vs-end pointer interpretation and evidence from at least two independent sources or real PS4 samples.
 8. Issue a signed-off-by report with PASS / FAIL / BLOCKED per artifact and reproducible commands, tool versions, input hashes, output hashes and logs. A blocked test is not a pass.
 9. The reviewer must not modify the implementation under review. Defects go back to the owning REA workstream; retesting uses a new immutable artifact hash.
 10. No console dispatch is required or authorized by this role until a separately approved, reversible test plan exists.
