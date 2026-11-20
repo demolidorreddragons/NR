@@ -17,7 +17,7 @@ This ledger records the next 40 work items. A task is **DONE** only when its sta
 | 56 | Resolve compiler/linker errors exposed after C compilation | **PENDING** | Successful final link with no suppressed errors. |
 | 57 | Verify PSBC executable and CLI target selection | **PENDING** | Executable runs; help and `-n` select PS4 NEO/GFX8. |
 | 58 | Record compiler/dependency provenance | **PENDING** | SHA-256, commit IDs, compiler versions, build flags and artifact manifest. |
-| 59 | Exercise compiler positive/negative input tests | **PENDING** | Reproducible valid input plus malformed/truncated input rejection. |
+| 59 | Exercise compiler positive/negative input tests | **PARTIAL — HOST NUMERIC REGRESSIONS PASS** | Host CI run `44677189726` passed E4M3FN edge cases, beta-zero/NaN isolation and tiled GEMM reference tests; PSBC CLI malformed-input tests remain pending. |
 | 60 | Accept reproducible GFX8 toolchain | **PENDING** | All prior gates pass; host build alone is not shader correctness. |
 
 ## Phase 12 — Compile and inspect GFX8 shaders
@@ -68,7 +68,7 @@ This ledger records the next 40 work items. A task is **DONE** only when its sta
 ## Current concrete progress
 
 - Task 51 patch committed as `cb66861b05fbe9601300b3bce39f99cc212447d4`.
-- The observed failure in run `44676657053` was missing `HAVE_SYSCONF` in the hand-written Linux host build configuration. The pinned Mesa source uses that feature macro to select POSIX `sysconf` for physical-memory and page-size queries. The workflow now checks that capability with a compiled/running probe.
+- The observed failure in run `44676657053` was missing `HAVE_SYSCONF` in the hand-written Linux host build configuration. The pinned Mesa source uses that feature macro to select POSIX `sysconf` for physical-memory and page-size queries. The workflow now checks that capability with a compiled/running probe. Host numeric regression tests on commit `92a3bc3f` passed run `44677189726`; the GCN8 compiler workflow remains queued/cancelled during overlapping CI runs, so task 51 is not yet revalidated.
 - Revalidation is required. No task from 61 onward is marked complete; no accepted `.sb` artifacts, GNM dispatch, PS4 Pro GPU measurements, model intake, or neural renderer are claimed.
 - REA-5 remains **NOT EXECUTED**. It is a documented independent-review protocol, not a separately instantiated agent.
 - Console installation, plugin activation, `plugins.ini` changes, saves/app-data changes and persistent console modifications remain outside this work.
@@ -76,3 +76,8 @@ This ledger records the next 40 work items. A task is **DONE** only when its sta
 ## Execution rule
 
 Proceed in dependency order. When an external prerequisite is absent (PS4 Pro test access, model archives, or user approval for a reversible hardware procedure), mark the affected task **BLOCKED** and continue with independent repository/host work rather than inventing evidence.
+
+
+## Additional source-level correctness correction
+
+The scalar FP32 and FP16-emulation GEMM shaders now skip reading C when beta is exactly zero, preventing NaN propagation from an unused residual buffer. Host regression tests cover this contract and E4M3FN edge behavior. This does not count as shader compilation or GPU execution.
