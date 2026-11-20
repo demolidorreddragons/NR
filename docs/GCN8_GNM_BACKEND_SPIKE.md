@@ -71,8 +71,11 @@ The first hardware backend should own these operations explicitly:
    compute-engine type bit. NR now has a local
    `pne_gcn8_set_cs_indirect_resource_table_pointer` packet writer that sets
    `PKT3_SHADER_TYPE_S(1)` and writes the 64-bit user-data pair at CS register
-   2:3 (high dword zero). Its PRX compile/link smoke is pending. Writable V#
-   fields, GPU VA constraints and cache policy still require validation.
+   2:3 (high dword zero). Its PRX compile/link smoke passed run `44743707987`; the same smoke linked
+   `sceGnmDrawCmdSetCsShader`, `sceGnmDrawCmdDispatchDirect`,
+   `sceGnmSubmitCommandBuffers` and `sceGnmSubmitDone`. No firmware call or
+   command submission occurred. Writable V# fields, GPU VA constraints and
+   cache policy still require validation.
 5. Bind the 20-byte parameter block using the actual GNM user-data/constant
    mechanism; the current host struct size alone does not prove this ABI.
 6. Emit dispatch dimensions from `GemmDispatch.groups_x/groups_y`, with the
