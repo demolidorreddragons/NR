@@ -138,3 +138,18 @@ Run `44680530122` rebuilt the PRX/PKG after the manifest parser began rejecting 
 - QA: `PASS_PC_ONLY_NOT_HARDWARE_TESTED`; `PKG_KIND=FULL_BASE_APPLICATION_NOT_PATCH`.
 
 This confirms repeatable PC-only package validation after the manifest hardening. It does not authorize console installation or prove PRX runtime/ABI compatibility.
+
+
+## Rebuild + OrbisPkgTool QA — PASS PC-only (run 44683251209)
+
+The latest completed PRX/PKG workflow on commit `ced8276d9768569ed28b28293f449431db96b88d` built the package and its separate Windows `independent-pkg-qa` job passed. The QA artifact is ID `14605348032` (ZIP SHA-256 `7a905348ac120201acf3e3c20be7f23c9c90a536c27b25f01304e997373240cb`). Its preserved `qa-report.txt` records:
+
+- PKG: 6,619,136 bytes; SHA-256 `30e4ee11e5a7336a262cfd6c78e848586fd47b8fb2eeb574ef2049d495cb38fb`.
+- GP4 SHA-256: `df8b92f4b8ed166bc1412564e16f38976c08c188d343429a48c7efcd3342c770`.
+- PRX SHA-256: `7561da3d3b83766becddcb37c1257d83c61009b5e814825ee60694d19f9cf704`.
+- EBOOT: 119,808 bytes; staged/embedded PARAM.SFO semantic checks PASS.
+- OrbisPkgTool reported structural/digest/signature validation PASS and extracted 15/15 files.
+- Package identity remains `CATEGORY=gde`, `APP_VER=01.02`, `VERSION=01.02`, `storage=digital50`; the artifact is a full/base application, not a PS4 patch.
+- QA status: `PASS_PC_ONLY_NOT_HARDWARE_TESTED`.
+
+This closes the previous branch-filter/QA-artifact gap for this exact build in the automated PC validation scope. It is not a clean-room REA-5 review, Orbis filesystem fault-injection, installation, PRX load test, or renderer validation. The existing no-install decision remains in force.
