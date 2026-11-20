@@ -1,0 +1,54 @@
+name: PS4 Read-Only Installed Neural Engine Metadata Audit
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/ps4-installed-app-audit.yml"
+permissions:
+  contents: read
+jobs:
+  inspect-installed-app:
+    runs-on: [self-hosted, Windows, X64, ps4-lan]
+    steps:
+      - name: Read installed app metadata without modifying console
+        shell: powershell -NoProfile -ExecutionPolicy Bypass -File {0}
+        env:
+          PS4_IP: ${{ vars.PS4_IP }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          if (-not $env:PS4_IP) { throw "PS4_IP variable missing." }
+          $base = "ftp://$($env:PS4_IP):2121/"
+          $creds = "anonymous:anonymous@example.com"
+          $appPath = "user/app/PNEU00001/"
+          $appUrl = $base + $appPath
+          $listing = & curl.exe --fail --silent --show-error --ftp-pasv --user $creds $appUrl 2>&1
+          if ($LASTEXITCODE -ne 0) { throw "Cannot read installed TITLE_ID directory /$appPath. $listing" }
+          $listing | ForEach-Object { Write-Host "INSTALLED_APP_ENTRY=$([string]$_)" }
+
+          $sfoUrl = $appUrl + "sce_sys/param.sfo"
+          $sfo = Join-Path $env:RUNNER_TEMP "PNEU00001-installed-param.sfo"
+          $download = & curl.exe --fail --silent --show-error --ftp-pasv --user $creds --output $sfo $sfoUrl 2>&1
+          if ($LASTEXITCODE -ne 0) { throw "Could not retrieve installed PARAM.SFO from /$appPath/sce_sys/param.sfo. $download" }
+          $bytes = (Get-Item -LiteralPath $sfo).Length
+          if ($bytes -lt 32) { throw "Installed PARAM.SFO is unexpectedly small: $bytes bytes." }
+          $hash = (Get-FileHash -LiteralPath $sfo -Algorithm SHA256).Hash.ToLowerInvariant()
+          Write-Host "READ_ONLY_AUDIT=PASS"
+          Write-Host "INSTALLED_TITLE_ID=PNEU00001"
+          Write-Host "INSTALLED_PARAM_SFO_BYTES=$bytes"
+          Write-Host "INSTALLED_PARAM_SFO_SHA256=$hash"
+          New-Item -ItemType Directory -Force -Path "audit-output" | Out-Null
+          Copy-Item -LiteralPath $sfo -Destination "audit-output/installed-param.sfo"
+          @(
+            "READ_ONLY_AUDIT=PASS"
+            "FTP_PATH=/$appPath/sce_sys/param.sfo"
+            "BYTES=$bytes"
+            "SHA256=$hash"
+            "NO_CONSOLE_FILES_WRITTEN=true"
+          ) | Set-Content -LiteralPath "audit-output/audit-report.txt" -Encoding UTF8
+      - name: Retain read-only metadata evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: PS4-installed-Neural-Engine-metadata-audit
+          path: audit-output/*
+          if-no-files-found: error
+          retention-days: 7
