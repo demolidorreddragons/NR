@@ -25,6 +25,8 @@ jobs:
           assert 'read_block(verify_src' in installer and 'read_block(verify_dst' in installer, 'both streams must use full-block reads'
           print('Installer copy verification checks passed')
           PY
+      - name: Model manifest validator tests
+        run: python3 -m unittest discover -s tools/tests -v
       - name: Configure
         run: cmake -S . -B build
       - name: Build
