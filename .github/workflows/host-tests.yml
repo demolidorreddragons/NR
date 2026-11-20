@@ -41,6 +41,8 @@ jobs:
           PY
       - name: Validate GCN8 numeric reference and tiled mapping
         run: python3 tools/test_gcn8_numeric.py
+      - name: Validate model input intake verifier
+        run: python3 tests/test_verify_model_inputs.py
       - name: Configure
         run: cmake -S . -B build
       - name: Build
