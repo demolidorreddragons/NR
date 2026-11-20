@@ -4,18 +4,15 @@
 import unittest
 
 
-def resolve_slot_start(orb_offset: int, chunk_offset_dwords: int,
-                       num_slots: int, points_to_end: bool) -> int:
-    base = orb_offset - chunk_offset_dwords * 4
-    return base - (num_slots * 4 if points_to_end else 0)
+def resolve_slot_start(orb_offset: int, chunk_offset_dwords: int) -> int:
+    """OpenGNM start-pointer interpretation: OrbShdr - offset * 4."""
+    return orb_offset - chunk_offset_dwords * 4
 
 
-def expected_offset(orb_offset: int, slot_start: int,
-                    num_slots: int, points_to_end: bool) -> int:
+def expected_offset(orb_offset: int, slot_start: int, num_slots: int) -> int:
     if num_slots == 0:
         return 0
-    target = slot_start + (num_slots * 4 if points_to_end else 0)
-    delta = orb_offset - target
+    delta = orb_offset - slot_start
     if delta < 0 or delta % 4:
         raise ValueError("slot table target is out of range or unaligned")
     value = delta // 4
@@ -25,55 +22,54 @@ def expected_offset(orb_offset: int, slot_start: int,
 
 
 class GnmSlotOffsetTests(unittest.TestCase):
-    def test_real_tiled_gemm_requires_unrepresentable_offset(self):
+    def test_four_short_shader_outputs_resolve_to_header_slot_table(self):
+        # Real PSBC output offsets from run 44681174240; slot table at 0x58.
+        fixtures = (
+            (0x3B4, 215),  # e4m3_decode.sb
+            (0x278, 136),  # e4m3_encode.sb
+            (0x1C8, 92),   # gemm_fp16_accum.sb
+            (0x180, 74),   # gemm_fp32.sb
+        )
+        for orb, stored in fixtures:
+            with self.subTest(orb=hex(orb)):
+                self.assertEqual(resolve_slot_start(orb, stored), 0x58)
+                self.assertEqual(expected_offset(orb, 0x58, 1), stored)
+
+    def test_tiled_shader_requires_unrepresentable_offset(self):
         orb = 0x990
         slot_start = 0x58
         num_slots = 1
-
-        # OpenGNM's header comment describes a start pointer; fpPS4 subtracts
-        # num_slots after resolving the base pointer (end-pointer convention).
-        # Compute raw candidates before applying the 8-bit field guard.
-        start_pointer = (orb - slot_start) // 4
-        end_pointer = (orb - (slot_start + num_slots * 4)) // 4
-        self.assertEqual(start_pointer, 590)
-        self.assertEqual(end_pointer, 589)
-        self.assertGreater(start_pointer, 0xff)
-        self.assertGreater(end_pointer, 0xff)
+        raw_expected = (orb - slot_start) // 4
+        self.assertEqual(raw_expected, 590)
+        self.assertGreater(raw_expected, 0xff)
         with self.assertRaises(OverflowError):
-            expected_offset(orb, slot_start, num_slots, False)
-        with self.assertRaises(OverflowError):
-            expected_offset(orb, slot_start, num_slots, True)
+            expected_offset(orb, slot_start, num_slots)
 
-    def test_emitted_wrapped_value_does_not_resolve_to_header_table(self):
+    def test_emitted_wrapped_value_points_into_code_not_slot_table(self):
         orb = 0x990
         emitted = 78
-        num_slots = 1
-        self.assertEqual(resolve_slot_start(orb, emitted, num_slots, False), 0x858)
-        self.assertEqual(resolve_slot_start(orb, emitted, num_slots, True), 0x854)
-        self.assertNotEqual(resolve_slot_start(orb, emitted, num_slots, False), 0x58)
-        self.assertNotEqual(resolve_slot_start(orb, emitted, num_slots, True), 0x58)
+        self.assertEqual(resolve_slot_start(orb, emitted), 0x858)
+        self.assertNotEqual(resolve_slot_start(orb, emitted), 0x58)
 
-    def test_small_shader_offset_is_representable(self):
-        orb = 0x100
-        slot_start = 0x58
+    def test_fp_ps4_end_pointer_interpretation_differs_by_one_slot(self):
+        orb = 0x3B4
+        stored = 215
         num_slots = 1
-        start_pointer = expected_offset(orb, slot_start, num_slots, False)
-        end_pointer = expected_offset(orb, slot_start, num_slots, True)
-        self.assertEqual(start_pointer, 42)
-        self.assertEqual(end_pointer, 41)
-        self.assertEqual(resolve_slot_start(orb, start_pointer, num_slots, False), slot_start)
-        self.assertEqual(resolve_slot_start(orb, end_pointer, num_slots, True), slot_start)
+        # fpPS4's parser subtracts num_slots after resolving the base pointer.
+        # That points four bytes before the header slot table in these fixtures.
+        self.assertEqual(resolve_slot_start(orb, stored) - num_slots * 4, 0x54)
+        self.assertEqual(resolve_slot_start(orb, stored), 0x58)
 
     def test_unaligned_and_out_of_range_offsets_rejected(self):
         with self.assertRaises(ValueError):
-            expected_offset(0x101, 0x58, 1, True)
+            expected_offset(0x101, 0x58, 1)
         with self.assertRaises(ValueError):
-            expected_offset(0x50, 0x58, 1, True)
+            expected_offset(0x50, 0x58, 1)
         with self.assertRaises(OverflowError):
-            expected_offset(0x990, 0x58, 1, True)
+            expected_offset(0x990, 0x58, 1)
 
     def test_zero_slots_use_zero_offset(self):
-        self.assertEqual(expected_offset(0x990, 0x58, 0, True), 0)
+        self.assertEqual(expected_offset(0x990, 0x58, 0), 0)
 
 
 if __name__ == "__main__":
