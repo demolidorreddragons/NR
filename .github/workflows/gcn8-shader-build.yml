@@ -12,11 +12,13 @@ on:
     branches: [feature/gcn8-numeric-kernels]
     paths:
       - "platform/ps4/gcn8/shaders/**"
+      - "tools/apply_psbc_gfx8_fixes.py"
       - ".github/workflows/gcn8-shader-build.yml"
   pull_request:
     branches: [main]
     paths:
       - "platform/ps4/gcn8/shaders/**"
+      - "tools/apply_psbc_gfx8_fixes.py"
       - ".github/workflows/gcn8-shader-build.yml"
 
 permissions:
