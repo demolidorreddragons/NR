@@ -62,16 +62,20 @@ jobs:
         run: |
           make -j2
           test -x opengnm-psbc
-      - name: Compile NR GEMM compute shader to SPIR-V
+      - name: Compile NR compute shaders to SPIR-V
         run: |
           mkdir -p dist/ps4/gcn8
-          glslangValidator -V --target-env vulkan1.1 platform/ps4/gcn8/shaders/gemm_fp32_wave64_tiled.comp -o dist/ps4/gcn8/gemm_fp32_wave64_tiled.spv
-          test -s dist/ps4/gcn8/gemm_fp32_wave64_tiled.spv
-      - name: Compile SPIR-V to PS4 Pro GFX8 GNM shader binary
+          for shader in gemm_fp32_wave64_tiled gemm_fp32 gemm_fp16_accum e4m3_decode e4m3_encode; do
+            glslangValidator -V --target-env vulkan1.1 "platform/ps4/gcn8/shaders/${shader}.comp" -o "dist/ps4/gcn8/${shader}.spv"
+            test -s "dist/ps4/gcn8/${shader}.spv"
+          done
+      - name: Compile SPIR-V to PS4 Pro GFX8 GNM shader binaries
         run: |
-          .deps/opengnm-psbc/opengnm-psbc -s compute -f dist/ps4/gcn8/gemm_fp32_wave64_tiled.spv -o dist/ps4/gcn8/gemm_fp32_wave64_tiled.sb -n
-          test -s dist/ps4/gcn8/gemm_fp32_wave64_tiled.sb
-      - name: Verify GNM shader container and compute metadata
+          for shader in gemm_fp32_wave64_tiled gemm_fp32 gemm_fp16_accum e4m3_decode e4m3_encode; do
+            .deps/opengnm-psbc/opengnm-psbc -s compute -f "dist/ps4/gcn8/${shader}.spv" -o "dist/ps4/gcn8/${shader}.sb" -n
+            test -s "dist/ps4/gcn8/${shader}.sb"
+          done
+      - name: Verify GNM shader containers and compute metadata
         run: |
           python3 - <<'PY'
           import importlib.util
@@ -79,18 +83,20 @@ jobs:
           spec = importlib.util.spec_from_file_location("verify_sb", ".deps/opengnm-psbc/tests/verify_sb.py")
           module = importlib.util.module_from_spec(spec)
           spec.loader.exec_module(module)
-          path = "dist/ps4/gcn8/gemm_fp32_wave64_tiled.sb"
-          if not module.verify_shader(path, module.GNM_SHADER_COMPUTE):
-              raise SystemExit("GFX8 compute shader container validation failed")
-          data = Path(path).read_bytes()
-          if b"OrbShdr" not in data:
-              raise SystemExit("GNM shader binary metadata marker missing")
-          print("GFX8_GEMM_SHADER_BINARY=container-verified; hardware dispatch not performed")
+          shaders = ("gemm_fp32_wave64_tiled", "gemm_fp32", "gemm_fp16_accum", "e4m3_decode", "e4m3_encode")
+          for shader in shaders:
+              path = Path("dist/ps4/gcn8") / f"{shader}.sb"
+              if not module.verify_shader(str(path), module.GNM_SHADER_COMPUTE):
+                  raise SystemExit(f"GFX8 compute shader container validation failed: {shader}")
+              data = path.read_bytes()
+              if b"OrbShdr" not in data:
+                  raise SystemExit(f"GNM shader binary metadata marker missing: {shader}")
+              print(f"VERIFIED {shader}: GNM compute container; no hardware dispatch")
           PY
       - uses: actions/upload-artifact@v4
         with:
-          name: nr-gcn8-gemm-gfx8-shader
+          name: nr-gcn8-compute-shaders-gfx8
           path: |
-            dist/ps4/gcn8/gemm_fp32_wave64_tiled.spv
-            dist/ps4/gcn8/gemm_fp32_wave64_tiled.sb
+            dist/ps4/gcn8/*.spv
+            dist/ps4/gcn8/*.sb
           if-no-files-found: error
