@@ -52,27 +52,43 @@ jobs:
           if ($storageTagCount -lt 3) { throw "PkgBuilder storage metadata patch not persisted; count=$storageTagCount" }
           "PKGBUILDER_ST_TYPE_PATCH_COUNT=$storageTagCount" | Out-File $env:GITHUB_STEP_SUMMARY -Append
 
-          # Sony's patch SFO schema rejects the base-app-only FORMAT field.
-          # Add a deterministic remove subcommand to the checked-out validator.
+          # Extend sfo set with an explicit max length so FORMAT=obs uses
+          # Sony's 4-byte SFO field allocation (the required patch schema).
           $programPath = "OrbisPkgTool-src/OrbisPkgTool/Program.cs"
           $program = Get-Content $programPath -Raw
-          $needle = '            case "check":'
-          $removeCase = @'
-                      case "remove":
-                      {
-                          string file = args[1], key = args[2];
+          $setOld = @'
+                          string? outFile = null;
+                          for (int i = 4; i < args.Length; i++)
+                              if (args[i] == "--out" && i + 1 < args.Length) outFile = args[++i];
                           var sfo = OrbisPkgTool.Sfo.ParamSfo.Parse(File.ReadAllBytes(file));
-                          int removed = sfo.Values.RemoveAll(v => string.Equals(v.Key, key, StringComparison.OrdinalIgnoreCase));
-                          if (removed == 0) throw new ArgumentException($"SFO key not found: {key}");
-                          File.WriteAllBytes(file, sfo.Serialize());
-                          Console.WriteLine($"Removed {key}");
-                          break;
-                      }
+                          var existing = sfo[key];
+                          if (int.TryParse(value, out int iv) && existing is { Format: 0x0404 })
+                              sfo.SetInt(key, iv);
+                          else if (existing != null)
+                              sfo.SetString(key, value, existing.MaxLength); // preserve the field's max length
+                          else
+                              sfo.SetString(key, value);
           '@
-          if (-not $program.Contains($needle)) { throw "SFO command insertion anchor not found." }
-          $program = $program.Replace($needle, $removeCase + $needle)
+          $setNew = @'
+                          string? outFile = null;
+                          int? requestedMaxLength = null;
+                          for (int i = 4; i < args.Length; i++) {
+                              if (args[i] == "--out" && i + 1 < args.Length) outFile = args[++i];
+                              else if (args[i] == "--max-length" && i + 1 < args.Length) requestedMaxLength = int.Parse(args[++i]);
+                          }
+                          var sfo = OrbisPkgTool.Sfo.ParamSfo.Parse(File.ReadAllBytes(file));
+                          var existing = sfo[key];
+                          if (int.TryParse(value, out int iv) && existing is { Format: 0x0404 })
+                              sfo.SetInt(key, iv);
+                          else if (existing != null)
+                              sfo.SetString(key, value, existing.MaxLength);
+                          else
+                              sfo.SetString(key, value, requestedMaxLength ?? 0x400);
+          '@
+          if (-not $program.Contains($setOld)) { throw "SFO set max-length insertion anchor not found." }
+          $program = $program.Replace($setOld, $setNew)
           [IO.File]::WriteAllText($programPath, $program, [Text.UTF8Encoding]::new($false))
-          if (-not ([IO.File]::ReadAllText($programPath).Contains('case "remove":'))) { throw "SFO remove command patch was not persisted." }
+          if (-not ([IO.File]::ReadAllText($programPath).Contains('requestedMaxLength ?? 0x400'))) { throw "SFO set max-length patch was not persisted." }
           dotnet build OrbisPkgTool-src/OrbisPkgTool/OrbisPkgTool.csproj --configuration Release
           if ($LASTEXITCODE -ne 0) { throw "OrbisPkgTool build failed." }
           $tool = "OrbisPkgTool-src/OrbisPkgTool/bin/Release/net10.0-windows/OrbisPkgTool.dll"
@@ -211,14 +227,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "SFO ATTRIBUTE update failed." }
           dotnet "$tool" sfo set "$sfo" PUBTOOLINFO "c_date=20261120,img0_l0_size=7,img0_l1_size=0,img0_sc_ksize=512,img0_pc_ksize=832,st_type=digital25" 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
           if ($LASTEXITCODE -ne 0) { throw "SFO PUBTOOLINFO update failed." }
-          $prePatchSfoText = dotnet "$tool" sfo read "$sfo" 2>&1
-          if ($LASTEXITCODE -ne 0) { throw "Pre-patch SFO readback failed." }
-          if (($prePatchSfoText -join "`n") -match "(?m)^FORMAT\\s*=") {
-            dotnet "$tool" sfo remove "$sfo" FORMAT 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
-            if ($LASTEXITCODE -ne 0) { throw "Patch-only SFO FORMAT field removal failed." }
-          } else {
-            "PATCH_SFO_FORMAT_FIELD_ABSENT=True" | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
-          }
+          dotnet "$tool" sfo set "$sfo" FORMAT obs --max-length 4 2>&1 | Tee-Object -FilePath "candidate-output/build-report.txt" -Append
+          if ($LASTEXITCODE -ne 0) { throw "Required patch SFO FORMAT=obs field creation failed." }
           dotnet "$tool" sfo read "$sfo" 2>&1 | Tee-Object -FilePath "candidate-output/patch-param-sfo.txt"
           if ($LASTEXITCODE -ne 0) { throw "Patch SFO readback failed." }
           $patchSfoText = Get-Content "candidate-output/patch-param-sfo.txt" -Raw
