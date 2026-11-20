@@ -110,9 +110,14 @@ jobs:
           # Run the upstream generated target first, then start a fresh make process.
           make generated
           python3 src/util/format_srgb.py > src/util/format_srgb.c
+          python3 src/amd/common/gfx10_format_table.py src/util/format/u_format.yaml src/amd/registers/gfx10-rsrc.json src/amd/registers/gfx11-rsrc.json > src/amd/common/gfx10_format_table.c
+          # The standalone Makefile omits Mesa's x86 SIMD assembly objects.
+          # Use upstream BLAKE3's supported portable-only configuration.
+          echo 'CFLAGS += -DBLAKE3_NO_SSE2 -DBLAKE3_NO_SSE41 -DBLAKE3_NO_AVX2 -DBLAKE3_NO_AVX512' >> config.mak
           test -s src/compiler/nir/nir_opcodes.c
           test -s src/compiler/nir/nir_intrinsics.c
           test -s src/util/format_srgb.c
+          test -s src/amd/common/gfx10_format_table.c
       - name: Build pinned opengnm-psbc host compiler
         working-directory: .deps/opengnm-psbc
         run: |
