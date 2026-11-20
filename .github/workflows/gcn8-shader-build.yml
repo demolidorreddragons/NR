@@ -103,6 +103,16 @@ jobs:
               "$gfx" packets_h > "src/amd/common/amd_cp_packets_${gfx}.h"
             test -s "src/amd/common/amd_cp_packets_${gfx}.h"
           done
+      - name: Generate remaining pinned Mesa NIR and ACO sources
+        working-directory: .deps/opengnm-psbc
+        run: |
+          # Make's source wildcards are evaluated before generated .c files exist.
+          # Run the upstream generated target first, then start a fresh make process.
+          make generated
+          python3 src/util/format_srgb.py > src/util/format_srgb.c
+          test -s src/compiler/nir/nir_opcodes.c
+          test -s src/compiler/nir/nir_intrinsics.c
+          test -s src/util/format_srgb.c
       - name: Build pinned opengnm-psbc host compiler
         working-directory: .deps/opengnm-psbc
         run: |
