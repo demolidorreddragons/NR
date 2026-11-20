@@ -112,8 +112,9 @@ jobs:
             if (-not (Get-ChildItem $patchOut -Recurse -File | Where-Object { $_.FullName.EndsWith($relative,[StringComparison]::OrdinalIgnoreCase) })) { throw "Patch payload missing: $relative" }
           }
           $changeInfo = Get-ChildItem $patchOut -Recurse -File | Where-Object {
-            $_.FullName.EndsWith("Sc0/changeinfo/changeinfo.xml",[StringComparison]::OrdinalIgnoreCase) -or
-            $_.FullName.EndsWith("Image0/sce_sys/changeinfo/changeinfo.xml",[StringComparison]::OrdinalIgnoreCase)
+            $normalizedPath = $_.FullName.Replace('\','/')
+            $normalizedPath.EndsWith("Sc0/changeinfo/changeinfo.xml",[StringComparison]::OrdinalIgnoreCase) -or
+            $normalizedPath.EndsWith("Image0/sce_sys/changeinfo/changeinfo.xml",[StringComparison]::OrdinalIgnoreCase)
           } | Select-Object -First 1
           if (-not $changeInfo) { throw "Patch changeinfo.xml missing from Sc0 or Image0/sce_sys." }
 
