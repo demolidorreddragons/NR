@@ -42,7 +42,8 @@ extern "C" std::int32_t pne_gcn8_set_cs_indirect_resource_table_pointer(
     std::memcpy(command_buffer->cmdptr, packet, sizeof(packet));
     command_buffer->cmdptr += 3;
     return PNE_GCN8_BINDING_OK;
- 
+}
+
 extern "C" std::int32_t pne_gcn8_emit_eop_fence(
     GnmCommandBuffer* command_buffer,
     std::uint64_t fence_gpu_address,
@@ -69,5 +70,4 @@ extern "C" std::int32_t pne_gcn8_emit_eop_fence(
     p[5] = 0;
     command_buffer->cmdptr += 6;
     return PNE_GCN8_BINDING_OK;
-}
 }
