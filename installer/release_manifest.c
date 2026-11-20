@@ -174,6 +174,9 @@ int pne_validate_release_manifest(const char* manifest_path,
                 set_error(error, error_size, "invalid hardware_status");
                 ok = 0;
             }
+        } else {
+            set_error(error, error_size, "unknown manifest key: %s", key);
+            ok = 0;
         }
 #undef REQUIRE_ONCE
         if (!ok) break;
