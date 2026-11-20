@@ -15,7 +15,8 @@ The resource hash is the published reference payload hash used by the supplied 0
 
 - 71 distinct block IDs, numbered 0 through 70.
 - 153 unique tensor records.
-- The reference graph consumes 145 records. The 8 unread records are exactly `block31.layer3.layer` through `block38.layer3.layer` (two bytes each); the pinned `docs/weights.md` identifies ViT `layer3` as unread metadata.\n- Every tensor slice is in bounds.
+- The reference graph consumes 145 records. The 8 unread records are exactly `block31.layer3.layer` through `block38.layer3.layer` (two bytes each); the pinned `docs/weights.md` identifies ViT `layer3` as unread metadata.
+- Every tensor slice is in bounds.
 - No overlapping slices.
 - All 153 slices exactly cover the single packed stage: zero unreferenced bytes.
 - Every tensor name, block/layer field, parameter field and byte length matches the source inventory.
