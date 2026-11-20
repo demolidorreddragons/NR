@@ -132,7 +132,7 @@ jobs:
           glslangValidator --version
           spirv-val --version
           llvm-mc-18 --version | tee /tmp/llvm-mc-version.txt
-          grep -F "AMDGPU" /tmp/llvm-mc-version.txt
+          grep -F "amdgcn" /tmp/llvm-mc-version.txt
           for shader in gemm_fp32_wave64_tiled gemm_fp32 gemm_fp16_accum e4m3_decode e4m3_encode; do
             spirv-val --target-env vulkan1.1 "dist/ps4/gcn8/${shader}.spv"
           done
