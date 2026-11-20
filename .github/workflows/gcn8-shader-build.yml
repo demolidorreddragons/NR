@@ -77,6 +77,16 @@ jobs:
           test -s src/compiler/builtin_types.c
           python3 src/vulkan/util/vk_struct_type_cast_gen.py --xml src/vulkan/registry/vk.xml --out src/vulkan/util/vk_struct_type_cast.h --beta false
           test -s src/vulkan/util/vk_struct_type_cast.h
+          # Mesa's amd/common/meson.build generates these packet headers from the pinned JSON inputs.
+          for gfx in gfx11 gfx12; do
+            python3 src/amd/packets/parse_cp_pm4_table_data_json.py \
+              src/amd/packets/cp_pm4_table_data_gfx11.json \
+              src/amd/packets/pm4_it_opcodes_gfx11.h \
+              src/amd/packets/cp_pm4_table_data_gfx12.json \
+              src/amd/packets/pm4_it_opcodes_gfx12.h \
+              "$gfx" packets_h > "src/amd/common/amd_cp_packets_${gfx}.h"
+            test -s "src/amd/common/amd_cp_packets_${gfx}.h"
+          done
       - name: Build pinned opengnm-psbc host compiler
         working-directory: .deps/opengnm-psbc
         run: |
