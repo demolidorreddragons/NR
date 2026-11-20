@@ -15,7 +15,7 @@ The resource hash is the published reference payload hash used by the supplied 0
 
 - 71 distinct block IDs, numbered 0 through 70.
 - 153 unique tensor records.
-- Every tensor slice is in bounds.
+- The reference graph consumes 145 records. The 8 unread records are exactly `block31.layer3.layer` through `block38.layer3.layer` (two bytes each); the pinned `docs/weights.md` identifies ViT `layer3` as unread metadata.\n- Every tensor slice is in bounds.
 - No overlapping slices.
 - All 153 slices exactly cover the single packed stage: zero unreferenced bytes.
 - Every tensor name, block/layer field, parameter field and byte length matches the source inventory.
@@ -25,7 +25,7 @@ The resource hash is the published reference payload hash used by the supplied 0
 
 Compared all 153 tensor record byte lengths against the graph/layout formulas in OpenDLSS-NR commit `9d08f4184bbcb9d858e2fb7a7834ec0837a9d2f1`, specifically `src/nr_graph.cpp` (`fusedLayout`, `preFusedLayout`, `upsampleFusedLayout`, `postFusedLayout`, split-512 block layout and the ViT tensor layout).
 
-Result: **153/153 record names and byte lengths match** the expected 71-block graph layout. The block-4 record includes the 16-byte trailing pad present in the observed 310.8.3 export. No record was silently dropped or reshaped.
+Result: **153/153 record names and byte lengths match** the expected 71-block graph layout; **145/153 records are consumed** and the 8 two-byte ViT `layer3` records are explicitly unread. The block-4 record includes the 16-byte trailing pad present in the observed 310.8.3 export. No record was silently dropped or reshaped.
 
 Reference documentation:
 - https://github.com/maanHimself/OpenDLSS-NR/blob/9d08f4184bbcb9d858e2fb7a7834ec0837a9d2f1/docs/network.md
