@@ -1,0 +1,77 @@
+name: Inspect installed Neural Engine PKG offline
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/ps4-inspect-installed-pkg.yml"
+permissions:
+  actions: read
+  contents: read
+jobs:
+  inspect:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout independent package inspector
+        uses: actions/checkout@v4
+        with:
+          repository: pearlxcore/OrbisPkgTool
+          ref: 3de6da849b64a8ad0d5ba00dd4e8919934b868b0
+          path: OrbisPkgTool-src
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Download read-only PS4 audit artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: PS4-installed-Neural-Engine-metadata-audit
+          path: installed-audit
+          run-id: 44654196789
+          github-token: ${{ github.token }}
+
+      - name: Build independent inspector
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          dotnet build OrbisPkgTool-src/OrbisPkgTool/OrbisPkgTool.csproj --configuration Release
+          if ($LASTEXITCODE -ne 0) { throw "Independent inspector build failed." }
+          $tool = "OrbisPkgTool-src/OrbisPkgTool/bin/Release/net10.0-windows/OrbisPkgTool.dll"
+          if (-not (Test-Path $tool)) { throw "Independent inspector DLL missing." }
+          "TOOL=$tool" | Out-File "$env:RUNNER_TEMP\installed-pkg-tool.txt"
+
+      - name: Validate and extract installed package metadata
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $tool = (Get-Content "$env:RUNNER_TEMP\installed-pkg-tool.txt" | Select-Object -First 1).Substring(5)
+          $pkg = Join-Path $env:GITHUB_WORKSPACE "installed-audit/app.pkg"
+          if (-not (Test-Path $pkg)) { throw "Installed app.pkg missing from audit artifact." }
+          New-Item -ItemType Directory -Force -Path audit-output | Out-Null
+          $size = (Get-Item $pkg).Length
+          $hash = (Get-FileHash -Algorithm SHA256 $pkg).Hash.ToLowerInvariant()
+          "INSTALLED_APP_PKG_BYTES=$size" | Out-File audit-output/installed-pkg-report.txt
+          "INSTALLED_APP_PKG_SHA256=$hash" | Out-File audit-output/installed-pkg-report.txt -Append
+
+          dotnet "$tool" validate "$pkg" 2>&1 | Tee-Object audit-output/pkg-validation.txt
+          if ($LASTEXITCODE -ne 0) { throw "Installed app.pkg failed independent package validation." }
+          $out = Join-Path $env:RUNNER_TEMP "installed-neural-engine-extracted"
+          dotnet "$tool" extract "$pkg" "$out" --verbose 2>&1 | Tee-Object audit-output/pkg-extract.txt
+          if ($LASTEXITCODE -ne 0) { throw "Installed app.pkg extraction failed." }
+          $sfo = Get-ChildItem $out -Recurse -File -Filter param.sfo | Select-Object -First 1
+          if (-not $sfo) { throw "Installed package PARAM.SFO not found after extraction." }
+          dotnet "$tool" sfo read "$($sfo.FullName)" 2>&1 | Tee-Object audit-output/installed-param-sfo.txt
+          if ($LASTEXITCODE -ne 0) { throw "Installed PARAM.SFO parsing failed." }
+          "EXTRACTED_PARAM_SFO=$($sfo.FullName)" | Out-File audit-output/installed-pkg-report.txt -Append
+          "INSTALLED_PACKAGE_INSPECTION=PASS_PC_ONLY" | Out-File audit-output/installed-pkg-report.txt -Append
+          Get-Content audit-output/installed-pkg-report.txt | Out-File $env:GITHUB_STEP_SUMMARY -Append
+
+      - name: Upload installed package inspection evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: PS4-installed-Neural-Engine-package-inspection
+          path: audit-output/*
+          if-no-files-found: warn
+          retention-days: 30
