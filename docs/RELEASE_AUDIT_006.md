@@ -86,3 +86,5 @@ O relatório acima permanece válido para o artefato antigo (run `44669637925`, 
 **Decisão permanece: NÃO APROVADO PARA INSTALAÇÃO NO PS4 PRO.** O artefato do run `44677990694` foi construído antes da nova validação SHA-256 no eboot e antes do novo job QA; não o tratar como substituto do próximo build auditado. Nenhuma operação no console foi realizada.
 
 - A primeira tentativa de compilar o novo eboot com SHA-256 (run `44678927683`) chegou à etapa de PKG e falhou porque `-std=c11` ocultou as declarações POSIX `fdopen`/`fileno` no sysroot Orbis. O build foi ajustado para `-std=gnu11` (commit `748539b1805069efa69c45c24e1d35bb796b204e`); é necessária nova execução antes de avaliar o artefato. Nenhum PKG atualizado foi produzido por essa tentativa.
+
+- A suíte host completa passou novamente no run `44679268881` (commit `e5cbab467e917825227a5411d69c44421cd8e9e1`). O teste SHA-256 cobre agora vetores vazio, `abc`, bloco de 56 bytes e 1 milhão de `a`, além de validar o manifesto válido/inválido. A compilação cruzada do instalador e a QA independente do PKG continuam pendentes no run de PRX/PKG.
