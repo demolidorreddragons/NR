@@ -75,8 +75,44 @@ jobs:
             return @($result | ForEach-Object { ([string]$_).Trim() } | Where-Object { $_ })
           }
           $rootBefore = @(Get-FtpNames $root)
-          if ($rootBefore -contains $name) { throw "Destination exists; refusing overwrite: $name" }
-          $oldNeural = @($rootBefore | Where-Object { $_ -match '^PS4-Neural-Engine-.*[.]pkg$' })
+          $targetAlreadyPresent = $rootBefore -contains $name
+          if ($targetAlreadyPresent) { Write-Host "Existing target found; verifying exact bytes instead of overwriting: $name" }
+          $oldNeural = @($rootBefore | Where-Object { $_ -match '^PS4-Neural-Engine-.*[.]pkg
+          $thirdParty = @($rootBefore | Where-Object { $_ -notmatch '^PS4-Neural-Engine-.*[.]pkg$' })
+          $archiveBefore = @(Get-FtpNames $archive)
+          $collisions = @($oldNeural | Where-Object { $archiveBefore -contains $_ })
+          if ($collisions.Count -gt 0) { throw "Archive collision; no files changed: $($collisions -join ', ')" }
+
+          if (-not $targetAlreadyPresent) {
+            $upload = & curl.exe --fail --silent --show-error --ftp-pasv --user $creds --upload-file $pkg $target 2>&1
+            if ($LASTEXITCODE -ne 0) { throw "FTP upload failed: $upload" }
+          }
+          $readback = Join-Path $env:RUNNER_TEMP $name
+          $download = & curl.exe --fail --silent --show-error --ftp-pasv --user $creds --output $readback $target 2>&1
+          if ($LASTEXITCODE -ne 0) { throw "FTP readback failed: $download" }
+          $remoteSize = (Get-Item -LiteralPath $readback).Length
+          $remoteHash = (Get-FileHash -LiteralPath $readback -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($remoteSize -ne $size -or $remoteHash -ne $actual) { throw "FTP readback mismatch." }
+          Write-Host "QA_APPROVED_PKG_UPLOAD_READBACK_VERIFIED bytes=$remoteSize sha256=$remoteHash"
+
+          foreach ($oldName in $oldNeural) {
+            $move = & curl.exe --fail --silent --show-error --ftp-pasv --user $creds --quote "CWD data" --quote "CWD pkg" --quote "RNFR $oldName" --quote "RNTO old_versions/$oldName" $hostUrl 2>&1
+            if ($LASTEXITCODE -ne 0) { throw "Could not archive older Neural Engine package $oldName. $move" }
+          }
+          $rootFinal = @(Get-FtpNames $root)
+          $archiveFinal = @(Get-FtpNames $archive)
+          if ($rootFinal -notcontains $name) { throw "New package missing from root after staging." }
+          foreach ($other in $thirdParty) { if ($rootFinal -notcontains $other) { throw "Third-party package unexpectedly moved: $other" } }
+          foreach ($oldName in $oldNeural) { if ($archiveFinal -notcontains $oldName) { throw "Archive verification failed for $oldName" } }
+          $remaining = @($rootFinal | Where-Object { $_ -match '^PS4-Neural-Engine-.*[.]pkg$' })
+          if ($remaining.Count -ne 1 -or $remaining[0] -ne $name) { throw "Unexpected Neural Engine PKG set in root: $($remaining -join ', ')" }
+          Write-Host "STAGING_AND_READBACK_SUCCESS=true"
+          Write-Host "PKG_PATH=/data/pkg/$name"
+          Write-Host "PKG_BYTES=$remoteSize"
+          Write-Host "PKG_SHA256=$remoteHash"
+          Write-Host "ARCHIVED_OLD_NEURAL_COUNT=$($oldNeural.Count)"
+          Write-Host "PRESERVED_THIRD_PARTY_COUNT=$($thirdParty.Count)"
+ -and $_ -ne $name })
           $thirdParty = @($rootBefore | Where-Object { $_ -notmatch '^PS4-Neural-Engine-.*[.]pkg$' })
           $archiveBefore = @(Get-FtpNames $archive)
           $collisions = @($oldNeural | Where-Object { $archiveBefore -contains $_ })
