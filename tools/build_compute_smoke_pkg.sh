@@ -18,6 +18,8 @@ APP_VERSION="01.00"
 STAGE="$ROOT/build/gcn8-smoke-stage/$RUN_ID"
 OUT="$ROOT/dist/gcn8-smoke/$RUN_ID"
 SAMPLE="$OO_PS4_TOOLCHAIN/samples/piglet"
+OPEN_GNM_INCLUDE="${OPEN_GNM_INCLUDE:-$ROOT/OpenGNM/include}"
+test -s "$OPEN_GNM_INCLUDE/gnm_drawcommandbuffer.h"
 mkdir -p "$ROOT/build/gcn8-smoke-stage" "$ROOT/dist/gcn8-smoke"
 rm -rf "$STAGE"
 mkdir -p "$STAGE/sce_sys/about" "$STAGE/sce_module" "$STAGE/gcn8" "$OUT"
@@ -44,7 +46,7 @@ COMMON=(--target=x86_64-pc-freebsd12-elf -std=c++17 -fPIC -fno-exceptions -fno-r
   -isystem "$OO_PS4_TOOLCHAIN/include" \
   -isystem /usr/include/x86_64-linux-gnu \
   -isystem "$OO_PS4_TOOLCHAIN/include/c++/v1" \
-  -I"$ROOT/OpenGNM/include" -I"$ROOT/platform/ps4/gcn8" \
+  -I"$OPEN_GNM_INCLUDE" -I"$ROOT/platform/ps4/gcn8" \
   -I"$ROOT/platform/ps4/gcn8/host")
 RUN_DEFINE="-DPNE_GCN8_SMOKE_RUN_ID=\"$RUN_ID\""
 clang++ "${COMMON[@]}" "$RUN_DEFINE" -c "$ROOT/platform/ps4/gcn8/smoke_main.cpp" -o "$STAGE/smoke_main.o"
