@@ -12,6 +12,8 @@ def resolve_slot_start(orb_offset: int, chunk_offset_dwords: int,
 
 def expected_offset(orb_offset: int, slot_start: int,
                     num_slots: int, points_to_end: bool) -> int:
+    if num_slots == 0:
+        return 0
     target = slot_start + (num_slots * 4 if points_to_end else 0)
     delta = orb_offset - target
     if delta < 0 or delta % 4:
@@ -66,7 +68,7 @@ class GnmSlotOffsetTests(unittest.TestCase):
             expected_offset(0x990, 0x58, 1, True)
 
     def test_zero_slots_use_zero_offset(self):
-        self.assertEqual(expected_offset(0x990, 0x58, 0, True), 0x990 // 4 - 0x58 // 4)
+        self.assertEqual(expected_offset(0x990, 0x58, 0, True), 0)
 
 
 if __name__ == "__main__":
