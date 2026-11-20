@@ -226,7 +226,23 @@ static int configure_loader(char* error, size_t error_size) {
         }
         if (in_default && strcmp(line, DEST_PRX) == 0) found_entry = 1;
     }
-    if (found_entry) return 1;
+    if (found_entry) {
+        FILE* staged = fopen(CONFIG_TMP, "wb");
+        if (!staged) {
+            snprintf(error, error_size, "ERROR: cannot stage unchanged plugins.ini (errno=%d).", errno);
+            return 0;
+        }
+        int staged_ok = fwrite(input, 1, length, staged) == length;
+        if (fflush(staged) != 0 || fsync(fileno(staged)) != 0) staged_ok = 0;
+        if (fclose(staged) != 0) staged_ok = 0;
+        if (!staged_ok) {
+            int saved_errno = errno;
+            remove(CONFIG_TMP);
+            snprintf(error, error_size, "ERROR: cannot verify staged plugins.ini (errno=%d).", saved_errno);
+            return 0;
+        }
+        return 1;
+    }
 
     in_default = 0;
     pos = 0;
