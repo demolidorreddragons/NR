@@ -1,6 +1,6 @@
 import hashlib, json, tempfile, unittest
 from pathlib import Path
-from tools.validate_model_manifest import ValidationError, validate, reference_layout_sizes
+from tools.validate_model_manifest import ValidationError, validate, reference_layout_sizes, reference_consumed_names
 
 class ManifestTests(unittest.TestCase):
     def setUp(self):
@@ -30,6 +30,9 @@ class ManifestTests(unittest.TestCase):
         self.assertEqual(sizes["block0.layer0.layer"], 21696)
         self.assertEqual(sizes["block31.layer3.layer"], 2)
         self.assertEqual(sizes["block70.layer0.blend_scale"], 2)
+        consumed = reference_consumed_names()
+        self.assertEqual(len(consumed), 145)
+        self.assertEqual(sorted(set(sizes) - consumed), [f"block{b}.layer3.layer" for b in range(31, 39)])
 
     def test_bad_hash(self): self.m["stages"][0]["sha256"]="0"*64; self.invalid()
     def test_duplicate_name(self): self.m["tensors"][1]=dict(self.m["tensors"][0]); self.invalid()
