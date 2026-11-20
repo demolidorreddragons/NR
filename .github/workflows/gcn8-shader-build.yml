@@ -41,6 +41,12 @@ jobs:
           git -C .deps/SPIRV-Headers checkout 09913f088a1197aba4aefd300a876b2ebbaa3391
           git clone https://github.com/KhronosGroup/Vulkan-Headers.git .deps/Vulkan-Headers
           git -C .deps/Vulkan-Headers checkout v1.4.328
+      - name: Apply audited PSBC GFX8 and SPIR-V input fixes
+        run: |
+          python3 tools/apply_psbc_gfx8_fixes.py .deps/opengnm-psbc
+          git -C .deps/opengnm-psbc diff --check
+          grep -F "lds_size_per_workgroup = gfxlevel >= GFX7 ? 64 * 1024 : 32 * 1024" .deps/opengnm-psbc/libpsbc/psbc_compile.c
+          grep -F "Invalid SPIR-V file size" .deps/opengnm-psbc/cmd/psbc/main.c
       - name: Configure reproducible host compiler build
         working-directory: .deps/opengnm-psbc
         run: |
@@ -130,10 +136,20 @@ jobs:
           grep -F "PS4 Pro (NEO/GFX8)" /tmp/psbc-help.txt
           mkdir -p /tmp/psbc-negative
           printf '\003\002\043\007' > /tmp/psbc-negative/invalid.spv
-          if ./opengnm-psbc -s compute -f /tmp/psbc-negative/invalid.spv -o /tmp/psbc-negative/invalid.sb -n; then
+          set +e
+          ./opengnm-psbc -s compute -f /tmp/psbc-negative/invalid.spv -o /tmp/psbc-negative/invalid.sb -n > /tmp/psbc-negative/invalid.log 2>&1
+          status=$?
+          set -e
+          if [ "$status" -eq 0 ]; then
             echo "PSBC unexpectedly accepted malformed SPIR-V" >&2
             exit 1
           fi
+          if [ "$status" -ge 128 ]; then
+            echo "PSBC crashed instead of rejecting malformed SPIR-V (exit=$status)" >&2
+            cat /tmp/psbc-negative/invalid.log
+            exit 1
+          fi
+          grep -F "Invalid SPIR-V file size" /tmp/psbc-negative/invalid.log
           test ! -e /tmp/psbc-negative/invalid.sb
       - name: Compile NR compute shaders to SPIR-V
         run: |
@@ -194,6 +210,7 @@ jobs:
               "llvm_mc": subprocess.check_output(["llvm-mc-18", "--version"], text=True).splitlines()[0],
               "psbc_cli": subprocess.check_output([".deps/opengnm-psbc/opengnm-psbc", "-h"], text=True).splitlines()[0],
               "psbc_binary_sha256": hashlib.sha256(Path(".deps/opengnm-psbc/opengnm-psbc").read_bytes()).hexdigest(),
+              "psbc_gfx8_patch_sha256": hashlib.sha256(Path("tools/apply_psbc_gfx8_fixes.py").read_bytes()).hexdigest(),
           }
           for shader in shaders:
               path = Path("dist/ps4/gcn8") / f"{shader}.sb"
