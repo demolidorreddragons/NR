@@ -3,6 +3,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <cstddef>
 
 namespace pne::gcn8 {
 
@@ -13,6 +14,10 @@ struct GemmParams {
     float alpha;
     float beta;
 };
+
+static_assert(sizeof(GemmParams) == 20, "GLSL push-constant ABI must be 20 bytes");
+static_assert(offsetof(GemmParams, alpha) == 12, "GLSL alpha offset mismatch");
+static_assert(offsetof(GemmParams, beta) == 16, "GLSL beta offset mismatch");
 
 struct BufferView {
     const void* data;
