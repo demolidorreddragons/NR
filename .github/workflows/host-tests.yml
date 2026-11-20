@@ -1,7 +1,7 @@
 name: host-tests
 on:
   push:
-    branches: [main]
+    branches: [main, feature/gcn8-numeric-kernels]
   pull_request:
   workflow_dispatch:
 jobs:
@@ -25,6 +25,13 @@ jobs:
           assert 'read_block(verify_src' in installer and 'read_block(verify_dst' in installer, 'both streams must use full-block reads'
           print('Installer copy verification checks passed')
           PY
+          assert 'DEST_BACKUP' in installer and 'CONFIG_BACKUP' in installer, 'transaction must retain recovery backups'
+          assert 'static int commit_install' in installer, 'PRX/config commit transaction missing'
+          assert 'rollback:' in installer and 'rollback attempted' in installer, 'transaction rollback path missing'
+          assert 'rename(DEST_TMP, DEST_PRX)' in installer, 'staged PRX must be committed only in transaction'
+          assert 'rename(CONFIG_TMP, CONFIG)' in installer, 'staged plugins.ini must be committed only in transaction'
+          assert 'if (found_entry)' in installer and 'fopen(CONFIG_TMP, "wb")' in installer, 'existing loader entry must still stage config'
+          print('Installer transaction and recovery invariants passed')
       - name: Configure
         run: cmake -S . -B build
       - name: Build
