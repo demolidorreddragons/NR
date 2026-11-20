@@ -38,17 +38,28 @@ Do not bind the four GEMM buffers by assumption.
 
 ## Memory-management boundary
 
-The inspected GNM headers describe descriptors and command submission, but do
-not provide a complete GPU-memory allocator or CPU/GPU mapping contract.
-The backend must separately establish, from pinned OpenOrbis/kernel headers
-and firmware-supported exports:
-- allocation API and memory type requirements;
-- CPU mapping and GPU virtual-address rules;
-- alignment, size rounding, and address-width constraints;
-- cache flush/invalidate operations and ownership transitions;
+The OpenOrbis SDK headers declare the following candidate libkernel calls:
+- `sceKernelAllocateDirectMemory(searchStart, searchEnd, length, align, type, &physicalOffset)`;
+- `sceKernelMapDirectMemory(&virtualAddress, length, protections, flags, physicalOffset, align)`;
+- `sceKernelReleaseDirectMemory(physicalOffset, length)`.
+
+The OpenOrbis sample `samples/_common/graphics.cpp` uses these APIs for
+display/framebuffer memory. Its sample values (memory type `3`, protections
+`0x33`, flags `0`) are evidence for that display path only; they are NOT
+approved defaults for compute buffers. The project compile/link smoke now
+checks the SDK declarations and import symbols for these three functions,
+without invoking them.
+
+Still unresolved before implementing the allocator:
+- which direct-memory type and protections are valid for general compute
+  buffers on supported GoldHEN/firmware combinations;
+- whether the mapped virtual address is directly valid as a GPU address or
+  requires a GPU address translation/registration step;
+- alignment, size rounding, and address-width constraints for CS resources;
+- CPU/GPU cache flush/invalidate operations and ownership transitions;
 - lifetime rules while a submitted command buffer is in flight.
 
-No allocator is implemented until those contracts are verified. Do not use
+No allocator is implemented until these contracts are verified. Do not use
 ordinary `malloc` addresses as GPU addresses.
 
 ## Required dispatch lifecycle
@@ -75,3 +86,14 @@ ordinary `malloc` addresses as GPU addresses.
 - No GCN8 dispatch has been executed on a PS4 Pro.
 - No cache-coherency behavior has been measured.
 - No shader resource binding has been proven.
+
+
+## Direct-memory SDK references
+
+- OpenOrbis `libkernel.h` declarations:
+  https://github.com/OpenOrbis/OpenOrbis-PS4-Toolchain/blob/0a1aaf9dd4a92695538bdeb09fb056d06dd11725/include/orbis/libkernel.h
+- OpenOrbis framebuffer sample (allocation and mapping example; not a compute
+  memory contract):
+  https://github.com/OpenOrbis/OpenOrbis-PS4-Toolchain/blob/0a1aaf9dd4a92695538bdeb09fb056d06dd11725/samples/_common/graphics.cpp
+- OpenOrbis Libkernel notes:
+  https://github.com/OpenOrbis/OpenOrbis-PS4-Toolchain/blob/0a1aaf9dd4a92695538bdeb09fb056d06dd11725/docs/MD/PS4%20Libraries/Libkernel.md
