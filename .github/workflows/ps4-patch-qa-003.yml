@@ -40,14 +40,6 @@ jobs:
           run-id: ${{ github.event.workflow_run.id }}
           github-token: ${{ github.token }}
 
-      - name: Download exact base PKG 002 artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: ps4-neural-engine-build
-          path: qa-base
-          run-id: 44644315395
-          github-token: ${{ github.token }}
-
       - name: Build independent inspector
         shell: pwsh
         run: |
@@ -66,8 +58,8 @@ jobs:
           $pkg = Join-Path $env:GITHUB_WORKSPACE "qa-candidate/PS4-Neural-Engine-003-CANDIDATE.pkg"
           $gp4 = Join-Path $env:GITHUB_WORKSPACE "qa-candidate/PS4-Neural-Engine-003.gp4"
           $report = Join-Path $env:GITHUB_WORKSPACE "qa-candidate/build-report.txt"
-          $base = Join-Path $env:GITHUB_WORKSPACE "qa-base/pkg/PS4-Neural-Engine-002.pkg"
-          if (-not (Test-Path $pkg) -or -not (Test-Path $gp4) -or -not (Test-Path $base)) { throw "Required candidate, GP4, or exact base artifact missing." }
+          $base = Join-Path $env:GITHUB_WORKSPACE "qa-candidate/PS4-Neural-Engine-002.pkg"
+          if (-not (Test-Path $pkg) -or -not (Test-Path $gp4) -or -not (Test-Path $base)) { throw "Required candidate patch, GP4, or delivered base PKG 002 missing." }
           New-Item -ItemType Directory -Force -Path qa-output | Out-Null
 
           $baseHash = (Get-FileHash -Algorithm SHA256 $base).Hash
@@ -76,6 +68,8 @@ jobs:
           $expectedHash = [regex]::Match($reportText, "CANDIDATE_PKG_SHA256=([A-Fa-f0-9]{64})").Groups[1].Value
           if (-not $expectedHash -or $candidateHash -ne $expectedHash) { throw "Candidate SHA-256 does not match engineering report." }
           "BASE_PKG_SHA256=$baseHash" | Out-File qa-output/qa-report.txt
+          $expectedBaseHash = [regex]::Match($reportText, "DELIVERABLE_BASE_PKG_SHA256=([A-Fa-f0-9]{64})").Groups[1].Value
+          if (-not $expectedBaseHash -or $baseHash -ne $expectedBaseHash) { throw "Delivered base PKG SHA-256 does not match engineering report." }
           "CANDIDATE_PKG_SHA256=$candidateHash" | Out-File qa-output/qa-report.txt -Append
 
           [xml]$project = Get-Content $gp4
