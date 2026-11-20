@@ -62,9 +62,13 @@ The first hardware backend should own these operations explicitly:
 2. Upload input matrices and initialize residual/output storage.
 3. Load and validate the GFX8 compute shader binary and its register metadata.
 4. Bind the CS stage and map each SPIR-V storage binding using the actual
-   shader input-usage metadata. Do not assume that all four GLSL storage
-   buffers map to V# descriptors: RW-resource and resource-table usage must be
-   checked in the compiled GNM binary before choosing the user-data setter.
+   shader input-usage metadata. The first successful GFX8 artifact identifies
+   one `PTR_INDIRECTRESOURCETABLE` pointer at user register 2. Pinned PSBC source
+   explicitly defines storage buffers as 16-byte V# entries in set 0 at
+   binding offsets N×64; the four GEMM bindings occupy offsets 0/64/128/192.
+   The pointer-user-data setter is the candidate for the table pointer, not
+   four direct V# user-data writes. Writable descriptor fields, GPU VA
+   constraints and cache policy still require validation.
 5. Bind the 20-byte parameter block using the actual GNM user-data/constant
    mechanism; the current host struct size alone does not prove this ABI.
 6. Emit dispatch dimensions from `GemmDispatch.groups_x/groups_y`, with the
