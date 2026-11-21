@@ -287,10 +287,11 @@ jobs:
           retention-days: 30
 
   build-patch:
-    name: build-patch-against-installed-010
+    name: build-associated-patch-against-installed-010
     needs: [build-prx-and-pkg, independent-pkg-qa]
     if: github.ref == 'refs/heads/feature/gcn8-numeric-kernels'
-    runs-on: ubuntu-24.04
+    runs-on: windows-latest
+    timeout-minutes: 25
     permissions:
       actions: read
       contents: read
@@ -301,71 +302,184 @@ jobs:
         with:
           name: ps4-neural-engine-build
           path: base-artifact
-          repository: ${{ github.repository }}
+          repository: \${{ github.repository }}
           run-id: 44851147057
-          github-token: ${{ github.token }}
-      - name: Download current successful release artifact
+          github-token: \${{ github.token }}
+      - name: Download current release 011 artifact
         uses: actions/download-artifact@v4
         with:
           name: ps4-neural-engine-build
           path: update-artifact
-          repository: ${{ github.repository }}
-          run-id: ${{ github.run_id }}
-          github-token: ${{ github.token }}
-      - name: Setup .NET 8
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: 8.0.x
-      - name: Install pinned OpenOrbis create-gp4
-        run: |
-          curl -fL --retry 3 -o /tmp/openorbis.tar.gz https://github.com/OpenOrbis/OpenOrbis-PS4-Toolchain/releases/download/v0.5.4/toolchain-llvm-18.tar.gz
-          echo "3c7cd5bb593ca74fa1c13fd59f3938dc0fc07985167f7275063019e63abe4526  /tmp/openorbis.tar.gz" | sha256sum -c -
-          tar -xzf /tmp/openorbis.tar.gz -C "$GITHUB_WORKSPACE"
-          echo "OO_PS4_TOOLCHAIN=$GITHUB_WORKSPACE/OpenOrbis/PS4Toolchain" >> "$GITHUB_ENV"
-      - name: Checkout pinned LibOrbisPkg
+          repository: \${{ github.repository }}
+          run-id: \${{ github.run_id }}
+          github-token: \${{ github.token }}
+      - name: Checkout pinned independent PKG inspector
         uses: actions/checkout@v4
         with:
-          repository: OpenOrbis/LibOrbisPkg
-          ref: 92a4e7f8e5914cb06b52ba3ae6b0675da438a051
-          path: LibOrbisPkg-src
-      - name: Compile patch-aware PkgTool.Core
+          repository: pearlxcore/OrbisPkgTool
+          ref: 3de6da849b64a8ad0d5ba00dd4e8919934b868b0
+          path: OrbisPkgTool-src
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - name: Build independent PKG inspector
+        shell: pwsh
         run: |
-          python3 - <<'PY'
-          from pathlib import Path
-          p = Path("LibOrbisPkg-src/LibOrbisPkg/PKG/PkgBuilder.cs")
-          s = p.read_text(encoding="utf-8-sig")
-          old = 'sfo["PUBTOOLINFO"] = new SFO.Utf8Value("PUBTOOLINFO", date+time+sizeInfo, 0x200);'
-          new = 'sfo["PUBTOOLINFO"] = new SFO.Utf8Value("PUBTOOLINFO", date+time+sizeInfo+",st_type=digital25", 0x200);'
-          copy_before = '        pkg.ParamSfo = new SfoEntry(sfo);'
-          copy_after = '        pkg.ParamSfo = new SfoEntry(sfo);'
-          marker = '        sfo["PUBTOOLVER"] = new SFO.IntegerValue("PUBTOOLVER", 0x02890000);'
-          if s.count(old) != 1 or s.count(copy_before) != 1 or s.count(marker) != 1:
-              raise SystemExit("Pinned LibOrbisPkg metadata anchors changed; refusing ambiguous patch.")
-          s = s.replace(old, new)
-          s = s.replace(copy_before + "\\n", "", 1)
-          s = s.replace(marker, marker + "\\n" + copy_after, 1)
-          p.write_text(s, encoding="utf-8")
-          check = p.read_text(encoding="utf-8")
-          if new not in check or check.count(copy_after) != 1 or check.index(copy_after) < check.index(marker):
-              raise SystemExit("Patch SFO must be copied only after digital25 PUBTOOLINFO/PUBTOOLVER finalization.")
-          PY
-          dotnet publish LibOrbisPkg-src/PkgTool.Core/PkgTool.Core.csproj -c Release -r linux-x64 --self-contained false -o "$RUNNER_TEMP/pkgtool-patch"
-          test -x "$RUNNER_TEMP/pkgtool-patch/PkgTool.Core"
-          echo "PKGTOOL_CORE=$RUNNER_TEMP/pkgtool-patch/PkgTool.Core" >> "$GITHUB_ENV"
-      - name: Build patch against installed release 010
-        env:
-          BASE_PKG: ${{ github.workspace }}/base-artifact/pkg/PS4-Neural-Engine-010.pkg
-          UPDATE_PKG: ${{ github.workspace }}/update-artifact/pkg/PS4-Neural-Engine-011.pkg
-          UPDATE_PRX: ${{ github.workspace }}/update-artifact/ps4/ps4_neural_engine.prx
-          UPDATE_MANIFEST: ${{ github.workspace }}/update-artifact/pkg/audit/pne-release.ini
-          OUT_DIR: ${{ github.workspace }}/dist/patch
-          PATCH_APP_VERSION: "01.07"
+          dotnet build OrbisPkgTool-src/OrbisPkgTool/OrbisPkgTool.csproj --configuration Release
+          if ($LASTEXITCODE -ne 0) { throw "OrbisPkgTool build failed." }
+          $tool = "OrbisPkgTool-src/OrbisPkgTool/bin/Release/net10.0-windows/OrbisPkgTool.dll"
+          if (-not (Test-Path $tool)) { throw "OrbisPkgTool DLL missing." }
+          "TOOL=$tool" | Out-File "$env:RUNNER_TEMP\patch-tool.txt"
+      - name: Download pinned Fake PKG Tools v7
+        shell: pwsh
         run: |
-          bash tools/build_patch_pkg.sh
-          mkdir -p dist/patch/audit
-          cp build/patch-stage/package.gp4 dist/patch/audit/PS4-Neural-Engine-011-PATCH.gp4
-          cp build/patch-stage/sce_sys/param.sfo dist/patch/audit/param.sfo
-          sha256sum dist/patch/*.pkg > dist/patch/audit/SHA256SUMS
+          $ErrorActionPreference = "Stop"
+          $url = "https://github.com/CyB1K/PS4-Fake-PKG-Tools-3.87/releases/download/v7/PS4_Fake_PKG_Tools_3.87_V7.rar"
+          $archive = Join-Path $env:RUNNER_TEMP "fake-pkg-tools-v7.rar"
+          Invoke-WebRequest -Uri $url -OutFile $archive
+          if ((Get-Item $archive).Length -ne 6674278) { throw "Unexpected Fake PKG Tools archive size." }
+          $hash = (Get-FileHash -Algorithm SHA256 $archive).Hash
+          if ($hash -ne "206FF9CD1199AE3943944FE61FB9247EC0B398B079AB125543FB1AD115E76ED7") { throw "Fake PKG Tools archive SHA mismatch." }
+          $dest = Join-Path $env:RUNNER_TEMP "fake-pkg-tools"
+          New-Item -ItemType Directory -Force -Path $dest | Out-Null
+          & "$env:ProgramFiles\7-Zip\7z.exe" x $archive "-o$dest" -y
+          if ($LASTEXITCODE -ne 0) { throw "Fake PKG Tools extraction failed." }
+          $cmd = Get-ChildItem $dest -Recurse -File -Filter "orbis-pub-cmd.exe" | Select-Object -First 1
+          if (-not $cmd) { throw "orbis-pub-cmd.exe missing." }
+          $toolHash = (Get-FileHash $cmd.FullName -Algorithm SHA256).Hash
+          if ($toolHash -ne "9D136A27A0739555329E46B61208B7105D4C5AEA5644CBF8052BFED4250D0E1B") { throw "orbis-pub-cmd.exe SHA mismatch." }
+          "PUBCMD=$($cmd.FullName)" | Out-File "$env:RUNNER_TEMP\patch-tool.txt" -Append
+      - name: Build Sony-associated patch from exact installed base
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $tool = "OrbisPkgTool-src/OrbisPkgTool/bin/Release/net10.0-windows/OrbisPkgTool.dll"
+          $pubCmd = (Get-Content "$env:RUNNER_TEMP\patch-tool.txt" | Where-Object { $_ -like "PUBCMD=*" } | Select-Object -First 1).Substring(7)
+          $basePkg = (Resolve-Path "base-artifact/pkg/PS4-Neural-Engine-010.pkg").Path
+          $updatePkg = (Resolve-Path "update-artifact/pkg/PS4-Neural-Engine-011.pkg").Path
+          $updatePrx = (Resolve-Path "update-artifact/ps4/ps4_neural_engine.prx").Path
+          $updateManifest = (Resolve-Path "update-artifact/pkg/audit/pne-release.ini").Path
+          $expectedBase = "015c9e2c266561fda005c15766fe4833412c658d9a8d0b7334fd2cfe3fec8ae2"
+          if ((Get-FileHash $basePkg -Algorithm SHA256).Hash.ToLowerInvariant() -ne $expectedBase) { throw "Base PKG is not the exact installed release 010." }
+          foreach ($p in @($updatePkg,$updatePrx,$updateManifest)) { if (-not (Test-Path $p)) { throw "Update payload missing: $p" } }
+          $work = Join-Path $env:RUNNER_TEMP "patch-011"
+          $extract = Join-Path $work "base-extracted"
+          $image = Join-Path $extract "Image0"
+          $out = Join-Path $env:GITHUB_WORKSPACE "dist/patch"
+          New-Item -ItemType Directory -Force -Path $work,$out | Out-Null
+          dotnet "$tool" validate "$basePkg"
+          if ($LASTEXITCODE -ne 0) { throw "Exact base PKG validation failed." }
+          dotnet "$tool" extract "$basePkg" "$extract" --verbose
+          if ($LASTEXITCODE -ne 0) { throw "Base PKG extraction failed." }
+          dotnet "$tool" restructure "$extract" --verbose
+          if ($LASTEXITCODE -ne 0) { throw "Base PKG restructure failed." }
+          $baseSfo = Join-Path $image "sce_sys/param.sfo"
+          if (-not (Test-Path $baseSfo)) { throw "Base Image0 PARAM.SFO missing." }
+          foreach ($pair in @(@("CATEGORY","gde"),@("APP_VER","01.06"),@("VERSION","01.06"),@("FORMAT","obs"))) {
+            dotnet "$tool" sfo set "$baseSfo" $pair[0] $pair[1]
+            if ($LASTEXITCODE -ne 0) { throw "Base SFO normalization failed: $($pair[0])" }
+          }
+          dotnet "$tool" sfo set "$baseSfo" PUBTOOLINFO "c_date=20261120,img0_l0_size=7,img0_l1_size=0,img0_sc_ksize=512,img0_pc_ksize=832,st_type=digital50"
+          if ($LASTEXITCODE -ne 0) { throw "Base digital50 PUBTOOLINFO update failed." }
+          $baseSfoText = (dotnet "$tool" sfo read "$baseSfo" 2>&1) -join "\`n"
+          foreach ($required in @("CATEGORY = gde","APP_VER = 01.06","VERSION = 01.06","FORMAT = obs","st_type=digital50")) {
+            if ($baseSfoText -notmatch [regex]::Escape($required)) { throw "Rebuilt base SFO missing $required" }
+          }
+          $about = Join-Path $image "sce_sys/about"
+          if (Test-Path $about) { Remove-Item $about -Recurse -Force }
+          foreach ($f in @("sce_sys/license.dat","sce_sys/license.info","sce_sys/psreserved.dat","sce_sys/playgo-chunk.dat","sce_sys/playgo-chunk.sha","sce_sys/playgo-manifest.xml")) {
+            $p = Join-Path $image $f
+            if (Test-Path $p) { Remove-Item $p -Force }
+          }
+          $zero = "00000000000000000000000000000000"
+          $baseGp4 = Join-Path $work "PS4-Neural-Engine-Installed-Base.gp4"
+          $baseRebuilt = Join-Path $work "PS4-Neural-Engine-Installed-Base.pkg"
+          & $pubCmd gp4_proj_create --volume_type pkg_ps4_app --content_id IV0000-PNEU00001_00-PS4NEURALENG0000 --passcode $zero --entitlement_key $zero --storage_type digital50 $baseGp4
+          if ($LASTEXITCODE -ne 0 -or -not (Test-Path $baseGp4)) { throw "Sony association base GP4 creation failed." }
+          $baseFiles = @(Get-ChildItem $image -Recurse -File | Sort-Object FullName)
+          if ($baseFiles.Count -lt 4) { throw "Rebuilt base payload incomplete." }
+          foreach ($file in $baseFiles) {
+            $target = $file.FullName.Substring($image.TrimEnd('\').Length + 1).Replace('\','/')
+            & $pubCmd gp4_file_add --force --pfs_compression enable $file.FullName $target $baseGp4
+            if ($LASTEXITCODE -ne 0) { throw "Adding base file failed: $target" }
+          }
+          & $pubCmd img_create --no_progress_bar $baseGp4 $baseRebuilt
+          if ($LASTEXITCODE -ne 0 -or -not (Test-Path $baseRebuilt)) { throw "Sony association base PKG build failed." }
+          dotnet "$tool" validate "$baseRebuilt"
+          if ($LASTEXITCODE -ne 0) { throw "Rebuilt association base validation failed." }
+          Copy-Item $baseRebuilt "$out/PS4-Neural-Engine-Installed-Base.pkg"
+          Copy-Item $basePkg "$out/PS4-Neural-Engine-Installed-Original.pkg"
+          $baseRebuiltHash = (Get-FileHash $baseRebuilt -Algorithm SHA256).Hash.ToLowerInvariant()
+          $baseHash = (Get-FileHash $basePkg -Algorithm SHA256).Hash.ToLowerInvariant()
+          $eboot = Join-Path $image "eboot.bin"
+          if (-not (Test-Path $eboot)) { throw "Base eboot missing." }
+          $newEboot = Join-Path (Split-Path $updatePkg -Parent) "eboot.bin"
+          $updateExtract = Join-Path $work "update-extracted"
+          dotnet "$tool" extract "$updatePkg" "$updateExtract" --verbose
+          if ($LASTEXITCODE -ne 0) { throw "Update PKG extraction failed." }
+          $newEbootFound = Get-ChildItem $updateExtract -Recurse -File -Filter eboot.bin | Select-Object -First 1
+          if (-not $newEbootFound) { throw "Release 011 eboot missing." }
+          $newEboot = $newEbootFound.FullName
+          $patchSfo = Join-Path $work "patch-param.sfo"
+          Copy-Item $baseSfo $patchSfo
+          foreach ($pair in @(@("CATEGORY","gpe"),@("APP_VER","01.07"),@("VERSION","01.07"),@("ATTRIBUTE","8388610"))) {
+            dotnet "$tool" sfo set "$patchSfo" $pair[0] $pair[1]
+            if ($LASTEXITCODE -ne 0) { throw "Patch SFO update failed: $($pair[0])" }
+          }
+          dotnet "$tool" sfo set "$patchSfo" PUBTOOLINFO "c_date=20261120,img0_l0_size=7,img0_l1_size=0,img0_sc_ksize=512,img0_pc_ksize=832,st_type=digital25"
+          if ($LASTEXITCODE -ne 0) { throw "Patch digital25 PUBTOOLINFO update failed." }
+          $patchSfoText = (dotnet "$tool" sfo read "$patchSfo" 2>&1) -join "\`n"
+          foreach ($required in @("CATEGORY = gpe","APP_VER = 01.07","VERSION = 01.07","FORMAT = obs","st_type=digital25")) {
+            if ($patchSfoText -notmatch [regex]::Escape($required)) { throw "Patch SFO missing $required" }
+          }
+          $changeDir = Join-Path $work "changeinfo"
+          New-Item -ItemType Directory -Force -Path $changeDir | Out-Null
+          $changeInfo = Join-Path $changeDir "changeinfo.xml"
+          $changeXml = '<?xml version="1.0" encoding="UTF-8"?>' + "\`n" + '<changeinfo><changes app_ver="01.07"><![CDATA[Neural Rendering update 01.07]]></changes></changeinfo>'
+          [IO.File]::WriteAllText($changeInfo,$changeXml,[Text.UTF8Encoding]::new($false))
+          $patchGp4 = Join-Path $work "PS4-Neural-Engine-011-PATCH.gp4"
+          $patchPkg = Join-Path $out "PS4-Neural-Engine-011-PATCH.pkg"
+          & $pubCmd gp4_proj_create --volume_type pkg_ps4_patch --content_id IV0000-PNEU00001_00-PS4NEURALENG0000 --passcode $zero --entitlement_key $zero --storage_type digital25 --app_path $baseRebuilt $patchGp4
+          if ($LASTEXITCODE -ne 0 -or -not (Test-Path $patchGp4)) { throw "Associated patch GP4 creation failed." }
+          foreach ($item in @(@($newEboot,"eboot.bin"),@($updatePrx,"ps4_neural_engine.prx"),@($patchSfo,"sce_sys/param.sfo"),@($changeInfo,"sce_sys/changeinfo/changeinfo.xml"))) {
+            & $pubCmd gp4_file_add --force --pfs_compression enable $item[0] $item[1] $patchGp4
+            if ($LASTEXITCODE -ne 0) { throw "Adding patch payload failed: $($item[1])" }
+          }
+          [xml]$gp4Xml = Get-Content $patchGp4
+          if ($gp4Xml.psproject.volume.volume_type -ne "pkg_ps4_patch") { throw "Patch GP4 volume_type invalid." }
+          if ([IO.Path]::GetFileName($gp4Xml.psproject.volume.package.app_path) -ne "PS4-Neural-Engine-Installed-Base.pkg") { throw "Patch GP4 app_path does not associate the rebuilt base." }
+          if ($gp4Xml.psproject.files.file.Count -lt 4) { throw "Patch GP4 payload incomplete." }
+          & $pubCmd img_create --no_progress_bar $patchGp4 $patchPkg
+          if ($LASTEXITCODE -ne 0 -or -not (Test-Path $patchPkg)) { throw "Patch PKG build failed." }
+          dotnet "$tool" validate "$patchPkg"
+          if ($LASTEXITCODE -ne 0) { throw "Independent patch PKG validation failed." }
+          dotnet "$tool" extract "$patchPkg" (Join-Path $work "patch-verify") --verbose
+          if ($LASTEXITCODE -ne 0) { throw "Patch PKG extraction failed." }
+          $verifySfo = Get-ChildItem (Join-Path $work "patch-verify") -Recurse -File -Filter param.sfo | Select-Object -First 1
+          if (-not $verifySfo) { throw "Patch PARAM.SFO missing." }
+          $verifyText = (dotnet "$tool" sfo read "$($verifySfo.FullName)" 2>&1) -join "\`n"
+          foreach ($required in @("CATEGORY = gpe","APP_VER = 01.07","VERSION = 01.07","st_type=digital25")) {
+            if ($verifyText -notmatch [regex]::Escape($required)) { throw "Built patch PARAM.SFO mismatch: $required" }
+          }
+          $prxHash = (Get-FileHash $updatePrx -Algorithm SHA256).Hash.ToLowerInvariant()
+          $ebootHash = (Get-FileHash $newEboot -Algorithm SHA256).Hash.ToLowerInvariant()
+          $patchHash = (Get-FileHash $patchPkg -Algorithm SHA256).Hash.ToLowerInvariant()
+          $report = @(
+            "PATCH_KIND=PACKAGE_MANAGER_PATCH"
+            "PATCH_BASE_VERSION=01.06"
+            "PATCH_APP_VERSION=01.07"
+            "PATCH_ORIGINAL_BASE_SHA256=$baseHash"
+            "PATCH_ASSOCIATION_BASE_SHA256=$baseRebuiltHash"
+            "PATCH_PRX_SHA256=$prxHash"
+            "PATCH_EBOOT_SHA256=$ebootHash"
+            "PATCH_BYTES=$((Get-Item $patchPkg).Length)"
+            "PATCH_SHA256=$patchHash"
+            "PATCH_QA_STATUS=BUILT_STRUCTURALLY_VALIDATED_PC_ONLY_NOT_HARDWARE_TESTED"
+          )
+          $report | Out-File "$out/BUILD_REPORT.txt"
+          Copy-Item $patchGp4 "$out/PS4-Neural-Engine-011-PATCH.gp4"
+          Copy-Item $baseGp4 "$out/PS4-Neural-Engine-Installed-Base.gp4"
       - name: Upload patch candidate and audit inputs
         uses: actions/upload-artifact@v4
         with:
