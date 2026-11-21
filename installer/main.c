@@ -506,6 +506,14 @@ int main(void) {
     }
     int prx_exists=path_exists(DEST_PRX),manifest_exists=path_exists(INSTALLED_MANIFEST);
     int marker_exists=path_exists(TRANSACTION_MARKER);
+    if (prx_exists < 0 || manifest_exists < 0 || marker_exists < 0 ||
+        (prx_exists && !path_is_regular_file(DEST_PRX)) ||
+        (manifest_exists && !path_is_regular_file(INSTALLED_MANIFEST))) {
+        write_status("ABORTED: CONFLICT; managed path is inaccessible or not a regular file; all data preserved.");
+        notify("PNE: conflito nos arquivos; nada alterado.");
+        sceKernelUsleep(3000000);
+        return 6;
+    }
     int manifest_valid=manifest_exists&&prx_exists&&
         pne_validate_release_manifest(INSTALLED_MANIFEST,DEST_PRX,error,sizeof(error));
     pne_install_state state=pne_classify_install_state(prx_exists,manifest_exists,manifest_valid,marker_exists);
