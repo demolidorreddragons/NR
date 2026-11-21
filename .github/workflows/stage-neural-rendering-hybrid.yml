@@ -81,7 +81,7 @@ jobs:
             try { return @($reader.ReadToEnd() -split "\r?\n" | Where-Object { $_ }) }
             finally { $reader.Dispose(); $s.Dispose() }
           }
-          function Move([string]$from,[string]$to) {
+          function Rename-FtpRemote([string]$from,[string]$to) {
             $r = Ftp $from ([System.Net.WebRequestMethods+Ftp]::Rename) $to
             $s = $r.GetResponse()
             $s.Dispose()
@@ -116,10 +116,10 @@ jobs:
               $ext = [IO.Path]::GetExtension($name)
               $dest = "$base-archived-$([DateTime]::UtcNow.ToString('yyyyMMddHHmmssfff'))$ext"
             }
-            Move "/data/pkg/$name" "old/$dest"
+            Rename-FtpRemote "/data/pkg/$name" "old/$dest"
             Write-Host "ARCHIVED=$name -> old/$dest"
           }
-          Move $staging "pkg/$remoteName"
+          Rename-FtpRemote $staging "pkg/$remoteName"
 
           $final = @(Names '/data/pkg')
           $nr = @($final | Where-Object { $_ -match '(?i)^PS4-Neural-Engine.*\.pkg$' })
