@@ -53,6 +53,31 @@ Limite da conclusão: a referência pública de NID não é uma extração diret
 
 Nota de ferramenta: `readelf -d` interpreta os `DT_NEEDED` do OELF usando a string table ELF genérica e mostra textos aparentemente truncados. O OELF usa `DT_SCE_STRTAB` próprio; a leitura correta deve considerar o segmento `PT_SCE_DYNLIBDATA`, não as strings exibidas pelo decodificador ELF genérico.
 
+## Evidência independente para carregamento explícito do GNM
+
+Foi encontrada uma implementação de probe GNM no projeto DolphinPS4:
+https://github.com/iHaiDeeZ/DolphinPS4/blob/879b3e57f3d3180bcb5f2234db3903688b28cd7d/probe-gnm/main.cpp
+
+O código documenta que chamar uma biblioteca de sistema cujo módulo ainda não foi carregado pode terminar o app com `PRX_NOT_RESOLVED_FUNCTION`. Para o GNM, ele:
+1. consulta `sceKernelGetModuleList` e `sceKernelGetModuleInfo`;
+2. procura `libSceGnmDriver` já carregado;
+3. se não estiver carregado, usa `sceKernelGetFsSandboxRandomWord` para montar `/<word>/common/lib/libSceGnmDriver.sprx`;
+4. tenta `sceKernelLoadStartModule`;
+5. resolve `sceGnmSubmitDone` por `sceKernelDlsym`, sem depender de import direto no executável.
+
+O comentário desse projeto relata que os caminhos relativos e `/system/common/lib/...` retornaram `0x80020002 (ENOENT)` em versões anteriores do probe, justificando testar primeiro o caminho com sandbox word. Isso é evidência externa relevante, mas não substitui um resultado do nosso PS4.
+
+No OpenOrbis v0.5.4, `include/orbis/libkernel.h` declara `sceKernelGetModuleList`, `sceKernelGetModuleInfo`, `sceKernelGetFsSandboxRandomWord`, `sceKernelLoadStartModule` e `sceKernelDlsym`. A base pública de NIDs confirma:
+- `sceKernelLoadStartModule`: `wzvqT4UqKX8`
+- `sceKernelDlsym`: `LwG8g3niqwA`
+- `sceKernelGetModuleList`: `IuxnUuXk6Bg`
+- `sceKernelGetModuleInfo`: `kUpgrXIrz7Q`
+- `sceKernelGetFsSandboxRandomWord`: `JGfTMBOdUJo` (referência etaHEN NID table)
+
+Isso torna a hipótese de módulo não carregado mais forte que a hipótese de NID incorreto no OELF.
+
+Foi adicionado o modo diagnóstico `gnm-load`, reaproveitando o Title ID `PNEU00004` do probe anterior. Ele não importa `libSceGnmDriver`, não chama nenhuma função GNM, consulta módulos, tenta carregar o PRX pelo caminho sandboxed e resolve `sceGnmSubmitDone` por DLSYM. Mesmo se o carregamento falhar, registra o código e termina com retorno zero para não confundir a falha de diagnóstico com um encerramento anormal do aplicativo. O pacote ainda não foi enviado nem instalado no console.
+
 ## Hipótese seguinte: módulo/export em runtime
 
 O cabeçalho OpenOrbis v0.5.4 declara `sceKernelLoadStartModule` e `sceKernelGetModuleInfo` em `include/orbis/libkernel.h`. Isso torna possível investigar carregamento/estado de módulo, mas não prova que `libSceGnmDriver.prx` precise de carregamento explícito: o OELF já declara a dependência por metadata SCE.
@@ -78,7 +103,7 @@ Commits:
 - `0a41d20` — asserts dos novos marcadores no teste host
 - `1f68064` — inclusão de `stddef.h` para os offsets ABI
 
-Host tests: execução `44875885489`, job `telemetry`, concluído com sucesso. A compilação OpenOrbis v0.5.4 também passou: no workflow `44875885487`, os passos `Build OpenOrbis Startup-Only diagnostic PKG` e `Build OpenOrbis GNM-Link-Only diagnostic PKG` concluíram com sucesso, ambos compilando o `stage_log.c` atualizado. Isso valida a compilação no toolchain, não a execução no hardware.
+Host tests: execução `44875885489`, job `telemetry`, concluído com sucesso. A versão inicial da telemetria errno compilou no OpenOrbis v0.5.4 no workflow `44875885487` (Startup-Only e GNM-Link-Only). A variante atual, que mantém handlers sem `SA_ONSTACK` se a pilha alternativa falhar e inclui o novo modo `gnm-load`, está sendo recompilada no workflow `44876293567`. Isso valida compilação no toolchain, não execução no hardware.
 
 ## Próximos passos
 
