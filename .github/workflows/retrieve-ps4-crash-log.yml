@@ -149,6 +149,32 @@ jobs:
             Write-Host "SCE_LOG_NOT_FOUND detail=$($_.Exception.Message)"
           }
 
+
+          foreach ($remote in @('/data/Loader_Logs.txt', '/data/memory.log')) {
+            $dest = Join-Path $outDir (($remote.Trim('/') -replace '/', '_'))
+            try {
+              $req = [System.Net.FtpWebRequest]::Create($base + $remote)
+              $req.Method = [System.Net.WebRequestMethods+Ftp]::DownloadFile
+              $req.Credentials = $credential
+              $req.UsePassive = $true
+              $req.UseBinary = $true
+              $req.KeepAlive = $false
+              $req.Timeout = 20000
+              $resp = $req.GetResponse()
+              $inputStream = $resp.GetResponseStream()
+              $file = [System.IO.File]::Create($dest)
+              $inputStream.CopyTo($file)
+              $file.Dispose()
+              $inputStream.Dispose()
+              $resp.Dispose()
+              $hash = (Get-FileHash -Algorithm SHA256 -Path $dest).Hash.ToLowerInvariant()
+              Write-Host "AUX_LOG_DOWNLOADED path=$remote bytes=$((Get-Item $dest).Length) sha256=$hash"
+              $found = $true
+            } catch {
+              Write-Host "AUX_LOG_NOT_FOUND path=$remote detail=$($_.Exception.Message)"
+            }
+          }
+
           if ($found) {
             "LOGGER_FOUND=true" | Set-Content (Join-Path $outDir 'result.txt')
           } else {
