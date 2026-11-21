@@ -18,7 +18,8 @@ jobs:
           assert r'\\r' not in source, 'installer contains double-escaped carriage-return sequences'
           print('Installer C escape sequences are valid')
           installer = Path('installer/main.c').read_text()
-          assert 'fstat(' not in installer, 'installer must not trust PS4 fstat size values'
+          assert 'fstat(' in installer and 'O_NOFOLLOW' in installer, 'managed-path inspection must use opened descriptors and reject symlinks'
+          assert 'st_size' not in installer, 'installer must not trust PS4 stat size values'
           assert 'PRX read-back verification failed' in installer, 'installer must verify copied PRX bytes'
           assert 'static ssize_t read_retry' in installer, 'installer must retry EINTR independently for each read'
           assert 'static ssize_t read_block' in installer, 'verification must accumulate short reads'
@@ -37,7 +38,7 @@ jobs:
           assert 'pne_classify_install_state' in installer and 'PNE_STATE_RECOVERY' in installer and 'PNE_STATE_CONFLICT' in installer, 'hybrid state detection missing'
           assert 'ALREADY_CURRENT' in installer and 'downgrade refused' in installer, 'hash idempotency and downgrade protection missing'
           assert 'TRANSACTION_MARKER' in installer and 'INSTALLED_MANIFEST' in installer, 'recovery marker/installed manifest missing'
-          assert 'path_is_regular_file' in installer, 'managed destination symlink protection missing'
+          assert 'path_is_regular_file' in installer and 'inspect_managed_path' in installer, 'managed destination regular-file and symlink protection missing'
           assert 'for (unsigned index = 0; index < 10000; ++index)' in installer, 'staging collision retry loop missing'
           assert 'if (errno != EEXIST) return 0;' in installer, 'staging retry must only continue on EEXIST'
           assert 'O_TRUNC' not in installer, 'installer must never truncate a pre-existing staging path'
