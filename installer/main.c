@@ -83,7 +83,8 @@ static FILE* fopen_unique_staged_file(const char* base, char* chosen, size_t cap
 
 static int path_exists(const char* path) {
     struct stat st;
-    if (lstat(path, &st) == 0) return 1;\n    return errno == ENOENT ? 0 : -1;
+    if (lstat(path, &st) == 0) return 1;
+    return errno == ENOENT ? 0 : -1;
 }
 static int path_is_regular_file(const char* path) {
     struct stat st;
