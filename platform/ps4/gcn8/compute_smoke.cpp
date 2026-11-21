@@ -300,28 +300,41 @@ extern "C" int pne_gcn8_compute_smoke_run(const char* shader_path,
     cmd.cmdptr = dcb + initial_dwords;
 
     uint32_t* before = cmd.cmdptr;
-    pne_gcn8_set_cs_shader(&cmd, &cs_registers);
-    if (cmd.cmdptr - before != 25) {
+    const auto shader_bind_result = pne_gcn8_set_cs_shader(&cmd, &cs_registers);
+    log.line("CS_SHADER_BIND_RESULT",
+             static_cast<uint32_t>(shader_bind_result));
+    if (shader_bind_result != PNE_GCN8_BINDING_OK ||
+        cmd.cmdptr - before != 25) {
         log.message("RESULT=FAIL; REASON=CS_SHADER_BIND_PACKET");
         return 19;
     }
 
-    if (pne_gcn8_set_cs_indirect_resource_table_pointer(
-            &cmd, 2, table_address, 80) != PNE_GCN8_BINDING_OK) {
+    const auto table_pointer_result =
+        pne_gcn8_set_cs_indirect_resource_table_pointer(
+            &cmd, 2, table_address, 80);
+    log.line("RESOURCE_TABLE_POINTER_RESULT",
+             static_cast<uint32_t>(table_pointer_result));
+    if (table_pointer_result != PNE_GCN8_BINDING_OK) {
         log.message("RESULT=FAIL; REASON=RESOURCE_TABLE_POINTER");
         return 20;
     }
 
     before = cmd.cmdptr;
-    pne_gcn8_dispatch_direct(&cmd, 1, 1, 1, 0);
-    if (cmd.cmdptr - before != 9) {
+    const auto dispatch_result = pne_gcn8_dispatch_direct(&cmd, 1, 1, 1, 0);
+    log.line("DISPATCH_PACKET_RESULT",
+             static_cast<uint32_t>(dispatch_result));
+    if (dispatch_result != PNE_GCN8_BINDING_OK ||
+        cmd.cmdptr - before != 9) {
         log.message("RESULT=FAIL; REASON=DISPATCH_PACKET");
         return 21;
     }
 
     before = cmd.cmdptr;
-    pne_gcn8_emit_eop_fence(&cmd, fence_address, kFenceMagic);
-    if (cmd.cmdptr - before != 6) {
+    const auto fence_result =
+        pne_gcn8_emit_eop_fence(&cmd, fence_address, kFenceMagic);
+    log.line("EOP_FENCE_PACKET_RESULT", static_cast<uint32_t>(fence_result));
+    if (fence_result != PNE_GCN8_BINDING_OK ||
+        cmd.cmdptr - before != 6) {
         log.message("RESULT=FAIL; REASON=EOP_FENCE_PACKET");
         return 22;
     }
