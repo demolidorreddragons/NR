@@ -110,9 +110,31 @@ static int run_gnm_load_probe(void) {
                       static_cast<unsigned>(dlsym_rc),
                       static_cast<unsigned long long>(reinterpret_cast<std::uintptr_t>(address)));
         stage_log(line);
-        stage_log(dlsym_rc==0 && address
-                      ? "RESULT_PASS_GNM_DYNAMIC_LOAD_AND_DLSYM"
-                      : "RESULT_FAIL_GNM_DLSYM");
+        const bool submit_done_resolved = dlsym_rc == 0 && address != nullptr;
+        stage_log(submit_done_resolved ? "GNM_EXPORT_OK sceGnmSubmitDone"
+                                       : "GNM_EXPORT_MISSING sceGnmSubmitDone");
+
+        struct RequiredExport { const char* name; };
+        const RequiredExport required[] = {
+            {"sceGnmDispatchInitDefaultHardwareState"},
+            {"sceGnmFlushGarlic"},
+            {"sceGnmSubmitCommandBuffers"},
+        };
+        bool all_exports_resolved = submit_done_resolved;
+        for (const auto& item : required) {
+            void* export_address = nullptr;
+            const int32_t rc = sceKernelDlsym(handle, item.name, &export_address);
+            std::snprintf(line, sizeof(line),
+                          "GNM_EXPORT name=%s rc=0x%08x address=0x%llx",
+                          item.name, static_cast<unsigned>(rc),
+                          static_cast<unsigned long long>(
+                              reinterpret_cast<std::uintptr_t>(export_address)));
+            stage_log(line);
+            if (rc != 0 || !export_address) all_exports_resolved = false;
+        }
+        stage_log(all_exports_resolved
+                      ? "RESULT_PASS_GNM_REQUIRED_EXPORT_AUDIT"
+                      : "RESULT_FAIL_GNM_REQUIRED_EXPORT_AUDIT");
     } else {
         stage_log("RESULT_FAIL_GNM_MODULE_LOAD");
     }
