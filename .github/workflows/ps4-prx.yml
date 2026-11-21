@@ -117,10 +117,12 @@ jobs:
           repository: GoldHEN/GoldHEN_Plugins_SDK
           ref: bcea3c7ef01dac6d7f9f49ebf9e90fe66d86f5f7
           path: GoldHEN_Plugins_SDK
-      - name: Resolve and verify pinned GoldHEN SDK linker inputs
+      - name: Build and verify pinned GoldHEN SDK PRX CRT object
         run: |
           echo "GOLDHEN_SDK=$GITHUB_WORKSPACE/GoldHEN_Plugins_SDK" >> "$GITHUB_ENV"
+          make -C GoldHEN_Plugins_SDK crt
           test -s "$GITHUB_WORKSPACE/GoldHEN_Plugins_SDK/build/crtprx.o"
+          file "$GITHUB_WORKSPACE/GoldHEN_Plugins_SDK/build/crtprx.o"
           sha256sum "$GITHUB_WORKSPACE/GoldHEN_Plugins_SDK/build/crtprx.o"
       - name: Checkout pinned OpenGNM API headers
         uses: actions/checkout@v4
