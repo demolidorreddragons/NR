@@ -35,5 +35,10 @@ assert 'PNE_GCN8_GNM_LOAD_ONLY' in main
 assert 'sceKernelGetModuleList' in main and 'sceKernelGetModuleInfo' in main
 assert 'sceKernelGetFsSandboxRandomWord' in main
 assert 'sceKernelLoadStartModule' in main and 'sceKernelDlsym' in main
-assert 'RESULT_PASS_GNM_DYNAMIC_LOAD_AND_DLSYM' in main
+assert 'GNM_EXPORT_OK sceGnmSubmitDone' in main
+assert 'sceGnmDispatchInitDefaultHardwareState' in main
+assert 'sceGnmFlushGarlic' in main
+assert 'sceGnmSubmitCommandBuffers' in main
+assert 'RESULT_PASS_GNM_REQUIRED_EXPORT_AUDIT' in main
+assert 'RESULT_FAIL_GNM_REQUIRED_EXPORT_AUDIT' in main
 assert 'RESULT_FAIL_GNM_MODULE_LOAD' in main
