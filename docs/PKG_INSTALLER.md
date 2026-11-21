@@ -1,6 +1,6 @@
 # PS4 PKG installer
 
-PKG 006 is a full base-application installer (not a patch) intended for a jailbroken PS4. It carries APP_VER/VERSION 01.02 and a freshly built eboot containing the corrected byte-stream PRX copier. This is deliberate: the audited console installation was an older `CATEGORY=gd`, `APP_VER=1.00` base, not the `gde` PKG 002 that patch 003 targeted. Install it through GoldHEN/Debug Package Installer, then launch **PS4 Neural Engine Installer** once.
+PKG 007 is a full base-application installer (not a patch) intended for a jailbroken PS4. It carries APP_VER/VERSION 01.03 and a freshly built eboot with atomic, collision-resistant temporary-file reservation for both the PRX and plugins.ini, in addition to byte-accurate PRX copy verification. This is deliberate: the audited console installation was an older `CATEGORY=gd`, `APP_VER=1.00` base, not the `gde` PKG 002 that patch 003 targeted. Install it through GoldHEN/Debug Package Installer, then launch **PS4 Neural Engine Installer** once.
 
 The installer first validates `/app0/pne-release.ini` (schema, release identity, PRX filename and SHA-256 of `/app0/ps4_neural_engine.prx`) before creating the GoldHEN destination directory or changing persistent plugin/configuration files. The SHA-256 implementation is included in the installer and covered by host test vectors.
 
@@ -17,7 +17,7 @@ This package currently installs the diagnostics/capture scaffold only. It does n
 
 For troubleshooting, the installer log records the failing operation and the platform `errno` value (for example, source lookup/open, temporary destination creation, write, verification, or final rename). Capture the log after the latest launch attempt; older log contents do not describe a newer attempt.
 
-## Release 006 — status da auditoria estática (20/11/2026)
+## Release 006 — histórico da auditoria estática (20/11/2026)
 
 O PKG 006 passou pelo build, validação estrutural e extração do pipeline no run [44669637925](https://github.com/demolidorreddragons/NR/actions/runs/44669637925). Isso não é aprovação para instalação.
 
@@ -62,3 +62,19 @@ A verificação automatizada de invariantes do instalador foi adicionada ao work
 O SVG simplificado foi reprovado e não pode voltar a ser usado como substituto da arte aprovada. O PKG deve incorporar a imagem raster original aprovada pelo usuário, sem redesenho, composição alternativa, logos vetoriais aproximados ou geração por IA. A única transformação permitida é o redimensionamento proporcional da imagem quadrada original para 512×512 com filtro Lanczos, preservando toda a composição.
 
 Fonte canônica esperada no repositório: `assets/neural-rendering-icon-source.png`. `tools/make_icon.py` falha explicitamente se essa imagem não estiver presente; não produz fallback. A imagem oficial foi fornecida pelo usuário e a prévia 512×512 foi explicitamente confirmada por ele como o ícone correto. A composição aprovada é a água-viva/UFO de fumaça monocromática em tons de prata e branco sobre fundo preto, logotipo PlayStation e identificação PS4 Pro na cúpula, e a inscrição “NEURAL RENDERING” na base. O upload original é JPEG 1536×1536, SHA-256 `3559eba63add88b4145982d99a6d696719e4a76bb4f3d08c26a02c89fc4fcbf5`. O PNG final aprovado para o aplicativo é 512×512, SHA-256 `7fe6a11ad7b4d37e5741c77822730a82487237dbed4a3eca529e995a29421ae4`. Este PNG confirmado deve ser incorporado sem qualquer nova transformação em `assets/neural-rendering-icon-source.png`; não substituir, redesenhar, recolorir, reinterpretar ou gerar outra versão. A integração binária no repositório ainda precisa ser feita antes do próximo PKG. Nenhum novo PKG com ícone substituto pode ser aprovado.
+
+
+## Release 007 — correção de colisão de staging (21/11/2026)
+
+O diagnóstico remoto do console identificou errno=17 (EEXIST) ao criar ps4_neural_engine.prx.pne-tmp. A listagem confirmou que esse temporário antigo permaneceu no diretório de plugins. A versão 007 corrige a causa sem apagar esse arquivo nem qualquer backup.
+
+- PRX e plugins.ini agora reservam nomes temporários exclusivos por open(O_CREAT|O_EXCL), tentando o nome-base e depois sufixos .001 até .9999.
+- A repetição ocorre somente em EEXIST; outros erros são reportados imediatamente.
+- Os caminhos efetivamente reservados são transportados pela cópia, verificação, commit e rollback. Arquivos temporários antigos permanecem intactos.
+- PKG_BUILD_NUMBER=007; APP_VER=01.03; TITLE_ID e CONTENT_ID permanecem estáveis para a mesma aplicação.
+
+### Sobre instalar por cima
+
+O PKG 007 continua sendo um full base application (CATEGORY=gde), não um patch (CATEGORY=gp). Portanto, não afirmamos que o instalador do PS4 aceitará atualizar a instalação anterior diretamente. A atualização sem desinstalação exige gerar e validar um patch PKG associado ao base instalado e conferir a compatibilidade de CONTENT_ID/APP_VER. O comportamento relatado — precisar desinstalar o base anterior — é compatível com a forma atual de empacotamento e não é corrigido apenas aumentando APP_VER.
+
+A criação de um patch não será simulada alterando somente CATEGORY: é necessário gerar GP4/PKG de patch corretamente associado ao base. Para este release, manteremos o formato base já validado e deixaremos explícito se a substituição exigir desinstalação. Não desinstalar nem alterar aplicativos no console automaticamente.
