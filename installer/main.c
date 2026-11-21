@@ -83,7 +83,7 @@ static FILE* fopen_unique_staged_file(const char* base, char* chosen, size_t cap
 
 static int path_exists(const char* path) {
     struct stat st;
-    return lstat(path, &st) == 0;
+    if (lstat(path, &st) == 0) return 1;\n    return errno == ENOENT ? 0 : -1;
 }
 static int path_is_regular_file(const char* path) {
     struct stat st;
@@ -98,7 +98,7 @@ static int read_release_number(const char* path, unsigned long* release) {
         if (strncmp(line, "release_number=", 15) == 0) {
             char* end = NULL; errno = 0;
             unsigned long value = strtoul(line + 15, &end, 10);
-            if (errno || end == line + 15 || (*end != '\n' && *end != '\r' && *end != '\\0')) { fclose(file); return 0; }
+            if (errno || end == line + 15 || (*end != '\n' && *end != '\r' && *end != '\0')) { fclose(file); return 0; }
             *release = value; found = 1; break;
         }
     }
@@ -515,7 +515,7 @@ int main(void) {
     if(!configure_loader(error,sizeof(error),config_tmp,sizeof(config_tmp),&config_changed)){
         remove(prx_tmp);remove(manifest_tmp);write_status(error);notify("PNE: falha ao preparar plugins.ini.");sceKernelUsleep(3000000);return 3;
     }
-    if(!config_changed)config_tmp[0]='\\0';
+    if(!config_changed)config_tmp[0]='\0';
     if(!commit_install(error,sizeof(error),prx_tmp,manifest_tmp,config_tmp)){
         write_status(error);notify("PNE: transacao nao concluida; preserve backups.");sceKernelUsleep(3000000);return 4;
     }
