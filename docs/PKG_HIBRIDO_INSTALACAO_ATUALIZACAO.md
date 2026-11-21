@@ -1,6 +1,6 @@
 # Arquitetura do PKG híbrido — instalação inicial e atualização do Neural Engine
 
-**Estado:** H2/H3/H4 integradas ao eboot e host CI aprovado no run `44846814858`; build do PKG 008 e QA independente em execução; fault injection completa e teste no console pendentes. Não instalar até todos os gates aplicáveis passarem e haver autorização explícita.  
+**Estado:** Release 008 foi staged; diagnóstico PS4 confirmou arquivos PRX/config regulares e temporários antigos preservados. Release 009 corrige a detecção de arquivos gerenciados com `open(O_NOFOLLOW)` + `fstat` somente para bits de tipo; build, QA independente e teste de hardware pendentes. Não instalar até todos os gates aplicáveis passarem e haver autorização explícita.  
 **Alvo:** PS4 Pro / Orbis + GoldHEN.  
 **Branch:** `feature/gcn8-numeric-kernels`.  
 **Identidade atual:** TITLE_ID `PNEU00001`, CONTENT_ID `IV0000-PNEU00001_00-PS4NEURALENG0000`.
