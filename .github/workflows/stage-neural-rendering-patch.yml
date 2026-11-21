@@ -1,0 +1,117 @@
+name: Stage validated Neural Rendering patch on PS4
+
+on:
+  push:
+    branches: [main]
+    paths: [".github/workflows/stage-neural-rendering-patch.yml"]
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  stage-patch:
+    runs-on: [self-hosted, Windows, X64, ps4-lan]
+    steps:
+      - name: Download the exact independently QA-validated patch artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ps4-neural-engine-patch-candidate
+          path: transfer
+          repository: demolidorreddragons/NR
+          run-id: 44856253337
+          github-token: ${{ github.token }}
+
+      - name: Verify and stage only PATCH 011 into PS4 /data/pkg
+        shell: powershell -NoProfile -ExecutionPolicy Bypass -Command "& '{0}'"
+        env:
+          PS4_IP: ${{ vars.PS4_IP }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          if (-not $env:PS4_IP) { throw "PS4_IP repository variable is missing." }
+
+          $expectedName = "PS4-Neural-Engine-011-PATCH.pkg"
+          $expectedSize = [long]4915200
+          $expectedHash = "f85abdea0f4402f1c0627a2343c2196a3a5ed5283b8c8946bc5cb7d1ed17fcdc"
+          $matches = @(Get-ChildItem -LiteralPath (Join-Path $env:GITHUB_WORKSPACE "transfer") -Recurse -File |
+            Where-Object { $_.Name -ceq $expectedName })
+          if ($matches.Count -ne 1) { throw "Expected exactly one $expectedName in the validated artifact; found $($matches.Count)." }
+
+          $pkg = $matches[0].FullName
+          $localSize = (Get-Item -LiteralPath $pkg).Length
+          $localHash = (Get-FileHash -LiteralPath $pkg -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($localSize -ne $expectedSize -or $localHash -ne $expectedHash) {
+            throw "Patch artifact identity mismatch. Size=$localSize SHA256=$localHash"
+          }
+
+          $credentials = New-Object System.Net.NetworkCredential("anonymous", "anonymous@example.com")
+          function New-FtpRequest([string]$path, [string]$method, [string]$renameTo = $null) {
+            $request = [System.Net.FtpWebRequest]::Create("ftp://$($env:PS4_IP):2121$path")
+            $request.Method = $method
+            $request.Credentials = $credentials
+            $request.UsePassive = $true
+            $request.UseBinary = $true
+            $request.KeepAlive = $false
+            $request.Timeout = 120000
+            $request.ReadWriteTimeout = 120000
+            if ($renameTo) { $request.RenameTo = $renameTo }
+            return $request
+          }
+
+          $target = "/data/pkg/$expectedName"
+          $existing = $false
+          try {
+            $check = New-FtpRequest $target ([System.Net.WebRequestMethods+Ftp]::GetFileSize)
+            $response = $check.GetResponse()
+            $existingSize = [long]$response.ContentLength
+            $response.Dispose()
+            $existing = $true
+          } catch {
+            if ($_.Exception.Response -and $_.Exception.Response.StatusCode -ne [System.Net.FtpStatusCode]::ActionNotTakenFileUnavailable) { throw }
+          }
+
+          if ($existing) {
+            if ($existingSize -ne $expectedSize) { throw "A different file already exists at $target; refusing to overwrite." }
+            $verifyExisting = Join-Path $env:RUNNER_TEMP "pne-patch-existing.pkg"
+            $get = New-FtpRequest $target ([System.Net.WebRequestMethods+Ftp]::DownloadFile)
+            $response = $get.GetResponse()
+            $stream = $response.GetResponseStream()
+            $output = [IO.File]::Create($verifyExisting)
+            try { $stream.CopyTo($output) } finally { $output.Dispose(); $stream.Dispose(); $response.Dispose() }
+            $existingHash = (Get-FileHash -LiteralPath $verifyExisting -Algorithm SHA256).Hash.ToLowerInvariant()
+            Remove-Item -LiteralPath $verifyExisting -Force
+            if ($existingHash -ne $expectedHash) { throw "Existing PS4 destination has a different SHA-256; refusing to overwrite." }
+            Write-Host "PATCH_ALREADY_PRESENT_AND_VERIFIED=$target"
+          } else {
+            $staging = "/data/$expectedName"
+            $upload = New-FtpRequest $staging ([System.Net.WebRequestMethods+Ftp]::UploadFile)
+            $upload.ContentLength = $localSize
+            $requestStream = $upload.GetRequestStream()
+            $input = [IO.File]::OpenRead($pkg)
+            try { $input.CopyTo($requestStream) } finally { $input.Dispose(); $requestStream.Dispose() }
+            $response = $upload.GetResponse()
+            $response.Dispose()
+
+            $move = New-FtpRequest $staging ([System.Net.WebRequestMethods+Ftp]::Rename) "pkg/$expectedName"
+            $response = $move.GetResponse()
+            $response.Dispose()
+          }
+
+          $verifyPath = Join-Path $env:RUNNER_TEMP "pne-patch-ps4-readback.pkg"
+          $download = New-FtpRequest $target ([System.Net.WebRequestMethods+Ftp]::DownloadFile)
+          $response = $download.GetResponse()
+          $stream = $response.GetResponseStream()
+          $output = [IO.File]::Create($verifyPath)
+          try { $stream.CopyTo($output) } finally { $output.Dispose(); $stream.Dispose(); $response.Dispose() }
+          $remoteSize = (Get-Item -LiteralPath $verifyPath).Length
+          $remoteHash = (Get-FileHash -LiteralPath $verifyPath -Algorithm SHA256).Hash.ToLowerInvariant()
+          Remove-Item -LiteralPath $verifyPath -Force
+          if ($remoteSize -ne $expectedSize -or $remoteHash -ne $expectedHash) {
+            throw "PS4 read-back verification failed. Size=$remoteSize SHA256=$remoteHash"
+          }
+
+          Write-Host "PS4_PATCH_STAGING=SUCCESS"
+          Write-Host "PS4_PATH=$target"
+          Write-Host "BYTES=$remoteSize"
+          Write-Host "SHA256=$remoteHash"
+          Write-Host "PACKAGE_TYPE=PATCH_010_TO_011"
