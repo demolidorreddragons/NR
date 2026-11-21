@@ -436,62 +436,21 @@ jobs:
           }
 
 
-  stage-feature-patch:
+  archive-neural-rendering-pkgs:
     if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'feature/gcn8-numeric-kernels' && github.event.workflow_run.head_repository.full_name == github.repository
     runs-on: [self-hosted, Windows, X64, ps4-lan]
     steps:
-      - name: Download exact patch candidate from completed build
-        uses: actions/download-artifact@v4
-        with:
-          name: ps4-neural-engine-patch-candidate
-          path: patch-artifact
-          repository: demolidorreddragons/NR
-          run-id: ${{ github.event.workflow_run.id }}
-          github-token: ${{ github.token }}
-
-      - name: Validate 010-to-011 patch artifact
-        shell: powershell
-        run: |
-          $ErrorActionPreference = "Stop"
-          $pkg = Join-Path $env:GITHUB_WORKSPACE "patch-artifact/PS4-Neural-Engine-011-PATCH.pkg"
-          $report = Join-Path $env:GITHUB_WORKSPACE "patch-artifact/BUILD_REPORT.txt"
-          if (-not (Test-Path -LiteralPath $pkg -PathType Leaf)) { throw "Patch PKG missing." }
-          if (-not (Test-Path -LiteralPath $report -PathType Leaf)) { throw "Patch report missing." }
-          $text = Get-Content -LiteralPath $report -Raw
-          $expected = "f85abdea0f4402f1c0627a2343c2196a3a5ed5283b8c8946bc5cb7d1ed17fcdc"
-          foreach ($line in @(
-            "PATCH_KIND=PACKAGE_MANAGER_PATCH",
-            "PATCH_BASE_VERSION=01.06",
-            "PATCH_APP_VERSION=01.07",
-            "PATCH_SHA256=$expected",
-            "PATCH_BYTES=4915200",
-            "PATCH_QA_STATUS=BUILT_STRUCTURALLY_VALIDATED_PC_ONLY_NOT_HARDWARE_TESTED"
-          )) {
-            if (-not $text.Contains($line)) { throw "Patch report mismatch: $line" }
-          }
-          $actual = (Get-FileHash -LiteralPath $pkg -Algorithm SHA256).Hash.ToLowerInvariant()
-          $size = (Get-Item -LiteralPath $pkg).Length
-          if ($actual -ne $expected -or $size -ne 4915200) { throw "Patch digest/size mismatch: $size/$actual" }
-          "PATCH_FILE=$pkg" | Out-File -FilePath $env:GITHUB_ENV -Append
-          "PATCH_SHA256=$actual" | Out-File -FilePath $env:GITHUB_ENV -Append
-          "PATCH_SIZE=$size" | Out-File -FilePath $env:GITHUB_ENV -Append
-          Write-Host "PATCH_KIND=PACKAGE_MANAGER_PATCH"
-          Write-Host "PATCH_SHA256=$actual"
-
-      - name: Upload patch to /data/pkg and verify remote read-back
+      - name: Move every Neural Rendering PKG from /data/pkg into /data/pkg/old
         shell: powershell
         env:
           PS4_IP: ${{ vars.PS4_IP }}
         run: |
           $ErrorActionPreference = "Stop"
-          if (-not $env:PS4_IP) { throw "PS4_IP variable is missing." }
-          $fileName = "PS4-Neural-Engine-011-PATCH-f85abdea0f44.pkg"
-          $remotePath = "/data/pkg/$fileName"
-          $uri = "ftp://$($env:PS4_IP):2121$remotePath"
+          if (-not $env:PS4_IP) { throw "PS4_IP repository variable is missing." }
           $credentials = New-Object System.Net.NetworkCredential("anonymous", "anonymous@example.com")
 
-          function New-Request([string]$method) {
-            $request = [System.Net.FtpWebRequest]::Create($uri)
+          function New-FtpRequest([string]$path, [string]$method, [string]$renameTo = $null) {
+            $request = [System.Net.FtpWebRequest]::Create("ftp://$($env:PS4_IP):2121$path")
             $request.Method = $method
             $request.Credentials = $credentials
             $request.UsePassive = $true
@@ -499,63 +458,125 @@ jobs:
             $request.KeepAlive = $false
             $request.Timeout = 120000
             $request.ReadWriteTimeout = 120000
+            if ($renameTo) { $request.RenameTo = $renameTo }
             return $request
           }
 
-          $exists = $false
-          try {
-            $request = New-Request ([System.Net.WebRequestMethods+Ftp]::GetFileSize)
+          function Get-FtpListing([string]$path) {
+            $request = New-FtpRequest $path ([System.Net.WebRequestMethods+Ftp]::ListDirectory)
             $response = $request.GetResponse()
-            $remoteSize = $response.ContentLength
-            $response.Dispose()
-            if ($remoteSize -ne [long]$env:PATCH_SIZE) { throw "Existing patch destination has unexpected size; refusing overwrite." }
-            $exists = $true
-          } catch {
-            if ($_.Exception.Message -like "*refusing overwrite*") { throw }
-            if ($_.Exception.Response -and $_.Exception.Response.StatusCode -ne [System.Net.FtpStatusCode]::ActionNotTakenFileUnavailable) { throw }
-          }
-
-          if (-not $exists) {
-            $request = New-Request ([System.Net.WebRequestMethods+Ftp]::UploadFile)
-            $request.ContentLength = [long]$env:PATCH_SIZE
-            $requestStream = $null
-            $response = $null
             try {
-              $requestStream = $request.GetRequestStream()
-              $input = [System.IO.File]::OpenRead($env:PATCH_FILE)
-              try { $input.CopyTo($requestStream) } finally { $input.Dispose() }
-              $requestStream.Dispose()
-              $requestStream = $null
-              $response = $request.GetResponse()
-              Write-Host "FTP_UPLOAD=$($response.StatusDescription.Trim())"
-            } finally {
-              if ($requestStream) { $requestStream.Dispose() }
-              if ($response) { $response.Dispose() }
-            }
+              $reader = New-Object System.IO.StreamReader($response.GetResponseStream())
+              try {
+                $items = @()
+                while (-not $reader.EndOfStream) {
+                  $line = $reader.ReadLine()
+                  if ($line) { $items += $line.Trim() }
+                }
+                return $items
+              } finally { $reader.Dispose() }
+            } finally { $response.Dispose() }
           }
 
-          $verifyPath = Join-Path $env:RUNNER_TEMP "pne-patch-readback.pkg"
-          $request = New-Request ([System.Net.WebRequestMethods+Ftp]::DownloadFile)
-          $response = $null
-          $stream = $null
-          $output = $null
+          # Ensure the archive directory exists; if mkdir fails, verify it is already present.
           try {
+            $request = New-FtpRequest "/data/pkg/old/" ([System.Net.WebRequestMethods+Ftp]::MakeDirectory)
             $response = $request.GetResponse()
-            $stream = $response.GetResponseStream()
-            $output = [System.IO.File]::Create($verifyPath)
-            $stream.CopyTo($output)
-            $output.Dispose()
-            $output = $null
-            $remoteSize = (Get-Item -LiteralPath $verifyPath).Length
-            $remoteHash = (Get-FileHash -LiteralPath $verifyPath -Algorithm SHA256).Hash.ToLowerInvariant()
-            if ($remoteSize -ne [long]$env:PATCH_SIZE -or $remoteHash -ne $env:PATCH_SHA256) { throw "PS4 read-back mismatch: $remoteSize/$remoteHash" }
-            Write-Host "STAGING=SUCCESS"
-            Write-Host "REMOTE_PATH=$remotePath"
-            Write-Host "REMOTE_SIZE=$remoteSize"
-            Write-Host "REMOTE_SHA256=$remoteHash"
-          } finally {
-            if ($output) { $output.Dispose() }
-            if ($stream) { $stream.Dispose() }
-            if ($response) { $response.Dispose() }
-            Remove-Item -LiteralPath $verifyPath -Force -ErrorAction SilentlyContinue
+            $response.Dispose()
+            Write-Host "CREATED=/data/pkg/old"
+          } catch {
+            $null = Get-FtpListing "/data/pkg/old/"
+            Write-Host "EXISTS=/data/pkg/old"
           }
+
+          $entries = @(Get-FtpListing "/data/pkg/")
+          $targets = @($entries | Where-Object {
+            $_ -match '(?i)(neural[-_ ]?rendering|neural[-_ ]?engine|pne).*\.pkg$'
+          })
+          Write-Host "MATCHING_PKGS=$($targets.Count)"
+          if ($targets.Count -eq 0) {
+            Write-Host "ARCHIVE_RESULT=NO_MATCHING_FILES"
+            exit 0
+          }
+
+          $moved = 0
+          foreach ($name in $targets) {
+            if ($name -match '[/\\]') { throw "Unexpected non-basename FTP listing entry: $name" }
+            $source = "/data/pkg/$name"
+            $sizeRequest = New-FtpRequest $source ([System.Net.WebRequestMethods+Ftp]::GetFileSize)
+            $sizeResponse = $sizeRequest.GetResponse()
+            $sourceSize = [long]$sizeResponse.ContentLength
+            $sizeResponse.Dispose()
+
+            $destinationName = $name
+            $destination = "/data/pkg/old/$destinationName"
+            try {
+              $check = New-FtpRequest $destination ([System.Net.WebRequestMethods+Ftp]::GetFileSize)
+              $checkResponse = $check.GetResponse()
+              $existingSize = [long]$checkResponse.ContentLength
+              $checkResponse.Dispose()
+              if ($existingSize -ne $sourceSize) {
+                $stem = [System.IO.Path]::GetFileNameWithoutExtension($name)
+                $ext = [System.IO.Path]::GetExtension($name)
+                $destinationName = "$stem-archived-$($sourceSize)$ext"
+                $destination = "/data/pkg/old/$destinationName"
+                $check2 = New-FtpRequest $destination ([System.Net.WebRequestMethods+Ftp]::GetFileSize)
+                try {
+                  $r2 = $check2.GetResponse()
+                  $r2.Dispose()
+                  throw "Archive collision at $destination; refusing to overwrite."
+                } catch {
+                  if ($_.Exception.Message -like "*refusing to overwrite*") { throw }
+                }
+              } else {
+                # Same-size existing archive entry: verify source and archive are byte-identical before deleting source.
+                $sourceTemp = Join-Path $env:RUNNER_TEMP "pne-source-archive-check.pkg"
+                $archiveTemp = Join-Path $env:RUNNER_TEMP "pne-old-archive-check.pkg"
+                foreach ($pair in @(@($source,$sourceTemp),@($destination,$archiveTemp))) {
+                  $download = New-FtpRequest $pair[0] ([System.Net.WebRequestMethods+Ftp]::DownloadFile)
+                  $response = $download.GetResponse()
+                  $stream = $response.GetResponseStream()
+                  $output = [System.IO.File]::Create($pair[1])
+                  try { $stream.CopyTo($output) } finally { $output.Dispose(); $stream.Dispose(); $response.Dispose() }
+                }
+                $h1 = (Get-FileHash -LiteralPath $sourceTemp -Algorithm SHA256).Hash
+                $h2 = (Get-FileHash -LiteralPath $archiveTemp -Algorithm SHA256).Hash
+                Remove-Item -LiteralPath $sourceTemp,$archiveTemp -Force
+                if ($h1 -ne $h2) { throw "Archive collision has same size but different content: $destination" }
+                $delete = New-FtpRequest $source ([System.Net.WebRequestMethods+Ftp]::DeleteFile)
+                $response = $delete.GetResponse()
+                $response.Dispose()
+                Write-Host "ALREADY_ARCHIVED_IDENTICAL=$name"
+                $moved++
+                continue
+              }
+            } catch {
+              if ($_.Exception.Message -like "*refusing to overwrite*") { throw }
+              # A missing destination is the expected path for a new archive entry.
+            }
+
+            $rename = New-FtpRequest $source ([System.Net.WebRequestMethods+Ftp]::Rename) "old/$destinationName"
+            $response = $rename.GetResponse()
+            $response.Dispose()
+
+            $verify = New-FtpRequest $destination ([System.Net.WebRequestMethods+Ftp]::GetFileSize)
+            $verifyResponse = $verify.GetResponse()
+            $destinationSize = [long]$verifyResponse.ContentLength
+            $verifyResponse.Dispose()
+            if ($destinationSize -ne $sourceSize) { throw "Post-move size mismatch for $destination" }
+
+            try {
+              $sourceCheck = New-FtpRequest $source ([System.Net.WebRequestMethods+Ftp]::GetFileSize)
+              $sourceResponse = $sourceCheck.GetResponse()
+              $sourceResponse.Dispose()
+              throw "Source still exists after move: $source"
+            } catch {
+              if ($_.Exception.Message -like "*Source still exists*") { throw }
+            }
+            Write-Host "ARCHIVED=$name"
+            Write-Host "ARCHIVE_SIZE=$destinationSize"
+            $moved++
+          }
+
+          Write-Host "ARCHIVED_COUNT=$moved"
+          Write-Host "ARCHIVE_RESULT=SUCCESS"
