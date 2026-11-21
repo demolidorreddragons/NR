@@ -108,3 +108,15 @@ Artifact histórico GFX8: ID `14631648737`; ZIP SHA-256 `a722c2e67e8138b086cd8c6
 **Correção de inventário:** `platform/ps4/gcn8/compute_smoke.cpp` contém um harness experimental que tenta alocação/mapa, V# manual, PM4, dispatch, EOP fence, submit e readback. Isso é implementação-fonte experimental, não validação de runtime. GPU VA derivado do mapeamento, V# writable e política de cache permanecem bloqueadores não resolvidos.
 
 Relatório completo: [RELATORIO_P0_BASELINE_2026-11-21.md](RELATORIO_P0_BASELINE_2026-11-21.md). Revisão do relatório: **REVISÃO INTERNA — NÃO INDEPENDENTE**.
+
+
+## Evidências CI atualizadas — commit `734b3aa1` — 2026-11-21
+
+| ID | Run / Job | Resultado | Evidência e limite |
+|---|---|---|---|
+| NR-HOST-734B3 | [44869051638](https://github.com/demolidorreddragons/NR/actions/runs/44869051638) / `136739200322` | success | Configure/Build/Test; contratos resource-table/EOP PM4, offsets GNM, layout 71-block e intake; host/CI apenas |
+| NR-PKG-734B3 | [44869051627](https://github.com/demolidorreddragons/NR/actions/runs/44869051627) / `136739407561` + `136739799751` | success | PRX/PKG Full/Base build e QA independente; jobs de patch skipped; não comprova instalação/runtime |
+| NR-GFX8-734B3 | [44869051626](https://github.com/demolidorreddragons/NR/actions/runs/44869051626) / `136739746528` | success | PSBC, SPIR-V e seis shaders GFX8 compilados; parser, containers/CRC e byte-level report cross-check passaram; runtime semantics unresolved |
+| NR-GCN8-SMOKE-PKG-734B3 | [44869051626](https://github.com/demolidorreddragons/NR/actions/runs/44869051626) / `136740942984` | success | Compute smoke PKG validado/extraído; SHA-256 `d8f7935493013722cf37834713b9de3c8f81c077d3bb5e777e83269e1ad966ad`; startup-only separado; nenhum hardware test |
+
+**Achado bloqueador mantido:** o relatório binário registra `runtime_semantics=UNRESOLVED`: início do input-usage slot sob hipótese OpenGNM = 88 dwords; hipótese fpPS4 = 84 dwords; as hipóteses não concordam. O PASS é estrutural/byte-level sob interpretação explicitada, não aprovação semântica de runtime. Dispatch GPU, GPU VA, descritores V# writable, cache/coerência e readback permanecem NOT_RUN/BLOCKED para hardware.
