@@ -26,7 +26,7 @@ assert '-lSceGnmDriver' not in startup
 assert 'PNE_GCN8_STARTUP_ONLY=1' in startup
 print("GCN8 diagnostic mode invariants: PASS")
 
-load_branch = build.split('elif [[ "$MODE" == "gnm-load" ]]', 1)[1].split('\nelse\n', 1)[0]
+load_branch = build.split('elif [[ "$MODE" == "gnm-load" ]]; then\n  clang++', 1)[1].split('\nelse\n', 1)[0]
 assert '-DPNE_GCN8_GNM_LOAD_ONLY=1' in load_branch
 assert '-lkernel' in load_branch
 assert '-lSceGnmDriver' not in load_branch
