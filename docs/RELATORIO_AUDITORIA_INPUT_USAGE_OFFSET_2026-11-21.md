@@ -1,54 +1,60 @@
-# Auditoria do offset InputUsage — OpenGNM × fpPS4
+# Auditoria do offset InputUsage — OpenGNM × fpPS4 × PSBC
 
 Data: 2026-11-21  
 Branch NR: `feature/gcn8-numeric-kernels`  
-Commit-base auditado: `9ed6f93ca366c8ad7daa65e6c0af350a5a56ac53`  
+Commit-base da investigação: `6403956658223b71bfb9af33c737f529cbc88f17`  
 Classificação: **INVESTIGAÇÃO ESTÁTICA — SEM VALIDAÇÃO DE RUNTIME/HARDWARE**.
 
 ## Resultado
 
-A divergência de quatro dwords (16 bytes) foi localizada em duas interpretações diferentes do mesmo campo, não em uma diferença de contagem do shader:
+A divergência observada nos seis shaders smoke é de **um slot (4 bytes / 1 dword)**: início da tabela em 88 dwords pela interpretação usada pelo OpenGNM/PSBC e candidato em 84 dwords pela aritmética literal do fpPS4. Não são quatro dwords de diferença.
 
-- OpenGNM documenta `chunkusagebaseoffsetdwords` como o deslocamento, em dwords, a partir de `GnmShaderBinaryInfo` até o início dos dados de chunk usage: `OrbShdr - offset * 4`.
-- fpPS4 calcula primeiro esse mesmo endereço e, em seguida, subtrai `numInputUsageSlots * sizeof(TInputUsageSlot)` para retornar o início da lista de slots.
+A inspeção adicional do compilador PSBC upstream esclareceu um ponto importante: o PSBC calcula explicitamente `chunkusagebaseoffsetdwords` como a distância de `OrbShdr` até o **início da tabela de input usage slots**. Isso coincide com o endereço que o verificador NR encontra nos bytes emitidos. Portanto, a interpretação OpenGNM/PSBC está consistente com o formato que o PSBC pinned efetivamente produz.
 
-Para o artefato smoke analisado, `numInputUsageSlots = 1`; portanto, as duas fórmulas diferem exatamente em 1 dword (4 bytes), não em quatro dwords. O valor 88 versus 84 relatado na rodada anterior deve ser interpretado como offsets absolutos distintos no layout observado, e não como uma prova de que os dois parsers contam slots de forma diferente. A fórmula fpPS4, em termos gerais, desloca pelo número de slots; para um slot, o delta aritmético é 4 bytes.
+O fpPS4, por sua vez, calcula esse endereço e subtrai novamente `numInputUsageSlots * sizeof(TInputUsageSlot)`. Para o fixture de um slot isso recua quatro bytes antes da tabela observada. Isso torna o cálculo fpPS4 um candidato a bug ou a uma convenção/layout diferente, mas não prova sozinho qual implementação corresponde ao ABI de todos os shaders/firmwares.
 
 ## Evidência primária
 
-1. OpenGNM pinned pelo workflow NR: commit `4b295ca54c82c83acf308d1c646a2dfa9ae57350`.
-   - `docs/reference/shaderbinary.md`, estrutura `GnmShaderBinaryInfo`: comentário do campo `chunkusagebaseoffsetdwords`: “starts at ((uint32_t*)&ShaderBinaryInfo) - chunkusagebaseoffsetdwords”.
-   - `docs/reference/shader.md`: `GnmInputUsageSlot` tem 4 bytes.
-   - `GnmShaderCommonData.numinputusageslots` é documentado como número de input usage slots.
-   - O código de `src/shader.c` consome `ci->inputusages[i]` a partir de uma lista já fornecida; não demonstra a interpretação do ponteiro dentro do blob `OrbShdr`.
+1. **OpenGNM**, commit pinned pelo workflow NR: `4b295ca54c82c83acf308d1c646a2dfa9ae57350`.
+   - `docs/reference/shaderbinary.md`, `GnmShaderBinaryInfo`: comentário de `chunkusagebaseoffsetdwords`: “starts at ((uint32_t*)&ShaderBinaryInfo) - chunkusagebaseoffsetdwords”.
+   - `docs/reference/shader.md`: `GnmInputUsageSlot` tem 4 bytes; `numinputusageslots` é a contagem de slots.
+   - `src/shader.c` consome `ci->inputusages[i]` a partir de uma lista já fornecida; não resolve diretamente o offset dentro do blob `OrbShdr`.
 
-2. fpPS4 observado em `red-prig/fpPS4`, branch `trunk`, commit `04cefd43e6fddd1ab033e7980cd356d14c964905`.
-   - `chip/ps4_shader.pas`, `TShaderBinaryInfo`: define `chunkUsageBaseOffsetInDW` e `numInputUsageSlots`.
-   - `_calc_shader_slot` (linhas 472–483): `usageMasks := Pointer(info) - chunkUsageBaseOffsetInDW * 4`; depois `Result := PInputUsageSlot(usageMasks) - numInputUsageSlots`.
-   - `TInputUsageSlot` é um registro packed de 4 bytes.
-   - Esta referência fpPS4 não é pin do workflow NR; foi consultada em HEAD da branch indicada e deve ser tratada como evidência upstream não fixada.
+2. **PSBC**, commit pinned pelo workflow NR: `28697f007862427ebec54388ec972ce6e3545912`, arquivo `libpsbc/psbc_compile.c`.
+   - Linhas 793–809 calculam `inputslots_offset = sizeof(PsslBinaryHeader) + sizeof(GnmShaderFileHeader) + headershsize(...)`.
+   - O comentário declara que o campo é o offset de `OrbShdr` de volta à tabela de slots.
+   - `chunkusageoffset = (orbshdr_offset - inputslots_offset) / 4`, com zero quando não há slots.
+   - Linhas 825–837 gravam esse valor em `GnmShaderBinaryInfo.chunkusagebaseoffsetdwords`.
+   - É evidência direta da intenção/implementação do produtor pinned; não é validação de um SDK Sony nem de runtime PS4.
 
-3. Implementação NR atual:
-   - `tools/verify_gfx8_report.py` calcula e reporta a hipótese OpenGNM como `OrbShdr - chunkOffset*4` e a hipótese fpPS4 como esse endereço menos `slotCount*4`.
-   - `platform/ps4/gcn8/host/shader_binary_contract.cpp` exige que o endereço obtido pela fórmula OpenGNM coincida com a posição esperada da tabela de slots no container produzido pelo PSBC.
-   - O fixture em `tests/test_gcn8_shader_binary.cpp` confirma apenas o contrato do layout sintético/artefato esperado pelo parser NR; não é uma prova independente da semântica do formato em todos os produtores/firmwares.
+3. **fpPS4**, repositório `red-prig/fpPS4`, branch `trunk`, commit observado `04cefd43e6fddd1ab033e7980cd356d14c964905`.
+   - `chip/ps4_shader.pas`, `TShaderBinaryInfo`, define os dois campos.
+   - `_calc_shader_slot` (linhas 472–483): calcula `usageMasks := Pointer(info) - chunkUsageBaseOffsetInDW * 4`; depois retorna `PInputUsageSlot(usageMasks) - numInputUsageSlots`.
+   - `TInputUsageSlot` é packed e tem 4 bytes.
+   - Este commit foi consultado diretamente, mas não é dependência pinned pelo workflow NR; preservar como referência upstream observada.
+
+4. **Artefatos NR**:
+   - Seis shaders emitidos pelo PSBC têm `numInputUsageSlots = 1`.
+   - O verificador byte-level confirma que `OrbShdr - chunkOffset*4` aponta exatamente para o slot table start derivado do cabeçalho PS4/NEO e que os quatro bytes correspondem ao slot declarado no relatório.
+   - O verificador confirma os bytes e o contrato do produtor; não demonstra aceitação pelo driver/firmware do PS4.
 
 ## Decisão técnica
 
-**Não alterar o offset nem o parser nesta rodada.** A documentação OpenGNM e o código fpPS4 não são semanticamente equivalentes: um descreve o endereço-base dos chunk usage data; o outro retorna o começo da sequência de slots após descontar a quantidade. Ainda falta uma fonte normativa/terceira implementação que esclareça se o campo aponta para o começo ou para o fim da sequência no formato efetivamente emitido pelo PSBC, ou uma amostra de shader oficial validada por runtime.
+**Não alterar o offset nem o parser nesta rodada.** A evidência atual favorece a interpretação OpenGNM/PSBC para os containers gerados pelo PSBC pinned. O cálculo fpPS4 literal recua pelo número de slots e não aponta para a tabela observada nesses artefatos. Ainda falta uma fonte normativa independente (SDK/ABI) ou uma amostra oficial validada em runtime que permita classificar definitivamente a diferença como bug fpPS4 ou diferença de formato/contexto.
 
-A validação byte-level NR pode continuar como **PASS sob a interpretação OpenGNM usada pelo próprio pipeline**, mas `runtime_semantics` permanece **UNRESOLVED**. Não elevar isso a PASS semântico, nem usar o resultado para autorizar dispatch/readback no PS4.
+A validação byte-level continua **PASS sob o contrato de emissão OpenGNM/PSBC**. A semântica de runtime continua **UNRESOLVED**; nenhum dispatch/readback no PS4 foi executado. Não promover o resultado para validação de hardware.
 
-## CI confirmada nesta rodada
+## CI confirmada
 
-- Host Tests `44869804248`: success; job `136741553417`; incluindo `Validate GNM input-usage offset arithmetic`.
-- Host Tests `44869807636`: success; job `136741563581`; incluindo o mesmo teste de aritmética.
+- Host Tests `44869804248`: success; job `136741553417`.
+- Host Tests `44869807636`: success; job `136741563581`.
+- Host Tests `44870307627`: success; job `136743115128`; validação de aritmética GNM, Configure, Build e Test concluídos.
 - GCN8 build `44869051626`: success; jobs `136739746528` e `136740942984`.
-- Esses resultados são host/CI; não representam execução em hardware.
+- Todos os resultados acima são host/CI, não execução no PS4.
 
-## Próxima evidência necessária
+## Próximas evidências necessárias
 
-1. Fixar um commit fpPS4 em dependência de auditoria e comparar a semântica com outra implementação independente/SDK documentado.
-2. Inspecionar bytes e limites de tabelas de mais de um shader, incluindo zero, um e múltiplos slots, sem inferir a posição somente do parser que está sendo testado.
-3. Só então ajustar o parser/contrato e adicionar fixtures derivadas de artefatos independentes.
-4. Manter dispatch/readback PS4 bloqueado até que o plano reversível seja aprovado e a execução autorizada.
+1. Obter referência independente/SDK documentado ou amostra oficial de shader com metadados verificáveis.
+2. Inspecionar shaders oficiais com zero, um e múltiplos slots e comparar o posicionamento de tabela e metadados.
+3. Se houver prova de que o ABI exige outra interpretação, ajustar produtor/parser juntos e adicionar fixtures independentes.
+4. Manter dispatch/readback PS4 bloqueado até contrato de memória/V#, plano reversível aprovado e autorização explícita de execução.
