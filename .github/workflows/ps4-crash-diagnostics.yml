@@ -83,6 +83,14 @@ jobs:
           Download-Remote "/data/GoldHEN/plugins/ps4_neural_engine.prx" (Join-Path $outDir "ps4_neural_engine.prx")
           Download-Remote "/data/GoldHEN/plugins/ps4_neural_engine.prx.pne-backup" (Join-Path $outDir "ps4_neural_engine.prx.pne-backup")
           Download-Remote "/data/GoldHEN/plugins/ps4_neural_engine.prx.pne-tmp" (Join-Path $outDir "ps4_neural_engine.prx.pne-tmp")
+
+          Download-Remote "/data/GoldHEN/config.ini" (Join-Path $outDir "goldhen-config.ini")
+          Download-Remote "/data/GoldHEN/plugins/ps4_neural_engine.prx.pne-backup.001" (Join-Path $outDir "ps4_neural_engine.prx.pne-backup.001")
+          Download-Remote "/data/GoldHEN/plugins/ps4_neural_engine.prx.pne-release.ini" (Join-Path $outDir "ps4_neural_engine.prx.pne-release.ini")
+          Download-Remote "/data/GoldHEN/plugins/ps4_neural_engine_002.prx" (Join-Path $outDir "ps4_neural_engine_002.prx")
+          Download-Remote "/data/GoldHEN/plugins/ps4_neural_engine_003.prx" (Join-Path $outDir "ps4_neural_engine_003.prx")
+          Download-Remote "/data/GoldHEN/plugins/ps4_neural_engine_004.prx" (Join-Path $outDir "ps4_neural_engine_004.prx")
+          Download-Remote "/data/GoldHEN/plugins/ps4_neural_engine_005.prx" (Join-Path $outDir "ps4_neural_engine_005.prx")
           Download-Remote "/data/sce_logs/log.bin" (Join-Path $outDir "sce-log.bin")
           Download-Remote "/data/install.log" (Join-Path $outDir "data-install.log")
           Download-Remote "/data/pkg/install.log" (Join-Path $outDir "pkg-install.log")
@@ -105,6 +113,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ps4-neural-engine-crash-diagnostics
-          path: \${{ runner.temp }}/nr-crash-diagnostics/
+          path: ${{ runner.temp }}/nr-crash-diagnostics/
           if-no-files-found: warn
           retention-days: 14
