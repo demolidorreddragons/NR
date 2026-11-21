@@ -3,7 +3,6 @@ set -euo pipefail
 export DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1
 
 : "${OO_PS4_TOOLCHAIN:?OO_PS4_TOOLCHAIN is required}"
-: "${GCN8_SHADER_FILE:?GCN8_SHADER_FILE must point to the compiled compute_smoke_add.sb}"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 TOOLS="$OO_PS4_TOOLCHAIN/bin/linux"
 PKGTOOL="${PKGTOOL_CORE:-$TOOLS/PkgTool.Core}"
@@ -40,9 +39,14 @@ mkdir -p "$ROOT/build/gcn8-smoke-stage" "$ROOT/dist/gcn8-smoke"
 rm -rf "$STAGE"
 mkdir -p "$STAGE/sce_sys/about" "$STAGE/sce_module" "$OUT"
 
-test -s "$GCN8_SHADER_FILE"
-cp "$GCN8_SHADER_FILE" "$STAGE/compute_smoke_add.sb"
-SHADER_SHA256="$(sha256sum "$STAGE/compute_smoke_add.sb" | awk '{print $1}')"
+if [[ "$MODE" == "compute" ]]; then
+  : "${GCN8_SHADER_FILE:?GCN8_SHADER_FILE must point to the compiled compute_smoke_add.sb}"
+  test -s "$GCN8_SHADER_FILE"
+  cp "$GCN8_SHADER_FILE" "$STAGE/compute_smoke_add.sb"
+  SHADER_SHA256="$(sha256sum "$STAGE/compute_smoke_add.sb" | awk '{print $1}')"
+else
+  SHADER_SHA256="none"
+fi
 
 for required in "$SAMPLE/sce_module/libc.prx" \
                 "$SAMPLE/sce_module/libSceFios2.prx" \
@@ -109,8 +113,11 @@ sfo VERSION Utf8 8 "$APP_VERSION"
 sfo PUBTOOLINFO Utf8 512 "c_date=$(date -u +%Y%m%d),img0_l0_size=7,img0_l1_size=0,img0_sc_ksize=512,img0_pc_ksize=832,st_type=digital50"
 
 cd "$STAGE"
-"$TOOLS/create-gp4" -out package.gp4 --content-id="$CONTENT_ID" \
-  --files "eboot.bin compute_smoke_add.sb sce_sys/param.sfo sce_sys/icon0.png sce_sys/about/right.sprx sce_module/libc.prx sce_module/libSceFios2.prx"
+PAYLOAD_FILES="eboot.bin sce_sys/param.sfo sce_sys/icon0.png sce_sys/about/right.sprx sce_module/libc.prx sce_module/libSceFios2.prx"
+if [[ "$MODE" == "compute" ]]; then
+  PAYLOAD_FILES="$PAYLOAD_FILES compute_smoke_add.sb"
+fi
+"$TOOLS/create-gp4" -out package.gp4 --content-id="$CONTENT_ID" --files "$PAYLOAD_FILES"
 "$PKGTOOL" pkg_build package.gp4 "$OUT"
 pkg="$(find "$OUT" -maxdepth 1 -type f -name '*.pkg' -print -quit)"
 test -n "$pkg" && test -s "$pkg"
@@ -121,22 +128,29 @@ VERIFY="$STAGE/pkg-verify"
 rm -rf "$VERIFY" && mkdir -p "$VERIFY"
 "$PKGTOOL" pkg_extract --verbose "$numbered_pkg" "$VERIFY"
 
-python3 - "$VERIFY" "$SHADER_SHA256" <<'PY'
+python3 - "$VERIFY" "$MODE" "$SHADER_SHA256" <<'PY'
 import hashlib, os, sys
-root, expected_shader = sys.argv[1:]
+root, mode, expected_shader = sys.argv[1:]
 found = {}
 for current, _, files in os.walk(root):
     for name in files:
-        path = os.path.join(current, name)
-        if name in {"eboot.bin", "compute_smoke_add.sb", "libc.prx", "libSceFios2.prx", "right.sprx"}:
-            found[name] = path
-missing = sorted({"eboot.bin", "compute_smoke_add.sb", "libc.prx", "libSceFios2.prx", "right.sprx"} - found.keys())
+        found[name] = os.path.join(current, name)
+required = {"eboot.bin", "libc.prx", "libSceFios2.prx", "right.sprx"}
+if mode == "compute":
+    required.add("compute_smoke_add.sb")
+missing = sorted(required - found.keys())
 if missing:
     raise SystemExit("Missing extracted payload: " + ", ".join(missing))
-actual = hashlib.sha256(open(found["compute_smoke_add.sb"], "rb").read()).hexdigest()
-if actual != expected_shader:
-    raise SystemExit(f"Shader payload SHA-256 mismatch: {actual} != {expected_shader}")
-print("COMPUTE_SMOKE_PKG_PAYLOAD=PASS")
+if mode == "compute":
+    with open(found["compute_smoke_add.sb"], "rb") as stream:
+        actual = hashlib.sha256(stream.read()).hexdigest()
+    if actual != expected_shader:
+        raise SystemExit(f"Shader payload SHA-256 mismatch: {actual} != {expected_shader}")
+    print("COMPUTE_SMOKE_PKG_PAYLOAD=PASS")
+else:
+    if "compute_smoke_add.sb" in found:
+        raise SystemExit("Startup-only PKG unexpectedly contains compute_smoke_add.sb")
+    print("STARTUP_ONLY_PKG_PAYLOAD=PASS; COMPUTE_SHADER=ABSENT")
 PY
 
 PKG_SHA256="$(sha256sum "$numbered_pkg" | awk '{print $1}')"
@@ -147,7 +161,7 @@ run_id=$RUN_ID
 title_id=$TITLE_ID
 content_id=$CONTENT_ID
 app_version=$APP_VERSION
-shader_file=compute_smoke_add.sb
+shader_file=$( [[ "$MODE" == "compute" ]] && echo compute_smoke_add.sb || echo none )
 shader_sha256=$SHADER_SHA256
 pkg_file=$(basename "$numbered_pkg")
 pkg_sha256=$PKG_SHA256
