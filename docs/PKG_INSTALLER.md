@@ -40,7 +40,7 @@ O tamanho retornado por FTP SIZE divergiu do tamanho exibido por LIST para o PRX
 
 **Correção no PKG 009:** inspeção por `open(O_RDONLY | O_NOFOLLOW)` e `fstat` apenas dos bits de tipo, sem confiar em `st_size`; erros de PRX, manifesto e marcador agora são reportados separadamente com `errno`. A criação temporária exclusiva continua ignorando nomes já ocupados por meio de sufixos numéricos. Os arquivos antigos no PS4 permanecem preservados.
 
-O host CI do código corrigido passou no run [44848981010](https://github.com/demolidorreddragons/NR/actions/runs/44848981010). Build Orbis/PKG 009 e QA independente ainda são gates pendentes; nenhuma limpeza, instalação ou ativação foi executada pelo diagnóstico.
+O host CI do código corrigido passou no run [44849066490](https://github.com/demolidorreddragons/NR/actions/runs/44849066490). Build Orbis e QA independente do PKG 009 passaram no run [44849066524](https://github.com/demolidorreddragons/NR/actions/runs/44849066524). O staging no PS4 passou no run [44849611210](https://github.com/demolidorreddragons/NR/actions/runs/44849611210): `/data/pkg/PS4-Neural-Engine-009.pkg`, 6.619.136 bytes, SHA-256 `242e032dc19ae9fc22cdd0b977241bd9ef8edf93bc5eb31777063575430699ba`; PKGs antigos foram arquivados com verificação em `/data/pkg/old/`, terceiros preservados e somente 009 permaneceu na raiz. O pacote não foi instalado e o PRX não foi ativado.
 
 ## Release 006 — histórico da auditoria estática (20/11/2026)
 
