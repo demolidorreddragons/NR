@@ -13,6 +13,8 @@
 #include <unistd.h>
 #include <orbis/libkernel.h>
 #include "release_manifest.h"
+#include "hybrid_state.h"
+#include "sha256.h"
 
 /* Retry interrupted reads without advancing only one side of a byte comparison. */
 static ssize_t read_retry(int fd, void* buffer, size_t capacity) {
@@ -44,6 +46,10 @@ static ssize_t read_block(int fd, void* buffer, size_t capacity) {
 #define CONFIG "/data/GoldHEN/plugins.ini"
 #define CONFIG_TMP CONFIG ".pne-tmp"
 #define CONFIG_BACKUP CONFIG ".pne-backup"
+#define INSTALLED_MANIFEST DEST_PRX ".pne-release.ini"
+#define MANIFEST_TMP INSTALLED_MANIFEST ".pne-tmp"
+#define MANIFEST_BACKUP INSTALLED_MANIFEST ".pne-backup"
+#define TRANSACTION_MARKER DEST_PRX ".pne-transaction"
 #define STATUS "/data/GoldHEN/ps4_neural_engine_install.log"
 #define MAX_CONFIG 65536
 
@@ -75,6 +81,50 @@ static FILE* fopen_unique_staged_file(const char* base, char* chosen, size_t cap
     return stream;
 }
 
+static int path_exists(const char* path) {
+    struct stat st;
+    return lstat(path, &st) == 0;
+}
+static int read_release_number(const char* path, unsigned long* release) {
+    FILE* file = fopen(path, "rb");
+    if (!file) return 0;
+    char line[256]; int found = 0;
+    while (fgets(line, sizeof(line), file)) {
+        if (strncmp(line, "release_number=", 15) == 0) {
+            char* end = NULL; errno = 0;
+            unsigned long value = strtoul(line + 15, &end, 10);
+            if (errno || end == line + 15 || (*end != '\\n' && *end != '\\r' && *end != '\\0')) { fclose(file); return 0; }
+            *release = value; found = 1; break;
+        }
+    }
+    if (ferror(file)) found = 0;
+    fclose(file); return found;
+}
+static int stage_manifest(char* temp_path, size_t temp_path_size) {
+    int in = open(RELEASE_MANIFEST, O_RDONLY);
+    if (in < 0) return 0;
+    int out = -1;
+    if (!open_unique_staged_file(MANIFEST_TMP, temp_path, temp_path_size, &out)) { close(in); return 0; }
+    char buffer[2048]; int ok = 1;
+    for (;;) {
+        ssize_t n = read_retry(in, buffer, sizeof(buffer));
+        if (n == 0) break;
+        if (n < 0) { ok = 0; break; }
+        ssize_t offset = 0;
+        while (offset < n) {
+            ssize_t w = write(out, buffer + offset, (size_t)(n-offset));
+            if (w < 0 && errno == EINTR) continue;
+            if (w <= 0) { ok = 0; break; }
+            offset += w;
+        }
+        if (!ok) break;
+    }
+    if (ok && fsync(out) != 0) ok = 0;
+    if (close(in) != 0) ok = 0;
+    if (close(out) != 0) ok = 0;
+    if (!ok) remove(temp_path);
+    return ok;
+}
 static void notify(const char* message) {
     OrbisNotificationRequest request;
     memset(&request, 0, sizeof(request));
@@ -220,7 +270,7 @@ static void trim_line(char* line) {
     if (p != line) memmove(line, p, strlen(p) + 1);
 }
 
-static int configure_loader(char* error, size_t error_size, char* temp_path, size_t temp_path_size) {
+static int configure_loader(char* error, size_t error_size, char* temp_path, size_t temp_path_size, int* changed) {
     char input[MAX_CONFIG];
     char output[MAX_CONFIG + 256];
     size_t length = 0, used = 0;
@@ -319,7 +369,7 @@ static int configure_loader(char* error, size_t error_size, char* temp_path, siz
         used += n;
     }
 
-    FILE* out = fopen_unique_staged_file(CONFIG_TMP, temp_path, temp_path_size);
+    *changed = 1;\n    FILE* out = fopen_unique_staged_file(CONFIG_TMP, temp_path, temp_path_size);
     if (!out) {
         snprintf(error, error_size, "ERROR: cannot create temporary plugins.ini (errno=%d).", errno);
         return 0;
@@ -358,127 +408,102 @@ static int choose_backup_path(const char* base, char* output, size_t capacity) {
     return 0;
 }
 
-static int commit_install(char* error, size_t error_size, const char* prx_tmp, const char* config_tmp) {
-    char prx_backup[256] = {0};
-    char config_backup[256] = {0};
-    int had_prx = path_exists(DEST_PRX);
-    int had_config = path_exists(CONFIG);
-    int moved_prx = 0, moved_config = 0, installed_prx = 0;
-    int failure = 0;
-
-    if (had_prx && !choose_backup_path(DEST_BACKUP, prx_backup, sizeof(prx_backup))) {
-        snprintf(error, error_size, "ERROR: cannot reserve a unique PRX recovery backup path (errno=%d).", errno);
-        return 0;
-    }
-    if (had_config && !choose_backup_path(CONFIG_BACKUP, config_backup, sizeof(config_backup))) {
-        snprintf(error, error_size, "ERROR: cannot reserve a unique plugins.ini recovery backup path (errno=%d).", errno);
-        return 0;
-    }
-    if (had_prx) {
-        if (rename(DEST_PRX, prx_backup) != 0) {
-            snprintf(error, error_size, "ERROR: cannot back up existing PRX to %s (errno=%d).", prx_backup, errno);
-            return 0;
+static int commit_install(char* error, size_t error_size,
+                          const char* prx_tmp, const char* manifest_tmp,
+                          const char* config_tmp) {
+    char prx_backup[256]={0}, manifest_backup[256]={0}, config_backup[256]={0};
+    int had_prx=path_exists(DEST_PRX), had_manifest=path_exists(INSTALLED_MANIFEST);
+    int had_config=config_tmp && config_tmp[0] && path_exists(CONFIG);
+    int moved_prx=0,moved_manifest=0,moved_config=0,installed_prx=0,installed_manifest=0,installed_config=0;
+    int failure=0, marker_fd=-1;
+    if (had_prx && !choose_backup_path(DEST_BACKUP,prx_backup,sizeof(prx_backup))) goto reserve_failed;
+    if (had_manifest && !choose_backup_path(MANIFEST_BACKUP,manifest_backup,sizeof(manifest_backup))) goto reserve_failed;
+    if (had_config && !choose_backup_path(CONFIG_BACKUP,config_backup,sizeof(config_backup))) goto reserve_failed;
+    marker_fd=open(TRANSACTION_MARKER,O_WRONLY|O_CREAT|O_EXCL,0600);
+    if(marker_fd<0){snprintf(error,error_size,"ERROR: RECOVERY_REQUIRED; transaction marker cannot be created (errno=%d).",errno);return 0;}
+    {
+        const char marker[]="PNE transaction in progress; preserve all backups.\n";
+        if(write(marker_fd,marker,sizeof(marker)-1)!=(ssize_t)(sizeof(marker)-1)||fsync(marker_fd)!=0){
+            failure=errno?errno:EIO;close(marker_fd);remove(TRANSACTION_MARKER);
+            snprintf(error,error_size,"ERROR: cannot persist transaction marker (errno=%d).",failure);return 0;
         }
-        moved_prx = 1;
     }
-    if (had_config) {
-        if (rename(CONFIG, config_backup) != 0) {
-            int operation_errno = errno;
-            int restore_errno = 0;
-            if (moved_prx && rename(prx_backup, DEST_PRX) != 0) restore_errno = errno;
-            if (restore_errno) {
-                snprintf(error, error_size,
-                         "ERROR: cannot back up plugins.ini (errno=%d); PRX restore also failed (errno=%d); inspect %s.",
-                         operation_errno, restore_errno, prx_backup);
-            } else {
-                snprintf(error, error_size,
-                         "ERROR: cannot back up plugins.ini (errno=%d); previous PRX restored.",
-                         operation_errno);
-            }
-            return 0;
-        }
-        moved_config = 1;
-    }
-    if (rename(prx_tmp, DEST_PRX) != 0) {
-        failure = errno;
-        goto rollback;
-    }
-    installed_prx = 1;
-    if (rename(config_tmp, CONFIG) != 0) {
-        failure = errno;
-        goto rollback;
-    }
+    close(marker_fd);
+    if(had_prx){if(rename(DEST_PRX,prx_backup)!=0){failure=errno;goto rollback;}moved_prx=1;}
+    if(had_manifest){if(rename(INSTALLED_MANIFEST,manifest_backup)!=0){failure=errno;goto rollback;}moved_manifest=1;}
+    if(had_config){if(rename(CONFIG,config_backup)!=0){failure=errno;goto rollback;}moved_config=1;}
+    if(rename(prx_tmp,DEST_PRX)!=0){failure=errno;goto rollback;}installed_prx=1;
+    if(rename(manifest_tmp,INSTALLED_MANIFEST)!=0){failure=errno;goto rollback;}installed_manifest=1;
+    if(config_tmp&&config_tmp[0]){if(rename(config_tmp,CONFIG)!=0){failure=errno;goto rollback;}installed_config=1;}
+    if(remove(TRANSACTION_MARKER)!=0){snprintf(error,error_size,"ERROR: files committed but marker remains; RECOVERY_REQUIRED (errno=%d).",errno);return 0;}
     return 1;
-
+reserve_failed:
+    snprintf(error,error_size,"ERROR: cannot reserve recovery backup path (errno=%d).",errno);return 0;
 rollback:
     {
-        int rollback_errno = 0;
-        if (installed_prx && remove(DEST_PRX) != 0 && errno != ENOENT) rollback_errno = errno;
-        if (moved_config && rename(config_backup, CONFIG) != 0 && rollback_errno == 0) rollback_errno = errno;
-        if (moved_prx && rename(prx_backup, DEST_PRX) != 0 && rollback_errno == 0) rollback_errno = errno;
-        remove(prx_tmp);
-        remove(config_tmp);
-        if (rollback_errno) {
-            snprintf(error, error_size,
-                     "ERROR: transactional commit failed (errno=%d); rollback incomplete (errno=%d); inspect %s and %s.",
-                     failure, rollback_errno, prx_backup, config_backup);
-        } else {
-            snprintf(error, error_size,
-                     "ERROR: transactional commit failed (errno=%d); previous files restored.",
-                     failure);
-        }
+        int re=0;
+        if(installed_config&&remove(CONFIG)!=0&&errno!=ENOENT)re=errno;
+        if(installed_manifest&&remove(INSTALLED_MANIFEST)!=0&&errno!=ENOENT&&!re)re=errno;
+        if(installed_prx&&remove(DEST_PRX)!=0&&errno!=ENOENT&&!re)re=errno;
+        if(moved_config&&rename(config_backup,CONFIG)!=0&&!re)re=errno;
+        if(moved_manifest&&rename(manifest_backup,INSTALLED_MANIFEST)!=0&&!re)re=errno;
+        if(moved_prx&&rename(prx_backup,DEST_PRX)!=0&&!re)re=errno;
+        if(prx_tmp&&prx_tmp[0])remove(prx_tmp);
+        if(manifest_tmp&&manifest_tmp[0])remove(manifest_tmp);
+        if(config_tmp&&config_tmp[0])remove(config_tmp);
+        if(re) snprintf(error,error_size,"ERROR: transaction failed (errno=%d); rollback incomplete (errno=%d); marker retained; inspect backups.",failure,re);
+        else {remove(TRANSACTION_MARKER);snprintf(error,error_size,"ERROR: transaction failed (errno=%d); previous files restored.",failure);}
     }
     return 0;
 }
 
 int main(void) {
-    char error[256];
-    char prx_tmp[256] = {0};
-    char config_tmp[256] = {0};
-    /* Validate immutable package identity and PRX bytes before creating or changing destinations. */
-    if (!pne_validate_release_manifest(RELEASE_MANIFEST, SOURCE_PRX, error, sizeof(error))) {
-        write_status(error);
-        notify("PNE: manifesto/hash do PRX invalido; nenhuma alteracao foi feita.");
-        sceKernelUsleep(3000000);
-        return 5;
+    char error[256],prx_tmp[256]={0},manifest_tmp[256]={0},config_tmp[256]={0};
+    int config_changed=0;
+    unsigned long incoming_release=0,installed_release=0;
+    char incoming_hash[65],installed_hash[65];
+    if(!pne_validate_release_manifest(RELEASE_MANIFEST,SOURCE_PRX,error,sizeof(error))||
+       !read_release_number(RELEASE_MANIFEST,&incoming_release)||
+       !pne_sha256_file(SOURCE_PRX,incoming_hash)){
+        write_status("ABORTED: invalid incoming manifest/hash; no destination changed.");
+        notify("PNE: manifesto/hash do pacote invalido.");sceKernelUsleep(3000000);return 5;
     }
-    if (mkdir("/data/GoldHEN", 0777) != 0 && errno != EEXIST) {
-        snprintf(error, sizeof(error), "ERROR: cannot create /data/GoldHEN (errno=%d).", errno);
-        write_status(error);
-        notify("PNE: falha ao preparar pasta GoldHEN. Veja install.log via FTP.");
-        sceKernelUsleep(3000000);
-        return 1;
+    int prx_exists=path_exists(DEST_PRX),manifest_exists=path_exists(INSTALLED_MANIFEST);
+    int marker_exists=path_exists(TRANSACTION_MARKER);
+    int manifest_valid=manifest_exists&&prx_exists&&
+        pne_validate_release_manifest(INSTALLED_MANIFEST,DEST_PRX,error,sizeof(error));
+    pne_install_state state=pne_classify_install_state(prx_exists,manifest_exists,manifest_valid,marker_exists);
+    if(state==PNE_STATE_RECOVERY||state==PNE_STATE_CONFLICT){
+        snprintf(error,sizeof(error),"ABORTED: state=%s; files/backups preserved; inspect transaction marker.",pne_install_state_name(state));
+        write_status(error);notify("PNE: recuperacao/conflito detectado; nada alterado.");sceKernelUsleep(3000000);return 6;
     }
-    if (mkdir(DEST_DIR, 0777) != 0 && errno != EEXIST) {
-        snprintf(error, sizeof(error), "ERROR: cannot create plugin directory (errno=%d).", errno);
-        write_status(error);
-        notify("PNE: falha ao criar pasta de plugins. Veja install.log via FTP.");
-        sceKernelUsleep(3000000);
-        return 1;
+    if(state==PNE_STATE_UPDATE){
+        if(!read_release_number(INSTALLED_MANIFEST,&installed_release)||!pne_sha256_file(DEST_PRX,installed_hash)){
+            write_status("ABORTED: installed manifest unreadable; CONFLICT.");return 6;
+        }
+        int order=pne_compare_release(installed_release,incoming_release);
+        if(order<0){write_status("ABORTED: downgrade refused; installed release is newer.");notify("PNE: downgrade bloqueado.");sceKernelUsleep(3000000);return 7;}
+        if(order==0){
+            if(strcmp(installed_hash,incoming_hash)==0){
+                write_status("ALREADY_CURRENT: release and PRX SHA-256 match; no writes or backups created.");
+                notify("PNE: Neural Engine ja esta atualizado.");sceKernelUsleep(2500000);return 0;
+            }
+            write_status("ABORTED: CONFLICT; same release number with different PRX hash.");notify("PNE: conflito de hash; nada alterado.");sceKernelUsleep(3000000);return 8;
+        }
     }
-
-    if (!copy_prx(error, sizeof(error), prx_tmp, sizeof(prx_tmp))) {
-        write_status(error);
-        notify("PNE: falha ao copiar PRX. O log agora informa a etapa e errno.");
-        sceKernelUsleep(3000000);
-        return 2;
+    if(mkdir("/data/GoldHEN",0777)!=0&&errno!=EEXIST){snprintf(error,sizeof(error),"ERROR: cannot create GoldHEN directory (errno=%d).",errno);write_status(error);return 1;}
+    if(mkdir(DEST_DIR,0777)!=0&&errno!=EEXIST){snprintf(error,sizeof(error),"ERROR: cannot create plugin directory (errno=%d).",errno);write_status(error);return 1;}
+    if(!copy_prx(error,sizeof(error),prx_tmp,sizeof(prx_tmp))){write_status(error);notify("PNE: falha ao copiar PRX.");sceKernelUsleep(3000000);return 2;}
+    if(!stage_manifest(manifest_tmp,sizeof(manifest_tmp))){int e=errno;remove(prx_tmp);snprintf(error,sizeof(error),"ERROR: cannot stage installed manifest (errno=%d).",e);write_status(error);return 3;}
+    if(!configure_loader(error,sizeof(error),config_tmp,sizeof(config_tmp),&config_changed)){
+        remove(prx_tmp);remove(manifest_tmp);write_status(error);notify("PNE: falha ao preparar plugins.ini.");sceKernelUsleep(3000000);return 3;
     }
-    if (!configure_loader(error, sizeof(error), config_tmp, sizeof(config_tmp))) {
-        remove(prx_tmp);
-        write_status(error);
-        notify("PNE: falha ao preparar plugins.ini. Arquivos ativos preservados.");
-        sceKernelUsleep(3000000);
-        return 3;
+    if(!config_changed)config_tmp[0]='\\0';
+    if(!commit_install(error,sizeof(error),prx_tmp,manifest_tmp,config_tmp)){
+        write_status(error);notify("PNE: transacao nao concluida; preserve backups.");sceKernelUsleep(3000000);return 4;
     }
-    if (!commit_install(error, sizeof(error), prx_tmp, config_tmp)) {
-        write_status(error);
-        notify("PNE: falha na transacao. Verifique backups e install.log.");
-        sceKernelUsleep(3000000);
-        return 4;
-    }
-
-    write_status("OK: PRX and plugins.ini committed; previous files retained as .pne-backup when present. Restart GoldHEN or reboot to load.");
-    notify("PNE instalado automaticamente. Reinicie o GoldHEN/PS4 para carregar.");
-    sceKernelUsleep(3000000);
-    return 0;
+    if(state==PNE_STATE_NEW)write_status("NEW_INSTALL: PRX, manifest and loader registration committed.");
+    else if(state==PNE_STATE_LEGACY)write_status("LEGACY_MIGRATION: unverified old PRX preserved as backup; managed manifest installed.");
+    else write_status("UPDATE: newer release committed; downgrade protection active; backups retained.");
+    notify("PNE instalado/atualizado. Reinicie GoldHEN/PS4 para carregar.");sceKernelUsleep(3000000);return 0;
 }
