@@ -65,3 +65,15 @@ Para cada execução de QA, registrar:
 - A revisão independente REA-5 permanece pendente até existir relatório real de revisor independente.
 
 Atualizar esta matriz com IDs de workflow/job, commits, hashes e links de logs a cada nova execução. Não inventar resultados retrospectivos.
+
+
+## Independência e revisão cruzada — regra aprovada em 2026-11-21
+
+- QA independente e auditoria técnica não herdam a narrativa, defesa ou aprovação prévia do desenvolvedor.
+- Recebem requisitos, critérios, commit, artefatos, hashes, ambiente e procedimento mínimo; conclusões anteriores não contam como evidência.
+- Desenvolvedor não aprova sozinho o próprio trabalho; conflito de interesse deve ser declarado.
+- Revisor não modifica o artefato auditado e pode emitir PASS, FAIL ou BLOCKED.
+- Sem executor/contexto separado, registrar **REVISÃO INTERNA — NÃO INDEPENDENTE**.
+- Falha crítica ou critério obrigatório não atendido bloqueia a promoção, independentemente de qualquer pontuação agregada.
+
+Consultar [Protocolo de independência, revisão cruzada e qualidade dos agentes](PROTOCOLO_INDEPENDENCIA_AGENTES.md) para papéis, matriz de revisão, contrato de tarefa, critérios e modelo de relatório.
