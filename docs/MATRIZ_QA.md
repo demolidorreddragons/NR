@@ -91,3 +91,20 @@ Consultar [Protocolo de independência, revisão cruzada e qualidade dos agentes
 | Regressão visual/numérica | Comparação com fixtures/oráculos | Dataset, métricas, tolerâncias prévias e resultados | Host não aprova GPU/hardware |
 
 Automação acelera feedback, mas não reduz o nível mínimo de validação. `PS4_HARDWARE_VALIDATED` exige execução real e evidência direta no PS4 Pro. QA independente permanece separado da implementação.
+
+
+## Evidências CI/artefatos — snapshot 2026-11-21
+
+| ID | Commit | Run / Job | Resultado | Nível e limite |
+|---|---|---|---|---|
+| P0-HOST-001 | `f602a436d6efe87e2a54fd7e5185c2e583c7473f` | [44862586387](https://github.com/demolidorreddragons/NR/actions/runs/44862586387) / `136719063324` | success; steps de validação, Configure, Build e Test passaram | CI_VALIDATED; host apenas |
+| P0-GFX8-HIST-001 | `5141ed44fe3202dbdec78f0a69700d34ef76e039` | [44743915113](https://github.com/demolidorreddragons/NR/actions/runs/44743915113) / `136314194759` | success; cinco shaders convertidos e verificados | CI_VALIDATED histórico; 267 commits atrás do HEAD |
+| P0-GFX8-HEAD-001 | `f602a436d6efe87e2a54fd7e5185c2e583c7473f` | nenhum run confirmado | NOT_RUN | não declarar compilação GFX8 no HEAD |
+| P0-WIN-TOOLS-001 | HEAD atual | probe self-hosted não executado | NOT_RUN | não classificar ferramentas como ausentes |
+| GNM-HW-001 | HEAD atual | nenhum dispatch no PS4 Pro | NOT_RUN | sem GPU VA, V# writable, cache ou readback comprovados |
+
+Artifact histórico GFX8: ID `14631648737`; ZIP SHA-256 `a722c2e67e8138b086cd8c6569850bb054277298339b4a23ea8e45d9ce337586`. ZIP contém cinco `.sb`, cinco SPIR-V, cinco GCN e cinco ISA, além de relatório e manifest. O hash foi recalculado após download. Como o commit do artifact é 267 commits anterior ao HEAD e arquivos de shader/backend/workflow mudaram nesse intervalo, ele não comprova os bytes atuais.
+
+**Correção de inventário:** `platform/ps4/gcn8/compute_smoke.cpp` contém um harness experimental que tenta alocação/mapa, V# manual, PM4, dispatch, EOP fence, submit e readback. Isso é implementação-fonte experimental, não validação de runtime. GPU VA derivado do mapeamento, V# writable e política de cache permanecem bloqueadores não resolvidos.
+
+Relatório completo: [RELATORIO_P0_BASELINE_2026-11-21.md](RELATORIO_P0_BASELINE_2026-11-21.md). Revisão do relatório: **REVISÃO INTERNA — NÃO INDEPENDENTE**.
