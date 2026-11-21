@@ -171,3 +171,18 @@ Especificação: [Plano de automação e eficiência](PLANO_AUTOMACAO_E_EFICIENC
 - Decisão: parser/offset não alterados; evidência favorece contrato do produtor PSBC, mas ABI Sony/runtime ainda não comprovado. `runtime_semantics=UNRESOLVED`.
 - Host Tests [run 44870307627](https://github.com/demolidorreddragons/NR/actions/runs/44870307627), job `136743115128`: success; validação aritmética GNM, Configure, Build e Test passaram.
 - Console, staging e instalação: não executados.
+
+
+## Fechamento da rodada Host CI — 2026-11-21 05:24 UTC
+
+Os três workflows Host Tests acionados pelos commits da auditoria InputUsage terminaram **SUCCESS**:
+
+| Commit | Run / Job | Configure | Build | Test |
+|---|---|---|---|---|
+| `020388e973dc4c3e982475e0cc3bc209123ba0e7` | [44870664622](https://github.com/demolidorreddragons/NR/actions/runs/44870664622) / `136744219097` | PASS | PASS | PASS |
+| `aae561144e4d814ff088a09c62848f4cfea943fc` | [44870671014](https://github.com/demolidorreddragons/NR/actions/runs/44870671014) / `136744239138` | PASS | PASS | PASS |
+| `124073b77a96733fd1a4a748f5f5ee6cc660d5e3` | [44870678044](https://github.com/demolidorreddragons/NR/actions/runs/44870678044) / `136744261320` | PASS | PASS | PASS |
+
+Em todos os três jobs passaram também os validadores do instalador, referência numérica/tiled mapping GCN8, aritmética InputUsage GNM, fórmulas do tensor 71-block e intake verifier. Não houve falha de CI nesta rodada. São três execuções Host CI; não representam três validações independentes do produto nem validação PS4.
+
+Estado após fechamento: a investigação estática InputUsage continua sem conclusão de ABI/runtime; parser e offset permanecem inalterados. Não houve execução de shader build/PKG para estes commits documentais, staging ou operação no console. O próximo gate técnico permanece a evidência ABI independente para resolver a divergência OpenGNM/PSBC × fpPS4.
