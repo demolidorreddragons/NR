@@ -61,7 +61,7 @@ cp "$SAMPLE/sce_module/libSceFios2.prx" "$STAGE/sce_module/libSceFios2.prx"
 cp "$SAMPLE/sce_sys/about/right.sprx" "$STAGE/sce_sys/about/right.sprx"
 python3 "$ROOT/tools/make_icon.py" "$STAGE/sce_sys/icon0.png"
 
-COMMON=(--target=x86_64-pc-freebsd12-elf -std=c++17 -fPIC -fno-exceptions -fno-rtti \
+COMMON=(--target=x86_64-pc-freebsd12-elf -std=c++17 -g -fPIC -fno-exceptions -fno-rtti \
   -DOPENGNM_REQUIRE_ABI=1 -isysroot "$OO_PS4_TOOLCHAIN" \
   -isystem "$OO_PS4_TOOLCHAIN/include" \
   -isystem /usr/include/x86_64-linux-gnu \
@@ -73,7 +73,7 @@ LOGGER_FLAGS=()
 if [[ "${GCN8_LOG_UDP:-0}" == "1" ]]; then
   LOGGER_FLAGS+=(-DSTAGE_LOG_UDP "-DPNE_GCN8_LOG_UDP_IP=\"${GCN8_LOG_UDP_IP:-}\"" "-DPNE_GCN8_LOG_UDP_PORT=${GCN8_LOG_UDP_PORT:-9999}")
 fi
-COMMON_C=(--target=x86_64-pc-freebsd12-elf -std=c11 -fPIC -isysroot "$OO_PS4_TOOLCHAIN" -isystem "$OO_PS4_TOOLCHAIN/include" -I"$ROOT/platform/ps4/gcn8")
+COMMON_C=(--target=x86_64-pc-freebsd12-elf -std=c11 -g -fPIC -isysroot "$OO_PS4_TOOLCHAIN" -isystem "$OO_PS4_TOOLCHAIN/include" -I"$ROOT/platform/ps4/gcn8")
 clang "${COMMON_C[@]}" "${LOGGER_FLAGS[@]}" -c "$ROOT/platform/ps4/gcn8/stage_log.c" -o "$STAGE/stage_log.o"
 if [[ "$MODE" == "startup" ]]; then
   clang++ "${COMMON[@]}" "${LOGGER_FLAGS[@]}" "$RUN_DEFINE" -DPNE_GCN8_STARTUP_ONLY=1 -c "$ROOT/platform/ps4/gcn8/smoke_main.cpp" -o "$STAGE/smoke_main.o"
@@ -160,6 +160,10 @@ else:
 PY
 
 PKG_SHA256="$(sha256sum "$numbered_pkg" | awk '{print $1}')"
+cp "$STAGE/smoke.elf" "$OUT/smoke.elf"
+cp "$STAGE/smoke.map" "$OUT/smoke.map"
+ELF_SHA256="$(sha256sum "$OUT/smoke.elf" | awk '{print $1}')"
+MAP_SHA256="$(sha256sum "$OUT/smoke.map" | awk '{print $1}')"
 cat > "$OUT/SMOKE_PKG_MANIFEST.txt" <<EOF
 schema=1
 mode=$MODE
@@ -178,10 +182,6 @@ map_file=smoke.map
 map_sha256=$MAP_SHA256
 hardware_status=not_run
 EOF
-cp "$STAGE/smoke.elf" "$OUT/smoke.elf"
-cp "$STAGE/smoke.map" "$OUT/smoke.map"
-ELF_SHA256="$(sha256sum "$OUT/smoke.elf" | awk '{print $1}')"
-MAP_SHA256="$(sha256sum "$OUT/smoke.map" | awk '{print $1}')"
 cp "$STAGE/package.gp4" "$OUT/package.gp4"
 cp "$STAGE/sce_sys/param.sfo" "$OUT/param.sfo"
 sha256sum "$numbered_pkg" "$OUT/SMOKE_PKG_MANIFEST.txt" "$OUT/package.gp4"
