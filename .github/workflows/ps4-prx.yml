@@ -309,7 +309,7 @@ jobs:
   build-patch:
     name: build-associated-patch-against-installed-010
     needs: [build-prx-and-pkg, independent-pkg-qa]
-    if: github.ref == 'refs/heads/feature/gcn8-numeric-kernels'
+    if: false # NR policy: only Full/Base PKGs unless explicitly requested
     runs-on: windows-latest
     timeout-minutes: 25
     permissions:
@@ -511,6 +511,7 @@ jobs:
   independent-patch-qa:
     name: independent-patch-qa
     needs: build-patch
+    if: false # NR policy: patch QA is disabled with patch generation
     runs-on: windows-latest
     permissions:
       actions: read
