@@ -142,6 +142,16 @@ jobs:
           repository: PS4-OpenGNM/opengnm
           ref: 4b295ca54c82c83acf308d1c646a2dfa9ae57350
           path: OpenGNM
+      - name: Build OpenOrbis GNM-Link-Only diagnostic PKG (no console execution)
+        env:
+          GCN8_SMOKE_MODE: gnm-link
+          OPEN_GNM_INCLUDE: ${{ github.workspace }}/OpenGNM/include
+        run: |
+          bash -n tools/build_compute_smoke_pkg.sh
+          bash tools/build_compute_smoke_pkg.sh
+          test -s "dist/gcn8-smoke/${GITHUB_RUN_ID}/gnm-link/SMOKE_PKG_MANIFEST.txt"
+          test -s "dist/gcn8-smoke/${GITHUB_RUN_ID}/gnm-link/smoke.elf"
+          test -s "dist/gcn8-smoke/${GITHUB_RUN_ID}/gnm-link/smoke.map"
       - name: Compile GCN8 GNM API and ABI smoke test
         run: |
           mkdir -p "$RUNNER_TEMP/gcnm-smoke"
@@ -189,6 +199,7 @@ jobs:
             dist/pkg/audit/*
             dist/goldhen/*.zip
             dist/goldhen/*.sha256
+            dist/gcn8-smoke/**
           if-no-files-found: error
 
   independent-pkg-qa:
