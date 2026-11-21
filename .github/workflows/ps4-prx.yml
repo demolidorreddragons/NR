@@ -442,7 +442,10 @@ jobs:
           foreach ($required in @("CATEGORY = gpe","APP_VER = 01.07","VERSION = 01.07","TITLE_ID = PNEU00001","CONTENT_ID = IV0000-PNEU00001_00-PS4NEURALENG0000","st_type=digital25")) {
             if ($sfoText -notmatch [regex]::Escape($required)) { throw "Patch SFO missing: $required" }
           }
-          $baseInfo = (dotnet "$tool" info "base-artifact/pkg/PS4-Neural-Engine-010.pkg" 2>&1) -join "\`n"
+          $basePkg = "base-artifact/pkg/PS4-Neural-Engine-010.pkg"
+          $baseHash = (Get-FileHash $basePkg -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($baseHash -ne "015c9e2c266561fda005c15766fe4833412c658d9a8d0b7334fd2cfe3fec8ae2") { throw "Base package is not the exact installed release 010." }
+          $baseInfo = (dotnet "$tool" info $basePkg 2>&1) -join "`n"
           if ($baseInfo -notmatch '01.06') { throw "Base package is not release 010 / APP_VER 01.06." }
           $baseSfo = (dotnet "$tool" sfo read "base-artifact/pkg/audit/param.sfo" 2>&1) -join "\`n"
           if ($baseSfo -notmatch 'CATEGORY = gde' -or $baseSfo -notmatch 'APP_VER = 01.06') { throw "Base SFO mismatch." }
