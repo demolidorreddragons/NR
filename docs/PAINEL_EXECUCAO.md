@@ -186,3 +186,10 @@ Os três workflows Host Tests acionados pelos commits da auditoria InputUsage te
 Em todos os três jobs passaram também os validadores do instalador, referência numérica/tiled mapping GCN8, aritmética InputUsage GNM, fórmulas do tensor 71-block e intake verifier. Não houve falha de CI nesta rodada. São três execuções Host CI; não representam três validações independentes do produto nem validação PS4.
 
 Estado após fechamento: a investigação estática InputUsage continua sem conclusão de ABI/runtime; parser e offset permanecem inalterados. Não houve execução de shader build/PKG para estes commits documentais, staging ou operação no console. O próximo gate técnico permanece a evidência ABI independente para resolver a divergência OpenGNM/PSBC × fpPS4.
+
+
+## Escopo de hardware upstream PSBC — auditoria complementar — 2026-11-21
+
+A documentação pública upstream do PS4-OpenGNM/opengnm-psbc declara validação em hardware apenas para shaders VS+PS em PS4 base GFX7/FW 9.00, com 600 frames. O próprio plano lista teste de compute shader em hardware como trabalho futuro. Portanto, esse relato não cobre compute GFX8/PS4 Pro nem FW 14.02 e não resolve a divergência InputUsage do NR. Classificação: evidência documental upstream, não validação reproduzida/independente do NR.
+
+A pesquisa não justificou mudança de código: parser e offset seguem intactos; runtime_semantics=UNRESOLVED.
