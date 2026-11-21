@@ -23,6 +23,11 @@ case "$MODE" in
     CONTENT_ID="IV0000-PNEU00003_00-GCN8STARTUP00000"
     APP_TITLE="Neural Rendering Startup Probe"
     ;;
+  gnm-link)
+    TITLE_ID="PNEU00004"
+    CONTENT_ID="IV0000-PNEU00004_00-GCN8LINK00000000"
+    APP_TITLE="Neural Rendering GNM Link Probe"
+    ;;
   *) echo "Unsupported GCN8_SMOKE_MODE: $MODE" >&2; exit 1 ;;
 esac
 if [[ ${#CONTENT_ID} -ne 36 || ! "$CONTENT_ID" =~ ^[A-Z]{2}[0-9]{4}-[A-Z0-9]{4}[0-9]{5}_00-[A-Z0-9]{16}$ ]]; then
@@ -79,6 +84,10 @@ if [[ "$MODE" == "startup" ]]; then
   clang++ "${COMMON[@]}" "${LOGGER_FLAGS[@]}" "$RUN_DEFINE" -DPNE_GCN8_STARTUP_ONLY=1 -c "$ROOT/platform/ps4/gcn8/smoke_main.cpp" -o "$STAGE/smoke_main.o"
   # Deliberately omit every GNM/compute object and import from this probe.
   ld.lld -m elf_x86_64 -pie --script "$OO_PS4_TOOLCHAIN/link.x" --eh-frame-hdr -L"$OO_PS4_TOOLCHAIN/lib" "$STAGE/smoke_main.o" "$STAGE/stage_log.o" "$OO_PS4_TOOLCHAIN/lib/crt1.o" -o "$STAGE/smoke.elf" -Map="$STAGE/smoke.map" -lc -lc++ -lkernel
+elif [[ "$MODE" == "gnm-link" ]]; then
+  clang++ "${COMMON[@]}" "${LOGGER_FLAGS[@]}" "$RUN_DEFINE" -DPNE_GCN8_GNM_LINK_ONLY=1 -c "$ROOT/platform/ps4/gcn8/smoke_main.cpp" -o "$STAGE/smoke_main.o"
+  # Link the GNM import dependency but deliberately make no GNM function calls.
+  ld.lld -m elf_x86_64 -pie --script "$OO_PS4_TOOLCHAIN/link.x" --eh-frame-hdr -L"$OO_PS4_TOOLCHAIN/lib" "$STAGE/smoke_main.o" "$STAGE/stage_log.o" "$OO_PS4_TOOLCHAIN/lib/crt1.o" -o "$STAGE/smoke.elf" -Map="$STAGE/smoke.map" -lc -lc++ -lkernel -lSceGnmDriver
 else
   clang++ "${COMMON[@]}" "${LOGGER_FLAGS[@]}" "$RUN_DEFINE" -c "$ROOT/platform/ps4/gcn8/smoke_main.cpp" -o "$STAGE/smoke_main.o"
   clang++ "${COMMON[@]}" -c "$ROOT/platform/ps4/gcn8/compute_smoke.cpp" -o "$STAGE/compute_smoke.o"
@@ -155,8 +164,13 @@ if mode == "compute":
     print("COMPUTE_SMOKE_PKG_PAYLOAD=PASS")
 else:
     if "compute_smoke_add.sb" in found:
-        raise SystemExit("Startup-only PKG unexpectedly contains compute_smoke_add.sb")
-    print("STARTUP_ONLY_PKG_PAYLOAD=PASS; COMPUTE_SHADER=ABSENT")
+        raise SystemExit("Non-compute diagnostic PKG unexpectedly contains compute_smoke_add.sb")
+    if mode == "startup":
+        print("STARTUP_ONLY_PKG_PAYLOAD=PASS; COMPUTE_SHADER=ABSENT")
+    elif mode == "gnm-link":
+        print("GNM_LINK_ONLY_PKG_PAYLOAD=PASS; COMPUTE_SHADER=ABSENT")
+    else:
+        raise SystemExit("Unknown diagnostic package mode: " + mode)
 PY
 
 PKG_SHA256="$(sha256sum "$numbered_pkg" | awk '{print $1}')"
