@@ -132,7 +132,7 @@ A inspeção do OELF confirma somente a dependência SCE `libkernel.prx` / módu
 
 O nome `libSceGnmDriver` aparece no executável apenas como texto usado para procurar/carregar o PRX; não aparece como biblioteca importada na tabela SCE. O OELF também não contém o NID estático `yvZ73uQUqrk#C#C` do probe anterior.
 
-A validação independente do PKG/SFO/payload ainda está em andamento no job `independent-pkg-qa`. O host-tests do commit com o probe e a instrumentação passou na execução `44876368025`. Nenhum staging ou instalação foi realizado.
+A validação independente terminou com sucesso no job `independent-pkg-qa` do workflow `44876293567`. Artifact QA ID `14695194744`, SHA-256 `f7f7efe3cd866c67423088d6997660153d4e164475de214eec9856d55fdaf7ba`. Resultado: `GNM_LOAD_SFO=PASS; STATIC_GNM_IMPORT=ABSENT; COMPUTE_SHADER=ABSENT`; `GNM_LOAD_QA_STATUS=PASS_PC_ONLY_NOT_HARDWARE_TESTED`. O host-tests do commit com o probe e a instrumentação passou na execução `44876368025`. Nenhum staging ou instalação foi realizado.
 
 ## Próximos passos
 
