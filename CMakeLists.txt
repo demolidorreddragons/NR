@@ -46,3 +46,11 @@ add_executable(test_gcn8_shader_binary tests/test_gcn8_shader_binary.cpp)
 target_link_libraries(test_gcn8_shader_binary PRIVATE pne_gcn8_shader_binary)
 add_test(NAME gcn8_shader_binary_contract COMMAND test_gcn8_shader_binary)
 
+
+add_library(pne_gcn8_vsharp_codec
+    platform/ps4/gcn8/host/vsharp_codec.cpp
+)
+target_include_directories(pne_gcn8_vsharp_codec PUBLIC platform/ps4/gcn8/host)
+add_executable(test_gcn8_vsharp_codec tests/test_gcn8_vsharp_codec.cpp)
+target_link_libraries(test_gcn8_vsharp_codec PRIVATE pne_gcn8_vsharp_codec)
+add_test(NAME gcn8_vsharp_codec COMMAND test_gcn8_vsharp_codec)
