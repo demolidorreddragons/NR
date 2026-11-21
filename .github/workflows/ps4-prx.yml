@@ -318,6 +318,46 @@ jobs:
           "CATEGORY=gde; APP_VER=$appVersion; VERSION=$appVersion; STORAGE=digital50" | Out-File qa-output/qa-report.txt -Append
           "QA_STATUS=PASS_PC_ONLY_NOT_HARDWARE_TESTED" | Out-File qa-output/qa-report.txt -Append
           Get-Content qa-output/qa-report.txt | Out-File $env:GITHUB_STEP_SUMMARY -Append
+      - name: Independently validate Startup-Only diagnostic PKG
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $tool = (Get-Content "$env:RUNNER_TEMP\pkg-independent-tool.txt" | Select-Object -First 1).Substring(5)
+          $artifact = Join-Path $env:GITHUB_WORKSPACE "build-artifact"
+          $startupPkg = Get-ChildItem $artifact -Recurse -File -Filter "PS4-Neural-Rendering-GCN8-startup-*.pkg" | Select-Object -First 1
+          $manifest = Get-ChildItem $artifact -Recurse -File -Filter "SMOKE_PKG_MANIFEST.txt" | Where-Object { (Get-Content $_.FullName -Raw) -match "mode=startup" } | Select-Object -First 1
+          $elf = Get-ChildItem $artifact -Recurse -File -Filter smoke.elf | Where-Object { $_.DirectoryName -like "*startup*" } | Select-Object -First 1
+          $map = Get-ChildItem $artifact -Recurse -File -Filter smoke.map | Where-Object { $_.DirectoryName -like "*startup*" } | Select-Object -First 1
+          foreach ($item in @($startupPkg,$manifest,$elf,$map)) { if (-not $item) { throw "Startup-only artifact file missing." } }
+          $manifestText = Get-Content $manifest.FullName -Raw
+          $pkgHash = (Get-FileHash $startupPkg.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+          $elfHash = (Get-FileHash $elf.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+          $mapHash = (Get-FileHash $map.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+          foreach ($required in @("mode=startup","title_id=PNEU00003","content_id=IV0000-PNEU00003_00-GCN8STARTUP00000","gnm_import_probe=none","gnm_function_calls=none","elf_sha256=$elfHash","map_sha256=$mapHash","hardware_status=not_run")) {
+            if ($manifestText -notmatch [regex]::Escape($required)) { throw "Startup-only manifest mismatch: $required" }
+          }
+          dotnet "$tool" validate "$($startupPkg.FullName)" 2>&1 | Tee-Object qa-output/startup-pkg-validation.txt
+          if ($LASTEXITCODE -ne 0) { throw "Independent Startup-only PKG validation failed." }
+          $out = Join-Path $env:RUNNER_TEMP "startup-independent-extracted"
+          dotnet "$tool" extract "$($startupPkg.FullName)" "$out" --verbose 2>&1 | Tee-Object qa-output/startup-pkg-extract.txt
+          if ($LASTEXITCODE -ne 0) { throw "Independent Startup-only PKG extraction failed." }
+          $sfo = Get-ChildItem $out -Recurse -File -Filter param.sfo | Select-Object -First 1
+          if (-not $sfo) { throw "Startup-only embedded PARAM.SFO missing." }
+          $sfoText = (dotnet "$tool" sfo read "$($sfo.FullName)" 2>&1) -join [Environment]::NewLine
+          if ($LASTEXITCODE -ne 0) { throw "Startup-only SFO read failed." }
+          foreach ($required in @("CATEGORY = gde","APP_VER = 01.00","VERSION = 01.00","TITLE_ID = PNEU00003","CONTENT_ID = IV0000-PNEU00003_00-GCN8STARTUP00000")) {
+            if ($sfoText -notmatch [regex]::Escape($required)) { throw "Startup-only SFO missing: $required" }
+          }
+          $eboot = Get-ChildItem $out -Recurse -File -Filter eboot.bin | Select-Object -First 1
+          $shader = Get-ChildItem $out -Recurse -File -Filter compute_smoke_add.sb | Select-Object -First 1
+          if (-not $eboot -or $eboot.Length -le 0) { throw "Startup-only eboot missing." }
+          if ($shader) { throw "Startup-only PKG unexpectedly contains compute shader." }
+          "STARTUP_PKG_SHA256=$pkgHash" | Out-File qa-output/startup-qa-report.txt
+          "STARTUP_ELF_SHA256=$elfHash" | Out-File qa-output/startup-qa-report.txt -Append
+          "STARTUP_MAP_SHA256=$mapHash" | Out-File qa-output/startup-qa-report.txt -Append
+          "STARTUP_SFO=PASS; GNM_IMPORT=ABSENT; COMPUTE_SHADER=ABSENT" | Out-File qa-output/startup-qa-report.txt -Append
+          "STARTUP_QA_STATUS=PASS_PC_ONLY_NOT_HARDWARE_TESTED" | Out-File qa-output/startup-qa-report.txt -Append
+          Get-Content qa-output/startup-qa-report.txt | Out-File $env:GITHUB_STEP_SUMMARY -Append
       - name: Independently validate GNM-Link-Only diagnostic PKG
         shell: pwsh
         run: |
