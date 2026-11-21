@@ -78,7 +78,7 @@ Commits:
 - `0a41d20` — asserts dos novos marcadores no teste host
 - `1f68064` — inclusão de `stddef.h` para os offsets ABI
 
-Host tests: execução `44875885489`, job `telemetry`, concluído com sucesso. A compilação OpenOrbis do logger atualizado está no workflow `44875885487` e precisa terminar antes de considerar o código validado pelo toolchain.
+Host tests: execução `44875885489`, job `telemetry`, concluído com sucesso. A compilação OpenOrbis v0.5.4 também passou: no workflow `44875885487`, os passos `Build OpenOrbis Startup-Only diagnostic PKG` e `Build OpenOrbis GNM-Link-Only diagnostic PKG` concluíram com sucesso, ambos compilando o `stage_log.c` atualizado. Isso valida a compilação no toolchain, não a execução no hardware.
 
 ## Próximos passos
 
