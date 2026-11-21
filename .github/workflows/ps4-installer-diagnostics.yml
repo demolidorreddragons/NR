@@ -1,0 +1,88 @@
+name: PS4 Installer Diagnostics (read-only)
+
+on:
+  push:
+    branches:
+      - feature/gcn8-numeric-kernels
+    paths:
+      - .github/workflows/ps4-installer-diagnostics.yml
+
+permissions:
+  contents: read
+
+jobs:
+  collect:
+    runs-on: [self-hosted, Windows, X64, ps4-lan]
+    timeout-minutes: 5
+    steps:
+      - name: Read installer log and current PRX state over GoldHEN FTP
+        shell: powershell
+        env:
+          PS4_IP: ${{ vars.PS4_IP }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          if (-not $env:PS4_IP) { throw "PS4_IP repository variable is missing." }
+          $credentials = New-Object System.Net.NetworkCredential("anonymous", "anonymous@example.com")
+
+          function Get-FtpText([string]$path) {
+            $request = [System.Net.FtpWebRequest]::Create("ftp://$($env:PS4_IP):2121$path")
+            $request.Method = [System.Net.WebRequestMethods+Ftp]::DownloadFile
+            $request.Credentials = $credentials
+            $request.UsePassive = $true
+            $request.UseBinary = $true
+            $request.KeepAlive = $false
+            $request.Timeout = 20000
+            $request.ReadWriteTimeout = 20000
+            $response = $request.GetResponse()
+            try {
+              $reader = New-Object System.IO.StreamReader($response.GetResponseStream())
+              try { return $reader.ReadToEnd() } finally { $reader.Dispose() }
+            } finally { $response.Dispose() }
+          }
+
+          function Get-FtpListing([string]$path) {
+            $request = [System.Net.FtpWebRequest]::Create("ftp://$($env:PS4_IP):2121$path")
+            $request.Method = [System.Net.WebRequestMethods+Ftp]::ListDirectory
+            $request.Credentials = $credentials
+            $request.UsePassive = $true
+            $request.UseBinary = $false
+            $request.KeepAlive = $false
+            $request.Timeout = 20000
+            $request.ReadWriteTimeout = 20000
+            $response = $request.GetResponse()
+            try {
+              $reader = New-Object System.IO.StreamReader($response.GetResponseStream())
+              try {
+                $raw = $reader.ReadToEnd()
+                return @($raw -split '\s+' | Where-Object { $_ })
+              } finally { $reader.Dispose() }
+            } finally { $response.Dispose() }
+          }
+
+          Write-Host "=== INSTALLER LOG: /data/GoldHEN/ps4_neural_engine_install.log ==="
+          try {
+            $log = Get-FtpText "/data/GoldHEN/ps4_neural_engine_install.log"
+            Write-Host $log
+          } catch {
+            Write-Host "INSTALL_LOG_READ_FAILED: $($_.Exception.Message)"
+            throw
+          }
+
+          Write-Host "=== PLUGIN DIRECTORY ENTRIES ==="
+          try {
+            Get-FtpListing "/data/GoldHEN/plugins/" | ForEach-Object { Write-Host $_ }
+          } catch {
+            Write-Host "PLUGIN_DIRECTORY_READ_FAILED: $($_.Exception.Message)"
+          }
+
+          Write-Host "=== PLUGINS.INI PNE REGISTRATION ==="
+          try {
+            $config = Get-FtpText "/data/GoldHEN/plugins.ini"
+            $matches = @($config -split "[\r\n]+" | Where-Object { $_ -match '^\s*\[default\]\s*$' -or $_ -match 'ps4_neural_engine\.prx' })
+            if ($matches.Count) { $matches | ForEach-Object { Write-Host $_ } }
+            else { Write-Host "No Neural Engine entry found." }
+          } catch {
+            Write-Host "PLUGINS_INI_READ_FAILED: $($_.Exception.Message)"
+          }
+
+          Write-Host "READ_ONLY_DIAGNOSTICS_COMPLETE"
