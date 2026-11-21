@@ -25,6 +25,10 @@ static char g_altstack[64 * 1024] __attribute__((aligned(16)));
 #ifdef STAGE_LOG_UDP
 static int g_sock = -1;
 static struct sockaddr_in g_dst;
+static void write_udp_record(const char *buf, size_t len) {
+    /* write() on a connected datagram socket is async-signal-safe. */
+    if (g_sock >= 0) (void)write(g_sock, buf, len);
+}
 #endif
 static size_t append_text(char *out, size_t cap, size_t n, const char *s) {
     if (!s) s = "(null)";
@@ -52,8 +56,7 @@ static void emit_normal(const char *buf, size_t len) {
     write_record(g_fd, buf, len);
     if (g_fd >= 0) (void)fsync(g_fd);
 #ifdef STAGE_LOG_UDP
-    if (g_sock >= 0)
-        (void)sendto(g_sock, buf, len, 0, (const struct sockaddr *)&g_dst, sizeof(g_dst));
+    write_udp_record(buf, len);
 #endif
 }
 int stage_log_init(const char *path, const char *udp_ip, int udp_port) {
@@ -72,7 +75,13 @@ int stage_log_init(const char *path, const char *udp_ip, int udp_port) {
             if (g_sock>=0) {
                 memset(&g_dst,0,sizeof(g_dst)); g_dst.sin_family=AF_INET;
                 g_dst.sin_port=htons((uint16_t)udp_port); g_dst.sin_addr=parsed;
-                status |= STAGE_LOG_UDP_OK;
+                if (connect(g_sock,(const struct sockaddr *)&g_dst,sizeof(g_dst))==0 &&
+                    fcntl(g_sock,F_SETFL,O_NONBLOCK)==0) {
+                    status |= STAGE_LOG_UDP_OK;
+                } else {
+                    close(g_sock);
+                    g_sock=-1;
+                }
             }
         }
     }
@@ -123,6 +132,9 @@ static void on_signal(int sig, siginfo_t *info, void *context) {
     n=append_hex(line,sizeof(line),n,(uint64_t)(uintptr_t)&stage_log_init);
     if (n<sizeof(line)) line[n++]='\n';
     write_record(g_fd,line,n);
+#ifdef STAGE_LOG_UDP
+    write_udp_record(line,n);
+#endif
     _exit(128+(sig&0x7f));
 }
 int stage_log_install_signals(void) {
