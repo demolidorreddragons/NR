@@ -131,3 +131,16 @@ Relatório completo: [RELATORIO_P0_BASELINE_2026-11-21.md](RELATORIO_P0_BASELINE
 Relatório estático: [RELATORIO_AUDITORIA_INPUT_USAGE_OFFSET_2026-11-21.md](RELATORIO_AUDITORIA_INPUT_USAGE_OFFSET_2026-11-21.md), commit `020388e973dc4c3e982475e0cc3bc209123ba0e7`.
 
 **Conclusão limitada:** PSBC pinned `28697f007862427ebec54388ec972ce6e3545912` calcula explicitamente o campo como distância de `OrbShdr` ao início da tabela de slots; bytes dos seis shaders concordam. fpPS4 observado subtrai novamente a contagem de slots. A evidência favorece o contrato de emissão PSBC/OpenGNM, mas não substitui ABI independente nem validação no PS4. Manter `runtime_semantics=UNRESOLVED`; não declarar runtime validado.
+
+
+## Host CI — fechamento da auditoria InputUsage — 2026-11-21
+
+| Commit | Run / Job | Resultado | Classificação |
+|---|---|---|---|
+| `020388e973dc4c3e982475e0cc3bc209123ba0e7` | [44870664622](https://github.com/demolidorreddragons/NR/actions/runs/44870664622) / `136744219097` | success; Configure/Build/Test e todos os validadores prévios passaram | CI_VALIDATED — host |
+| `aae561144e4d814ff088a09c62848f4cfea943fc` | [44870671014](https://github.com/demolidorreddragons/NR/actions/runs/44870671014) / `136744239138` | success; Configure/Build/Test e todos os validadores prévios passaram | CI_VALIDATED — host |
+| `124073b77a96733fd1a4a748f5f5ee6cc660d5e3` | [44870678044](https://github.com/demolidorreddragons/NR/actions/runs/44870678044) / `136744261320` | success; Configure/Build/Test e todos os validadores prévios passaram | CI_VALIDATED — host |
+
+Os três jobs passaram por: installer newline/state machine/release manifest, GCN8 numeric reference/tiled mapping, GNM InputUsage offset arithmetic, layout DLSS-NR 71-block e model input intake verifier. Os commits são atualizações documentais sequenciais, não três revisões independentes. Nenhuma execução no PS4, staging ou instalação decorre desses resultados.
+
+**Gate não promovido:** a semântica de runtime do `chunkUsageBaseOffsetDwords` continua UNRESOLVED devido à divergência entre o cálculo de slot-table start no PSBC/OpenGNM e a subtração adicional no fpPS4. Sem ABI independente ou amostra oficial validada, não alterar parser/offset nem autorizar dispatch/readback.
