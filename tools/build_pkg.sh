@@ -2,8 +2,9 @@
 set -euo pipefail
 export DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1
 : "${OO_PS4_TOOLCHAIN:?OO_PS4_TOOLCHAIN is required}"
-: "${GOLDHEN_SDK:?GOLDHEN_SDK is required}"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+GOLDHEN_SDK="${GOLDHEN_SDK:-$ROOT/GoldHEN_Plugins_SDK}"
+: "${GOLDHEN_SDK:?GOLDHEN_SDK must resolve to the checked-out GoldHEN plugin SDK}"
 STAGE="$ROOT/build/pkg-stage"
 OUT="$ROOT/dist/pkg"
 TOOLS="$OO_PS4_TOOLCHAIN/bin/linux"
