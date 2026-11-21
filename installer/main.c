@@ -629,9 +629,9 @@ int main(void) {
             path_is_regular_file(DEST_TMP) &&
             pne_validate_release_manifest(INSTALLED_MANIFEST,DEST_TMP,staged_error,sizeof(staged_error)) &&
             read_release_number(INSTALLED_MANIFEST,&staged_release) &&
-            pne_compare_release(staged_release,incoming_release)>=0 &&
             pne_sha256_file(DEST_TMP,staged_hash) &&
-            strcmp(staged_hash,incoming_hash)==0;
+            pne_recovery_candidate_is_compatible(1,1,staged_release,incoming_release,
+                                                 strcmp(staged_hash,incoming_hash)==0);
         if(!staged_candidate_valid){
             snprintf(error,sizeof(error),"ABORTED: CONFLICT; active PRX does not match its manifest and no exact verified release-%lu recovery candidate is available (%s); all files/backups preserved.",
                      incoming_release,staged_error[0]?staged_error:"staged candidate identity/hash mismatch");
