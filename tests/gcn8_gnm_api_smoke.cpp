@@ -142,3 +142,9 @@ __attribute__((used)) KernelReleaseDirectMemorySignature
 
 // Compile/link-only GNM and direct-memory import smoke test. No firmware call is executed.
 int pne_gcn8_gnm_api_smoke() { return 0; }
+
+// The pinned GoldHEN CRT's _init/_fini entry points require these module
+// callbacks. Keep this link-only probe self-contained; neither callback is
+// executed, and they deliberately perform no firmware or GPU operations.
+extern "C" int module_start(std::size_t, const void*) { return 0; }
+extern "C" int module_stop(std::size_t, const void*) { return 0; }
