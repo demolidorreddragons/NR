@@ -56,7 +56,8 @@ jobs:
               $ext=[IO.Path]::GetExtension($name)
               $destination="/data/pkg/old/$stem-archived-$([DateTime]::UtcNow.ToString('yyyyMMddHHmmss'))$ext"
             } catch { }
-            $move=Ftp $source ([System.Net.WebRequestMethods+Ftp]::Rename) $destination.TrimStart('/')
+            $relativeDestination="old/$([IO.Path]::GetFileName($destination))"
+            $move=Ftp $source ([System.Net.WebRequestMethods+Ftp]::Rename) $relativeDestination
             $moved=$move.GetResponse(); $moved.Dispose()
             Write-Host "ARCHIVED=$source -> $destination"
           }
