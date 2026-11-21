@@ -35,7 +35,8 @@ int main() {
     f.mtype_l1s = 3; f.mtype_l2 = 3; f.mtype = 7;
     f.dstselx = f.dstsely = f.dstselz = f.dstselw = 7;
     f.numformat = 7; f.dataformat = 15; f.elementsize = 3;
-    f.indexstride = 3; f.type = 3;
+    f.indexstride = 3; f.addtiden = true; f.atc = true;
+    f.hashen = true; f.heap = true; f.type = 3;
     assert(pack_vsharp_buffer(f, w) == VSharpCodecError::none);
     assert(w[0] == 0xfffffffcu);
     assert((w[1] & 0xfffu) == 0xfffu);
