@@ -260,3 +260,5 @@ jobs:
           "REMOTE_BYTES=$finalSize" | Out-File $env:GITHUB_STEP_SUMMARY -Append
           "REMOTE_SHA256=$finalHash" | Out-File $env:GITHUB_STEP_SUMMARY -Append
           "INSTALLATION_PERFORMED=FALSE" | Out-File $env:GITHUB_STEP_SUMMARY -Append
+
+# Retry marker: trigger a fresh inspection after FTP listing hardening.
