@@ -4,7 +4,7 @@ name: PS4 PRX and PKG build
 
 concurrency:
   # Keep a reproducible PRX/PKG build running while later commits queue.
-  group: ps4-prx-pkg-build-${{ github.ref }}
+  group: ps4-prx-pkg-build-sony-patch-${{ github.ref }}
   cancel-in-progress: false
 
 on:
