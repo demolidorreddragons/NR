@@ -1,0 +1,214 @@
+name: Stage GCN8 GNM-Load-Only diagnostic PKG on PS4
+
+on:
+  push:
+    branches: [feature/gcn8-numeric-kernels]
+    paths:
+      - ".github/workflows/stage-gcn8-gnm-link-001.yml"
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: stage-gcn8-gnm-load-diagnostic
+  cancel-in-progress: false
+
+jobs:
+  stage-diagnostic:
+    runs-on: [self-hosted, Windows, X64, ps4-lan]
+    timeout-minutes: 20
+    steps:
+      - name: Download exact build artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ps4-neural-engine-build
+          path: build-artifact
+          repository: demolidorreddragons/NR
+          run-id: 44876293567
+          github-token: ${{ github.token }}
+
+      - name: Download independent QA evidence
+        uses: actions/download-artifact@v4
+        with:
+          name: PS4-Neural-Engine-independent-QA
+          path: qa
+          repository: demolidorreddragons/NR
+          run-id: 44876293567
+          github-token: ${{ github.token }}
+
+      - name: Verify exact GNM-Load package and independent QA before console changes
+        shell: powershell -ExecutionPolicy Bypass -File {0}
+        env:
+          EXPECTED_SHA256: bc5cdd06e73578281c66498decab293abc907043488b8a1dc351c2c5001cc9a6
+        run: |
+          $ErrorActionPreference = "Stop"
+          $pkg = Get-ChildItem "build-artifact" -Recurse -File -Filter "PS4-Neural-Rendering-GCN8-gnm-load-44876293567.pkg" | Select-Object -First 1
+          $report = Join-Path $env:GITHUB_WORKSPACE "qa/gnm-load-qa-report.txt"
+          if (-not $pkg) { throw "Exact GNM-Load diagnostic PKG missing from build artifact." }
+          if (-not (Test-Path -LiteralPath $report -PathType Leaf)) { throw "Independent GNM-Load QA report missing." }
+          $qa = Get-Content -LiteralPath $report -Raw
+          foreach ($required in @("GNM_LOAD_PKG_SHA256=$($env:EXPECTED_SHA256)", "GNM_LOAD_SFO=PASS", "STATIC_GNM_IMPORT=ABSENT", "COMPUTE_SHADER=ABSENT", "GNM_LOAD_QA_STATUS=PASS_PC_ONLY_NOT_HARDWARE_TESTED")) {
+            if ($qa -notmatch [regex]::Escape($required)) { throw "Independent QA evidence mismatch: $required" }
+          }
+          $actual = (Get-FileHash -LiteralPath $pkg.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($actual -ne $env:EXPECTED_SHA256) { throw "Diagnostic PKG SHA-256 mismatch: $actual" }
+          "PKG_PATH=$($pkg.FullName)" | Out-File "$env:RUNNER_TEMP\gcn8-gnm-load-stage.env"
+          "PKG_BYTES=$((Get-Item -LiteralPath $pkg.FullName).Length)" | Out-File "$env:RUNNER_TEMP\gcn8-gnm-load-stage.env" -Append
+          "PKG_SHA256=$actual" | Out-File "$env:RUNNER_TEMP\gcn8-gnm-load-stage.env" -Append
+          Write-Host "INDEPENDENT_QA=PASS_PC_ONLY_NOT_HARDWARE_TESTED"
+          Write-Host "EXACT_DIAGNOSTIC_ARTIFACT_VERIFIED bytes=$((Get-Item -LiteralPath $pkg.FullName).Length) sha256=$actual"
+
+      - name: Archive old NR packages and stage verified diagnostic PKG
+        shell: powershell -ExecutionPolicy Bypass -File {0}
+        env:
+          PS4_IP: ${{ vars.PS4_IP }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          if (-not $env:PS4_IP) { throw "PS4_IP Actions variable is missing." }
+          $envFile = "$env:RUNNER_TEMP\gcn8-gnm-load-stage.env"
+          $envLines = Get-Content -LiteralPath $envFile
+          $pkg = ($envLines | Where-Object { $_ -like "PKG_PATH=*" } | Select-Object -First 1).Substring(9)
+          $localSize = [long](($envLines | Where-Object { $_ -like "PKG_BYTES=*" } | Select-Object -First 1).Substring(10))
+          $expected = ($envLines | Where-Object { $_ -like "PKG_SHA256=*" } | Select-Object -First 1).Substring(11).ToLowerInvariant()
+          $fileName = "PS4-Neural-Rendering-GCN8-gnm-load-44876293567.pkg"
+          $base = "ftp://$($env:PS4_IP):2121"
+          $credentials = New-Object System.Net.NetworkCredential("anonymous", "anonymous@example.com")
+
+          function New-FtpRequest([string]$path, [string]$method) {
+            $r = [System.Net.FtpWebRequest]::Create("$base$path")
+            $r.Method = $method
+            $r.Credentials = $credentials
+            $r.UsePassive = $true
+            $r.UseBinary = $true
+            $r.KeepAlive = $false
+            $r.Timeout = 120000
+            $r.ReadWriteTimeout = 120000
+            return $r
+          }
+          function Get-FtpNames([string]$path) {
+            $r = New-FtpRequest $path ([System.Net.WebRequestMethods+Ftp]::ListDirectory)
+            $r.Timeout = 30000
+            $response = $r.GetResponse()
+            try {
+              $reader = New-Object System.IO.StreamReader($response.GetResponseStream())
+              try {
+                $items = @()
+                while (-not $reader.EndOfStream) {
+                  $line = $reader.ReadLine()
+                  if ($line) { $items += $line.Trim() }
+                }
+                return $items
+              } finally { $reader.Dispose() }
+            } finally { $response.Dispose() }
+          }
+          function Get-RemoteHash([string]$path, [string]$localPath) {
+            $r = New-FtpRequest $path ([System.Net.WebRequestMethods+Ftp]::DownloadFile)
+            $response = $r.GetResponse()
+            try {
+              $stream = $response.GetResponseStream()
+              try {
+                $out = [System.IO.File]::Create($localPath)
+                try { $stream.CopyTo($out) } finally { $out.Dispose() }
+              } finally { $stream.Dispose() }
+            } finally { $response.Dispose() }
+            return (Get-FileHash -LiteralPath $localPath -Algorithm SHA256).Hash.ToLowerInvariant()
+          }
+          function Move-Verified([string]$source, [string]$targetDirectory, [string]$name) {
+            $tmp = Join-Path $env:RUNNER_TEMP ("nr-archive-" + [guid]::NewGuid().ToString("N") + ".pkg")
+            try {
+              $beforeHash = Get-RemoteHash $source $tmp
+              $beforeSize = (Get-Item -LiteralPath $tmp).Length
+              $targetName = $name
+              $existing = @(Get-FtpNames "$targetDirectory/")
+              if ($existing -contains $targetName) {
+                $stem = [IO.Path]::GetFileNameWithoutExtension($name)
+                $ext = [IO.Path]::GetExtension($name)
+                $stamp = (Get-Date).ToUniversalTime().ToString("yyyyMMddTHHmmssZ")
+                $n = 1
+                do { $targetName = "$stem.archive-$stamp-$n$ext"; $n++ } while ($existing -contains $targetName)
+              }
+              $rename = New-FtpRequest $source ([System.Net.WebRequestMethods+Ftp]::Rename)
+              $rename.RenameTo = "$targetDirectory/$targetName"
+              $response = $rename.GetResponse()
+              $response.Dispose()
+              $afterHash = Get-RemoteHash "$targetDirectory/$targetName" $tmp
+              $afterSize = (Get-Item -LiteralPath $tmp).Length
+              if ($beforeHash -ne $afterHash -or $beforeSize -ne $afterSize) { throw "Archive readback mismatch: $targetName" }
+              Write-Host "ARCHIVE_VERIFIED=$targetDirectory/$targetName bytes=$afterSize sha256=$afterHash"
+            } finally { Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue }
+          }
+
+          # List before mutation; only NR package names are eligible for archive.
+          $root = @(Get-FtpNames "/data/pkg/")
+          Write-Host "INITIAL_PKG_ROOT=$($root -join ',')"
+          if ($root -notcontains "old") {
+            try {
+              $mkd = New-FtpRequest "/data/pkg/old/" ([System.Net.WebRequestMethods+Ftp]::MakeDirectory)
+              $response = $mkd.GetResponse(); $response.Dispose()
+            } catch { $null = Get-FtpNames "/data/pkg/old/" }
+          }
+          $archive = @(Get-FtpNames "/data/pkg/old/")
+          $candidates = @($root | Where-Object {
+            ($_ -match '^PS4-Neural-(Engine|Rendering)-.*\.pkg$' -or $_ -match '^IV0000-NRE.*\.pkg$') -and $_ -ne $fileName
+          })
+          foreach ($name in $candidates) { Move-Verified "/data/pkg/$name" "/data/pkg/old" $name }
+
+          # If the exact diagnostic filename exists with another hash, archive it; never overwrite it.
+          $root = @(Get-FtpNames "/data/pkg/")
+          if ($root -contains $fileName) {
+            $existingPath = Join-Path $env:RUNNER_TEMP "existing-gcn8-gnm-load.pkg"
+            try {
+              $existingHash = Get-RemoteHash "/data/pkg/$fileName" $existingPath
+              if ($existingHash -ne $expected) { Move-Verified "/data/pkg/$fileName" "/data/pkg/old" $fileName }
+              else { Write-Host "EXACT_DIAGNOSTIC_ALREADY_STAGED=TRUE" }
+            } finally { Remove-Item -LiteralPath $existingPath -Force -ErrorAction SilentlyContinue }
+          }
+
+          # Upload outside /data/pkg, read back, then atomically promote by FTP rename.
+          $tempRemote = "/data/NR-GCN8-GNM-LOAD-44876293567.uploading"
+          $finalRemote = "/data/pkg/$fileName"
+          $root = @(Get-FtpNames "/data/pkg/")
+          if ($root -notcontains $fileName) {
+            $upload = New-FtpRequest $tempRemote ([System.Net.WebRequestMethods+Ftp]::UploadFile)
+            $upload.ContentLength = $localSize
+            $stream = $upload.GetRequestStream()
+            try {
+              $input = [IO.File]::OpenRead($pkg)
+              try { $input.CopyTo($stream) } finally { $input.Dispose() }
+            } finally { $stream.Dispose() }
+            $response = $upload.GetResponse(); $response.Dispose()
+
+            $readback = Join-Path $env:RUNNER_TEMP "gcn8-gnm-load-upload-readback.pkg"
+            try {
+              $remoteHash = Get-RemoteHash $tempRemote $readback
+              $remoteSize = (Get-Item -LiteralPath $readback).Length
+              if ($remoteHash -ne $expected -or $remoteSize -ne $localSize) { throw "Temporary upload readback mismatch." }
+              Write-Host "TEMP_UPLOAD_VERIFIED bytes=$remoteSize sha256=$remoteHash"
+            } finally { Remove-Item -LiteralPath $readback -Force -ErrorAction SilentlyContinue }
+
+            $promote = New-FtpRequest $tempRemote ([System.Net.WebRequestMethods+Ftp]::Rename)
+            $promote.RenameTo = $finalRemote
+            $response = $promote.GetResponse(); $response.Dispose()
+          }
+
+          $finalLocal = Join-Path $env:RUNNER_TEMP "gcn8-gnm-load-final-readback.pkg"
+          try {
+            $finalHash = Get-RemoteHash $finalRemote $finalLocal
+            $finalSize = (Get-Item -LiteralPath $finalLocal).Length
+            if ($finalHash -ne $expected -or $finalSize -ne $localSize) { throw "Final staged package readback mismatch." }
+          } finally { Remove-Item -LiteralPath $finalLocal -Force -ErrorAction SilentlyContinue }
+
+          $finalRoot = @(Get-FtpNames "/data/pkg/")
+          $nrRoot = @($finalRoot | Where-Object { $_ -match '^PS4-Neural-(Engine|Rendering)-.*\.pkg$' -or $_ -match '^IV0000-NRE.*\.pkg$' })
+          if ($nrRoot.Count -ne 1 -or $nrRoot[0] -ne $fileName) {
+            throw "Expected exactly one NR PKG in /data/pkg/: $($nrRoot -join ',')"
+          }
+          $archived = @(Get-FtpNames "/data/pkg/old/")
+          Write-Host "STAGING_STATUS=PASS_NOT_INSTALLED"
+          Write-Host "REMOTE_PATH=$finalRemote"
+          Write-Host "REMOTE_BYTES=$finalSize"
+          Write-Host "REMOTE_SHA256=$finalHash"
+          Write-Host "ARCHIVED_NR_PACKAGES=$($archived -join ',')"
+          Write-Host "THIRD_PARTY_ROOT_FILES_PRESERVED=TRUE"
+          Write-Host "INSTALLATION_PERFORMED=FALSE"
