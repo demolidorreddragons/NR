@@ -9,7 +9,7 @@ OUT="$ROOT/dist/pkg"
 TOOLS="$OO_PS4_TOOLCHAIN/bin/linux"
 PKGTOOL="${PKGTOOL_CORE:-$TOOLS/PkgTool.Core}"
 TITLE_ID="PNEU00001"
-APP_VERSION="${APP_VERSION:-01.03}"
+APP_VERSION="${APP_VERSION:-01.04}"
 if [[ ! "$APP_VERSION" =~ ^[0-9]{2}\.[0-9]{2}$ ]]; then
   echo "APP_VERSION must use Sony XX.YY format (for example 01.01)." >&2
   exit 1
@@ -64,6 +64,7 @@ INSTALLER_CFLAGS=(--target=x86_64-pc-freebsd12-elf -std=gnu11 -fPIC -funwind-tab
 clang "${INSTALLER_CFLAGS[@]}" -c "$ROOT/installer/main.c" -o "$STAGE/installer.o"
 clang "${INSTALLER_CFLAGS[@]}" -c "$ROOT/installer/sha256.c" -o "$STAGE/sha256.o"
 clang "${INSTALLER_CFLAGS[@]}" -c "$ROOT/installer/release_manifest.c" -o "$STAGE/release_manifest.o"
+clang "${INSTALLER_CFLAGS[@]}" -c "$ROOT/installer/hybrid_state.c" -o "$STAGE/hybrid_state.o"
 
 # Match the OpenOrbis sample linker flags: let link.x/crt1.o define startup.
 ld.lld -m elf_x86_64 -pie --script "$OO_PS4_TOOLCHAIN/link.x" \
