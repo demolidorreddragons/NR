@@ -299,14 +299,16 @@ static int configure_loader(char* error, size_t error_size, char* temp_path, siz
     char output[MAX_CONFIG + 256];
     size_t length = 0, used = 0;
     struct stat config_stat;
-    int config_stat_result = lstat(CONFIG, &config_stat);
-    if (config_stat_result == 0) {
+    int config_stat_result = inspect_managed_path(CONFIG, &config_stat);
+    if (config_stat_result == 1) {
         if (!S_ISREG(config_stat.st_mode)) {
+            errno = EINVAL;
             snprintf(error, error_size, "ERROR: plugins.ini is not a regular file; preserving it.");
             return 0;
         }
-    } else if (errno != ENOENT) {
-        snprintf(error, error_size, "ERROR: cannot inspect plugins.ini (errno=%d).", errno);
+    } else if (config_stat_result < 0) {
+        int saved_errno = errno;
+        snprintf(error, error_size, "ERROR: cannot safely open plugins.ini for inspection (errno=%d); preserving it.", saved_errno);
         return 0;
     }
     FILE* in = fopen(CONFIG, "rb");
