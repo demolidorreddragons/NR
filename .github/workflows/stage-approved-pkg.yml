@@ -267,3 +267,5 @@ jobs:
 # Retry marker: trigger a fresh inspection after FTP listing hardening.
 
 # Diagnostic retry marker.
+
+# Trigger final archive parser verification.
