@@ -589,7 +589,7 @@ jobs:
     runs-on: [self-hosted, Windows, X64, ps4-lan]
     steps:
       - name: Move Neural Rendering PKGs from /data/pkg into /data/pkg/old (no build)
-        shell: powershell
+        shell: powershell -NoProfile -ExecutionPolicy Bypass -Command "& '{0}'"
         env:
           PS4_IP: ${{ vars.PS4_IP }}
         run: |
