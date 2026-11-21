@@ -28,7 +28,7 @@ jobs:
           github-token: ${{ github.token }}
 
       - name: Verify exact approved release artifact
-        shell: powershell
+        shell: powershell -NoProfile -ExecutionPolicy Bypass -Command "& '{0}'"
         env:
           EXPECTED_SHA256: 30c27cf5a3f0bddd53583b53eaf978f662a413cdf63f817ad0a1f72dd8a4ca45
           EXPECTED_COMMIT: a8f423f20dc95303e588e84c4c9d615bc4f2567d
@@ -48,7 +48,7 @@ jobs:
           Write-Host "APPROVED_ARTIFACT_VERIFIED"
 
       - name: Archive older Neural Rendering packages and stage release 006
-        shell: powershell
+        shell: powershell -NoProfile -ExecutionPolicy Bypass -Command "& '{0}'"
         env:
           PS4_IP: ${{ vars.PS4_IP }}
           EXPECTED_SHA256: 30c27cf5a3f0bddd53583b53eaf978f662a413cdf63f817ad0a1f72dd8a4ca45
