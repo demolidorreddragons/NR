@@ -1,17 +1,17 @@
-name: Stage GCN8 GNM-Link-Only diagnostic PKG on PS4
+name: Stage GCN8 GNM-Load-Only diagnostic PKG on PS4
 
 on:
   push:
     branches: [feature/gcn8-numeric-kernels]
     paths:
-      - ".github/workflows/stage-gcn8-gnm-link-001.yml"
+      - ".github/workflows/stage-gcn8-gnm-load-001.yml"
 
 permissions:
   actions: read
   contents: read
 
 concurrency:
-  group: stage-gcn8-gnm-link-diagnostic
+  group: stage-gcn8-gnm-load-diagnostic
   cancel-in-progress: false
 
 jobs:
@@ -25,7 +25,7 @@ jobs:
           name: ps4-neural-engine-build
           path: build-artifact
           repository: demolidorreddragons/NR
-          run-id: 44873622760
+          run-id: 44876293567
           github-token: ${{ github.token }}
 
       - name: Download independent QA evidence
@@ -34,28 +34,28 @@ jobs:
           name: PS4-Neural-Engine-independent-QA
           path: qa
           repository: demolidorreddragons/NR
-          run-id: 44873622760
+          run-id: 44876293567
           github-token: ${{ github.token }}
 
-      - name: Verify exact GNM-Link package and independent QA before console changes
+      - name: Verify exact GNM-Load package and independent QA before console changes
         shell: powershell -ExecutionPolicy Bypass -File {0}
         env:
-          EXPECTED_SHA256: e68da9f35981aa32e788ebe3f0461360167c0194b0c408c47c945745ebab5847
+          EXPECTED_SHA256: bc5cdd06e73578281c66498decab293abc907043488b8a1dc351c2c5001cc9a6
         run: |
           $ErrorActionPreference = "Stop"
-          $pkg = Get-ChildItem "build-artifact" -Recurse -File -Filter "PS4-Neural-Rendering-GCN8-gnm-link-44873622760.pkg" | Select-Object -First 1
-          $report = Join-Path $env:GITHUB_WORKSPACE "qa/gnm-link-qa-report.txt"
-          if (-not $pkg) { throw "Exact GNM-Link diagnostic PKG missing from build artifact." }
-          if (-not (Test-Path -LiteralPath $report -PathType Leaf)) { throw "Independent GNM-Link QA report missing." }
+          $pkg = Get-ChildItem "build-artifact" -Recurse -File -Filter "PS4-Neural-Rendering-GCN8-gnm-load-44876293567.pkg" | Select-Object -First 1
+          $report = Join-Path $env:GITHUB_WORKSPACE "qa/gnm-load-qa-report.txt"
+          if (-not $pkg) { throw "Exact GNM-Load diagnostic PKG missing from build artifact." }
+          if (-not (Test-Path -LiteralPath $report -PathType Leaf)) { throw "Independent GNM-Load QA report missing." }
           $qa = Get-Content -LiteralPath $report -Raw
-          foreach ($required in @("GNM_LINK_PKG_SHA256=$($env:EXPECTED_SHA256)", "GNM_LINK_SFO=PASS; COMPUTE_SHADER=ABSENT", "GNM_LINK_QA_STATUS=PASS_PC_ONLY_NOT_HARDWARE_TESTED")) {
+          foreach ($required in @("GNM_LOAD_PKG_SHA256=$($env:EXPECTED_SHA256)", "GNM_LOAD_SFO=PASS; COMPUTE_SHADER=ABSENT", "GNM_LOAD_QA_STATUS=PASS_PC_ONLY_NOT_HARDWARE_TESTED")) {
             if ($qa -notmatch [regex]::Escape($required)) { throw "Independent QA evidence mismatch: $required" }
           }
           $actual = (Get-FileHash -LiteralPath $pkg.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
           if ($actual -ne $env:EXPECTED_SHA256) { throw "Diagnostic PKG SHA-256 mismatch: $actual" }
-          "PKG_PATH=$($pkg.FullName)" | Out-File "$env:RUNNER_TEMP\gcn8-gnm-link-stage.env"
-          "PKG_BYTES=$((Get-Item -LiteralPath $pkg.FullName).Length)" | Out-File "$env:RUNNER_TEMP\gcn8-gnm-link-stage.env" -Append
-          "PKG_SHA256=$actual" | Out-File "$env:RUNNER_TEMP\gcn8-gnm-link-stage.env" -Append
+          "PKG_PATH=$($pkg.FullName)" | Out-File "$env:RUNNER_TEMP\gcn8-gnm-load-stage.env"
+          "PKG_BYTES=$((Get-Item -LiteralPath $pkg.FullName).Length)" | Out-File "$env:RUNNER_TEMP\gcn8-gnm-load-stage.env" -Append
+          "PKG_SHA256=$actual" | Out-File "$env:RUNNER_TEMP\gcn8-gnm-load-stage.env" -Append
           Write-Host "INDEPENDENT_QA=PASS_PC_ONLY_NOT_HARDWARE_TESTED"
           Write-Host "EXACT_DIAGNOSTIC_ARTIFACT_VERIFIED bytes=$((Get-Item -LiteralPath $pkg.FullName).Length) sha256=$actual"
 
@@ -66,12 +66,12 @@ jobs:
         run: |
           $ErrorActionPreference = "Stop"
           if (-not $env:PS4_IP) { throw "PS4_IP Actions variable is missing." }
-          $envFile = "$env:RUNNER_TEMP\gcn8-gnm-link-stage.env"
+          $envFile = "$env:RUNNER_TEMP\gcn8-gnm-load-stage.env"
           $envLines = Get-Content -LiteralPath $envFile
           $pkg = ($envLines | Where-Object { $_ -like "PKG_PATH=*" } | Select-Object -First 1).Substring(9)
           $localSize = [long](($envLines | Where-Object { $_ -like "PKG_BYTES=*" } | Select-Object -First 1).Substring(10))
           $expected = ($envLines | Where-Object { $_ -like "PKG_SHA256=*" } | Select-Object -First 1).Substring(11).ToLowerInvariant()
-          $fileName = "PS4-Neural-Rendering-GCN8-gnm-link-44873622760.pkg"
+          $fileName = "PS4-Neural-Rendering-GCN8-gnm-load-44876293567.pkg"
           $base = "ftp://$($env:PS4_IP):2121"
           $credentials = New-Object System.Net.NetworkCredential("anonymous", "anonymous@example.com")
 
@@ -157,7 +157,7 @@ jobs:
           # If the exact diagnostic filename exists with another hash, archive it; never overwrite it.
           $root = @(Get-FtpNames "/data/pkg/")
           if ($root -contains $fileName) {
-            $existingPath = Join-Path $env:RUNNER_TEMP "existing-gcn8-gnm-link.pkg"
+            $existingPath = Join-Path $env:RUNNER_TEMP "existing-gcn8-gnm-load.pkg"
             try {
               $existingHash = Get-RemoteHash "/data/pkg/$fileName" $existingPath
               if ($existingHash -ne $expected) { Move-Verified "/data/pkg/$fileName" "/data/pkg/old" $fileName }
@@ -166,7 +166,7 @@ jobs:
           }
 
           # Upload outside /data/pkg, read back, then atomically promote by FTP rename.
-          $tempRemote = "/data/NR-GCN8-GNM-LINK-44873622760.uploading"
+          $tempRemote = "/data/NR-GCN8-GNM-LOAD-44876293567.uploading"
           $finalRemote = "/data/pkg/$fileName"
           $root = @(Get-FtpNames "/data/pkg/")
           if ($root -notcontains $fileName) {
@@ -179,7 +179,7 @@ jobs:
             } finally { $stream.Dispose() }
             $response = $upload.GetResponse(); $response.Dispose()
 
-            $readback = Join-Path $env:RUNNER_TEMP "gcn8-gnm-link-upload-readback.pkg"
+            $readback = Join-Path $env:RUNNER_TEMP "gcn8-gnm-load-upload-readback.pkg"
             try {
               $remoteHash = Get-RemoteHash $tempRemote $readback
               $remoteSize = (Get-Item -LiteralPath $readback).Length
@@ -192,7 +192,7 @@ jobs:
             $response = $promote.GetResponse(); $response.Dispose()
           }
 
-          $finalLocal = Join-Path $env:RUNNER_TEMP "gcn8-gnm-link-final-readback.pkg"
+          $finalLocal = Join-Path $env:RUNNER_TEMP "gcn8-gnm-load-final-readback.pkg"
           try {
             $finalHash = Get-RemoteHash $finalRemote $finalLocal
             $finalSize = (Get-Item -LiteralPath $finalLocal).Length
