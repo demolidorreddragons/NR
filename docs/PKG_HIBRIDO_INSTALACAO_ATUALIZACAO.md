@@ -1,6 +1,6 @@
 # Arquitetura do PKG híbrido — instalação inicial e atualização do Neural Engine
 
-**Estado:** Release 009 (APP_VER 01.05) é histórico, com QA independente PC-only e staging anteriores. Release 010 (APP_VER 01.06) está em preparação, incluindo a correção de inspeção de `plugins.ini`; aguarda build e QA independente próprios. Nenhum pacote foi instalado nem PRX ativado; hardware/runtime ainda não testados. Não instalar até haver autorização explícita.  
+**Estado:** Release 010 (APP_VER 01.06) foi buildada, passou QA independente PC-only e foi staged no PS4; o usuário reportou a instalação do app. Diagnóstico read-only de 2026-11-21 encontrou o PRX 010 verificado ainda em `.pne-tmp`, enquanto o PRX ativo tem hash diferente; o carregamento do PRX 010 não foi confirmado. Correção de recuperação transacional em desenvolvimento para release 011. Não ativar PRX nem instalar novo PKG sem autorização explícita.  
 **Alvo:** PS4 Pro / Orbis + GoldHEN.  
 **Branch:** `feature/gcn8-numeric-kernels`.  
 **Identidade atual:** TITLE_ID `PNEU00001`, CONTENT_ID `IV0000-PNEU00001_00-PS4NEURALENG0000`.
@@ -60,7 +60,7 @@ O instalador deve validar o manifesto e o hash do PRX antes de tocar nos destino
 4. NEW e UPDATE podem prosseguir após validação.
 5. LEGACY exige migração conservadora: preservar o arquivo anterior e não inferir versão/ABI pelo nome.
 6. RECOVERY deve parar e solicitar inspeção/restauração; nunca sobrescrever backup.
-7. CONFLICT aborta sem modificar o estado ativo.
+7. CONFLICT normalmente aborta sem modificar o estado ativo. Exceção estrita: se o PRX temporário existente for arquivo regular, o manifesto instalado validar exatamente esse temporário, a versão do manifesto for igual à versão de entrada e o SHA-256 do temporário for idêntico ao PRX do PKG atual, o eboot pode recuperar a transação: cria uma segunda cópia temporária exclusiva, valida novamente, preserva o temporário original e promove PRX/manifesto com backups rotacionados. Se qualquer condição falhar, aborta sem alterar destinos. Marcador transacional presente continua exigindo inspeção manual.
 
 ## 5. Commit seguro
 
@@ -85,7 +85,7 @@ Executar o instalador duas vezes com o mesmo payload deve produzir o mesmo estad
 - nenhuma duplicação de seção/linha;
 - nenhuma substituição desnecessária de arquivos se o hash já for igual;
 - nenhum backup novo se não houve alteração;
-- logs indicando `NEW_INSTALL`, `UPDATE`, `ALREADY_CURRENT`, `RECOVERY_REQUIRED` ou `ABORTED`.
+- logs indicando `STARTED`, `NEW_INSTALL`, `UPDATE`, `ALREADY_CURRENT`, `RECOVERY_CANDIDATE`, `RECOVERY_COMMIT`, `RECOVERY_REQUIRED` ou `ABORTED`.
 
 Se a versão empacotada for igual à instalada e os hashes coincidirem, retornar `ALREADY_CURRENT`. Se for inferior, recusar downgrade por padrão. Downgrade deve exigir procedimento separado e explícito, com backup preservado.
 
@@ -117,10 +117,10 @@ Se a versão empacotada for igual à instalada e os hashes coincidirem, retornar
 - O build gera `pne-release.ini` com identidade e SHA-256 do PRX; o eboot agora valida schema, TITLE_ID, CONTENT_ID, nome do PRX e SHA-256 antes de criar diretórios ou alterar destinos. A validação usa SHA-256 implementado localmente e vetores de teste host.
 - Temporários de PRX, manifesto e `plugins.ini` usam nomes exclusivos com `O_CREAT | O_EXCL`; arquivos temporários preexistentes não são truncados. `plugins.ini` não é regravado quando a entrada gerenciada já existe.
 - A transação PRX + configuração preserva backups e tenta rollback, mas os dois caminhos não podem ser trocados atomicamente em conjunto.
-- O release 009 (APP_VER 01.05) integra a máquina de estados, manifesto instalado ao lado do PRX, marcador de transação persistente, migração LEGACY com backup, recusa de downgrade e `ALREADY_CURRENT` por release/hash. A release 010 incrementa APP_VER para 01.06 e revalida o caminho de inspeção de `plugins.ini` com `inspect_managed_path()`; o QA desta release ainda precisa ser executado. Host CI passou no run `44849066490`; build Orbis/PKG passou e QA independente do artefato exato passou no run `44849066524`.
+- Release 010 (APP_VER 01.06) passou host tests no run `44851147120`, build Orbis/PKG e QA independente PC-only no run `44851147057`; PKG SHA-256 `015c9e2c266561fda005c15766fe4833412c658d9a8d0b7334fd2cfe3fec8ae2`, PRX SHA-256 `54e8595144a3a7e1d36602a1100bae6189f0955175c355bd3ac67d9cb7f85277`. Foi staged com read-back SHA-256 no PS4 no run `44851483879`. O usuário informou que instalou o app.
 - QA independente: PKG SHA-256 `242e032dc19ae9fc22cdd0b977241bd9ef8edf93bc5eb31777063575430699ba`, 6.619.136 bytes, `FULL_BASE_APPLICATION_NOT_PATCH`, `CATEGORY=gde`, `APP_VER=01.05`, `VERSION=01.05`, `TITLE_ID=PNEU00001`, `CONTENT_ID=IV0000-PNEU00001_00-PS4NEURALENG0000`, `st_type=digital50`, PRX SHA-256 `54e8595144a3a7e1d36602a1100bae6189f0955175c355bd3ac67d9cb7f85277`, `QA_STATUS=PASS_PC_ONLY_NOT_HARDWARE_TESTED`.
 - O staging PS4 passou no run `44849611210`: arquivos PKG antigos Neural Rendering foram arquivados com hash e read-back verificados em `/data/pkg/old/`; somente `PS4-Neural-Engine-009.pkg` ficou na raiz `/data/pkg/`; pacotes de terceiros foram preservados. PKG final foi relido do console e SHA/bytes conferidos. `INSTALLATION_PERFORMED=FALSE`.
-- Permanecem pendentes fault injection Orbis e teste de hardware/runtime. O resultado do PKG 006/008 não substitui QA do 009.
+- Diagnóstico read-only do PS4 em run `44852190436`: `plugins.ini` tem uma única entrada Neural Engine e `PluginLoader_Enabled=1`; PRX ativo tem 317.216 bytes, SHA-256 `1481214d21aa5c826f9d51ae8cd55759e625c2b9ca7159dd9578ea632661d8e7`; manifesto instalado declara release 010 e PRX SHA `54e8595144a3a7e1d36602a1100bae6189f0955175c355bd3ac67d9cb7f85277`; `.pne-tmp` e `.pne-backup.001` têm 224.128 bytes e correspondem ao hash esperado do release 010. Portanto, o PRX 010 está staged, mas o arquivo ativo ainda é outro binário. O log do instalador tem apenas mensagens antigas e não contém `STARTED`/`RECOVERY_COMMIT`; `/data/sce_coredumps/` não listou dumps; `/data/sce_logs/log.bin` tem 16 MiB e é praticamente todo zero, sem mensagens textuais. Nenhuma evidência permite atribuir causalmente o CE-34878-0. Nenhum arquivo do PS4 foi alterado pela coleta.
 - Não há evidência de instalação/atualização do pacote no PS4 Pro nem de carregamento bem-sucedido do PRX.
 
-**Decisão:** seguir com um único PKG full/base cujo eboot faz instalação inicial e atualização idempotente do plugin GoldHEN. Não rotular o arquivo como base+patch do Package Manager até existir evidência técnica de um mecanismo PS4 válido para isso. Release 010 só pode ser considerada aprovada após build e QA independente próprios; instalação real permanece separada e exige autorização explícita, além de fault injection aplicável.
+**Decisão:** seguir com um único PKG full/base cujo eboot faz instalação inicial, atualização idempotente e recuperação estritamente verificada de um PRX staged. Não rotular o arquivo como base+patch do Package Manager. Release 010 está aprovada apenas em QA PC-only e staging; o estado atual do PS4 mostra divergência entre PRX ativo e manifesto. A correção de recuperação da release 011 precisa passar host tests, build e QA independente antes de qualquer instalação. Reiniciar GoldHEN agora não é recomendado, pois carregaria o PRX ativo antigo, não o PRX 010 verificado.
