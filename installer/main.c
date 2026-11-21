@@ -137,7 +137,7 @@ static void notify(const char* message) {
 }
 
 static void write_status(const char* message) {
-    FILE* f = fopen(STATUS, "wb");
+    FILE* f = fopen(STATUS, "ab");
     if (!f) return;
     fprintf(f, "PS4 Neural Engine installer\n%s\n", message);
     fflush(f);
@@ -274,7 +274,7 @@ static int configure_loader(char* error, size_t error_size, char* temp_path, siz
     char input[MAX_CONFIG];
     char output[MAX_CONFIG + 256];
     size_t length = 0, used = 0;
-    FILE* in = fopen(CONFIG, "rb");
+    struct stat config_stat;\n    if (lstat(CONFIG, &config_stat) == 0 && !S_ISREG(config_stat.st_mode)) {\n        snprintf(error, error_size, "ERROR: plugins.ini is not a regular file; preserving it.");\n        return 0;\n    }\n    if (errno != 0 && errno != ENOENT) {\n        snprintf(error, error_size, "ERROR: cannot inspect plugins.ini (errno=%d).", errno);\n        return 0;\n    }\n    FILE* in = fopen(CONFIG, "rb");
     if (in) {
         length = fread(input, 1, sizeof(input)-1, in);
         if (ferror(in) || !feof(in)) {
@@ -496,7 +496,7 @@ int main(void) {
     if(mkdir("/data/GoldHEN",0777)!=0&&errno!=EEXIST){snprintf(error,sizeof(error),"ERROR: cannot create GoldHEN directory (errno=%d).",errno);write_status(error);return 1;}
     if(mkdir(DEST_DIR,0777)!=0&&errno!=EEXIST){snprintf(error,sizeof(error),"ERROR: cannot create plugin directory (errno=%d).",errno);write_status(error);return 1;}
     if(!copy_prx(error,sizeof(error),prx_tmp,sizeof(prx_tmp))){write_status(error);notify("PNE: falha ao copiar PRX.");sceKernelUsleep(3000000);return 2;}
-    if(!stage_manifest(manifest_tmp,sizeof(manifest_tmp))){int e=errno;remove(prx_tmp);snprintf(error,sizeof(error),"ERROR: cannot stage installed manifest (errno=%d).",e);write_status(error);return 3;}
+    if(!stage_manifest(manifest_tmp,sizeof(manifest_tmp)) ||\n       !pne_validate_release_manifest(manifest_tmp,prx_tmp,error,sizeof(error))){int e=errno;remove(prx_tmp);remove(manifest_tmp);snprintf(error,sizeof(error),"ERROR: cannot stage/verify installed manifest (errno=%d).",e);write_status(error);return 3;}
     if(!configure_loader(error,sizeof(error),config_tmp,sizeof(config_tmp),&config_changed)){
         remove(prx_tmp);remove(manifest_tmp);write_status(error);notify("PNE: falha ao preparar plugins.ini.");sceKernelUsleep(3000000);return 3;
     }
