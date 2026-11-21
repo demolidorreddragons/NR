@@ -184,7 +184,7 @@ jobs:
           # If an old_versions folder exists, consolidate only Neural Rendering PKGs into old/.
           try {
             $legacyNames = @(Get-FtpNames "/data/pkg/old_versions/")
-            foreach ($name in @($legacyNames | Where-Object { $_ -match '^PS4-Neural-Engine-.*\.pkg$' })) {
+            foreach ($name in @($legacyNames | Where-Object { $_ -match '^PS4-Neural-(Engine|Rendering)-.*\.pkg$' -or $_ -match '^IV0000-NRE.*\.pkg$' })) {
               Move-VerifiedRemoteFile "/data/pkg/old_versions/$name" "/data/pkg/old" $name
             }
           } catch {
@@ -249,7 +249,7 @@ jobs:
           } finally { Remove-Item -LiteralPath $verifyFinal -Force -ErrorAction SilentlyContinue }
 
           $finalRoot = @(Get-FtpNames "/data/pkg/")
-          $nrRoot = @($finalRoot | Where-Object { $_ -match '^PS4-Neural-Engine-.*\.pkg$' })
+          $nrRoot = @($finalRoot | Where-Object { $_ -match '^PS4-Neural-(Engine|Rendering)-.*\.pkg$' -or $_ -match '^IV0000-NRE.*\.pkg$' })
           if ($nrRoot.Count -ne 1 -or $nrRoot[0] -ne "PS4-Neural-Engine-006.pkg") {
             throw "Unexpected Neural Rendering PKGs remain in /data/pkg/: $($nrRoot -join ', ')"
           }
