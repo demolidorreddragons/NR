@@ -308,7 +308,9 @@ static int configure_loader(char* error, size_t error_size, char* temp_path, siz
         if (in_default && strcmp(line, DEST_PRX) == 0) found_entry = 1;
     }
     if (found_entry) {
-        FILE* staged = fopen_unique_staged_file(CONFIG_TMP, temp_path, temp_path_size);
+        *changed = 0;
+        return 1;
+    }
         if (!staged) {
             snprintf(error, error_size, "ERROR: cannot stage unchanged plugins.ini (errno=%d).", errno);
             return 0;
