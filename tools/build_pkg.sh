@@ -9,7 +9,7 @@ OUT="$ROOT/dist/pkg"
 TOOLS="$OO_PS4_TOOLCHAIN/bin/linux"
 PKGTOOL="${PKGTOOL_CORE:-$TOOLS/PkgTool.Core}"
 TITLE_ID="PNEU00001"
-APP_VERSION="${APP_VERSION:-01.06}"
+APP_VERSION="${APP_VERSION:-01.07}"
 if [[ ! "$APP_VERSION" =~ ^[0-9]{2}\.[0-9]{2}$ ]]; then
   echo "APP_VERSION must use Sony XX.YY format (for example 01.01)." >&2
   exit 1
