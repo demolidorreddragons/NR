@@ -285,6 +285,74 @@ static int copy_prx(char* error, size_t error_size, char* temp_path, size_t temp
     /* Keep the verified PRX staged; main() commits it with plugins.ini. */
     return 1;
 }
+static int copy_file_to_unique_staged(const char* source, const char* base,
+                                     char* chosen, size_t capacity,
+                                     char* error, size_t error_size) {
+    struct stat metadata;
+    int inspected = inspect_managed_path(source, &metadata);
+    if (inspected != 1 || !S_ISREG(metadata.st_mode)) {
+        snprintf(error, error_size,
+                 "ERROR: recovery candidate is missing or not a regular file (errno=%d).",
+                 inspected < 0 ? errno : EINVAL);
+        return 0;
+    }
+
+    int in = open(source, O_RDONLY | O_NOFOLLOW);
+    if (in < 0) {
+        snprintf(error, error_size, "ERROR: cannot open recovery candidate (errno=%d).", errno);
+        return 0;
+    }
+    int out = -1;
+    if (!open_unique_staged_file(base, chosen, capacity, &out)) {
+        int saved_errno = errno;
+        close(in);
+        snprintf(error, error_size, "ERROR: cannot reserve recovery staging path (errno=%d).", saved_errno);
+        return 0;
+    }
+
+    char buffer[16384];
+    long long copied = 0;
+    int ok = 1, saved_errno = 0;
+    for (;;) {
+        ssize_t n = read_retry(in, buffer, sizeof(buffer));
+        if (n == 0) break;
+        if (n < 0) { ok = 0; saved_errno = errno; break; }
+        ssize_t offset = 0;
+        while (offset < n) {
+            ssize_t written = write(out, buffer + offset, (size_t)(n - offset));
+            if (written < 0 && errno == EINTR) continue;
+            if (written <= 0) {
+                ok = 0;
+                saved_errno = written < 0 ? errno : EIO;
+                break;
+            }
+            offset += written;
+            copied += written;
+        }
+        if (!ok) break;
+    }
+    if (ok && fsync(out) != 0) { ok = 0; saved_errno = errno; }
+    if (close(in) != 0 && ok) { ok = 0; saved_errno = errno; }
+    if (close(out) != 0 && ok) { ok = 0; saved_errno = errno; }
+    if (!ok || copied <= 0) {
+        remove(chosen);
+        snprintf(error, error_size, "ERROR: recovery candidate copy failed (bytes=%lld errno=%d).",
+                 copied, saved_errno ? saved_errno : EIO);
+        return 0;
+    }
+
+    char source_hash[65], staged_hash[65];
+    if (!pne_sha256_file(source, source_hash) ||
+        !pne_sha256_file(chosen, staged_hash) ||
+        strcmp(source_hash, staged_hash) != 0) {
+        int hash_errno = errno ? errno : EIO;
+        remove(chosen);
+        snprintf(error, error_size, "ERROR: recovery staging SHA-256 mismatch (errno=%d).", hash_errno);
+        return 0;
+    }
+    return 1;
+}
+
 static void trim_line(char* line) {
     size_t n = strlen(line);
     while (n && (line[n-1] == '\r' || line[n-1] == '\n' ||
@@ -518,6 +586,7 @@ int main(void) {
     int config_changed=0;
     unsigned long incoming_release=0,installed_release=0;
     char incoming_hash[65],installed_hash[65];
+    write_status("STARTED: installer entered main; validating incoming release manifest and PRX.");
     if(!pne_validate_release_manifest(RELEASE_MANIFEST,SOURCE_PRX,error,sizeof(error))||
        !read_release_number(RELEASE_MANIFEST,&incoming_release)||
        !pne_sha256_file(SOURCE_PRX,incoming_hash)){
@@ -549,9 +618,47 @@ int main(void) {
     int manifest_valid=manifest_exists&&prx_exists&&
         pne_validate_release_manifest(INSTALLED_MANIFEST,DEST_PRX,error,sizeof(error));
     pne_install_state state=pne_classify_install_state(prx_exists,manifest_exists,manifest_valid,marker_exists);
-    if(state==PNE_STATE_RECOVERY||state==PNE_STATE_CONFLICT){
-        snprintf(error,sizeof(error),"ABORTED: state=%s; files/backups preserved; inspect transaction marker.",pne_install_state_name(state));
-        write_status(error);notify("PNE: recuperacao/conflito detectado; nada alterado.");sceKernelUsleep(3000000);return 6;
+    if(state==PNE_STATE_RECOVERY){
+        snprintf(error,sizeof(error),"ABORTED: state=RECOVERY; transaction marker exists; files/backups preserved for manual inspection.");
+        write_status(error);notify("PNE: transacao pendente; backups preservados.");sceKernelUsleep(3000000);return 6;
+    }
+    if(state==PNE_STATE_CONFLICT){
+        char staged_error[256]={0}, staged_hash[65]={0}, recovery_prx_tmp[256]={0};
+        unsigned long staged_release=0;
+        int staged_candidate_valid =
+            path_is_regular_file(DEST_TMP) &&
+            pne_validate_release_manifest(INSTALLED_MANIFEST,DEST_TMP,staged_error,sizeof(staged_error)) &&
+            read_release_number(INSTALLED_MANIFEST,&staged_release) &&
+            staged_release==incoming_release &&
+            pne_sha256_file(DEST_TMP,staged_hash) &&
+            strcmp(staged_hash,incoming_hash)==0;
+        if(!staged_candidate_valid){
+            snprintf(error,sizeof(error),"ABORTED: CONFLICT; active PRX does not match its manifest and no exact verified release-%lu recovery candidate is available (%s); all files/backups preserved.",
+                     incoming_release,staged_error[0]?staged_error:"staged candidate identity/hash mismatch");
+            write_status(error);notify("PNE: conflito; nada alterado e backups preservados.");sceKernelUsleep(3000000);return 6;
+        }
+        write_status("RECOVERY_CANDIDATE: staged PRX and installed manifest match the incoming release/hash; preparing a separate recovery copy.");
+        if(!copy_file_to_unique_staged(DEST_TMP,DEST_TMP,recovery_prx_tmp,sizeof(recovery_prx_tmp),error,sizeof(error))){
+            write_status(error);notify("PNE: falha ao preparar recuperacao; arquivos preservados.");sceKernelUsleep(3000000);return 6;
+        }
+        if(!stage_manifest(manifest_tmp) ||
+           !pne_validate_release_manifest(manifest_tmp,recovery_prx_tmp,error,sizeof(error))){
+            int e=errno;remove(recovery_prx_tmp);remove(manifest_tmp);
+            snprintf(error,sizeof(error),"ERROR: recovery manifest staging/verification failed (errno=%d); original staged candidate preserved.",e);
+            write_status(error);notify("PNE: manifesto de recuperacao invalido; nada ativado.");sceKernelUsleep(3000000);return 6;
+        }
+        if(!configure_loader(error,sizeof(error),config_tmp,sizeof(config_tmp),&config_changed)){
+            remove(recovery_prx_tmp);remove(manifest_tmp);write_status(error);
+            notify("PNE: nao foi possivel validar plugins.ini; arquivos preservados.");sceKernelUsleep(3000000);return 6;
+        }
+        if(!config_changed)config_tmp[0]='\0';
+        if(!commit_install(error,sizeof(error),recovery_prx_tmp,manifest_tmp,config_tmp)){
+            write_status(error);notify("PNE: recuperacao nao concluida; preserve todos os backups.");sceKernelUsleep(3000000);return 6;
+        }
+        write_status("RECOVERY_COMMIT: verified staged PRX promoted; previous PRX/manifest backups retained; restart GoldHEN to load.");
+        notify("PNE: recuperacao concluida. Reinicie GoldHEN/PS4 para carregar.");
+        sceKernelUsleep(3000000);
+        return 0;
     }
     if(state==PNE_STATE_UPDATE){
         if(!read_release_number(INSTALLED_MANIFEST,&installed_release)||!pne_sha256_file(DEST_PRX,installed_hash)){
