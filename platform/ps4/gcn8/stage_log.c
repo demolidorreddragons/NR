@@ -197,8 +197,10 @@ int stage_log_install_signals(void) {
     errno=0;
     int rc=sigaltstack(&ss,NULL);
     int saved_errno=(rc==0)?0:errno;
+    const int altstack_ready=(rc==0);
     log_signal_diag("sigaltstack",0u,rc,saved_errno);
-    if (rc!=0) return -1;
+    if (!altstack_ready)
+        stage_log("SIGNAL_ALTSTACK_UNAVAILABLE_FALLBACK_NO_SA_ONSTACK");
 
     struct sigaction action; memset(&action,0,sizeof(action));
     #if defined(__FreeBSD__) && !defined(__linux__)
@@ -206,7 +208,7 @@ int stage_log_install_signals(void) {
 #else
     action.sa_sigaction=on_signal;
 #endif
-    action.sa_flags=SA_SIGINFO|SA_ONSTACK;
+    action.sa_flags=SA_SIGINFO|(altstack_ready?SA_ONSTACK:0);
     errno=0;
     rc=sigemptyset(&action.sa_mask);
     saved_errno=(rc==0)?0:errno;
@@ -214,13 +216,19 @@ int stage_log_install_signals(void) {
     if (rc!=0) return -1;
 
     const int signals[]={SIGSEGV,SIGBUS,SIGILL,SIGABRT,SIGFPE};
+    int action_failures=0;
     for (size_t i=0;i<sizeof(signals)/sizeof(signals[0]);++i) {
         errno=0;
         rc=sigaction(signals[i],&action,NULL);
         saved_errno=(rc==0)?0:errno;
         log_signal_diag("sigaction",(unsigned)signals[i],rc,saved_errno);
-        if (rc!=0) return -1;
+        if (rc!=0) ++action_failures;
     }
-    stage_log("SIGNAL_INSTALL_COMPLETE");
+    if (action_failures!=0) {
+        stage_log("SIGNAL_INSTALL_PARTIAL");
+        return -1;
+    }
+    stage_log(altstack_ready ? "SIGNAL_INSTALL_COMPLETE" :
+                               "SIGNAL_INSTALL_COMPLETE_NO_ALTSTACK");
     return 0;
 }
