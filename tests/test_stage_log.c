@@ -50,6 +50,15 @@ int main(void) {
     assert(waitpid(child, &wait_status, 0) == child);
     assert(WIFEXITED(wait_status));
     assert(WEXITSTATUS(wait_status) == 128 + SIGABRT);
+    read_file_contains(crash_path, "SIGNAL_INSTALL_BEGIN");
+    read_file_contains(crash_path, "SIGNAL_ABI stack_t_size=");
+    read_file_contains(crash_path, "SIGNAL_DIAG op=sigaltstack signal=0 rc=0 errno=0");
+    read_file_contains(crash_path, "SIGNAL_DIAG op=sigemptyset signal=0 rc=0 errno=0");
+    char signal_line[96];
+    snprintf(signal_line, sizeof(signal_line),
+             "SIGNAL_DIAG op=sigaction signal=%d rc=0 errno=0", SIGSEGV);
+    read_file_contains(crash_path, signal_line);
+    read_file_contains(crash_path, "SIGNAL_INSTALL_COMPLETE");
     read_file_contains(crash_path, "CRASH sig=0x");
     read_file_contains(crash_path, "CRASH_CTX[0]");
     unlink(crash_path);
