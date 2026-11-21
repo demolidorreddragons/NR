@@ -448,7 +448,7 @@ extern "C" int pne_gcn8_compute_smoke_run(const char* shader_path,
     }
 
     stage_log("DISPATCH_DONE_FENCE_CONFIRMED");
-    sceGnmFlushGarlic();
+    gnm.flush_garlic();
     for (uint32_t i = 0; i < kElementCount; ++i) {
         const float expected = input[i] + 1.0f;
         if (output[i] != expected) {
