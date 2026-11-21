@@ -166,10 +166,17 @@ This corrects the broad phrase “no GNM runtime backend” in earlier notes: **
 1. The harness treats the mapped CPU virtual pointer as the candidate GPU VA. The project has no proof that this address is GPU-valid for the target firmware.
 2. It manually constructs the output V# and selects `GNM_MEMORY_UNCACHED`; writable SSBO descriptor encoding and access/cache policy are not validated on hardware.
 3. `sceGnmFlushGarlic()` is used around submission/readback, but its sufficiency for CPU→GPU and GPU→CPU visibility of these buffers is not established.
-4. Return values from local shader/dispatch/fence packet writers are not consistently checked; checking packet dword deltas does not substitute for checking the writer's error enum.
+4. The harness now checks the return enums from the local shader/dispatch/fence packet writers as well as emitted dword counts (commit `edbb7f8e017016fc826b2fa231747c56ccaaee94`). This closes the earlier unchecked-return defect; it does not prove packet behavior on firmware.
 5. Submit/fence lifetime and failure cleanup need a separate review; some timeout paths deliberately retain memory until process exit.
 6. The smoke harness has not been compiled/linked for the exact current HEAD in a confirmed run and has not been executed on the console.
 
 Task tracking: [GNM-001](https://github.com/demolidorreddragons/NR/issues/16). Do not run this application on the PS4 until the review, reversible test plan approval and explicit console authorization gates are met. No install, PRX activation, plugin.ini change or console dispatch was performed during this audit.
 
 The successful shader artifact in run [44743915113](https://github.com/demolidorreddragons/NR/actions/runs/44743915113) belongs to commit `5141ed44fe3202dbdec78f0a69700d34ef76e039`, 267 commits behind the audited HEAD. It is historical compiler evidence only; the current HEAD GFX8 build remains NOT_RUN.
+
+
+## Static audit update — 2026-11-21
+
+A focused static review compared the local SET_SH_REG, DISPATCH_DIRECT and EOP packet writers with the pinned OpenGNM implementation. Their packet shapes and dword counts match the corresponding upstream helpers. OpenGNM's direct-memory helper also confirms the allocate-then-map sequence and keeps the direct-memory offset distinct from the mapped pointer. This is useful source evidence, but it does not by itself prove GPU-VA behavior for the target firmware or writable SSBO/cache semantics.
+
+The report records the exact findings and unresolved risks: [RELATORIO_GNM_STATIC_AUDIT_2026-11-21.md](RELATORIO_GNM_STATIC_AUDIT_2026-11-21.md). The smoke harness remains experimental and **not approved for console execution**. The Content ID startup length fix and an explicit canonical-format/36-character guard are in commit `2cae50d15c3a4532a330e2e75dc0e1fde21d1759`; CI runs 44863812886 and 44863812891 were still in progress when recorded. No hardware test, install, PRX activation or console state change occurred.
