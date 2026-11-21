@@ -27,3 +27,10 @@ int pne_compare_release(unsigned long installed, unsigned long incoming) {
     if (incoming > installed) return 1;
     return 0;
 }
+
+int pne_recovery_candidate_is_compatible(int staged_file_valid, int manifest_valid,
+                                         unsigned long staged_release, unsigned long incoming_release,
+                                         int hashes_match) {
+    if (!staged_file_valid || !manifest_valid || !hashes_match) return 0;
+    return pne_compare_release(staged_release, incoming_release) >= 0;
+}
