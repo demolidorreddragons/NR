@@ -207,7 +207,7 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
-          $tool = (Get-Content "$env:RUNNER_TEMP\pkg009-tool.txt" | Select-Object -First 1).Substring(5)
+          $tool = (Get-Content "$env:RUNNER_TEMP\pkg-independent-tool.txt" | Select-Object -First 1).Substring(5)
           $artifact = Join-Path $env:GITHUB_WORKSPACE "build-artifact"
           $manifest = Join-Path $artifact "pkg/audit/pne-release.ini"
           if (-not (Test-Path $manifest)) { throw "Release manifest missing." }
