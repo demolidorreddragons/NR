@@ -117,7 +117,7 @@ Se a versão empacotada for igual à instalada e os hashes coincidirem, retornar
 - O build gera `pne-release.ini` com identidade e SHA-256 do PRX; o eboot agora valida schema, TITLE_ID, CONTENT_ID, nome do PRX e SHA-256 antes de criar diretórios ou alterar destinos. A validação usa SHA-256 implementado localmente e vetores de teste host.
 - Temporários de PRX, manifesto e `plugins.ini` usam nomes exclusivos com `O_CREAT | O_EXCL`; arquivos temporários preexistentes não são truncados. `plugins.ini` não é regravado quando a entrada gerenciada já existe.
 - A transação PRX + configuração preserva backups e tenta rollback, mas os dois caminhos não podem ser trocados atomicamente em conjunto.
-- O release candidato 008 integra a máquina de estados, manifesto instalado ao lado do PRX, marcador de transação persistente, migração LEGACY com backup, recusa de downgrade e `ALREADY_CURRENT` por release/hash. Host CI passou no run `44847096221` no commit `b05968a`; o build/QA do PKG 008 ainda é um gate separado.
+- O release candidato 008 integra a máquina de estados, manifesto instalado ao lado do PRX, marcador de transação persistente, migração LEGACY com backup, recusa de downgrade e `ALREADY_CURRENT` por release/hash. Host CI passou no run `44847096221` no commit `b05968a`; build do PKG 008 passou no run `44847096234`; QA independente do artefato exato continua sendo gate separado.
 - O workflow de build preserva GP4/SFO/manifest e QA independente; o resultado do PKG 006 não pode ser reaproveitado como evidência para o PKG 008.
 - Não há evidência de instalação/atualização do pacote no PS4 Pro nem de carregamento bem-sucedido do PRX.
 
