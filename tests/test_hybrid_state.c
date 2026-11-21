@@ -13,6 +13,12 @@ int main(void) {
     assert(pne_compare_release(6,7) == 1);
     assert(pne_compare_release(7,7) == 0);
     assert(pne_compare_release(8,7) == -1);
+    assert(pne_recovery_candidate_is_compatible(1,1,10,11,1) == 1);
+    assert(pne_recovery_candidate_is_compatible(1,1,10,10,1) == 1);
+    assert(pne_recovery_candidate_is_compatible(1,1,12,11,1) == 0);
+    assert(pne_recovery_candidate_is_compatible(0,1,10,11,1) == 0);
+    assert(pne_recovery_candidate_is_compatible(1,0,10,11,1) == 0);
+    assert(pne_recovery_candidate_is_compatible(1,1,10,11,0) == 0);
     assert(pne_install_state_name(PNE_STATE_NEW)[0] == 'N');
     puts("Hybrid installer state-machine tests passed");
     return 0;
