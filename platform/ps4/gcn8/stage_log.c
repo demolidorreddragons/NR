@@ -138,7 +138,7 @@ static void on_signal(int sig, siginfo_t *info, void *context) {
     n=append_hex(line,sizeof(line),n,words[28]);
     n=append_text(line,sizeof(line),n," ctx_w31=");
     n=append_hex(line,sizeof(line),n,words[31]);
-    if (n<sizeof(line)) line[n++]='\\n';
+    if (n<sizeof(line)) line[n++]='\n';
     emit_crash_line(line,n);
 
     /* The context ABI offsets differ across OpenOrbis headers and the PS4
@@ -153,7 +153,7 @@ static void on_signal(int sig, siginfo_t *info, void *context) {
             n=append_text(line,sizeof(line),n," ");
             n=append_hex(line,sizeof(line),n,words[base+i]);
         }
-        if (n<sizeof(line)) line[n++]='\\n';
+        if (n<sizeof(line)) line[n++]='\n';
         emit_crash_line(line,n);
     }
     _exit(128+(sig&0x7f));
