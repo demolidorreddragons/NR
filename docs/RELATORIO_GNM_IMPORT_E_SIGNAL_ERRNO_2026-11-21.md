@@ -105,6 +105,35 @@ Commits:
 
 Host tests: execução `44875885489`, job `telemetry`, concluído com sucesso. A versão inicial da telemetria errno compilou no OpenOrbis v0.5.4 no workflow `44875885487` (Startup-Only e GNM-Link-Only). A variante atual, que mantém handlers sem `SA_ONSTACK` se a pilha alternativa falhar e inclui o novo modo `gnm-load`, está sendo recompilada no workflow `44876293567`. Isso valida compilação no toolchain, não execução no hardware.
 
+## Resultado do build do probe dinâmico
+
+O novo modo `gnm-load` compilou com o OpenOrbis v0.5.4 no workflow:
+https://github.com/demolidorreddragons/NR/actions/runs/44876293567
+
+O job `build-prx-and-pkg` concluiu com sucesso. Artefato:
+- ID: `14695779072`
+- SHA-256 do ZIP: `174b7d8b7d9da1c08ae6aaa9ebea46d62369d299143f3af068cf8dbec19c196f`
+
+Manifest do pacote:
+- PKG SHA-256: `bc5cdd06e73578281c66498decab293abc907043488b8a1dc351c2c5001cc9a6`
+- ELF SHA-256: `7b742abd43a625042778d4335d1c121414ae3c1786fc75f4cb3c92ceb4e73534`
+- OELF SHA-256: `e9187a023918474a1291ff543c5fe2932cb26e7532d80bcd6c7a21077c93d399`
+- `gnm_import_probe=none`
+- `gnm_load_probe=sceKernelLoadStartModule_then_sceKernelDlsym_no_gnm_call`
+- `gnm_function_calls=none`
+- `hardware_status=not_run`
+
+A inspeção do OELF confirma somente a dependência SCE `libkernel.prx` / módulo `libkernel`, sem import estático de `libSceGnmDriver.prx`. A tabela de NIDs contém:
+- `IuxnUuXk6Bg#B#B` — `sceKernelGetModuleList`
+- `kUpgrXIrz7Q#B#B` — `sceKernelGetModuleInfo`
+- `JGfTMBOdUJo#B#B` — `sceKernelGetFsSandboxRandomWord`
+- `wzvqT4UqKX8#B#B` — `sceKernelLoadStartModule`
+- `LwG8g3niqwA#B#B` — `sceKernelDlsym`
+
+O nome `libSceGnmDriver` aparece no executável apenas como texto usado para procurar/carregar o PRX; não aparece como biblioteca importada na tabela SCE. O OELF também não contém o NID estático `yvZ73uQUqrk#C#C` do probe anterior.
+
+A validação independente do PKG/SFO/payload ainda está em andamento no job `independent-pkg-qa`. O host-tests do commit com o probe e a instrumentação passou na execução `44876368025`. Nenhum staging ou instalação foi realizado.
+
 ## Próximos passos
 
 1. Concluir a compilação OpenOrbis e confirmar que a instrumentação compila no target.
