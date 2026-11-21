@@ -19,6 +19,29 @@ This package currently installs the diagnostics/capture scaffold only. It does n
 
 For troubleshooting, the installer log records the failing operation and the platform `errno` value (for example, source lookup/open, temporary destination creation, write, verification, or final rename). Capture the log after the latest launch attempt; older log contents do not describe a newer attempt.
 
+## Diagnóstico real do PS4 — conflito do instalador / PKG 008
+
+Diagnóstico somente leitura executado pelo runner Windows/PS4 LAN no run [44848816765](https://github.com/demolidorreddragons/NR/actions/runs/44848816765), sem alterar arquivos do console.
+
+O log remoto continha duas tentativas:
+- tentativa anterior: `ERROR: cannot create temporary PRX ... (errno=17 / EEXIST)`;
+- tentativa mais recente: `ABORTED: CONFLICT; managed path is inaccessible or not a regular file`.
+
+O FTP LIST detalhado confirmou que os caminhos gerenciados existentes são arquivos regulares, não links simbólicos:
+- `ps4_neural_engine.prx`: modo `-rw-------`, 224128 bytes no LIST;
+- `ps4_neural_engine.prx.pne-tmp`: modo `-rw-------`, 224128 bytes — temporário residual de uma tentativa anterior;
+- `ps4_neural_engine.prx.pne-backup`: modo `-rw-rw-rw-`, 206528 bytes;
+- `plugins.ini`, `plugins.ini.pne-tmp` e `plugins.ini.pne-backup`: 55 bytes cada;
+- não havia manifesto instalado nem marcador de transação.
+
+O tamanho retornado por FTP SIZE divergiu do tamanho exibido por LIST para o PRX; por isso esses valores não são usados como prova de integridade. Nenhum temporário, backup, PRX ou configuração foi apagado ou alterado durante o diagnóstico.
+
+**Causa provável confirmada pelo estado do filesystem:** o teste de tipo de arquivo do eboot baseado em `lstat/S_ISREG` classificou incorretamente um PRX que o FTP identifica como arquivo regular, levando ao abort genérico antes da migração LEGACY. A mensagem EEXIST pertence a uma tentativa anterior que encontrou o nome temporário fixo já ocupado.
+
+**Correção no PKG 009:** inspeção por `open(O_RDONLY | O_NOFOLLOW)` e `fstat` apenas dos bits de tipo, sem confiar em `st_size`; erros de PRX, manifesto e marcador agora são reportados separadamente com `errno`. A criação temporária exclusiva continua ignorando nomes já ocupados por meio de sufixos numéricos. Os arquivos antigos no PS4 permanecem preservados.
+
+O host CI do código corrigido passou no run [44848981010](https://github.com/demolidorreddragons/NR/actions/runs/44848981010). Build Orbis/PKG 009 e QA independente ainda são gates pendentes; nenhuma limpeza, instalação ou ativação foi executada pelo diagnóstico.
+
 ## Release 006 — histórico da auditoria estática (20/11/2026)
 
 O PKG 006 passou pelo build, validação estrutural e extração do pipeline no run [44669637925](https://github.com/demolidorreddragons/NR/actions/runs/44669637925). Isso não é aprovação para instalação.
