@@ -331,3 +331,22 @@ A estrutura passa a contemplar dez especialidades, incluindo separação explíc
 - [Matriz de QA e evidências](MATRIZ_QA.md)
 
 O protocolo define dez papéis, revisão cruzada, barreiras contra viés, contrato obrigatório de tarefa, estados PASS/FAIL/BLOCKED/NOT_RUN, pontuação auxiliar e relatório independente. A pontuação nunca substitui gates obrigatórios. Papéis organizacionais não significam dez agentes autônomos ativos.
+
+
+## 10. Sistema de eficiência, automação e controle de qualidade — aprovado em 2026-11-21
+
+**Decisão:** automatizar trabalho repetitivo e reduzir retrabalho sem enfraquecer gates técnicos, QA independente ou segurança operacional. A especificação executável está em [PLANO_AUTOMACAO_E_EFICIENCIA.md](PLANO_AUTOMACAO_E_EFICIENCIA.md).
+
+Princípios:
+1. Fila priorizada por dependências, bloqueios, risco e valor técnico; tarefas independentes podem avançar em paralelo somente quando seus contratos e interfaces estiverem definidos.
+2. Cada tarefa recebe contrato com ID, escopo, responsável, revisores sem conflito, commit-base, dependências, critérios mensuráveis, comandos, evidências, riscos e Definition of Done.
+3. Impact Analyzer identifica módulos e testes potencialmente afetados; Test Selector recomenda testes direcionados para feedback rápido. Nenhum teste obrigatório de release ou gate de hardware pode ser omitido por seleção automática.
+4. Failure Analyzer consolida logs e falhas recorrentes, apresentando hipóteses rastreáveis, nunca correções automáticas não revisadas.
+5. Build Optimizer usa cache somente com chaves completas e verificáveis; artefatos de cache não substituem validação de integridade.
+6. Evidence Collector vincula commit, workflow/job, ambiente, comandos, logs, artefatos, hashes e limitações.
+7. Métricas de produtividade são auxiliares; não premiar velocidade à custa de correção, cobertura, segurança ou independência.
+8. O painel deve expor bloqueios e próximos passos desbloqueados. Após um gate passar, avançar automaticamente para a próxima tarefa segura e desbloqueada.
+
+**Ordem de implantação:** (1) fila/contratos/dependências; (2) Impact Analyzer e Test Selector; (3) Failure Analyzer; (4) cache/build; (5) Evidence Collector; (6) painel de métricas; (7) ampliar regressão numérica e visual.
+
+**Limites:** automação não autoriza instalação/desinstalação, ativação de PRX, alteração de `plugins.ini`, reinício do GoldHEN ou operação destrutiva no console. Testes host/CI não equivalem a validação PS4 Pro. O pacote padrão permanece um único Full/Base (`gde`).
