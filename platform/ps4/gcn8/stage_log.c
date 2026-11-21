@@ -166,7 +166,7 @@ static void log_signal_diag(const char *operation, unsigned signal_number,
     n=append_text(line,sizeof(line),n," signal=");
     n=append_dec(line,sizeof(line),n,signal_number);
     n=append_text(line,sizeof(line),n," rc=");
-    n=append_dec(line,sizeof(line),n,(unsigned)(result < 0 ? 1 : 0));
+    n=append_text(line,sizeof(line),n,result < 0 ? "-1" : "0");
     n=append_text(line,sizeof(line),n," errno=");
     n=append_dec(line,sizeof(line),n,(unsigned)saved_errno);
     if (n<sizeof(line)) line[n++]='\\n';
