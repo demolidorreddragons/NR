@@ -67,6 +67,10 @@ int main(int argc, char** argv) {
 #ifdef PNE_GCN8_STARTUP_ONLY
     const int result = 0;
     stage_log("RESULT_PASS_STARTUP_ONLY_GNM_NOT_LINKED");
+#elif defined(PNE_GCN8_GNM_LINK_ONLY)
+    const int result = 0;
+    stage_log("GNM_LINK_ONLY_MAIN_REACHED");
+    stage_log("RESULT_PASS_GNM_LINK_ONLY_NO_GNM_CALLS");
 #else
     const int result = pne_gcn8_compute_smoke_run(
         "app0:/compute_smoke_add.sb", persistent_log ? log_path : nullptr);
