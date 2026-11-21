@@ -110,3 +110,22 @@ Foi inspecionada a implementação pública atual de `PS4-OpenGNM/opengnm/tests/
 5. O harness NR não deve ser executado no PS4 neste estado. A próxima correção segura é obter um contrato específico para GPU VA/low-4-GiB e V# writable, além de validar a sincronização e a política de cache do output. A evidência atual não autoriza trocar macros, endereços ou descritores por tentativa.
 
 **Classificação:** STATIC_REVIEW adicional. GPU VA para V# / tabela 32-bit = BLOCKED; V# writable/cache = BLOCKED; compute dispatch/readback = NOT_RUN.
+
+## 8. Rechecagem documental independente do offset de InputUsage (2026-11-21)
+
+Foi feita nova consulta às referências públicas atuais, separando explicitamente documentação de implementação:
+
+- A referência pública atual do OpenGNM para `GnmShaderBinaryInfo` declara que `chunkusagebaseoffsetdwords` aponta para o início da tabela: `((uint32_t*)&ShaderBinaryInfo) - chunkusagebaseoffsetdwords`. A página também mantém `numinputusageslots` como campo separado.
+- O código atual do fpPS4 executa duas operações: primeiro recua `chunkUsageBaseOffsetInDW * 4` bytes a partir de `OrbShdr`, depois recua mais `numInputUsageSlots` elementos de `TInputUsageSlot`. Isso é uma interpretação de fim-da-tabela e contradiz literalmente o comentário da documentação OpenGNM.
+- A documentação OpenGNM de shaders descreve a tabela de InputUsage como dados colocados imediatamente após a estrutura de estágio, antes do código. Ela não demonstra, por si só, qual das duas convenções o parser Sony aceita em todos os binários.
+- Os exemplos públicos freegnm avisam que os shaders compilados por psbc não carregam reflection e que seus exemplos não foram testados em PS4 Pro/NEO; portanto não são uma amostra independente apta a resolver o contrato GFX8/NEO.
+
+**Conclusão desta rodada:** a divergência não foi resolvida. A documentação OpenGNM favorece a interpretação de início da tabela; fpPS4 implementa a interpretação de fim da tabela. Nenhuma das duas fontes, isoladamente, prova o comportamento do parser Sony no firmware 14.02. Não mudar o cálculo do PSBC nem relaxar o bloqueio com base apenas nesta documentação. Manter os shaders com offset não representável como rejeitados; exigir amostra real de shader PS4 com tabela conhecida, parser independente adicional ou validação controlada no hardware antes de decidir o layout.
+
+Referências consultadas:
+- OpenGNM Shader Binary: https://ps4-opengnm.github.io/opengnm/reference/shaderbinary/
+- OpenGNM Shader Guide: https://ps4-opengnm.github.io/opengnm/guides/shaders/
+- fpPS4 resolver: https://github.com/red-prig/fpPS4/blob/trunk/chip/ps4_shader.pas
+- freegnm examples caveats: https://github.com/lateleite/freegnm-examples
+
+**Limite:** esta atualização é auditoria documental. Não houve compilação GFX8, dispatch, readback, execução no PS4, nem validação do parser Sony.
