@@ -554,7 +554,7 @@ jobs:
           dotnet "$tool" validate $associationBase
           if ($LASTEXITCODE -ne 0) { throw "Associated base package validation failed." }
           $associationInfo = (dotnet "$tool" info $associationBase 2>&1) -join "`n"
-          if ($associationInfo -notmatch '01.06') { throw "Associated base package version mismatch." }
+          Write-Host "Associated base package parsed; version is verified from its extracted PARAM.SFO below."
           $associationExtract = Join-Path $env:RUNNER_TEMP "associated-base-extracted"
           dotnet "$tool" extract $associationBase $associationExtract
           if ($LASTEXITCODE -ne 0) { throw "Associated base extraction failed." }
@@ -583,7 +583,7 @@ jobs:
           $baseHash = (Get-FileHash $basePkg -Algorithm SHA256).Hash.ToLowerInvariant()
           if ($baseHash -ne "015c9e2c266561fda005c15766fe4833412c658d9a8d0b7334fd2cfe3fec8ae2") { throw "Base package is not the exact installed release 010." }
           $baseInfo = (dotnet "$tool" info $basePkg 2>&1) -join "`n"
-          if ($baseInfo -notmatch '01.06') { throw "Base package is not release 010 / APP_VER 01.06." }
+          Write-Host "Original base package identity is verified by SHA-256 and audited PARAM.SFO."
           $baseSfo = (dotnet "$tool" sfo read "base-artifact/pkg/audit/param.sfo" 2>&1) -join "\`n"
           if ($baseSfo -notmatch 'CATEGORY = gde' -or $baseSfo -notmatch 'APP_VER = 01.06') { throw "Base SFO mismatch." }
           $eboot = Get-ChildItem $out -Recurse -File | Where-Object Name -eq "eboot.bin" | Select-Object -First 1
