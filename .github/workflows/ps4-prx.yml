@@ -453,4 +453,24 @@ jobs:
           $expectedPrx = (Get-FileHash "update-artifact/ps4/ps4_neural_engine.prx" -Algorithm SHA256).Hash
           $actualPrx = (Get-FileHash $prx.FullName -Algorithm SHA256).Hash
           if ($actualPrx -ne $expectedPrx) { throw "Patch PRX digest mismatch." }
-          "PATCH_QA_STATUS=PASS_PC_ONLY_NOT_HARDWARE_TESTED" | Out-File "patch-artifact/audit/QA_STATUS.txt"
+          $manifestText = Get-Content $manifest.FullName -Raw
+          if ($manifestText -notmatch 'release_number=011' -or $manifestText -notmatch 'app_version=01.07' -or $manifestText -notmatch "prx_sha256=$($expectedPrx.ToLowerInvariant())") { throw "Patch release manifest does not match release 011 payload." }
+          $patchHash = (Get-FileHash $pkg -Algorithm SHA256).Hash.ToLowerInvariant()
+          @(
+            "PATCH_KIND=PACKAGE_MANAGER_PATCH"
+            "PATCH_BASE_VERSION=01.06"
+            "PATCH_APP_VERSION=01.07"
+            "PATCH_BASE_SHA256=$baseHash"
+            "PATCH_BYTES=$((Get-Item $pkg).Length)"
+            "PATCH_SHA256=$patchHash"
+            "PATCH_PRX_SHA256=$actualPrx"
+            "PATCH_QA_STATUS=PASS_PC_ONLY_NOT_HARDWARE_TESTED"
+          ) | Out-File "patch-artifact/audit/QA_STATUS.txt"
+      - name: Upload independent patch QA evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: PS4-Neural-Engine-independent-patch-QA
+          path: patch-artifact/audit/*
+          if-no-files-found: warn
+          retention-days: 30
