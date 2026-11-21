@@ -38,7 +38,7 @@ jobs:
           github-token: ${{ github.token }}
 
       - name: Verify exact GNM-Link package and independent QA before console changes
-        shell: powershell
+        shell: pwsh
         env:
           EXPECTED_SHA256: e68da9f35981aa32e788ebe3f0461360167c0194b0c408c47c945745ebab5847
         run: |
@@ -60,7 +60,7 @@ jobs:
           Write-Host "EXACT_DIAGNOSTIC_ARTIFACT_VERIFIED bytes=$((Get-Item -LiteralPath $pkg.FullName).Length) sha256=$actual"
 
       - name: Archive old NR packages and stage verified diagnostic PKG
-        shell: powershell
+        shell: pwsh
         env:
           PS4_IP: ${{ vars.PS4_IP }}
         run: |
