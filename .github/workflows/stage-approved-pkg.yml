@@ -24,34 +24,65 @@ jobs:
           name: ps4-neural-engine-build
           path: transfer
           repository: demolidorreddragons/NR
-          run-id: 44843777335
+          run-id: 44847096234
           github-token: ${{ github.token }}
+
+
+      - name: Download independent QA evidence for the exact build run
+        uses: actions/download-artifact@v4
+        with:
+          name: PS4-Neural-Engine-008-independent-QA
+          path: qa
+          repository: demolidorreddragons/NR
+          run-id: 44847096234
+          github-token: ${{ github.token }}
+
+      - name: Verify independent QA evidence before any PS4 changes
+        shell: powershell -NoProfile -ExecutionPolicy Bypass -Command "& '{0}'"
+        env:
+          EXPECTED_SHA256: 43d57118b206df9677d08cd56cc430e69054ebd2c53e86c06bb61ce56fde2b32
+        run: |
+          $ErrorActionPreference = "Stop"
+          $reportPath = Join-Path $env:GITHUB_WORKSPACE "qa/qa-report.txt"
+          $sfoPath = Join-Path $env:GITHUB_WORKSPACE "qa/embedded-param-sfo.txt"
+          if (-not (Test-Path -LiteralPath $reportPath -PathType Leaf)) { throw "Independent QA report missing." }
+          if (-not (Test-Path -LiteralPath $sfoPath -PathType Leaf)) { throw "Embedded PARAM.SFO QA evidence missing." }
+          $report = Get-Content -LiteralPath $reportPath -Raw
+          foreach ($required in @("PKG_KIND=FULL_BASE_APPLICATION_NOT_PATCH","PKG_SHA256=$($env:EXPECTED_SHA256)","PARAM_SFO_SEMANTIC_FIELDS=PASS","QA_STATUS=PASS_PC_ONLY_NOT_HARDWARE_TESTED")) {
+            if ($report -notmatch [regex]::Escape($required)) { throw "Independent QA evidence missing or mismatched: $required" }
+          }
+          $sfo = Get-Content -LiteralPath $sfoPath -Raw
+          foreach ($required in @("CATEGORY = gde","APP_VER = 01.04","VERSION = 01.04","TITLE_ID = PNEU00001","CONTENT_ID = IV0000-PNEU00001_00-PS4NEURALENG0000","st_type=digital50")) {
+            if ($sfo -notmatch [regex]::Escape($required)) { throw "Independent embedded SFO evidence mismatch: $required" }
+          }
+          Write-Host "INDEPENDENT_QA_EVIDENCE_VERIFIED=TRUE"
+          "INDEPENDENT_QA=PASS_PC_ONLY_NOT_HARDWARE_TESTED" | Out-File $env:GITHUB_STEP_SUMMARY -Append
 
       - name: Verify exact approved release artifact
         shell: powershell -NoProfile -ExecutionPolicy Bypass -Command "& '{0}'"
         env:
-          EXPECTED_SHA256: 30c27cf5a3f0bddd53583b53eaf978f662a413cdf63f817ad0a1f72dd8a4ca45
-          EXPECTED_COMMIT: a8f423f20dc95303e588e84c4c9d615bc4f2567d
+          EXPECTED_SHA256: 43d57118b206df9677d08cd56cc430e69054ebd2c53e86c06bb61ce56fde2b32
+          EXPECTED_COMMIT: b05968afdb4742c658723de14ad038b89a9cd873
         run: |
           $ErrorActionPreference = "Stop"
-          $pkg = Join-Path $env:GITHUB_WORKSPACE "transfer/pkg/PS4-Neural-Engine-006.pkg"
+          $pkg = Join-Path $env:GITHUB_WORKSPACE "transfer/pkg/PS4-Neural-Engine-008.pkg"
           if (-not (Test-Path -LiteralPath $pkg -PathType Leaf)) { throw "Approved PKG is missing from the exact build artifact." }
           $hash = (Get-FileHash -LiteralPath $pkg -Algorithm SHA256).Hash.ToLowerInvariant()
           $size = (Get-Item -LiteralPath $pkg).Length
           if ($hash -ne $env:EXPECTED_SHA256) { throw "PKG SHA-256 mismatch: $hash" }
           if ($size -le 0) { throw "PKG is empty." }
-          "SOURCE_RUN_ID=44843777335" | Out-File $env:GITHUB_STEP_SUMMARY -Append
+          "SOURCE_RUN_ID=44847096234" | Out-File $env:GITHUB_STEP_SUMMARY -Append
           "SOURCE_COMMIT=$env:EXPECTED_COMMIT" | Out-File $env:GITHUB_STEP_SUMMARY -Append
-          "PKG_FILE=PS4-Neural-Engine-006.pkg" | Out-File $env:GITHUB_STEP_SUMMARY -Append
+          "PKG_FILE=PS4-Neural-Engine-008.pkg" | Out-File $env:GITHUB_STEP_SUMMARY -Append
           "PKG_BYTES=$size" | Out-File $env:GITHUB_STEP_SUMMARY -Append
           "PKG_SHA256=$hash" | Out-File $env:GITHUB_STEP_SUMMARY -Append
           Write-Host "APPROVED_ARTIFACT_VERIFIED"
 
-      - name: Archive older Neural Rendering packages and stage release 006
+      - name: Archive older Neural Rendering packages and stage release 008
         shell: powershell -NoProfile -ExecutionPolicy Bypass -Command "& '{0}'"
         env:
           PS4_IP: ${{ vars.PS4_IP }}
-          EXPECTED_SHA256: 30c27cf5a3f0bddd53583b53eaf978f662a413cdf63f817ad0a1f72dd8a4ca45
+          EXPECTED_SHA256: 43d57118b206df9677d08cd56cc430e69054ebd2c53e86c06bb61ce56fde2b32
         run: |
           $ErrorActionPreference = "Stop"
           if (-not $env:PS4_IP) { throw "PS4_IP Actions variable is missing." }
@@ -174,7 +205,7 @@ jobs:
           $rootNames = @(Get-FtpNames "/data/pkg/")
           foreach ($entry in $rootNames) { Write-Host "PKG_ROOT_ENTRY=[$entry]" }
           $archiveCandidates = @($rootNames | Where-Object {
-            ($_ -match '^PS4-Neural-(Engine|Rendering)-.*\.pkg$' -or $_ -match '^IV0000-NRE.*\.pkg$') -and $_ -ne "PS4-Neural-Engine-006.pkg"
+            ($_ -match '^PS4-Neural-(Engine|Rendering)-.*\.pkg$' -or $_ -match '^IV0000-NRE.*\.pkg$') -and $_ -ne "PS4-Neural-Engine-008.pkg"
           })
           foreach ($candidate in $archiveCandidates) { Write-Host "ARCHIVE_CANDIDATE=[$candidate]" }
           foreach ($name in $archiveCandidates) {
@@ -191,27 +222,27 @@ jobs:
             Write-Host "NO_READABLE_OLD_VERSIONS_DIRECTORY: $($_.Exception.Message)"
           }
 
-          # A conflicting release-006 file is archived, never overwritten.
+          # A conflicting release-008 file is archived, never overwritten.
           $rootNames = @(Get-FtpNames "/data/pkg/")
           $alreadyStaged = $false
-          if ($rootNames -contains "PS4-Neural-Engine-006.pkg") {
-            $check = Join-Path $env:RUNNER_TEMP "ps4-existing-006.pkg"
+          if ($rootNames -contains "PS4-Neural-Engine-008.pkg") {
+            $check = Join-Path $env:RUNNER_TEMP "ps4-existing-008.pkg"
             try {
-              $existingHash = Get-RemoteHash "/data/pkg/PS4-Neural-Engine-006.pkg" $check
+              $existingHash = Get-RemoteHash "/data/pkg/PS4-Neural-Engine-008.pkg" $check
               if ($existingHash -ne $env:EXPECTED_SHA256) {
-                Move-VerifiedRemoteFile "/data/pkg/PS4-Neural-Engine-006.pkg" "/data/pkg/old" "PS4-Neural-Engine-006.pkg"
+                Move-VerifiedRemoteFile "/data/pkg/PS4-Neural-Engine-008.pkg" "/data/pkg/old" "PS4-Neural-Engine-008.pkg"
               } else {
                 $alreadyStaged = $true
-                Write-Host "APPROVED_006_ALREADY_PRESENT_WITH_MATCHING_HASH"
+                Write-Host "APPROVED_008_ALREADY_PRESENT_WITH_MATCHING_HASH"
               }
             } finally { Remove-Item -LiteralPath $check -Force -ErrorAction SilentlyContinue }
           }
 
           # Upload to a unique temporary name, read it back, then rename to the canonical filename.
-          $pkg = Join-Path $env:GITHUB_WORKSPACE "transfer/pkg/PS4-Neural-Engine-006.pkg"
+          $pkg = Join-Path $env:GITHUB_WORKSPACE "transfer/pkg/PS4-Neural-Engine-008.pkg"
           $localSize = (Get-Item -LiteralPath $pkg).Length
-          $tempRemote = "/data/pkg/PS4-Neural-Engine-006.$([guid]::NewGuid().ToString('N')).uploading"
-          $finalRemote = "/data/pkg/PS4-Neural-Engine-006.pkg"
+          $tempRemote = "/data/pkg/PS4-Neural-Engine-008.$([guid]::NewGuid().ToString('N')).uploading"
+          $finalRemote = "/data/pkg/PS4-Neural-Engine-008.pkg"
           if (-not $alreadyStaged) {
             $tempRequest = New-FtpRequest $tempRemote ([System.Net.WebRequestMethods+Ftp]::UploadFile)
             $tempRequest.ContentLength = $localSize
@@ -223,7 +254,7 @@ jobs:
             $uploadResponse = $tempRequest.GetResponse()
             $uploadResponse.Dispose()
 
-            $verify = Join-Path $env:RUNNER_TEMP "ps4-uploaded-006.pkg"
+            $verify = Join-Path $env:RUNNER_TEMP "ps4-uploaded-008.pkg"
             try {
               $remoteHash = Get-RemoteHash $tempRemote $verify
               $remoteSize = (Get-Item -LiteralPath $verify).Length
@@ -238,19 +269,19 @@ jobs:
             $renameResponse = $rename.GetResponse()
             $renameResponse.Dispose()
           }
-          $verifyFinal = Join-Path $env:RUNNER_TEMP "ps4-final-006.pkg"
+          $verifyFinal = Join-Path $env:RUNNER_TEMP "ps4-final-008.pkg"
           try {
             $finalHash = Get-RemoteHash $finalRemote $verifyFinal
             $finalSize = (Get-Item -LiteralPath $verifyFinal).Length
             if ($finalHash -ne $env:EXPECTED_SHA256 -or $finalSize -ne $localSize) {
-              throw "Final /data/pkg/PS4-Neural-Engine-006.pkg failed read-back integrity verification."
+              throw "Final /data/pkg/PS4-Neural-Engine-008.pkg failed read-back integrity verification."
             }
             Write-Host "FINAL_PKG_VERIFIED: path=$finalRemote; bytes=$finalSize; sha256=$finalHash"
           } finally { Remove-Item -LiteralPath $verifyFinal -Force -ErrorAction SilentlyContinue }
 
           $finalRoot = @(Get-FtpNames "/data/pkg/")
           $nrRoot = @($finalRoot | Where-Object { $_ -match '^PS4-Neural-(Engine|Rendering)-.*\.pkg$' -or $_ -match '^IV0000-NRE.*\.pkg$' })
-          if ($nrRoot.Count -ne 1 -or $nrRoot[0] -ne "PS4-Neural-Engine-006.pkg") {
+          if ($nrRoot.Count -ne 1 -or $nrRoot[0] -ne "PS4-Neural-Engine-008.pkg") {
             throw "Unexpected Neural Rendering PKGs remain in /data/pkg/: $($nrRoot -join ', ')"
           }
           $archiveFinal = @(Get-FtpNames "/data/pkg/old/")
