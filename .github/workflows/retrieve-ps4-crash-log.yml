@@ -1,0 +1,88 @@
+name: Retrieve PS4 crash logger evidence
+
+on:
+  push:
+    branches:
+      - feature/gcn8-numeric-kernels
+    paths:
+      - ".github/workflows/retrieve-ps4-crash-log.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  retrieve:
+    runs-on: [self-hosted, Windows, X64, ps4-lan]
+    timeout-minutes: 5
+    steps:
+      - name: Retrieve logger file over read-only FTP
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $outDir = Join-Path $env:RUNNER_TEMP 'ps4-crash-evidence'
+          New-Item -ItemType Directory -Force -Path $outDir | Out-Null
+          $base = 'ftp://192.168.0.17:2121'
+          $credential = New-Object System.Net.NetworkCredential('anonymous', 'anonymous@')
+          $found = $false
+
+          foreach ($dir in @('/user/data/', '/data/')) {
+            $safeName = ($dir.Trim('/') -replace '/', '_')
+            $listPath = Join-Path $outDir ("listing-" + $safeName + ".txt")
+            try {
+              $listReq = [System.Net.FtpWebRequest]::Create($base + $dir)
+              $listReq.Method = [System.Net.WebRequestMethods+Ftp]::ListDirectoryDetails
+              $listReq.Credentials = $credential
+              $listReq.UsePassive = $true
+              $listReq.UseBinary = $true
+              $listReq.KeepAlive = $false
+              $listReq.Timeout = 15000
+              $listResp = $listReq.GetResponse()
+              $reader = New-Object System.IO.StreamReader($listResp.GetResponseStream())
+              $listing = $reader.ReadToEnd()
+              $reader.Dispose()
+              $listResp.Dispose()
+              Set-Content -Path $listPath -Value $listing -Encoding UTF8
+              Write-Host "FTP_LIST_OK $dir"
+            } catch {
+              Set-Content -Path $listPath -Value ("LIST_ERROR: " + $_.Exception.Message) -Encoding UTF8
+              Write-Host "FTP_LIST_UNAVAILABLE $dir"
+            }
+          }
+
+          foreach ($remote in @('/user/data/pne.log', '/data/pne.log')) {
+            $dest = Join-Path $outDir (($remote.Trim('/') -replace '/', '_'))
+            try {
+              $req = [System.Net.FtpWebRequest]::Create($base + $remote)
+              $req.Method = [System.Net.WebRequestMethods+Ftp]::DownloadFile
+              $req.Credentials = $credential
+              $req.UsePassive = $true
+              $req.UseBinary = $true
+              $req.KeepAlive = $false
+              $req.Timeout = 20000
+              $resp = $req.GetResponse()
+              $inputStream = $resp.GetResponseStream()
+              $file = [System.IO.File]::Create($dest)
+              $inputStream.CopyTo($file)
+              $file.Dispose()
+              $inputStream.Dispose()
+              $resp.Dispose()
+              $hash = (Get-FileHash -Algorithm SHA256 -Path $dest).Hash.ToLowerInvariant()
+              Write-Host "LOGGER_DOWNLOADED path=$remote bytes=$((Get-Item $dest).Length) sha256=$hash"
+              $found = $true
+            } catch {
+              Write-Host "LOGGER_NOT_FOUND path=$remote detail=$($_.Exception.Message)"
+            }
+          }
+
+          if ($found) {
+            "LOGGER_FOUND=true" | Set-Content (Join-Path $outDir 'result.txt')
+          } else {
+            "LOGGER_FOUND=false; inspect directory listings and confirm the console is online and the logger ran." | Set-Content (Join-Path $outDir 'result.txt')
+          }
+      - name: Upload retrieved evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: ps4-crash-logger-evidence
+          path: ${{ runner.temp }}/ps4-crash-evidence/
+          if-no-files-found: error
+          retention-days: 7
