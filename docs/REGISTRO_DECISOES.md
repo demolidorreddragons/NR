@@ -62,3 +62,19 @@ Este arquivo preserva decisões aprovadas e seus motivos. Novas decisões devem 
 **Limites:** staging não é instalação. O assistente não instala automaticamente; instalação continua sendo uma operação separada que exige autorização explícita e específica. Não avisar que está pronto para instalar antes do staging/readback verificado. PKGs diagnósticos com gates técnicos não resolvidos não devem ser recomendados para instalação; nesse caso, comunicar o bloqueio em vez de fornecer instruções para instalar.
 
 **Integração:** regra operacional em `docs/REGRAS_OPERACIONAIS_DO_PROJETO.md` §2.1 e regra obrigatória de execução em `AGENTS.md`.
+
+
+## DEC-2026-11-21-04 — Coleta imediata de feedback pós-instalação e correção
+
+**Estado:** APROVADA PELO USUÁRIO  
+**Data:** 2026-11-21
+
+**Decisão:** depois que o usuário instalar manualmente o PKG e enviar feedback, iniciar imediatamente a coleta não destrutiva das evidências disponíveis, correlacioná-las com o build/commit exato, diagnosticar e corrigir os problemas encontrados. Não encerrar com simples agradecimento ou status.
+
+**Coleta:** logs, crash/coredumps, timestamps, metadados e hashes; usar runner Windows bridge, preservar originais e registrar origem/tamanho/SHA-256. Solicitar apenas dados específicos que não estejam acessíveis.
+
+**Correção:** identificar causa com evidência, implementar correção mínima, executar testes e registrar resultados. Se for necessário novo teste no console, cumprir novamente os gates de QA, staging/readback, aviso e autorização específica de instalação/execução.
+
+**Limites:** feedback não autoriza instalação adicional, execução destrutiva, ativação de PRX, reinício GoldHEN ou alteração de dados/configurações. A coleta deve ser read-only e preservar os dados do usuário.
+
+**Integração:** `docs/REGRAS_OPERACIONAIS_DO_PROJETO.md` §2.2 e `AGENTS.md`.
