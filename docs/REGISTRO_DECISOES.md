@@ -48,3 +48,17 @@ Este arquivo preserva decisões aprovadas e seus motivos. Novas decisões devem 
 **Salvaguardas:** testes direcionados não removem suítes obrigatórias; cache não substitui build limpo; diagnósticos automáticos não aprovam nem corrigem sozinhos; métricas não substituem gates; host/CI não equivale a hardware. Regras de autorização do console e PKG Full/Base permanecem inalteradas.
 
 **Documentos:** `PLANO_AUTOMACAO_E_EFICIENCIA.md`, `CONTRATO_PIPELINE_CI_QA.md`, `METRICAS_PRODUTIVIDADE_E_QUALIDADE.md`, Plano Mestre, Painel e Matriz QA.
+
+
+## DEC-2026-11-21-03 — Aviso e procedimento obrigatório após staging de PKG
+
+**Estado:** APROVADA PELO USUÁRIO  
+**Data:** 2026-11-21
+
+**Decisão:** sempre que um PKG aprovado que realmente precise ser instalado for colocado na pasta correta do PS4, o assistente deve avisar explicitamente o usuário após concluir o readback final e verificar tamanho/SHA-256. O aviso deve vir acompanhado, na mesma mensagem, do procedimento manual de instalação.
+
+**Conteúdo obrigatório do aviso:** nome e caminho exatos do PKG, tamanho, SHA-256, resultado do QA, indicação de instalação limpa ou atualização e pré-requisitos que cabem ao usuário (incluindo remoção manual de versão anterior, quando aplicável).
+
+**Limites:** staging não é instalação. O assistente não instala automaticamente; instalação continua sendo uma operação separada que exige autorização explícita e específica. Não avisar que está pronto para instalar antes do staging/readback verificado. PKGs diagnósticos com gates técnicos não resolvidos não devem ser recomendados para instalação; nesse caso, comunicar o bloqueio em vez de fornecer instruções para instalar.
+
+**Integração:** regra operacional em `docs/REGRAS_OPERACIONAIS_DO_PROJETO.md` §2.1 e regra obrigatória de execução em `AGENTS.md`.
