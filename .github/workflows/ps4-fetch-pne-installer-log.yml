@@ -80,3 +80,4 @@ jobs:
           Write-Host "PNE_TRANSACTION_DIAGNOSTICS_READ_ONLY_COMPLETE"
 
 # Re-run read-only PS4 transaction diagnostics.
+# Triggered by commit message: Fetch PS4 PNE installer log
