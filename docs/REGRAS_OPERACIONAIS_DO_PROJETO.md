@@ -37,6 +37,25 @@ Executar a sequência abaixo somente depois de validar o artefato local e o rela
 
 Se qualquer validação falhar, não promover o arquivo para o destino final. Relatar o bloqueio com a evidência concreta.
 
+### 2.1 Aviso e procedimento de instalação (handoff obrigatório)
+
+Quando a entrega exigir instalação no console, o fluxo obrigatório é:
+
+1. Concluir build, validação do PKG e QA aplicável.
+2. Fazer staging do PKG aprovado em `/data/pkg/<nome-final>.pkg` pelo runner Windows autorizado, seguindo integralmente a seção 2 (incluindo readback final e comparação de tamanho/SHA-256).
+3. **Somente depois de confirmar que o arquivo está na pasta correta e que o readback final confere**, avisar o usuário explicitamente que o PKG está pronto para instalação e informar: nome do arquivo, caminho no PS4, tamanho, SHA-256 e resultado do QA.
+4. No mesmo aviso, fornecer o procedimento de instalação para o usuário executar manualmente:
+   - No PS4, abrir **Configurações → GoldHEN → Package Installer** (ou o Package Installer disponibilizado no ambiente instalado).
+   - Selecionar o PKG de Neural Rendering em `/data/pkg/`.
+   - Confirmar a instalação e aguardar a conclusão; não interromper o processo.
+   - Ao terminar, iniciar o aplicativo pelo menu de conteúdo do PS4 e enviar o resultado/log solicitado para a próxima validação.
+   - Se o menu/Package Installer não estiver disponível, não improvisar alterações em `plugins.ini` nem ativar plugins; informar o bloqueio e solicitar orientação.
+5. Dizer claramente se a instalação é limpa ou atualização e se existe alguma ação manual prévia. Pela regra atual, quando for necessária remoção de versão anterior, **o usuário a faz manualmente**; nunca desinstalar por conta própria.
+6. Não instalar automaticamente como consequência do staging. O aviso e o procedimento são uma transferência de responsabilidade para o usuário; qualquer instalação executada pelo assistente continua exigindo autorização explícita e específica, separada da autorização de staging.
+7. Não enviar instruções de instalação antes do staging/readback estar concluído, nem afirmar que o pacote está pronto enquanto houver validação pendente.
+
+Se o pacote não precisar ser instalado naquela etapa (por exemplo, artefato diagnóstico ainda bloqueado), não sugerir instalação. Informar apenas que o artefato não deve ser instalado e explicar o bloqueio técnico.
+
 ## 3. Limites de autorização no console
 
 Sem autorização explícita do usuário, é proibido:
