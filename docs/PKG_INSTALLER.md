@@ -1,5 +1,7 @@
 # PS4 PKG installer
 
+PKG 009 is the current full base-application installer (not a patch). It carries APP_VER/VERSION 01.05 and corrects PS4 managed-file conflict detection by probing opened descriptors with `O_NOFOLLOW` and using `fstat` only for file-type bits (never `st_size`). Existing regular PRX/config files are recognized without following symlinks; inaccessible, symlink, or non-regular paths remain fail-closed. Existing stale `.pne-tmp` and backup files are preserved and bypassed by exclusive numbered staging names.
+
 PKG 007 is a full base-application installer (not a patch) intended for a jailbroken PS4. It carries APP_VER/VERSION 01.03 and a freshly built eboot with atomic, collision-resistant temporary-file reservation for both the PRX and plugins.ini, in addition to byte-accurate PRX copy verification. This is deliberate: the audited console installation was an older `CATEGORY=gd`, `APP_VER=1.00` base, not the `gde` PKG 002 that patch 003 targeted. Install it through GoldHEN/Debug Package Installer, then launch **PS4 Neural Engine Installer** once.
 
 The installer first validates `/app0/pne-release.ini` (schema, release identity, PRX filename and SHA-256 of `/app0/ps4_neural_engine.prx`) before creating the GoldHEN destination directory or changing persistent plugin/configuration files. The SHA-256 implementation is included in the installer and covered by host test vectors.
