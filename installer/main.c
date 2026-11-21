@@ -290,7 +290,8 @@ static int configure_loader(char* error, size_t error_size, char* temp_path, siz
     } else if (errno != ENOENT) {
         snprintf(error, error_size, "ERROR: cannot inspect plugins.ini (errno=%d).", errno);
         return 0;
-    }\n    FILE* in = fopen(CONFIG, "rb");
+    }
+    FILE* in = fopen(CONFIG, "rb");
     if (in) {
         length = fread(input, 1, sizeof(input)-1, in);
         if (ferror(in) || !feof(in)) {
@@ -379,7 +380,8 @@ static int configure_loader(char* error, size_t error_size, char* temp_path, siz
         used += n;
     }
 
-    *changed = 1;\n    FILE* out = fopen_unique_staged_file(CONFIG_TMP, temp_path, temp_path_size);
+    *changed = 1;
+    FILE* out = fopen_unique_staged_file(CONFIG_TMP, temp_path, temp_path_size);
     if (!out) {
         snprintf(error, error_size, "ERROR: cannot create temporary plugins.ini (errno=%d).", errno);
         return 0;
