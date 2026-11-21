@@ -87,10 +87,10 @@ jobs:
                   $items = @()
                   while (-not $reader.EndOfStream) {
                     $line = $reader.ReadLine()
-                    if ($line) { $items += $line.Trim() }
+                    if ($line) { foreach ($token in ($line.Trim() -split '\s+')) { if ($token) { $items += $token } } }
                   }
                   Write-Host "FTP_LIST_OK path=$candidate entries=$($items.Count)"
-                  return ,$items
+                  return $items
                 } catch {
                   $lastError = $_
                   Write-Host "FTP_LIST_RETRY path=$candidate attempt=$attempt error=$($_.Exception.Message)"
@@ -174,7 +174,7 @@ jobs:
           $rootNames = @(Get-FtpNames "/data/pkg/")
           foreach ($entry in $rootNames) { Write-Host "PKG_ROOT_ENTRY=[$entry]" }
           $archiveCandidates = @($rootNames | Where-Object {
-            $_ -match '^PS4-Neural-Engine-.*\.pkg$' -and $_ -ne "PS4-Neural-Engine-006.pkg"
+            ($_ -match '^PS4-Neural-(Engine|Rendering)-.*\.pkg$' -or $_ -match '^IV0000-NRE.*\.pkg$') -and $_ -ne "PS4-Neural-Engine-006.pkg"
           })
           foreach ($candidate in $archiveCandidates) { Write-Host "ARCHIVE_CANDIDATE=[$candidate]" }
           foreach ($name in $archiveCandidates) {
