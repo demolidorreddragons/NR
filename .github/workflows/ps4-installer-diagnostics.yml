@@ -16,7 +16,7 @@ jobs:
     timeout-minutes: 5
     steps:
       - name: Read installer log and current PRX state over GoldHEN FTP
-        shell: powershell
+        shell: powershell -NoProfile -ExecutionPolicy Bypass -File {0}
         env:
           PS4_IP: ${{ vars.PS4_IP }}
         run: |
