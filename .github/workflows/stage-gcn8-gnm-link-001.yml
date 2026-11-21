@@ -48,7 +48,7 @@ jobs:
           if (-not $pkg) { throw "Exact GNM-Load diagnostic PKG missing from build artifact." }
           if (-not (Test-Path -LiteralPath $report -PathType Leaf)) { throw "Independent GNM-Load QA report missing." }
           $qa = Get-Content -LiteralPath $report -Raw
-          foreach ($required in @("GNM_LOAD_PKG_SHA256=$($env:EXPECTED_SHA256)", "GNM_LOAD_SFO=PASS; COMPUTE_SHADER=ABSENT", "GNM_LOAD_QA_STATUS=PASS_PC_ONLY_NOT_HARDWARE_TESTED")) {
+          foreach ($required in @("GNM_LOAD_PKG_SHA256=$($env:EXPECTED_SHA256)", "GNM_LOAD_SFO=PASS", "STATIC_GNM_IMPORT=ABSENT", "COMPUTE_SHADER=ABSENT", "GNM_LOAD_QA_STATUS=PASS_PC_ONLY_NOT_HARDWARE_TESTED")) {
             if ($qa -notmatch [regex]::Escape($required)) { throw "Independent QA evidence mismatch: $required" }
           }
           $actual = (Get-FileHash -LiteralPath $pkg.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
