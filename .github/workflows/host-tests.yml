@@ -105,7 +105,7 @@ jobs:
     timeout-minutes: 5
     steps:
       - name: Retrieve logger file over read-only FTP
-        shell: C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.EXE -ExecutionPolicy Bypass -File {0}
+        shell: powershell -ExecutionPolicy Bypass -File {0}
         run: |
           $ErrorActionPreference = 'Stop'
           $outDir = Join-Path $env:RUNNER_TEMP 'ps4-crash-evidence'
