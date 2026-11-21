@@ -85,6 +85,26 @@ jobs:
             Write-Host "PLUGINS_INI_READ_FAILED: $($_.Exception.Message)"
           }
 
+          Write-Host "=== UNIX FILE TYPES / PERMISSIONS (FTP LIST - READ-ONLY) ==="
+          foreach ($dir in @("/data/GoldHEN/plugins/","/data/GoldHEN/")) {
+            $request = [System.Net.FtpWebRequest]::Create("ftp://$($env:PS4_IP):2121$dir")
+            $request.Method = [System.Net.WebRequestMethods+Ftp]::ListDirectoryDetails
+            $request.Credentials = $credentials
+            $request.UsePassive = $true
+            $request.UseBinary = $false
+            $request.KeepAlive = $false
+            $request.Timeout = 15000
+            $request.ReadWriteTimeout = 15000
+            try {
+              $response = $request.GetResponse()
+              try {
+                $reader = New-Object System.IO.StreamReader($response.GetResponseStream())
+                try { Write-Host "LIST_DETAILS=$dir"; while (-not $reader.EndOfStream) { $line=$reader.ReadLine(); if ($line) { Write-Host $line } } }
+                finally { $reader.Dispose() }
+              } finally { $response.Dispose() }
+            } catch { Write-Host "LIST_DETAILS_FAILED path=$dir error=$($_.Exception.Message)" }
+          }
+
           Write-Host "=== GOLDHEN ROOT AND TRANSACTION FILES (READ-ONLY) ==="
           foreach ($dir in @("/data/GoldHEN/","/data/GoldHEN/plugins/")) {
             Write-Host "DIRECTORY=$dir"
@@ -112,6 +132,8 @@ jobs:
             "/data/GoldHEN/plugins/ps4_neural_engine.prx.pne-tmp",
             "/data/GoldHEN/plugins/pne-release.ini",
             "/data/GoldHEN/plugins/ps4_neural_engine.prx.pne-manifest",
+            "/data/GoldHEN/plugins/ps4_neural_engine.prx.pne-release.ini",
+            "/data/GoldHEN/plugins/ps4_neural_engine.prx.pne-transaction",
             "/data/GoldHEN/plugins.ini",
             "/data/GoldHEN/plugins.ini.pne-backup",
             "/data/GoldHEN/plugins.ini.pne-tmp",
