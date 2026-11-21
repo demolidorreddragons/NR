@@ -330,7 +330,7 @@ static int configure_loader(char* error, size_t error_size, char* temp_path, siz
     }
     *changed = 1;
     in_default = 0;
-    int kept_entry = 0;
+    int kept_entry = 0, added_entry = 0;
     pos = 0;
     while (pos < length) {
         size_t start = pos;
@@ -355,7 +355,7 @@ static int configure_loader(char* error, size_t error_size, char* temp_path, siz
         memcpy(output + used, input + start, line_len);
         used += line_len;
 
-        if (in_default && strcmp(line, "[default]") == 0 && entry_count == 0) {
+        if (in_default && strcmp(line, "[default]") == 0 && entry_count == 0 && !added_entry) {
             if (used && output[used-1] != '\n') output[used++] = '\n';
             int n = snprintf(output + used, sizeof(output)-used, "%s\n", DEST_PRX);
             if (n < 0 || (size_t)n >= sizeof(output)-used) {
@@ -363,6 +363,7 @@ static int configure_loader(char* error, size_t error_size, char* temp_path, siz
                 return 0;
             }
             used += (size_t)n;
+            added_entry = 1;
         }
     }
 
