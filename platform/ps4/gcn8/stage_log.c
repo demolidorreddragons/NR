@@ -158,10 +158,49 @@ static void on_signal(int sig, siginfo_t *info, void *context) {
     }
     _exit(128+(sig&0x7f));
 }
+static void log_signal_diag(const char *operation, unsigned signal_number,
+                              int result, int saved_errno) {
+    char line[160]; size_t n=0;
+    n=append_text(line,sizeof(line),n,"SIGNAL_DIAG op=");
+    n=append_text(line,sizeof(line),n,operation);
+    n=append_text(line,sizeof(line),n," signal=");
+    n=append_dec(line,sizeof(line),n,signal_number);
+    n=append_text(line,sizeof(line),n," rc=");
+    n=append_dec(line,sizeof(line),n,(unsigned)(result < 0 ? 1 : 0));
+    n=append_text(line,sizeof(line),n," errno=");
+    n=append_dec(line,sizeof(line),n,(unsigned)saved_errno);
+    if (n<sizeof(line)) line[n++]='\\n';
+    stage_log(line);
+}
+
+static void log_signal_abi(void) {
+    char line[192]; size_t n=0;
+    n=append_text(line,sizeof(line),n,"SIGNAL_ABI stack_t_size=");
+    n=append_dec(line,sizeof(line),n,(unsigned)sizeof(stack_t));
+    n=append_text(line,sizeof(line),n," ss_sp_off=");
+    n=append_dec(line,sizeof(line),n,(unsigned)offsetof(stack_t,ss_sp));
+    n=append_text(line,sizeof(line),n," ss_size_off=");
+    n=append_dec(line,sizeof(line),n,(unsigned)offsetof(stack_t,ss_size));
+    n=append_text(line,sizeof(line),n," ss_flags_off=");
+    n=append_dec(line,sizeof(line),n,(unsigned)offsetof(stack_t,ss_flags));
+    n=append_text(line,sizeof(line),n," altstack_bytes=");
+    n=append_dec(line,sizeof(line),n,(unsigned)sizeof(g_altstack));
+    if (n<sizeof(line)) line[n++]='\\n';
+    stage_log(line);
+}
+
 int stage_log_install_signals(void) {
+    stage_log("SIGNAL_INSTALL_BEGIN");
+    log_signal_abi();
+
     stack_t ss; memset(&ss,0,sizeof(ss));
     ss.ss_sp=g_altstack; ss.ss_size=sizeof(g_altstack);
-    if (sigaltstack(&ss,NULL)!=0) return -1;
+    errno=0;
+    int rc=sigaltstack(&ss,NULL);
+    int saved_errno=(rc==0)?0:errno;
+    log_signal_diag("sigaltstack",0u,rc,saved_errno);
+    if (rc!=0) return -1;
+
     struct sigaction action; memset(&action,0,sizeof(action));
     #if defined(__FreeBSD__) && !defined(__linux__)
     action.__sa_handler.__sa_sigaction=on_signal;
@@ -169,9 +208,20 @@ int stage_log_install_signals(void) {
     action.sa_sigaction=on_signal;
 #endif
     action.sa_flags=SA_SIGINFO|SA_ONSTACK;
-    sigemptyset(&action.sa_mask);
+    errno=0;
+    rc=sigemptyset(&action.sa_mask);
+    saved_errno=(rc==0)?0:errno;
+    log_signal_diag("sigemptyset",0u,rc,saved_errno);
+    if (rc!=0) return -1;
+
     const int signals[]={SIGSEGV,SIGBUS,SIGILL,SIGABRT,SIGFPE};
-    for (size_t i=0;i<sizeof(signals)/sizeof(signals[0]);++i)
-        if (sigaction(signals[i],&action,NULL)!=0) return -1;
+    for (size_t i=0;i<sizeof(signals)/sizeof(signals[0]);++i) {
+        errno=0;
+        rc=sigaction(signals[i],&action,NULL);
+        saved_errno=(rc==0)?0:errno;
+        log_signal_diag("sigaction",(unsigned)signals[i],rc,saved_errno);
+        if (rc!=0) return -1;
+    }
+    stage_log("SIGNAL_INSTALL_COMPLETE");
     return 0;
 }
