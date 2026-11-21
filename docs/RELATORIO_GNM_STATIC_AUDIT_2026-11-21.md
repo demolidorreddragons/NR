@@ -47,3 +47,20 @@ Não atribuir PASS aos workflows até consultar conclusão, jobs e artefatos. A 
 ## Decisão
 
 **Não autorizado para hardware.** Manter o smoke harness como experimental. Próxima etapa: concluir os dois workflows, inspecionar os artefatos/hashes, fechar a revisão dos descritores/cache e submeter o relatório a revisão GCN8/QA sem conflito. O plano reversível no console permanece draft e não aprovado; não instalar nem executar este PKG.
+
+
+## Evidência de artefatos — CI 44863812886
+
+Estado atualizado após conclusão dos workflows: **CI PASS; integridade dos artefatos PASS; hardware NOT_RUN**. Base do build: commit `2cae50d15c3a4532a330e2e75dc0e1fde21d1759`.
+
+- [Workflow GFX8 + smoke PKG](https://github.com/demolidorreddragons/NR/actions/runs/44863812886) — concluído `success`.
+- Artifact `nr-gcn8-compute-shaders-gfx8`, ID `14691306027`, 26.065 bytes; SHA-256 do ZIP baixado: `4fa78cf2dbdc0a5e74bb7d4a7bc2d755a8829ea2403e5e62d6b38e0cd1a40379`. ZIP íntegro; contém seis módulos shader em formatos .sb/.spv/.gcn.bin/.isa e relatórios/manifestos. A presença e compilação não provam execução GPU.
+- Artifact `nr-gcn8-spirv`, ID `14691206276`, 17.558 bytes; SHA-256 do ZIP baixado: `1e0853482fb3175abe58b5022e38e53c7120cf94c79c0830bb70e7fc9a82f169`. ZIP íntegro; contém seis fontes compute e seis módulos SPIR-V.
+- Artifact `nr-gcn8-compute-smoke-ps4-pkg`, ID `14691072641`, 25.267.787 bytes; SHA-256 do ZIP baixado: `c9bd40d90cce73f28f48cf0ce4228bdf61c56da7502924061af0376e4004597d`. ZIP íntegro. Contém variantes compute e startup, cada uma com PKG de 6.619.136 bytes, `package.gp4`, `param.sfo` e manifesto.
+- Compute PKG: SHA-256 interno conferido com manifesto `fa9efc2cc7457ff005a05bc697fb437ec930ef33fa86de1879841e86181f04fb`; Content ID `IV0000-PNEU00002_00-GCN8SMOKE0000000` (36 caracteres), também presente no param.sfo.
+- Startup PKG: SHA-256 interno conferido com manifesto `0446077f7751965f482287498a9f0eb56793940c249e00302a138d3ff32969ed`; Content ID `IV0000-PNEU00003_00-GCN8STARTUP00000` (36 caracteres), também presente no param.sfo.
+- Os dois manifestos declaram explicitamente `hardware_status=not_run`. Os hashes foram recalculados a partir dos bytes baixados; os três ZIPs passaram `zipfile.testzip()`.
+
+## Decisão após inspeção
+
+A integridade e a consistência dos artefatos estão verificadas. Isso fecha apenas a etapa de empacotamento/artefatos de CI. **Não aprova execução no PS4**: GPU VA, V# writable, coerência de cache e ciclo de vida submit/fence/readback continuam bloqueadores de backend. O PKG smoke não deve ser instalado nem executado; o plano reversível de console segue draft/não aprovado. Próxima tarefa: obter revisão técnica independente dos bloqueios GNM e preparar evidência de fonte para GPU VA/V# e cache, sem tocar no console.
