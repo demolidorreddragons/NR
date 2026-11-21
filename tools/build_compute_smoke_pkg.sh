@@ -179,7 +179,9 @@ PY
 
 PKG_SHA256="$(sha256sum "$numbered_pkg" | awk '{print $1}')"
 cp "$STAGE/smoke.elf" "$OUT/smoke.elf"
+cp "$STAGE/smoke.oelf" "$OUT/smoke.oelf"
 cp "$STAGE/smoke.map" "$OUT/smoke.map"
+OELF_SHA256="$(sha256sum "$OUT/smoke.oelf" | awk '{print $1}')"
 ELF_SHA256="$(sha256sum "$OUT/smoke.elf" | awk '{print $1}')"
 MAP_SHA256="$(sha256sum "$OUT/smoke.map" | awk '{print $1}')"
 cat > "$OUT/SMOKE_PKG_MANIFEST.txt" <<EOF
@@ -198,6 +200,8 @@ pkg_sha256=$PKG_SHA256
 pointer_semantics=psbc_source_confirmed_orbshdr_minus_chunkusagebaseoffsetdwords
 elf_file=smoke.elf
 elf_sha256=$ELF_SHA256
+oelf_file=smoke.oelf
+oelf_sha256=$OELF_SHA256
 map_file=smoke.map
 map_sha256=$MAP_SHA256
 hardware_status=not_run
