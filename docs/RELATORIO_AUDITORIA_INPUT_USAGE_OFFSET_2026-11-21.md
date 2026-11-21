@@ -58,3 +58,15 @@ A validação byte-level continua **PASS sob o contrato de emissão OpenGNM/PSBC
 2. Inspecionar shaders oficiais com zero, um e múltiplos slots e comparar o posicionamento de tabela e metadados.
 3. Se houver prova de que o ABI exige outra interpretação, ajustar produtor/parser juntos e adicionar fixtures independentes.
 4. Manter dispatch/readback PS4 bloqueado até contrato de memória/V#, plano reversível aprovado e autorização explícita de execução.
+
+
+## Evidência complementar: escopo real da validação de hardware PSBC
+
+Consulta pública adicional ao plano/README upstream do PS4-OpenGNM/opengnm-psbc (2026-11-21):
+
+- O plano upstream afirma validação em hardware para shaders VS+PS, em PS4 base GFX7, firmware 9.00, usando sceGnmSetVsShader/sceGnmSetPsShader e 600 frames de triângulo.
+- O mesmo plano lista explicitamente Compute shader hardware test como trabalho futuro. A validação relatada não cobre CS, PS4 Pro GFX8/NEO, nem FW 14.02.
+- O plano descreve chunkusagebaseoffsetdwords como offset de OrbShdr até input usage slot table, reforçando a intenção do produtor. Entretanto, a validação VS/PS em GFX7 não isola nem demonstra a interpretação do offset nos nossos shaders compute GFX8.
+- Classificação: relato upstream primário do próprio projeto, mas sem logs/artefatos brutos anexados na página consultada; não é ABI Sony independente nem validação reproduzida pelo NR.
+
+Conclusão: a pesquisa não resolve a divergência de runtime para nosso caso. Mantém-se a decisão de não alterar parser/offset e runtime_semantics=UNRESOLVED. Não extrapolar validação VS/PS GFX7 para compute GFX8/PS4 Pro.
