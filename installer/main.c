@@ -305,7 +305,8 @@ static int configure_loader(char* error, size_t error_size, char* temp_path, siz
     }
     input[length] = 0;
 
-    int in_default = 0, found_default = 0, found_entry = 0;
+    int in_default = 0, found_default = 0;
+    unsigned entry_count = 0;
     size_t pos = 0;
     while (pos < length) {
         size_t start = pos;
@@ -321,7 +322,7 @@ static int configure_loader(char* error, size_t error_size, char* temp_path, siz
             in_default = strcmp(line, "[default]") == 0;
             if (in_default) found_default = 1;
         }
-        if (in_default && strcmp(line, DEST_PRX) == 0) found_entry = 1;
+        if (in_default && strcmp(line, DEST_PRX) == 0) entry_count++;
     }
     if (found_entry) {
         *changed = 0;
@@ -357,6 +358,10 @@ static int configure_loader(char* error, size_t error_size, char* temp_path, siz
         trim_line(line);
 
         if (line[0] == '[') in_default = strcmp(line, "[default]") == 0;
+        if (in_default && strcmp(line, DEST_PRX) == 0) {
+            if (kept_entry) continue;
+            kept_entry = 1;
+        }
         if (used + line_len + 1 >= sizeof(output)) {
             snprintf(error, error_size, "ERROR: plugins.ini exceeds safe output size.");
             return 0;
