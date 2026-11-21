@@ -1,6 +1,6 @@
 # Arquitetura do PKG híbrido — instalação inicial e atualização do Neural Engine
 
-**Estado:** Release 011 (APP_VER 01.07) passou host tests, build e QA independente PC-only e foi staged no PS4. O Package Manager recusou o PKG 011 com `Package already installed`; ele não foi instalado e seu eboot não foi executado. O PRX 011 é byte-idêntico ao 010; a alteração 011 foi no eboot/installer, sem correção comprovada para CE-34878-0. O fluxo separado de patch real foi implementado em `workflow `ps4-prx.yml` (jobs `build-associated-patch-against-installed-010` e `independent-patch-qa`)` e no job `build-patch`/`independent-patch-qa` do workflow `ps4-prx.yml`; aguarda execução e QA CI. Não desinstalar o aplicativo nem repetir a tentativa com o PKG 011.
+**Estado:** Release 011 (APP_VER 01.07) passou host tests, build e QA independente PC-only e foi staged no PS4. O Package Manager recusou o PKG 011 com `Package already installed`; ele não foi instalado e seu eboot não foi executado. O PRX 011 é byte-idêntico ao 010; a alteração 011 foi no eboot/installer, sem correção comprovada para CE-34878-0. O patch real 010→011 foi gerado no workflow `ps4-prx.yml` e passou QA estrutural independente PC-only no run `44856253337`. Ainda não foi instalado nem validado no PS4. Não desinstalar o aplicativo nem repetir a tentativa com o PKG 011.
 **Alvo:** PS4 Pro / Orbis + GoldHEN.  
 **Branch:** `feature/gcn8-numeric-kernels`.  
 **Identidade atual:** TITLE_ID `PNEU00001`, CONTENT_ID `IV0000-PNEU00001_00-PS4NEURALENG0000`.
@@ -18,7 +18,7 @@ O usuário não deve precisar escolher ou baixar um PKG diferente para instalar 
 
 O termo “híbrido” aqui descreve o comportamento do instalador e do payload do plugin, não uma categoria híbrida do sistema de pacotes Sony.
 
-O PKG atual é um **full/base application** (`CATEGORY=gde`). Um PKG patch PS4 usa outra categoria e depende de um pacote base compatível. Um único PARAM.SFO não deve ser anunciado como simultaneamente base e patch, nem o pacote atual deve ser renomeado como patch para simular compatibilidade.
+O PKG atual é um **full/base application** (`CATEGORY=gde`). Para este app não-game mini, o patch usa `CATEGORY=gpe`, `volume_type=pkg_ps4_patch`, `storage_type=digital25` e associação explícita à base 010. O patch 011 passou QA estrutural independente PC-only; a aceitação no console ainda não foi testada.
 
 Assim, há duas operações diferentes:
 
