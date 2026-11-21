@@ -120,3 +120,14 @@ Relatório completo: [RELATORIO_P0_BASELINE_2026-11-21.md](RELATORIO_P0_BASELINE
 | NR-GCN8-SMOKE-PKG-734B3 | [44869051626](https://github.com/demolidorreddragons/NR/actions/runs/44869051626) / `136740942984` | success | Compute smoke PKG validado/extraído; SHA-256 `d8f7935493013722cf37834713b9de3c8f81c077d3bb5e777e83269e1ad966ad`; startup-only separado; nenhum hardware test |
 
 **Achado bloqueador mantido:** o relatório binário registra `runtime_semantics=UNRESOLVED`: início do input-usage slot sob hipótese OpenGNM = 88 dwords; hipótese fpPS4 = 84 dwords; as hipóteses não concordam. O PASS é estrutural/byte-level sob interpretação explicitada, não aprovação semântica de runtime. Dispatch GPU, GPU VA, descritores V# writable, cache/coerência e readback permanecem NOT_RUN/BLOCKED para hardware.
+
+
+## Auditoria InputUsage e Host CI — 2026-11-21
+
+| ID | Commit | Run / Job | Resultado | Nível e limite |
+|---|---|---|---|---|
+| NR-HOST-OFFSET-6403 | `6403956658223b71bfb9af33c737f529cbc88f17` | [44870307627](https://github.com/demolidorreddragons/NR/actions/runs/44870307627) / `136743115128` | success; validação de aritmética GNM, Configure, Build e Test passaram | CI_VALIDATED; host apenas |
+
+Relatório estático: [RELATORIO_AUDITORIA_INPUT_USAGE_OFFSET_2026-11-21.md](RELATORIO_AUDITORIA_INPUT_USAGE_OFFSET_2026-11-21.md), commit `020388e973dc4c3e982475e0cc3bc209123ba0e7`.
+
+**Conclusão limitada:** PSBC pinned `28697f007862427ebec54388ec972ce6e3545912` calcula explicitamente o campo como distância de `OrbShdr` ao início da tabela de slots; bytes dos seis shaders concordam. fpPS4 observado subtrai novamente a contagem de slots. A evidência favorece o contrato de emissão PSBC/OpenGNM, mas não substitui ABI independente nem validação no PS4. Manter `runtime_semantics=UNRESOLVED`; não declarar runtime validado.
