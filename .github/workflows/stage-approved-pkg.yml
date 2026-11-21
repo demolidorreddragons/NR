@@ -1,0 +1,240 @@
+name: Stage approved Neural Rendering PKG on PS4
+
+on:
+  push:
+    branches: [feature/gcn8-numeric-kernels]
+    paths:
+      - ".github/workflows/stage-approved-pkg.yml"
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: stage-approved-neural-rendering-pkg
+  cancel-in-progress: false
+
+jobs:
+  archive-and-stage:
+    runs-on: [self-hosted, Windows, X64, ps4-lan]
+    steps:
+      - name: Download exact independently audited build artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ps4-neural-engine-build
+          path: transfer
+          repository: demolidorreddragons/NR
+          run-id: 44843777335
+          github-token: ${{ github.token }}
+
+      - name: Verify exact approved release artifact
+        shell: powershell
+        env:
+          EXPECTED_SHA256: 30c27cf5a3f0bddd53583b53eaf978f662a413cdf63f817ad0a1f72dd8a4ca45
+          EXPECTED_COMMIT: a8f423f20dc95303e588e84c4c9d615bc4f2567d
+        run: |
+          $ErrorActionPreference = "Stop"
+          $pkg = Join-Path $env:GITHUB_WORKSPACE "transfer/pkg/PS4-Neural-Engine-006.pkg"
+          if (-not (Test-Path -LiteralPath $pkg -PathType Leaf)) { throw "Approved PKG is missing from the exact build artifact." }
+          $hash = (Get-FileHash -LiteralPath $pkg -Algorithm SHA256).Hash.ToLowerInvariant()
+          $size = (Get-Item -LiteralPath $pkg).Length
+          if ($hash -ne $env:EXPECTED_SHA256) { throw "PKG SHA-256 mismatch: $hash" }
+          if ($size -le 0) { throw "PKG is empty." }
+          "SOURCE_RUN_ID=44843777335" | Out-File $env:GITHUB_STEP_SUMMARY -Append
+          "SOURCE_COMMIT=$env:EXPECTED_COMMIT" | Out-File $env:GITHUB_STEP_SUMMARY -Append
+          "PKG_FILE=PS4-Neural-Engine-006.pkg" | Out-File $env:GITHUB_STEP_SUMMARY -Append
+          "PKG_BYTES=$size" | Out-File $env:GITHUB_STEP_SUMMARY -Append
+          "PKG_SHA256=$hash" | Out-File $env:GITHUB_STEP_SUMMARY -Append
+          Write-Host "APPROVED_ARTIFACT_VERIFIED"
+
+      - name: Archive older Neural Rendering packages and stage release 006
+        shell: powershell
+        env:
+          PS4_IP: ${{ vars.PS4_IP }}
+          EXPECTED_SHA256: 30c27cf5a3f0bddd53583b53eaf978f662a413cdf63f817ad0a1f72dd8a4ca45
+        run: |
+          $ErrorActionPreference = "Stop"
+          if (-not $env:PS4_IP) { throw "PS4_IP Actions variable is missing." }
+          $credentials = New-Object System.Net.NetworkCredential("anonymous", "anonymous@example.com")
+          $base = "ftp://$($env:PS4_IP):2121"
+
+          function New-FtpRequest([string]$path, [string]$method) {
+            $request = [System.Net.FtpWebRequest]::Create("$base$path")
+            $request.Method = $method
+            $request.Credentials = $credentials
+            $request.UsePassive = $true
+            $request.UseBinary = $true
+            $request.KeepAlive = $false
+            $request.Timeout = 120000
+            $request.ReadWriteTimeout = 120000
+            return $request
+          }
+          function Get-FtpNames([string]$path) {
+            $request = New-FtpRequest $path ([System.Net.WebRequestMethods+Ftp]::ListDirectory)
+            $response = $request.GetResponse()
+            try {
+              $reader = New-Object System.IO.StreamReader($response.GetResponseStream())
+              try {
+                $items = @()
+                while (-not $reader.EndOfStream) {
+                  $line = $reader.ReadLine()
+                  if ($line) { $items += $line.Trim() }
+                }
+                return ,$items
+              } finally { $reader.Dispose() }
+            } finally { $response.Dispose() }
+          }
+          function Get-RemoteHash([string]$path, [string]$localPath) {
+            $request = New-FtpRequest $path ([System.Net.WebRequestMethods+Ftp]::DownloadFile)
+            $response = $request.GetResponse()
+            try {
+              $stream = $response.GetResponseStream()
+              try {
+                $output = [System.IO.File]::Create($localPath)
+                try { $stream.CopyTo($output) } finally { $output.Dispose() }
+              } finally { $stream.Dispose() }
+            } finally { $response.Dispose() }
+            return (Get-FileHash -LiteralPath $localPath -Algorithm SHA256).Hash.ToLowerInvariant()
+          }
+          function Move-VerifiedRemoteFile([string]$sourcePath, [string]$targetDirectory, [string]$sourceName) {
+            $temp = Join-Path $env:RUNNER_TEMP ("ps4-archive-" + [guid]::NewGuid().ToString("N") + ".pkg")
+            try {
+              $beforeHash = Get-RemoteHash $sourcePath $temp
+              $beforeSize = (Get-Item -LiteralPath $temp).Length
+              $targetName = $sourceName
+              $targetPath = "$targetDirectory/$targetName"
+              $existingNames = @(Get-FtpNames "$targetDirectory/")
+              if ($existingNames -contains $targetName) {
+                $stem = [System.IO.Path]::GetFileNameWithoutExtension($sourceName)
+                $ext = [System.IO.Path]::GetExtension($sourceName)
+                $stamp = (Get-Date).ToUniversalTime().ToString("yyyyMMddTHHmmssZ")
+                $n = 1
+                do {
+                  $targetName = "$stem.archive-$stamp-$n$ext"
+                  $targetPath = "$targetDirectory/$targetName"
+                  $n++
+                } while ($existingNames -contains $targetName)
+              }
+              $request = New-FtpRequest $sourcePath ([System.Net.WebRequestMethods+Ftp]::Rename)
+              $request.RenameTo = $targetPath
+              $response = $request.GetResponse()
+              try { Write-Host "ARCHIVE_MOVE: $sourcePath -> $targetPath; $($response.StatusDescription.Trim())" }
+              finally { $response.Dispose() }
+
+              $afterHash = Get-RemoteHash $targetPath $temp
+              $afterSize = (Get-Item -LiteralPath $temp).Length
+              if ($afterHash -ne $beforeHash -or $afterSize -ne $beforeSize) {
+                throw "Archive read-back mismatch for $targetPath"
+              }
+              Write-Host "ARCHIVE_VERIFIED: $targetPath; bytes=$afterSize; sha256=$afterHash"
+            } finally {
+              Remove-Item -LiteralPath $temp -Force -ErrorAction SilentlyContinue
+            }
+          }
+
+          # Confirm the live destination and create the requested archive directory.
+          $rootNames = @(Get-FtpNames "/data/pkg/")
+          if (-not $rootNames) { Write-Host "PS4_PKG_ROOT_LISTED_EMPTY" }
+          $oldNames = @()
+          if ($rootNames -notcontains "old") {
+            try {
+              $request = New-FtpRequest "/data/pkg/old/" ([System.Net.WebRequestMethods+Ftp]::MakeDirectory)
+              $response = $request.GetResponse(); $response.Dispose()
+              Write-Host "CREATED_DIRECTORY=/data/pkg/old/"
+            } catch {
+              $oldNames = @(Get-FtpNames "/data/pkg/old/")
+              Write-Host "ARCHIVE_DIRECTORY_ALREADY_EXISTS=/data/pkg/old/"
+            }
+          } else {
+            $oldNames = @(Get-FtpNames "/data/pkg/old/")
+          }
+          if (-not $oldNames) { $oldNames = @(Get-FtpNames "/data/pkg/old/") }
+
+          # Move only Neural Rendering PKGs; third-party packages are never selected.
+          $rootNames = @(Get-FtpNames "/data/pkg/")
+          $archiveCandidates = @($rootNames | Where-Object {
+            $_ -match '^PS4-Neural-Engine-.*\.pkg$' -and $_ -ne "PS4-Neural-Engine-006.pkg"
+          })
+          foreach ($name in $archiveCandidates) {
+            Move-VerifiedRemoteFile "/data/pkg/$name" "/data/pkg/old" $name
+          }
+
+          # If an old_versions folder exists, consolidate only Neural Rendering PKGs into old/.
+          try {
+            $legacyNames = @(Get-FtpNames "/data/pkg/old_versions/")
+            foreach ($name in @($legacyNames | Where-Object { $_ -match '^PS4-Neural-Engine-.*\.pkg$' })) {
+              Move-VerifiedRemoteFile "/data/pkg/old_versions/$name" "/data/pkg/old" $name
+            }
+          } catch {
+            Write-Host "NO_READABLE_OLD_VERSIONS_DIRECTORY: $($_.Exception.Message)"
+          }
+
+          # A conflicting release-006 file is archived, never overwritten.
+          $rootNames = @(Get-FtpNames "/data/pkg/")
+          if ($rootNames -contains "PS4-Neural-Engine-006.pkg") {
+            $check = Join-Path $env:RUNNER_TEMP "ps4-existing-006.pkg"
+            try {
+              $existingHash = Get-RemoteHash "/data/pkg/PS4-Neural-Engine-006.pkg" $check
+              if ($existingHash -ne $env:EXPECTED_SHA256) {
+                Move-VerifiedRemoteFile "/data/pkg/PS4-Neural-Engine-006.pkg" "/data/pkg/old" "PS4-Neural-Engine-006.pkg"
+              } else {
+                Write-Host "APPROVED_006_ALREADY_PRESENT_WITH_MATCHING_HASH"
+              }
+            } finally { Remove-Item -LiteralPath $check -Force -ErrorAction SilentlyContinue }
+          }
+
+          # Upload to a temporary name, read it back, then atomically rename to the canonical filename.
+          $pkg = Join-Path $env:GITHUB_WORKSPACE "transfer/pkg/PS4-Neural-Engine-006.pkg"
+          $localSize = (Get-Item -LiteralPath $pkg).Length
+          $tempRemote = "/data/pkg/PS4-Neural-Engine-006.pkg.uploading"
+          $finalRemote = "/data/pkg/PS4-Neural-Engine-006.pkg"
+          $tempRequest = New-FtpRequest $tempRemote ([System.Net.WebRequestMethods+Ftp]::UploadFile)
+          $tempRequest.ContentLength = $localSize
+          $requestStream = $tempRequest.GetRequestStream()
+          try {
+            $input = [System.IO.File]::OpenRead($pkg)
+            try { $input.CopyTo($requestStream) } finally { $input.Dispose() }
+          } finally { $requestStream.Dispose() }
+          $uploadResponse = $tempRequest.GetResponse()
+          $uploadResponse.Dispose()
+
+          $verify = Join-Path $env:RUNNER_TEMP "ps4-uploaded-006.pkg"
+          try {
+            $remoteHash = Get-RemoteHash $tempRemote $verify
+            $remoteSize = (Get-Item -LiteralPath $verify).Length
+            if ($remoteHash -ne $env:EXPECTED_SHA256 -or $remoteSize -ne $localSize) {
+              throw "Uploaded temporary PKG failed read-back integrity verification."
+            }
+            Write-Host "TEMP_UPLOAD_VERIFIED: bytes=$remoteSize; sha256=$remoteHash"
+          } finally { Remove-Item -LiteralPath $verify -Force -ErrorAction SilentlyContinue }
+
+          $rename = New-FtpRequest $tempRemote ([System.Net.WebRequestMethods+Ftp]::Rename)
+          $rename.RenameTo = $finalRemote
+          $renameResponse = $rename.GetResponse()
+          $renameResponse.Dispose()
+
+          $verifyFinal = Join-Path $env:RUNNER_TEMP "ps4-final-006.pkg"
+          try {
+            $finalHash = Get-RemoteHash $finalRemote $verifyFinal
+            $finalSize = (Get-Item -LiteralPath $verifyFinal).Length
+            if ($finalHash -ne $env:EXPECTED_SHA256 -or $finalSize -ne $localSize) {
+              throw "Final /data/pkg/PS4-Neural-Engine-006.pkg failed read-back integrity verification."
+            }
+            Write-Host "FINAL_PKG_VERIFIED: path=$finalRemote; bytes=$finalSize; sha256=$finalHash"
+          } finally { Remove-Item -LiteralPath $verifyFinal -Force -ErrorAction SilentlyContinue }
+
+          $finalRoot = @(Get-FtpNames "/data/pkg/")
+          $nrRoot = @($finalRoot | Where-Object { $_ -match '^PS4-Neural-Engine-.*\.pkg$' })
+          if ($nrRoot.Count -ne 1 -or $nrRoot[0] -ne "PS4-Neural-Engine-006.pkg") {
+            throw "Unexpected Neural Rendering PKGs remain in /data/pkg/: $($nrRoot -join ', ')"
+          }
+          $archiveFinal = @(Get-FtpNames "/data/pkg/old/")
+          Write-Host "ROOT_NEURAL_RENDERING_PKGS=$($nrRoot -join ',')"
+          Write-Host "ARCHIVED_NEURAL_RENDERING_PKGS=$($archiveFinal -join ',')"
+          Write-Host "THIRD_PARTY_ROOT_FILES_PRESERVED=TRUE"
+          Write-Host "INSTALLATION_PERFORMED=FALSE"
+          "STAGING_STATUS=PASS_NOT_INSTALLED" | Out-File $env:GITHUB_STEP_SUMMARY -Append
+          "REMOTE_PATH=$finalRemote" | Out-File $env:GITHUB_STEP_SUMMARY -Append
+          "REMOTE_BYTES=$finalSize" | Out-File $env:GITHUB_STEP_SUMMARY -Append
+          "REMOTE_SHA256=$finalHash" | Out-File $env:GITHUB_STEP_SUMMARY -Append
+          "INSTALLATION_PERFORMED=FALSE" | Out-File $env:GITHUB_STEP_SUMMARY -Append
