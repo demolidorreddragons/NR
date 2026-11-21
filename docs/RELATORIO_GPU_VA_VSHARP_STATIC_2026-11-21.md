@@ -150,3 +150,30 @@ Referências:
 - PSBC plan and stated FW 9.00 VS+PS validation: https://github.com/PS4-OpenGNM/opengnm-psbc/blob/main/OPENGNM_PSBC_PLAN.md
 
 **Classificação:** STATIC_REVIEW. Sem build novo, artefato GFX8, dispatch ou teste no PS4 nesta rodada.
+
+
+## 10. Análise estrutural do limite de 8 bits de InputUsage (2026-11-21)
+
+Foi reaberto o código-fonte pinned do PSBC (28697f007862427ebec54388ec972ce6e3545912) e os headers OpenGNM pinned (4b295ca54c82c83acf308d1c646a2dfa9ae57350) para delimitar o que realmente precisa mudar para recuperar o shader tiled.
+
+### Fatos confirmados no código
+
+- GnmShaderBinaryInfo.chunkusagebaseoffsetdwords é declarado como uint8_t no header OpenGNM; portanto o campo serializado representa somente 0–255 dwords (0–1020 bytes).
+- O PSBC pinned serializa os InputUsage slots imediatamente após o cabeçalho específico do estágio, antes do código GCN.
+- O mesmo PSBC coloca o bloco OrbShdr imediatamente depois do código GCN e calcula a distância retroativa até o início dessa tabela.
+- Para o tiled GEMM, o relatório byte-level registra tabela em 0x58, OrbShdr em 0x990: distância 0x938 bytes = 590 dwords. A conversão para uint8 resulta em 78, que aponta para endereço incorreto.
+- Para os quatro shaders curtos, as distâncias observadas são 215, 136, 92 e 74 dwords, todas representáveis e resolvendo para 0x58.
+
+### Consequência de engenharia
+
+O erro não é apenas uma falha de verificação: a disposição atual do produtor torna matematicamente impossível representar o ponteiro para a tabela inicial quando a distância excede 255 dwords. A rejeição de overflow evita emitir um container silenciosamente corrompido, mas deixa o shader tiled sem artefato válido.
+
+A correção real exige resolver o layout do container, não alargar localmente o campo nem truncá-lo. Antes de implementar qualquer rearranjo, é necessário provar como o parser GNM determina a tabela de slots, quais regiões do container podem ser movidas/duplicadas, e como o CRC cobre a nova disposição. Os helpers OpenGNM que calculam a tabela a partir do cabeçalho de estágio também precisam ser considerados; não se deve assumir que uma cópia adicional próxima a OrbShdr será consumida pelo driver.
+
+### Próximo experimento seguro
+
+Construir um fixture sintético de container, sem PS4, que varie o tamanho do código ao redor do limite de 1020 bytes e compare: (1) tabela no local canônico após o cabeçalho CS; (2) qualquer layout alternativo proposto, com os mesmos slots e código; (3) resolução do offset, limites de todos os segmentos e CRC; (4) comportamento do parser host NR e dos helpers OpenGNM.
+
+Esse experimento pode provar consistência estrutural do formato modelado, mas não provar aceitação pelo parser Sony. A evidência pública atualmente disponível não basta para escolher um layout alternativo. Manter o tiled rejeitado e o runtime bloqueado até essa análise.
+
+**Estado:** overflow reproduzido/explicado estaticamente; mitigação por rejeição é válida; solução estrutural ainda BLOCKED; nenhum dispatch ou teste PS4 realizado.
