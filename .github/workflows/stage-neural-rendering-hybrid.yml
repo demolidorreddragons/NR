@@ -1,4 +1,4 @@
-name: Stage validated Neural Rendering hybrid Full/Base PKG on PS4
+name: Stage validated Neural Rendering Full/Base PKG on PS4
 
 on:
   push:
@@ -10,7 +10,7 @@ permissions:
   contents: read
 
 jobs:
-  stage-hybrid:
+  stage-full:
     runs-on: [self-hosted, Windows, X64, ps4-lan]
     steps:
       - name: Download exact Full/Base build artifact
@@ -19,10 +19,19 @@ jobs:
           name: ps4-neural-engine-build
           path: transfer
           repository: demolidorreddragons/NR
-          run-id: 44858062821
+          run-id: 44859652486
           github-token: ${{ github.token }}
 
-      - name: Verify Full/Base identity and transfer safely to PS4
+      - name: Download independent QA evidence
+        uses: actions/download-artifact@v4
+        with:
+          name: PS4-Neural-Engine-independent-QA
+          path: qa
+          repository: demolidorreddragons/NR
+          run-id: 44859652486
+          github-token: ${{ github.token }}
+
+      - name: Verify Full/Base PKG, archive previous NR PKGs, and transfer
         shell: powershell -NoProfile -ExecutionPolicy Bypass -Command "& '{0}'"
         env:
           PS4_IP: ${{ vars.PS4_IP }}
@@ -30,19 +39,28 @@ jobs:
           $ErrorActionPreference = "Stop"
           if (-not $env:PS4_IP) { throw "PS4_IP repository variable is missing." }
 
-          $expectedName = "PS4-Neural-Engine-011.pkg"
-          $expectedSize = [long]6619136
-          $expectedHash = "afc5dc6e16eb348fb451f4a0fefbe524447215b508ffa388f952e28ad8cd7b65"
-          $matches = @(Get-ChildItem -LiteralPath (Join-Path $env:GITHUB_WORKSPACE "transfer") -Recurse -File |
-            Where-Object { $_.Name -ceq $expectedName })
-          if ($matches.Count -ne 1) { throw "Expected exactly one $expectedName; found $($matches.Count)." }
+          $qaReport = Get-ChildItem -LiteralPath (Join-Path $env:GITHUB_WORKSPACE "qa") -Recurse -File -Filter "qa-report.txt" | Select-Object -First 1
+          if (-not $qaReport) { throw "Independent QA report is missing." }
+          $qaText = Get-Content -LiteralPath $qaReport.FullName -Raw
+          foreach ($required in @("PKG_KIND=FULL_BASE_APPLICATION_NOT_PATCH","PARAM_SFO_SEMANTIC_FIELDS=PASS","CATEGORY=gde","QA_STATUS=PASS_PC_ONLY_NOT_HARDWARE_TESTED")) {
+            if (-not $qaText.Contains($required)) { throw "Independent QA evidence missing: $required" }
+          }
+          $expectedSize = [long]([regex]::Match($qaText, '(?m)^PKG_BYTES=(\d+)$').Groups[1].Value)
+          $expectedHash = [regex]::Match($qaText, '(?m)^PKG_SHA256=([0-9a-f]{64})$').Groups[1].Value
+          if ($expectedSize -le 0 -or $expectedHash.Length -ne 64) { throw "QA report has invalid PKG size/hash." }
 
+          $matches = @(Get-ChildItem -LiteralPath (Join-Path $env:GITHUB_WORKSPACE "transfer") -Recurse -File -Filter "PS4-Neural-Engine-*.pkg")
+          if ($matches.Count -ne 1) { throw "Expected exactly one built Full/Base PKG; found $($matches.Count)." }
           $pkg = $matches[0].FullName
           $localSize = (Get-Item -LiteralPath $pkg).Length
           $localHash = (Get-FileHash -LiteralPath $pkg -Algorithm SHA256).Hash.ToLowerInvariant()
           if ($localSize -ne $expectedSize -or $localHash -ne $expectedHash) {
-            throw "Full/Base artifact identity mismatch. Size=$localSize SHA256=$localHash"
+            throw "Build artifact differs from independently QA-validated PKG. Size=$localSize SHA256=$localHash"
           }
+          $release = [regex]::Match((Split-Path $pkg -Leaf), '^PS4-Neural-Engine-(\d+)\.pkg$')
+          if (-not $release.Success) { throw "Unexpected PKG filename." }
+          $releaseNumber = $release.Groups[1].Value
+          $remoteName = "PS4-Neural-Engine-$releaseNumber-HYBRID.pkg"
 
           $credentials = New-Object System.Net.NetworkCredential("anonymous", "anonymous@example.com")
           function New-FtpRequest([string]$path, [string]$method, [string]$renameTo = $null) {
@@ -57,48 +75,50 @@ jobs:
             if ($renameTo) { $request.RenameTo = $renameTo }
             return $request
           }
-
-          $remoteName = "PS4-Neural-Engine-011-HYBRID.pkg"
-          $target = "/data/pkg/$remoteName"
-          $staging = "/data/$remoteName.uploading"
-          $existing = $false
-          try {
-            $check = New-FtpRequest $target ([System.Net.WebRequestMethods+Ftp]::GetFileSize)
-            $response = $check.GetResponse()
-            $existingSize = [long]$response.ContentLength
-            $response.Dispose()
-            $existing = $true
-          } catch {
-            if ($_.Exception.Response -and $_.Exception.Response.StatusCode -ne [System.Net.FtpStatusCode]::ActionNotTakenFileUnavailable) { throw }
+          function Get-FtpNames([string]$path) {
+            $request = New-FtpRequest $path ([System.Net.WebRequestMethods+Ftp]::ListDirectory)
+            $response = $request.GetResponse()
+            $reader = New-Object IO.StreamReader($response.GetResponseStream())
+            try { return @($reader.ReadToEnd() -split "\r?\n" | Where-Object { $_ }) }
+            finally { $reader.Dispose(); $response.Dispose() }
           }
 
-          if ($existing) {
-            if ($existingSize -ne $expectedSize) { throw "A different file already exists at $target; refusing to overwrite." }
-            $verifyExisting = Join-Path $env:RUNNER_TEMP "pne-hybrid-existing.pkg"
-            $get = New-FtpRequest $target ([System.Net.WebRequestMethods+Ftp]::DownloadFile)
-            $response = $get.GetResponse()
-            $stream = $response.GetResponseStream()
-            $output = [IO.File]::Create($verifyExisting)
-            try { $stream.CopyTo($output) } finally { $output.Dispose(); $stream.Dispose(); $response.Dispose() }
-            $existingHash = (Get-FileHash -LiteralPath $verifyExisting -Algorithm SHA256).Hash.ToLowerInvariant()
-            Remove-Item -LiteralPath $verifyExisting -Force
-            if ($existingHash -ne $expectedHash) { throw "Existing destination differs; refusing to overwrite." }
-            Write-Host "HYBRID_ALREADY_PRESENT_AND_VERIFIED=$target"
-          } else {
-            $upload = New-FtpRequest $staging ([System.Net.WebRequestMethods+Ftp]::UploadFile)
-            $upload.ContentLength = $localSize
-            $requestStream = $upload.GetRequestStream()
-            $input = [IO.File]::OpenRead($pkg)
-            try { $input.CopyTo($requestStream) } finally { $input.Dispose(); $requestStream.Dispose() }
-            $response = $upload.GetResponse()
-            $response.Dispose()
-
-            $move = New-FtpRequest $staging ([System.Net.WebRequestMethods+Ftp]::Rename) "pkg/$remoteName"
+          # Preserve every prior NR PKG by moving it into the existing archive directory.
+          $rootNames = Get-FtpNames "/data/pkg"
+          $oldPackages = @($rootNames | Where-Object { $_ -match '(?i)^PS4-Neural-Engine.*\.pkg$' })
+          foreach ($name in $oldPackages) {
+            $destinationName = $name
+            $destinationPath = "/data/pkg/old/$destinationName"
+            try {
+              $check = New-FtpRequest $destinationPath ([System.Net.WebRequestMethods+Ftp]::GetFileSize)
+              $checkResponse = $check.GetResponse()
+              $checkResponse.Dispose()
+              $stem = [IO.Path]::GetFileNameWithoutExtension($name)
+              $ext = [IO.Path]::GetExtension($name)
+              $destinationName = "$stem-archived-$([DateTime]::UtcNow.ToString('yyyyMMddHHmmssfff'))$ext"
+            } catch { }
+            $move = New-FtpRequest "/data/pkg/$name" ([System.Net.WebRequestMethods+Ftp]::Rename) "old/$destinationName"
             $response = $move.GetResponse()
             $response.Dispose()
+            Write-Host "ARCHIVED=/data/pkg/$name -> /data/pkg/old/$destinationName"
           }
+          $remaining = @(Get-FtpNames "/data/pkg" | Where-Object { $_ -match '(?i)^PS4-Neural-Engine.*\.pkg$' })
+          if ($remaining.Count -ne 0) { throw "Old Neural Rendering PKGs remain at root: $($remaining -join ', ')" }
 
-          $verifyPath = Join-Path $env:RUNNER_TEMP "pne-hybrid-ps4-readback.pkg"
+          $target = "/data/pkg/$remoteName"
+          $staging = "/data/$remoteName.uploading"
+          $upload = New-FtpRequest $staging ([System.Net.WebRequestMethods+Ftp]::UploadFile)
+          $upload.ContentLength = $localSize
+          $requestStream = $upload.GetRequestStream()
+          $input = [IO.File]::OpenRead($pkg)
+          try { $input.CopyTo($requestStream) } finally { $input.Dispose(); $requestStream.Dispose() }
+          $response = $upload.GetResponse()
+          $response.Dispose()
+          $move = New-FtpRequest $staging ([System.Net.WebRequestMethods+Ftp]::Rename) "pkg/$remoteName"
+          $response = $move.GetResponse()
+          $response.Dispose()
+
+          $verifyPath = Join-Path $env:RUNNER_TEMP "pne-full-ps4-readback.pkg"
           $download = New-FtpRequest $target ([System.Net.WebRequestMethods+Ftp]::DownloadFile)
           $response = $download.GetResponse()
           $stream = $response.GetResponseStream()
@@ -110,9 +130,14 @@ jobs:
           if ($remoteSize -ne $expectedSize -or $remoteHash -ne $expectedHash) {
             throw "PS4 read-back verification failed. Size=$remoteSize SHA256=$remoteHash"
           }
+          $finalNames = @(Get-FtpNames "/data/pkg" | Where-Object { $_ -match '(?i)^PS4-Neural-Engine.*\.pkg$' })
+          if ($finalNames.Count -ne 1 -or $finalNames[0] -ne $remoteName) {
+            throw "Unexpected Neural Rendering PKGs remain at root: $($finalNames -join ', ')"
+          }
 
-          Write-Host "PS4_HYBRID_STAGING=SUCCESS"
+          Write-Host "PS4_FULL_STAGING=SUCCESS"
           Write-Host "PS4_PATH=$target"
           Write-Host "BYTES=$remoteSize"
           Write-Host "SHA256=$remoteHash"
           Write-Host "PACKAGE_TYPE=FULL_BASE_APPLICATION_CATEGORY_GDE"
+          Write-Host "INSTALLATION=NOT_PERFORMED"
