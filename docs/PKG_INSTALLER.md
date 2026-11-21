@@ -82,3 +82,8 @@ A especificação normativa é [PKG_HIBRIDO_INSTALACAO_ATUALIZACAO.md](PKG_HIBRI
 - **Aplicativo instalador no Package Manager do PS4:** o PKG atual é base (gde), não patch. A substituição do próprio aplicativo sem desinstalar é um fluxo separado do sistema de pacotes PS4 e ainda não foi comprovada. Não confundir essa limitação com a atualização do PRX pelo instalador híbrido.
 
 O usuário relatou que o Package Manager exigiu desinstalar a versão anterior do aplicativo. Isso evidencia que a atualização do próprio app ainda não está resolvida; não altera o requisito já acordado de que o eboot do único PKG deve instalar/atualizar o plugin. Não declarar H2/H4 concluídas até a máquina de estados NEW/UPDATE/LEGACY/RECOVERY/CONFLICT, detecção de versão/hash e idempotência estarem implementadas e testadas.
+
+
+## Release 008 — instalador híbrido do plugin
+
+O candidato 008 integra a máquina de estados NEW/UPDATE/LEGACY/RECOVERY/CONFLICT, persiste `pne-release.ini` ao lado do PRX, usa marcador de transação para detectar interrupção, preserva backups, recusa downgrade e retorna `ALREADY_CURRENT` quando release e SHA-256 coincidem. Entradas duplicadas do Neural Engine em `[default]` são normalizadas; se já houver exatamente uma, `plugins.ini` não é regravado. O estado de validação e os gates pendentes estão em `docs/PKG_HIBRIDO_INSTALACAO_ATUALIZACAO.md`. Isso não transforma o full/base PKG em patch de atualização do aplicativo no Package Manager.
