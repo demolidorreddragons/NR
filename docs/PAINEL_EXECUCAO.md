@@ -160,3 +160,14 @@ Especificação: [Plano de automação e eficiência](PLANO_AUTOMACAO_E_EFICIENC
 - Smoke PKG: artifact `nr-gcn8-compute-smoke-ps4-pkg` ID `14693371031` (25,267,698 bytes). Compute payload PASS; PKG SHA-256 `d8f7935493013722cf37834713b9de3c8f81c077d3bb5e777e83269e1ad966ad`; manifest SHA-256 `659a8d491b2feb71a3e6a0d49ea577748068592f4dea157c3d3b9cee22edbb89`. Startup-only PKG payload PASS, compute shader ausente por projeto; SHA-256 `578964f74b3f9335a1d467f53f84a15dfafdb5320bb2b6bf54e334e67e5b36ca`.
 - Limite crítico: `runtime_semantics=UNRESOLVED`; OpenGNM aponta slot start 88 dwords e fpPS4 84 dwords. `pointer_hypotheses_agree=false`. Nenhum dispatch/readback no PS4 ocorreu. Não promover GNM runtime a validado.
 - Próxima tarefa: resolver a semântica do `chunkUsageBaseOffsetDwords`/`numInputUsageSlots` com evidência de implementação/ABI e testes binários direcionados, sem escolher hipótese por conveniência. Em paralelo, manter bloqueado o teste de hardware até contrato de memória/V# e plano reversível aprovados.
+
+
+## Atualização da auditoria InputUsage — 2026-11-21
+
+- Relatório: [Auditoria OpenGNM × fpPS4 × PSBC](RELATORIO_AUDITORIA_INPUT_USAGE_OFFSET_2026-11-21.md).
+- Commit do relatório: `020388e973dc4c3e982475e0cc3bc209123ba0e7`.
+- A inspeção do PSBC pinned `28697f007862427ebec54388ec972ce6e3545912`, `libpsbc/psbc_compile.c:793–809`, confirma que o produtor calcula `chunkusagebaseoffsetdwords` como distância até o início da tabela de slots. Isso coincide com os bytes emitidos e com a interpretação OpenGNM usada pelo verificador NR.
+- fpPS4 observado em `04cefd43e6fddd1ab033e7980cd356d14c964905` subtrai adicionalmente `numInputUsageSlots`; para os seis shaders (um slot cada), o candidato fica 4 bytes antes da tabela.
+- Decisão: parser/offset não alterados; evidência favorece contrato do produtor PSBC, mas ABI Sony/runtime ainda não comprovado. `runtime_semantics=UNRESOLVED`.
+- Host Tests [run 44870307627](https://github.com/demolidorreddragons/NR/actions/runs/44870307627), job `136743115128`: success; validação aritmética GNM, Configure, Build e Test passaram.
+- Console, staging e instalação: não executados.
