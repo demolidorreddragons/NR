@@ -28,6 +28,11 @@ case "$MODE" in
     CONTENT_ID="IV0000-PNEU00004_00-GCN8LINK00000000"
     APP_TITLE="Neural Rendering GNM Link Probe"
     ;;
+  gnm-load)
+    TITLE_ID="PNEU00004"
+    CONTENT_ID="IV0000-PNEU00004_00-GCN8LINK00000000"
+    APP_TITLE="Neural Rendering GNM Module Load Probe"
+    ;;
   *) echo "Unsupported GCN8_SMOKE_MODE: $MODE" >&2; exit 1 ;;
 esac
 if [[ ${#CONTENT_ID} -ne 36 || ! "$CONTENT_ID" =~ ^[A-Z]{2}[0-9]{4}-[A-Z0-9]{4}[0-9]{5}_00-[A-Z0-9]{16}$ ]]; then
@@ -53,8 +58,11 @@ else
   SHADER_SHA256="none"
 fi
 GNM_PROBE="none"
+GNM_LOAD_PROBE="none"
 if [[ "$MODE" == "gnm-link" ]]; then
   GNM_PROBE="sceGnmSubmitDone_address_only_no_call"
+elif [[ "$MODE" == "gnm-load" ]]; then
+  GNM_LOAD_PROBE="sceKernelLoadStartModule_then_sceKernelDlsym_no_gnm_call"
 fi
 
 for required in "$SAMPLE/sce_module/libc.prx" \
@@ -92,6 +100,10 @@ elif [[ "$MODE" == "gnm-link" ]]; then
   clang++ "${COMMON[@]}" "${LOGGER_FLAGS[@]}" "$RUN_DEFINE" -DPNE_GCN8_GNM_LINK_ONLY=1 -c "$ROOT/platform/ps4/gcn8/smoke_main.cpp" -o "$STAGE/smoke_main.o"
   # Link the GNM import dependency but deliberately make no GNM function calls.
   ld.lld -m elf_x86_64 -pie --script "$OO_PS4_TOOLCHAIN/link.x" --eh-frame-hdr -L"$OO_PS4_TOOLCHAIN/lib" "$STAGE/smoke_main.o" "$STAGE/stage_log.o" "$OO_PS4_TOOLCHAIN/lib/crt1.o" -o "$STAGE/smoke.elf" -Map="$STAGE/smoke.map" -lc -lc++ -lkernel -lSceGnmDriver
+elif [[ "$MODE" == "gnm-load" ]]; then
+  clang++ "${COMMON[@]}" "${LOGGER_FLAGS[@]}" "$RUN_DEFINE" -DPNE_GCN8_GNM_LOAD_ONLY=1 -c "$ROOT/platform/ps4/gcn8/smoke_main.cpp" -o "$STAGE/smoke_main.o"
+  # No GNM import: load the system module through libkernel and resolve one symbol with dlsym.
+  ld.lld -m elf_x86_64 -pie --script "$OO_PS4_TOOLCHAIN/link.x" --eh-frame-hdr -L"$OO_PS4_TOOLCHAIN/lib" "$STAGE/smoke_main.o" "$STAGE/stage_log.o" "$OO_PS4_TOOLCHAIN/lib/crt1.o" -o "$STAGE/smoke.elf" -Map="$STAGE/smoke.map" -lc -lc++ -lkernel
 else
   clang++ "${COMMON[@]}" "${LOGGER_FLAGS[@]}" "$RUN_DEFINE" -c "$ROOT/platform/ps4/gcn8/smoke_main.cpp" -o "$STAGE/smoke_main.o"
   clang++ "${COMMON[@]}" -c "$ROOT/platform/ps4/gcn8/compute_smoke.cpp" -o "$STAGE/compute_smoke.o"
@@ -173,6 +185,8 @@ else:
         print("STARTUP_ONLY_PKG_PAYLOAD=PASS; COMPUTE_SHADER=ABSENT")
     elif mode == "gnm-link":
         print("GNM_LINK_ONLY_PKG_PAYLOAD=PASS; COMPUTE_SHADER=ABSENT")
+    elif mode == "gnm-load":
+        print("GNM_LOAD_ONLY_PKG_PAYLOAD=PASS; COMPUTE_SHADER=ABSENT")
     else:
         raise SystemExit("Unknown diagnostic package mode: " + mode)
 PY
@@ -194,6 +208,7 @@ app_version=$APP_VERSION
 shader_file=$( [[ "$MODE" == "compute" ]] && echo compute_smoke_add.sb || echo none )
 shader_sha256=$SHADER_SHA256
 gnm_import_probe=$GNM_PROBE
+gnm_load_probe=$GNM_LOAD_PROBE
 gnm_function_calls=none
 pkg_file=$(basename "$numbered_pkg")
 pkg_sha256=$PKG_SHA256
