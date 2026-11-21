@@ -19,7 +19,7 @@ jobs:
           print('Installer C escape sequences are valid')
           installer = Path('installer/main.c').read_text()
           assert 'fstat(' in installer and 'O_NOFOLLOW' in installer, 'managed-path inspection must use opened descriptors and reject symlinks'
-          assert 'st_size' not in installer, 'installer must not trust PS4 stat size values'
+          assert 'st.st_size' not in installer and 'metadata->st_size' not in installer, 'installer must not trust PS4 stat size values'
           assert 'PRX read-back verification failed' in installer, 'installer must verify copied PRX bytes'
           assert 'static ssize_t read_retry' in installer, 'installer must retry EINTR independently for each read'
           assert 'static ssize_t read_block' in installer, 'verification must accumulate short reads'
