@@ -320,3 +320,14 @@ A execução passa a ser controlada também pelos seguintes documentos versionad
 - [Regras operacionais](REGRAS_OPERACIONAIS_DO_PROJETO.md): limites de autorização, preservação de dados, PKG e fluxo de staging.
 
 **Regra de execução:** concluir tarefas em unidades pequenas e verificáveis; após aprovação de um gate, avançar para a próxima tarefa desbloqueada. Nenhum gate pode ser considerado aprovado sem as evidências definidas na matriz QA. Validação host/CI não equivale a validação no PS4 Pro. Esta governança não amplia as autorizações para instalação, ativação de PRX, reinício de GoldHEN ou operações destrutivas.
+
+
+## 9. Estrutura de agentes e independência aprovada (2026-11-21)
+
+A estrutura passa a contemplar dez especialidades, incluindo separação explícita entre engenharia GCN8 e backend GNM/Orbis, QA independente, auditoria técnica independente, desempenho/estabilidade e segurança/cadeia de suprimentos. A independência não é presumida pelo nome do papel: exige executor/contexto separado, pacote neutro de requisitos e artefatos, ausência de conflito e relatório reproduzível.
+
+- [Protocolo de independência, revisão cruzada e qualidade dos agentes](PROTOCOLO_INDEPENDENCIA_AGENTES.md)
+- [Painel de execução](PAINEL_EXECUCAO.md)
+- [Matriz de QA e evidências](MATRIZ_QA.md)
+
+O protocolo define dez papéis, revisão cruzada, barreiras contra viés, contrato obrigatório de tarefa, estados PASS/FAIL/BLOCKED/NOT_RUN, pontuação auxiliar e relatório independente. A pontuação nunca substitui gates obrigatórios. Papéis organizacionais não significam dez agentes autônomos ativos.
