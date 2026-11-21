@@ -3,7 +3,7 @@
 Data: 2026-11-21  
 Base de código: `2cae50d15c3a4532a330e2e75dc0e1fde21d1759`  
 Classificação: **REVISÃO INTERNA — NÃO INDEPENDENTE**  
-Estado: **IN_PROGRESS** — revisão estática parcial concluída; CI do commit em execução; hardware NOT_RUN.
+Estado: **IN_PROGRESS** — revisão estática parcial concluída e integridade dos artefatos de CI verificada; revisão independente e hardware NOT_RUN.
 
 ## Escopo
 
@@ -39,10 +39,10 @@ A verificação também confere as quantidades de dwords emitidas. Isso corrige 
 
 Commit: `2cae50d15c3a4532a330e2e75dc0e1fde21d1759`.
 
-- GFX8 + smoke PKG: [run 44863812886](https://github.com/demolidorreddragons/NR/actions/runs/44863812886) — em execução no momento deste relatório.
-- PRX/PKG + QA: [run 44863812891](https://github.com/demolidorreddragons/NR/actions/runs/44863812891) — em execução no momento deste relatório.
+- GFX8 + smoke PKG: [run 44863812886](https://github.com/demolidorreddragons/NR/actions/runs/44863812886) — concluído `success`; artefatos inspecionados e hashes verificados (ver seção de evidência abaixo).
+- PRX/PKG + QA: [run 44863812891](https://github.com/demolidorreddragons/NR/actions/runs/44863812891) — concluído `success` nos jobs de build e QA independente.
 
-Não atribuir PASS aos workflows até consultar conclusão, jobs e artefatos. A correção do Content ID startup está no mesmo commit: `IV0000-PNEU00003_00-GCN8STARTUP00000` (36 caracteres), com validação de comprimento e formato canônico antes de construir o PKG.
+A correção do Content ID startup está no mesmo commit: `IV0000-PNEU00003_00-GCN8STARTUP00000` (36 caracteres), com validação de comprimento e formato canônico antes de construir o PKG. CI PASS não significa validação de hardware.
 
 ## Decisão
 
