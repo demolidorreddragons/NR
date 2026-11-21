@@ -151,10 +151,10 @@ jobs:
       - name: Preserve GP4 and release metadata for independent QA
         run: |
           mkdir -p dist/pkg/audit
-          cp build/pkg-stage/package.gp4 dist/pkg/audit/PS4-Neural-Engine-008.gp4
+          cp build/pkg-stage/package.gp4 dist/pkg/audit/PS4-Neural-Engine-009.gp4
           cp build/pkg-stage/sce_sys/param.sfo dist/pkg/audit/param.sfo
           cp build/pkg-stage/pne-release.ini dist/pkg/audit/pne-release.ini
-          test -s dist/pkg/audit/PS4-Neural-Engine-008.gp4
+          test -s dist/pkg/audit/PS4-Neural-Engine-009.gp4
           test -s dist/pkg/audit/param.sfo
           test -s dist/pkg/audit/pne-release.ini
       - name: Upload PRX and PKG artifacts
@@ -201,15 +201,15 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "Independent PKG inspector build failed." }
           $tool = "OrbisPkgTool-src/OrbisPkgTool/bin/Release/net10.0-windows/OrbisPkgTool.dll"
           if (-not (Test-Path $tool)) { throw "Inspector DLL missing." }
-          "TOOL=$tool" | Out-File "$env:RUNNER_TEMP\pkg008-tool.txt"
+          "TOOL=$tool" | Out-File "$env:RUNNER_TEMP\pkg009-tool.txt"
       - name: Independently validate GP4, PKG, SFO, manifest and payload
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
-          $tool = (Get-Content "$env:RUNNER_TEMP\pkg008-tool.txt" | Select-Object -First 1).Substring(5)
+          $tool = (Get-Content "$env:RUNNER_TEMP\pkg009-tool.txt" | Select-Object -First 1).Substring(5)
           $artifact = Join-Path $env:GITHUB_WORKSPACE "build-artifact"
-          $pkg = Join-Path $artifact "pkg/PS4-Neural-Engine-008.pkg"
-          $gp4 = Join-Path $artifact "pkg/audit/PS4-Neural-Engine-008.gp4"
+          $pkg = Join-Path $artifact "pkg/PS4-Neural-Engine-009.pkg"
+          $gp4 = Join-Path $artifact "pkg/audit/PS4-Neural-Engine-009.gp4"
           $manifest = Join-Path $artifact "pkg/audit/pne-release.ini"
           $sfo = Join-Path $artifact "pkg/audit/param.sfo"
           $sourcePrx = Join-Path $artifact "ps4/ps4_neural_engine.prx"
@@ -226,12 +226,12 @@ jobs:
             if ($gp4Text -notmatch [regex]::Escape($entry)) { throw "GP4 file association missing: $entry" }
           }
           $manifestText = Get-Content $manifest -Raw
-          foreach ($required in @("schema=1","release_number=008","title_id=PNEU00001","content_id=IV0000-PNEU00001_00-PS4NEURALENG0000","abi_status=unverified","hardware_status=not_tested","prx_sha256=$sourcePrxHash")) {
+          foreach ($required in @("schema=1","release_number=009","title_id=PNEU00001","content_id=IV0000-PNEU00001_00-PS4NEURALENG0000","abi_status=unverified","hardware_status=not_tested","prx_sha256=$sourcePrxHash")) {
             if ($manifestText -notmatch [regex]::Escape($required)) { throw "Release manifest mismatch: $required" }
           }
           dotnet "$tool" validate "$pkg" 2>&1 | Tee-Object qa-output/pkg-validation.txt
           if ($LASTEXITCODE -ne 0) { throw "Independent PKG validation failed." }
-          $out = Join-Path $env:RUNNER_TEMP "pkg008-extracted"
+          $out = Join-Path $env:RUNNER_TEMP "pkg009-extracted"
           dotnet "$tool" extract "$pkg" "$out" --verbose 2>&1 | Tee-Object qa-output/pkg-extract.txt
           if ($LASTEXITCODE -ne 0) { throw "Independent PKG extraction failed." }
           $embeddedSfo = Get-ChildItem $out -Recurse -File -Filter param.sfo | Select-Object -First 1
@@ -246,7 +246,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "Embedded SFO read failed." }
           $stagedSfoText | Out-File qa-output/staged-param-sfo.txt
           $embeddedSfoText | Out-File qa-output/embedded-param-sfo.txt
-          foreach ($required in @("CATEGORY = gde","APP_VER = 01.04","VERSION = 01.04","TITLE_ID = PNEU00001","CONTENT_ID = IV0000-PNEU00001_00-PS4NEURALENG0000","st_type=digital50")) {
+          foreach ($required in @("CATEGORY = gde","APP_VER = 01.05","VERSION = 01.05","TITLE_ID = PNEU00001","CONTENT_ID = IV0000-PNEU00001_00-PS4NEURALENG0000","st_type=digital50")) {
             if ($stagedSfoText -notmatch [regex]::Escape($required)) { throw "Staged GP4 SFO missing expected field: $required" }
             if ($embeddedSfoText -notmatch [regex]::Escape($required)) { throw "Embedded SFO missing expected field: $required" }
           }
@@ -268,14 +268,14 @@ jobs:
           "PARAM_SFO_SEMANTIC_FIELDS=PASS" | Out-File qa-output/qa-report.txt -Append
           "PRX_SHA256=$embeddedPrxHash" | Out-File qa-output/qa-report.txt -Append
           "EBOOT_BYTES=$($eboot.Length)" | Out-File qa-output/qa-report.txt -Append
-          "CATEGORY=gde; APP_VER=01.04; VERSION=01.04; STORAGE=digital50" | Out-File qa-output/qa-report.txt -Append
+          "CATEGORY=gde; APP_VER=01.05; VERSION=01.05; STORAGE=digital50" | Out-File qa-output/qa-report.txt -Append
           "QA_STATUS=PASS_PC_ONLY_NOT_HARDWARE_TESTED" | Out-File qa-output/qa-report.txt -Append
           Get-Content qa-output/qa-report.txt | Out-File $env:GITHUB_STEP_SUMMARY -Append
       - name: Upload independent QA evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: PS4-Neural-Engine-008-independent-QA
+          name: PS4-Neural-Engine-009-independent-QA
           path: qa-output/*
           if-no-files-found: warn
           retention-days: 30
