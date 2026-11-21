@@ -301,17 +301,17 @@ jobs:
         with:
           name: ps4-neural-engine-build
           path: base-artifact
-          repository: \${{ github.repository }}
+          repository: ${{ github.repository }}
           run-id: 44851147057
-          github-token: \${{ github.token }}
+          github-token: ${{ github.token }}
       - name: Download current successful release artifact
         uses: actions/download-artifact@v4
         with:
           name: ps4-neural-engine-build
           path: update-artifact
-          repository: \${{ github.repository }}
-          run-id: \${{ github.run_id }}
-          github-token: \${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ github.run_id }}
+          github-token: ${{ github.token }}
       - name: Setup .NET 8
         uses: actions/setup-dotnet@v4
         with:
@@ -354,11 +354,11 @@ jobs:
           echo "PKGTOOL_CORE=$RUNNER_TEMP/pkgtool-patch/PkgTool.Core" >> "$GITHUB_ENV"
       - name: Build patch against installed release 010
         env:
-          BASE_PKG: \${{ github.workspace }}/base-artifact/pkg/PS4-Neural-Engine-010.pkg
-          UPDATE_PKG: \${{ github.workspace }}/update-artifact/pkg/PS4-Neural-Engine-011.pkg
-          UPDATE_PRX: \${{ github.workspace }}/update-artifact/ps4/ps4_neural_engine.prx
-          UPDATE_MANIFEST: \${{ github.workspace }}/update-artifact/pkg/audit/pne-release.ini
-          OUT_DIR: \${{ github.workspace }}/dist/patch
+          BASE_PKG: ${{ github.workspace }}/base-artifact/pkg/PS4-Neural-Engine-010.pkg
+          UPDATE_PKG: ${{ github.workspace }}/update-artifact/pkg/PS4-Neural-Engine-011.pkg
+          UPDATE_PRX: ${{ github.workspace }}/update-artifact/ps4/ps4_neural_engine.prx
+          UPDATE_MANIFEST: ${{ github.workspace }}/update-artifact/pkg/audit/pne-release.ini
+          OUT_DIR: ${{ github.workspace }}/dist/patch
           PATCH_APP_VERSION: "01.07"
         run: |
           bash tools/build_patch_pkg.sh
@@ -401,17 +401,17 @@ jobs:
         with:
           name: ps4-neural-engine-build
           path: base-artifact
-          repository: \${{ github.repository }}
+          repository: ${{ github.repository }}
           run-id: 44851147057
-          github-token: \${{ github.token }}
+          github-token: ${{ github.token }}
       - name: Download current update artifact
         uses: actions/download-artifact@v4
         with:
           name: ps4-neural-engine-build
           path: update-artifact
-          repository: \${{ github.repository }}
-          run-id: \${{ github.run_id }}
-          github-token: \${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ github.run_id }}
+          github-token: ${{ github.token }}
       - name: Build independent inspector
         shell: pwsh
         run: |
