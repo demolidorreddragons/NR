@@ -142,6 +142,16 @@ jobs:
           repository: PS4-OpenGNM/opengnm
           ref: 4b295ca54c82c83acf308d1c646a2dfa9ae57350
           path: OpenGNM
+      - name: Build OpenOrbis Startup-Only diagnostic PKG (no GNM import)
+        env:
+          GCN8_SMOKE_MODE: startup
+          OPEN_GNM_INCLUDE: ${{ github.workspace }}/OpenGNM/include
+        run: |
+          bash -n tools/build_compute_smoke_pkg.sh
+          bash tools/build_compute_smoke_pkg.sh
+          test -s "dist/gcn8-smoke/${GITHUB_RUN_ID}/startup/SMOKE_PKG_MANIFEST.txt"
+          test -s "dist/gcn8-smoke/${GITHUB_RUN_ID}/startup/smoke.elf"
+          test -s "dist/gcn8-smoke/${GITHUB_RUN_ID}/startup/smoke.map"
       - name: Build OpenOrbis GNM-Link-Only diagnostic PKG (no console execution)
         env:
           GCN8_SMOKE_MODE: gnm-link
