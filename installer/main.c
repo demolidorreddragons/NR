@@ -425,12 +425,7 @@ static int loader_entry_is_canonical(void) {
     return count == 1;
 }
 
-/* Commit PRX and loader config with retained, collision-free recovery copies. */
-static int path_exists(const char* path) {
-    struct stat st;
-    return stat(path, &st) == 0;
-}
-
+/* Commit PRX, installed manifest and loader config with retained recovery copies. */
 /* Never delete or overwrite a recovery copy. Rotate the new backup name instead. */
 static int choose_backup_path(const char* base, char* output, size_t capacity) {
     if (!base || !output || capacity == 0) return 0;
@@ -523,11 +518,14 @@ int main(void) {
         int order=pne_compare_release(installed_release,incoming_release);
         if(order<0){write_status("ABORTED: downgrade refused; installed release is newer.");notify("PNE: downgrade bloqueado.");sceKernelUsleep(3000000);return 7;}
         if(order==0){
-            if(strcmp(installed_hash,incoming_hash)==0 && loader_entry_is_canonical()){
-                write_status("ALREADY_CURRENT: release and PRX SHA-256 match; no writes or backups created.");
+            if(strcmp(installed_hash,incoming_hash)!=0){
+                write_status("ABORTED: CONFLICT; same release number with different PRX hash.");notify("PNE: conflito de hash; nada alterado.");sceKernelUsleep(3000000);return 8;
+            }
+            if(loader_entry_is_canonical()){
+                write_status("ALREADY_CURRENT: release, PRX SHA-256 and GoldHEN registration match; no writes or backups created.");
                 notify("PNE: Neural Engine ja esta atualizado.");sceKernelUsleep(2500000);return 0;
             }
-            write_status("ABORTED: CONFLICT; same release number with different PRX hash.");notify("PNE: conflito de hash; nada alterado.");sceKernelUsleep(3000000);return 8;
+            /* Same payload but missing/duplicate loader registration: repair config transactionally. */
         }
     }
     if(mkdir("/data/GoldHEN",0777)!=0&&errno!=EEXIST){snprintf(error,sizeof(error),"ERROR: cannot create GoldHEN directory (errno=%d).",errno);write_status(error);return 1;}
