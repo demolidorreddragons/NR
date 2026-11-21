@@ -68,6 +68,37 @@ jobs:
           echo "3c7cd5bb593ca74fa1c13fd59f3938dc0fc07985167f7275063019e63abe4526  /tmp/openorbis.tar.gz" | sha256sum -c -
           tar -xzf /tmp/openorbis.tar.gz -C "$GITHUB_WORKSPACE"
           echo "OO_PS4_TOOLCHAIN=$GITHUB_WORKSPACE/OpenOrbis/PS4Toolchain" >> "$GITHUB_ENV"
+
+      - name: Preserve exact OpenOrbis GNM import stub for forensic audit
+        run: |
+          set -euo pipefail
+          mkdir -p dist/gcn8-smoke/openorbis-import-audit
+          audit="dist/gcn8-smoke/openorbis-import-audit"
+          mapfile -d '' libs < <(find -L "$OO_PS4_TOOLCHAIN/lib" -maxdepth 1 -type f -iname '*GnmDriver*' -print0)
+          if [[ ${#libs[@]} -eq 0 ]]; then
+            echo "No GnmDriver import library found in $OO_PS4_TOOLCHAIN/lib" | tee "$audit/RESULT.txt"
+            exit 1
+          fi
+          : > "$audit/RESULT.txt"
+          for lib in "${libs[@]}"; do
+            base="$(basename "$lib")"
+            cp -L "$lib" "$audit/$base"
+            {
+              echo "=== FILE: $lib ==="
+              file "$lib"
+              echo "--- SHA256 ---"
+              sha256sum "$lib"
+              echo "--- ARCHIVE MEMBERS (if archive) ---"
+              ar t "$lib" 2>&1 || true
+              echo "--- SYMBOLS ---"
+              nm -A "$lib" 2>&1 || true
+              echo "--- ELF HEADERS / SECTIONS / DYNAMIC / RELOCS ---"
+              readelf -W -h -S -d -r -s "$lib" 2>&1 || true
+              echo "--- RELEVANT STRINGS ---"
+              strings -a "$lib" | grep -Ei 'sceGnmSubmitDone|yvZ73uQUqrk|CAF67BDEE414AAB9|libSceGnmDriver' || true
+            } >> "$audit/RESULT.txt"
+          done
+          echo "OPENORBIS_GNM_IMPORT_STUB_AUDIT=CAPTURED"
       - name: Checkout and patch pinned LibOrbisPkg builder
         uses: actions/checkout@v4
         with:
