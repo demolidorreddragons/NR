@@ -41,7 +41,7 @@ jobs:
           assert 'if (errno != EEXIST) return 0;' in installer, 'staging retry must only continue on EEXIST'
           assert 'O_TRUNC' not in installer, 'installer must never truncate a pre-existing staging path'
           assert 'fdopen(fd, "wb")' in installer, 'staged config must wrap the exclusively-created descriptor'
-          assert 'pne_validate_release_manifest(RELEASE_MANIFEST, SOURCE_PRX' in installer, 'installer must verify release identity and PRX hash'
+          assert 'pne_validate_release_manifest(RELEASE_MANIFEST,SOURCE_PRX' in installer, 'installer must verify release identity and PRX hash'
           assert installer.index('pne_validate_release_manifest(RELEASE_MANIFEST, SOURCE_PRX') < installer.index('mkdir("/data/GoldHEN"'), 'manifest/hash validation must precede destination writes'
           assert 'RELEASE_MANIFEST "/app0/pne-release.ini"' in installer, 'installer manifest path missing'
           build_script = Path('tools/build_pkg.sh').read_text()
