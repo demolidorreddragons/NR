@@ -629,7 +629,7 @@ int main(void) {
             path_is_regular_file(DEST_TMP) &&
             pne_validate_release_manifest(INSTALLED_MANIFEST,DEST_TMP,staged_error,sizeof(staged_error)) &&
             read_release_number(INSTALLED_MANIFEST,&staged_release) &&
-            staged_release==incoming_release &&
+            pne_compare_release(staged_release,incoming_release)>=0 &&
             pne_sha256_file(DEST_TMP,staged_hash) &&
             strcmp(staged_hash,incoming_hash)==0;
         if(!staged_candidate_valid){
@@ -637,7 +637,7 @@ int main(void) {
                      incoming_release,staged_error[0]?staged_error:"staged candidate identity/hash mismatch");
             write_status(error);notify("PNE: conflito; nada alterado e backups preservados.");sceKernelUsleep(3000000);return 6;
         }
-        write_status("RECOVERY_CANDIDATE: staged PRX and installed manifest match the incoming release/hash; preparing a separate recovery copy.");
+        write_status("RECOVERY_CANDIDATE: staged PRX hash matches the incoming release and its manifest is not newer; preparing a separate recovery copy.");
         if(!copy_file_to_unique_staged(DEST_TMP,DEST_TMP,recovery_prx_tmp,sizeof(recovery_prx_tmp),error,sizeof(error))){
             write_status(error);notify("PNE: falha ao preparar recuperacao; arquivos preservados.");sceKernelUsleep(3000000);return 6;
         }
