@@ -17,7 +17,7 @@ The repository has a self-hosted GitHub Actions runner on the user's Windows PC 
 1. Before every live operation, read `AGENTS.md`, this document, and the exact workflow being used.
 2. Inspect the current GitHub Actions workflow definitions and recent runs. Do not assume an old workflow is still enabled or that a connectivity-only workflow performs deployment.
 3. For builds, use the actual successful build run and its artifact. Match the artifact to the intended branch/commit and inspect package metadata and SHA-256 before transfer.
-4. Dispatch or trigger a workflow that explicitly targets `runs-on: [self-hosted, Windows, X64, ps4-lan]`. A hosted Ubuntu runner cannot access the user's LAN.
+4. Dispatch or trigger a workflow that explicitly targets `runs-on: [self-hosted, Windows, X64, ps4-lan]`. A hosted Ubuntu runner cannot access the user's LAN. The bridge workflow is configured to process successful builds from `main` and `feature/gcn8-numeric-kernels`, downloading the artifact by the triggering build run ID.
 5. Use the runner to perform FTP operations. Use passive mode; the PS4 GoldHEN FTP server previously rejected EPSV, so use PASV/passive FTP.
 6. For upload, write to the agreed staging path, then read the file back from the PS4 (or retrieve its remote size and SHA-256 through a trusted runner-side method). Compare the remote read-back SHA-256 with the build artifact SHA-256.
 7. Report transfer as complete only after the workflow's upload and integrity-verification steps succeed and the logs identify the exact remote path, byte count, and matching digest.
@@ -27,7 +27,7 @@ The repository has a self-hosted GitHub Actions runner on the user's Windows PC 
 
 ## Workflow capability distinction
 
-`.github/workflows/ps4-bridge-test.yml` is a connectivity/inspection workflow unless its current contents explicitly include upload and read-back verification. It must not be described as a deployment workflow merely because it can list the PS4 FTP directories.
+`.github/workflows/ps4-bridge-test.yml` performs read-only pre-stage diagnostics and then stages the exact successful build artifact under `/data/pkg/` with remote SHA-256 read-back verification. Its diagnostics are explicitly labelled `pre-stage`: the installer log on the console describes the last eboot launch, not the candidate just uploaded. A fresh post-install log can only be attributed to the new candidate after the user installs and launches it.
 
 A deployment workflow must:
 - download the exact build artifact from the triggering successful workflow run;
