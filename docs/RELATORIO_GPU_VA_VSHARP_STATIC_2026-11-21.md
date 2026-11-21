@@ -129,3 +129,24 @@ Referências consultadas:
 - freegnm examples caveats: https://github.com/lateleite/freegnm-examples
 
 **Limite:** esta atualização é auditoria documental. Não houve compilação GFX8, dispatch, readback, execução no PS4, nem validação do parser Sony.
+
+## 9. Nova trilha de evidência: RE do parser no firmware FW 9.00 (2026-11-21)
+
+A revisão do plano público de reescrita do OpenGNM revelou uma trilha mais forte que os exemplos de parser emulador: o projeto declara ter feito engenharia reversa de libSceGnmDriver.sprx do firmware 9.00 e marca o item RE-6 (shader binary parser) como concluído. O plano identifica como fonte tools/gnm_driver_fw900_analysis.md e afirma que essa análise cobre offsets de metadados, algoritmo CRC32 e layout da resource table. Também declara que a autoridade do comportamento do driver vem do firmware disassemblado, com shadPS4 como referência cruzada.
+
+**O que foi possível verificar publicamente nesta rodada:**
+- O plano público documenta explicitamente a existência e o escopo da RE do parser e identifica FW 9.00, incluindo o módulo NEO/Pro libSceGnmDriverForNeoMode.sprx.
+- A referência pública do formato OpenGNM continua descrevendo o campo como início da tabela: OrbShdr - chunkusagebaseoffsetdwords*4.
+- A página pública do PSBC diz que o hardware validation DONE corresponde a VS+PS em PS4 FW 9.00, com renderização de triângulo por 600 frames. Isso é evidência de validação de shader gráfico no FW 9.00, mas não é validação de compute GFX8/PS4 Pro nem prova de qual convenção o parser Sony aplica ao compute.
+- O arquivo detalhado tools/gnm_driver_fw900_analysis.md não está acessível no repositório público consultado (resposta 404). Portanto, nesta rodada não foi possível auditar as instruções/pseudocódigo da função parser, seus offsets exatos, nem confirmar se o trecho foi analisado no caminho NEO ou apenas no driver comum.
+
+**Impacto na hipótese InputUsage:** a documentação do OpenGNM tem uma alegação de proveniência mais forte (RE do firmware) do que fpPS4, mas o material primário necessário para conferir o detalhe do ponteiro não está publicado/acessível. A alegação de RE não será convertida em prova independente sem o trecho da análise, pseudocódigo, endereço/offset da função e descrição do fluxo que resolve a tabela. O comentário do cabeçalho, o cálculo do produtor PSBC e a validação VS/PS FW 9.00 são coerentes com o ponteiro para início, mas ainda não provam o caso CS GFX8 no FW 14.02.
+
+**Próximo passo técnico delimitado:** solicitar/publicar a evidência RE-6 relevante (função, pseudocódigo e referências aos campos chunkusagebaseoffsetdwords/numinputusageslots) ou localizar um shader real com metadados e parser firmware observável. Até lá, preservar a hipótese de início como melhor sustentada documentalmente, manter runtime_semantics=UNRESOLVED e não alterar o parser/PSBC nem liberar o dispatch.
+
+Referências:
+- OpenGNM rewrite plan / RE-6: https://github.com/PS4-OpenGNM/opengnm/blob/main/OPENGNM_REWRITE_PLAN.md
+- OpenGNM shader binary reference: https://ps4-opengnm.github.io/opengnm/reference/shaderbinary/
+- PSBC plan and stated FW 9.00 VS+PS validation: https://github.com/PS4-OpenGNM/opengnm-psbc/blob/main/OPENGNM_PSBC_PLAN.md
+
+**Classificação:** STATIC_REVIEW. Sem build novo, artefato GFX8, dispatch ou teste no PS4 nesta rodada.
