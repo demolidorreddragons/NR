@@ -48,7 +48,12 @@ jobs:
           assert 'abi_status=unverified' in build_script and 'hardware_status=not_tested' in build_script, 'manifest must not claim unproven compatibility'
           print('Installer transaction and release-manifest invariants passed')
           PY
-      - name: Test hybrid installer state machine\n        run: |\n          cc -std=c11 -Wall -Wextra -Werror -Iinstaller installer/hybrid_state.c tests/test_hybrid_state.c -o "$RUNNER_TEMP/pne-installer-test/test_hybrid_state"\n          "$RUNNER_TEMP/pne-installer-test/test_hybrid_state"\n      - name: Test installer release manifest and SHA-256
+      - name: Test hybrid installer state machine
+        run: |
+          mkdir -p "$RUNNER_TEMP/pne-installer-test"
+          cc -std=c11 -Wall -Wextra -Werror -Iinstaller installer/hybrid_state.c tests/test_hybrid_state.c -o "$RUNNER_TEMP/pne-installer-test/test_hybrid_state"
+          "$RUNNER_TEMP/pne-installer-test/test_hybrid_state"
+      - name: Test installer release manifest and SHA-256
         run: |
           mkdir -p "$RUNNER_TEMP/pne-installer-test"
           cc -std=c11 -Wall -Wextra -Werror -Iinstaller installer/sha256.c installer/release_manifest.c tests/test_release_manifest.c -o "$RUNNER_TEMP/pne-installer-test/test_release_manifest"
