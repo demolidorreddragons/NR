@@ -1,147 +1,16 @@
-name: Fetch PS4 PNE installer log and transaction recovery state
+name: Fetch PS4 PNE installer log (legacy entrypoint)
 
 on:
-  push:
-    branches: [main]
-    paths: [".github/workflows/ps4-fetch-pne-installer-log.yml"]
+  workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
-  fetch-log:
-    if: ${{ github.event.head_commit.message == 'Fetch PS4 PNE installer log' }}
-    runs-on: [self-hosted, Windows, X64, ps4-lan]
-    timeout-minutes: 5
+  retired:
+    runs-on: ubuntu-latest
     steps:
-      - name: Read installer log, transaction backups and staged files (read-only)
-        shell: powershell -ExecutionPolicy Bypass -File {0}
-        env:
-          PS4_IP: ${{ vars.PS4_IP }}
+      - name: Point to the maintained read-only crash diagnostics workflow
         run: |
-          $ErrorActionPreference = "Stop"
-          if (-not $env:PS4_IP) { throw "PS4_IP repository variable is missing." }
-          $base = "ftp://$($env:PS4_IP):2121"
-          $cred = "anonymous:anonymous@example.com"
-          $temp = Join-Path $env:RUNNER_TEMP "pne-transaction-diagnostics"
-          New-Item -ItemType Directory -Force -Path $temp | Out-Null
-
-          function Read-FtpText([string]$remote, [string]$label, [bool]$required = $false) {
-            $out = Join-Path $temp ($label -replace '[^A-Za-z0-9_.-]','_')
-            $stderr = "$out.stderr"
-            $stdout = "$out.stdout"
-            $process = Start-Process -FilePath "curl.exe" -ArgumentList @("--fail","--silent","--show-error","--ftp-pasv","--user",$cred,"--output",$out,"$base$remote") -NoNewWindow -Wait -PassThru -RedirectStandardOutput $stdout -RedirectStandardError $stderr
-            $exitCode = $process.ExitCode
-            $errorText = if (Test-Path -LiteralPath $stderr) { Get-Content -LiteralPath $stderr -Raw } else { "" }
-            if ($exitCode -ne 0) {
-              if ($required) { throw "Required FTP read failed for $remote (curl exit=$exitCode): $errorText" }
-              Write-Host "FILE_UNAVAILABLE $remote (curl exit=$exitCode): $errorText"
-              return
-            }
-            Write-Host "===== BEGIN $remote ====="
-            Get-Content -LiteralPath $out -Raw | Write-Host
-            Write-Host "===== END $remote ====="
-            Write-Host "FILE_BYTES $remote $((Get-Item -LiteralPath $out).Length)"
-          }
-
-          function List-Ftp([string]$remote) {
-            Write-Host "===== DIRECTORY $remote ====="
-            $out = Join-Path $temp (($remote -replace '[^A-Za-z0-9_.-]','_') + ".listing")
-            $stderr = "$out.stderr"
-            $process = Start-Process -FilePath "curl.exe" -ArgumentList @("--fail","--silent","--show-error","--ftp-pasv","--user",$cred,"--list-only","$base$remote") -NoNewWindow -Wait -PassThru -RedirectStandardOutput $out -RedirectStandardError $stderr
-            $errorText = if (Test-Path -LiteralPath $stderr) { Get-Content -LiteralPath $stderr -Raw } else { "" }
-            if ($process.ExitCode -ne 0) { Write-Host "DIRECTORY_UNAVAILABLE $remote (curl exit=$($process.ExitCode)): $errorText"; return @() }
-            $listing = @(Get-Content -LiteralPath $out)
-            $listing | ForEach-Object { Write-Host $_ }
-            return @($listing)
-          }
-
-          $pluginFiles = List-Ftp "/data/GoldHEN/plugins/"
-          $goldhenFiles = List-Ftp "/data/GoldHEN/"
-          $null = List-Ftp "/data/"
-          $null = List-Ftp "/data/pkg/"
-
-          Read-FtpText "/data/GoldHEN/ps4_neural_engine_install.log" "current-installer-log.txt" $true
-          Read-FtpText "/data/GoldHEN/plugins.ini" "plugins.ini.txt"
-          Read-FtpText "/data/GoldHEN/plugins.ini.pne-backup" "plugins.ini.pne-backup.txt"
-          Read-FtpText "/data/GoldHEN/plugins.ini.pne-tmp" "plugins.ini.pne-tmp.txt"
-          foreach ($remote in @(
-            "/data/GoldHEN/plugins/ps4_neural_engine.prx",
-            "/data/GoldHEN/plugins/ps4_neural_engine.prx.pne-backup",
-            "/data/GoldHEN/plugins/ps4_neural_engine.prx.pne-tmp"
-          )) {
-            $leaf = [System.IO.Path]::GetFileName($remote)
-            $out = Join-Path $temp $leaf
-            $stderr = "$out.stderr"
-            $stdout = "$out.stdout"
-            $process = Start-Process -FilePath "curl.exe" -ArgumentList @("--fail","--silent","--show-error","--ftp-pasv","--user",$cred,"--output",$out,"$base$remote") -NoNewWindow -Wait -PassThru -RedirectStandardOutput $stdout -RedirectStandardError $stderr
-            $exitCode = $process.ExitCode
-            $errorText = if (Test-Path -LiteralPath $stderr) { Get-Content -LiteralPath $stderr -Raw } else { "" }
-            if ($exitCode -eq 0 -and (Test-Path -LiteralPath $out)) {
-              $item = Get-Item -LiteralPath $out
-              $hash = (Get-FileHash -LiteralPath $out -Algorithm SHA256).Hash.ToLowerInvariant()
-              Write-Host "BINARY_FILE $remote SIZE=$($item.Length) SHA256=$hash"
-            } else {
-              Write-Host "BINARY_FILE_UNAVAILABLE $remote (curl exit=$exitCode): $errorText"
-            }
-          }
-          Read-FtpText "/data/install.log" "data-install.log.txt"
-          Read-FtpText "/data/pkg/install.log" "pkg-install.log.txt"
-          Write-Host "PLUGIN_FILE_COUNT=$($pluginFiles.Count)"
-          Write-Host "GOLDHEN_FILE_COUNT=$($goldhenFiles.Count)"
-
-          # Read crash dumps and system log without changing console state.
-          $dumpDir = Join-Path $temp "sce_coredumps"
-          New-Item -ItemType Directory -Force -Path $dumpDir | Out-Null
-          $coreListing = List-Ftp "/data/sce_coredumps/"
-          foreach ($name in $coreListing) {
-            if ($name -notmatch '\.(dmp|core|bin|log|dat|elf|mdmp)
-
-# Re-run read-only PS4 transaction diagnostics.
-# Triggered by commit message: Fetch PS4 PNE installer log
-) { continue }
-            $safeName = [System.IO.Path]::GetFileName($name)
-            if (-not $safeName) { continue }
-            $out = Join-Path $dumpDir $safeName
-            $stderr = "$out.stderr"
-            $stdout = "$out.stdout"
-            $args = @("--fail","--silent","--show-error","--ftp-pasv","--user",$cred,"--output",$out,($base + "/data/sce_coredumps/" + $safeName))
-            $process = Start-Process -FilePath "curl.exe" -ArgumentList $args -NoNewWindow -Wait -PassThru -RedirectStandardOutput $stdout -RedirectStandardError $stderr
-            if ($process.ExitCode -eq 0 -and (Test-Path -LiteralPath $out)) {
-              $item = Get-Item -LiteralPath $out
-              $hash = (Get-FileHash -LiteralPath $out -Algorithm SHA256).Hash.ToLowerInvariant()
-              Write-Host "COREDUMP=$safeName SIZE=$($item.Length) SHA256=$hash"
-            } else {
-              Write-Host "COREDUMP_UNAVAILABLE=$safeName EXIT=$($process.ExitCode)"
-            }
-          }
-
-          $sceLogsDir = Join-Path $temp "sce_logs"
-          New-Item -ItemType Directory -Force -Path $sceLogsDir | Out-Null
-          $out = Join-Path $sceLogsDir "log.bin"
-          $stderr = "$out.stderr"
-          $stdout = "$out.stdout"
-          $args = @("--fail","--silent","--show-error","--ftp-pasv","--user",$cred,"--output",$out,($base + "/data/sce_logs/log.bin"))
-          $process = Start-Process -FilePath "curl.exe" -ArgumentList $args -NoNewWindow -Wait -PassThru -RedirectStandardOutput $stdout -RedirectStandardError $stderr
-          if ($process.ExitCode -eq 0 -and (Test-Path -LiteralPath $out)) {
-            $item = Get-Item -LiteralPath $out
-            $hash = (Get-FileHash -LiteralPath $out -Algorithm SHA256).Hash.ToLowerInvariant()
-            Write-Host "SCE_LOG=/data/sce_logs/log.bin SIZE=$($item.Length) SHA256=$hash"
-          } else {
-            Write-Host "SCE_LOG_UNAVAILABLE=/data/sce_logs/log.bin EXIT=$($process.ExitCode)"
-          }
-
-          Write-Host "PNE_TRANSACTION_DIAGNOSTICS_READ_ONLY_COMPLETE"
-
-
-      - name: Preserve collected PS4 diagnostics as workflow artifact
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: ps4-neural-engine-crash-diagnostics
-          path: \${{ runner.temp }}/pne-transaction-diagnostics/
-          if-no-files-found: warn
-          retention-days: 14
-
-# Re-run read-only PS4 transaction diagnostics.
-# Triggered by commit message: Fetch PS4 PNE installer log
+          echo "This legacy collector is retired."
+          echo "Use .github/workflows/ps4-crash-diagnostics.yml for PS4 logs, PRX metadata and crash-dump collection."
