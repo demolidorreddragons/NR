@@ -4,7 +4,7 @@ on:
   push:
     branches: [feature/gcn8-numeric-kernels]
     paths:
-      - ".github/workflows/stage-gcn8-gnm-load-001.yml"
+      - ".github/workflows/stage-gcn8-gnm-link-001.yml"
 
 permissions:
   actions: read
