@@ -1,6 +1,6 @@
 # Arquitetura do PKG híbrido — instalação inicial e atualização do Neural Engine
 
-**Estado:** Release 011 (APP_VER 01.07) passou host tests, build e QA independente PC-only e foi staged no PS4. O Package Manager recusou o PKG 011 com `Package already installed`; ele não foi instalado e seu eboot não foi executado. O PRX 011 é byte-idêntico ao 010; a alteração 011 foi no eboot/installer, sem correção comprovada para CE-34878-0. O fluxo separado de patch real foi implementado em `tools/build_patch_pkg.sh` e no job `build-patch`/`independent-patch-qa` do workflow `ps4-prx.yml`; aguarda execução e QA CI. Não desinstalar o aplicativo nem repetir a tentativa com o PKG 011.
+**Estado:** Release 011 (APP_VER 01.07) passou host tests, build e QA independente PC-only e foi staged no PS4. O Package Manager recusou o PKG 011 com `Package already installed`; ele não foi instalado e seu eboot não foi executado. O PRX 011 é byte-idêntico ao 010; a alteração 011 foi no eboot/installer, sem correção comprovada para CE-34878-0. O fluxo separado de patch real foi implementado em `workflow `ps4-prx.yml` (jobs `build-associated-patch-against-installed-010` e `independent-patch-qa`)` e no job `build-patch`/`independent-patch-qa` do workflow `ps4-prx.yml`; aguarda execução e QA CI. Não desinstalar o aplicativo nem repetir a tentativa com o PKG 011.
 **Alvo:** PS4 Pro / Orbis + GoldHEN.  
 **Branch:** `feature/gcn8-numeric-kernels`.  
 **Identidade atual:** TITLE_ID `PNEU00001`, CONTENT_ID `IV0000-PNEU00001_00-PS4NEURALENG0000`.
@@ -109,7 +109,7 @@ Se a versão empacotada for igual à instalada e os hashes coincidirem, retornar
 | H5 | Fault injection de cada write/fsync/rename/rollback | **PENDENTE** — adicionar harness de falhas e provar restauração de PRX, manifesto e `plugins.ini`. |
 | H6 | QA independente do PKG exato | **PASS — RELEASE 011 (PC-ONLY)** | QA independente validou o PKG 011 com SHA-256 `f7eb91f19356f92991536d36e2483a853907ddcd467df9579842383f8b87b7ef`; não é teste de hardware. |
 | H7 | Teste controlado de instalação inicial e atualização | Evidência de console, logs, rollback e carregamento |
-| H8 | Patch verdadeiro para atualizar o próprio app via Package Manager | **PIPELINE IMPLEMENTADO — CI PENDENTE** — usa base 010 verificada, GP4 `pkg_ps4_patch`, `CATEGORY=gpe`, `digital25` e validação independente; não instalar até QA passar |
+| H8 | Patch verdadeiro para atualizar o próprio app via Package Manager | **PIPELINE IMPLEMENTADO — CI PENDENTE** — usa base 010 verificada, reconstrói uma base de associação Sony, define `app_path`, GP4 `pkg_ps4_patch`, `CATEGORY=gpe`, `digital25` e QA independente; não instalar até QA passar |
 
 ## 9. Estado atual e bloqueios
 
