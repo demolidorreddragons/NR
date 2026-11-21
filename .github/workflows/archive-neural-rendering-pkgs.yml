@@ -1,0 +1,76 @@
+name: Archive older Neural Rendering PKGs on PS4
+
+on:
+  push:
+    branches: [main]
+    paths: [".github/workflows/archive-neural-rendering-pkgs.yml"]
+
+permissions:
+  contents: read
+
+jobs:
+  archive-old-pkgs:
+    runs-on: [self-hosted, Windows, X64, ps4-lan]
+    steps:
+      - name: Move older Neural Rendering PKGs into /data/pkg/old
+        shell: powershell -NoProfile -ExecutionPolicy Bypass -Command "& '{0}'"
+        env:
+          PS4_IP: ${{ vars.PS4_IP }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          if (-not $env:PS4_IP) { throw "PS4_IP repository variable is missing." }
+          $credentials = New-Object System.Net.NetworkCredential("anonymous", "anonymous@example.com")
+          function Ftp([string]$path,[string]$method,[string]$renameTo=$null) {
+            $r = [System.Net.FtpWebRequest]::Create("ftp://$($env:PS4_IP):2121$path")
+            $r.Method=$method; $r.Credentials=$credentials; $r.UsePassive=$true
+            $r.UseBinary=$true; $r.KeepAlive=$false; $r.Timeout=60000
+            if ($renameTo) { $r.RenameTo=$renameTo }
+            return $r
+          }
+
+          # Ensure archive directory exists; do not alter anything already inside it.
+          try { $x=Ftp "/data/pkg/old" ([System.Net.WebRequestMethods+Ftp]::MakeDirectory); $z=$x.GetResponse(); $z.Dispose() }
+          catch {
+            if (-not $_.Exception.Response -or $_.Exception.Response.StatusCode -notin @(
+              [System.Net.FtpStatusCode]::ActionNotTakenFileUnavailable,
+              [System.Net.FtpStatusCode]::ActionNotTakenFilenameNotAllowed)) { throw }
+          }
+
+          $list=Ftp "/data/pkg" ([System.Net.WebRequestMethods+Ftp]::ListDirectory)
+          $response=$list.GetResponse()
+          $reader=New-Object IO.StreamReader($response.GetResponseStream())
+          try { $names=@($reader.ReadToEnd() -split "`r?`n" | Where-Object { $_ }) }
+          finally { $reader.Dispose(); $response.Dispose() }
+
+          $toMove=@($names | Where-Object {
+            $_ -match '(?i)^PS4-Neural-Engine.*\.pkg$' -and
+            $_ -ne 'PS4-Neural-Engine-011-HYBRID.pkg'
+          })
+          foreach ($name in $toMove) {
+            $source="/data/pkg/$name"
+            $destination="/data/pkg/old/$name"
+            try {
+              $check=Ftp $destination ([System.Net.WebRequestMethods+Ftp]::GetFileSize)
+              $checkResponse=$check.GetResponse(); $checkResponse.Dispose()
+              $stem=[IO.Path]::GetFileNameWithoutExtension($name)
+              $ext=[IO.Path]::GetExtension($name)
+              $destination="/data/pkg/old/$stem-archived-$([DateTime]::UtcNow.ToString('yyyyMMddHHmmss'))$ext"
+            } catch { }
+            $move=Ftp $source ([System.Net.WebRequestMethods+Ftp]::Rename) $destination.TrimStart('/')
+            $moved=$move.GetResponse(); $moved.Dispose()
+            Write-Host "ARCHIVED=$source -> $destination"
+          }
+
+          # Read back directory listing and assert that only the current hybrid remains at root.
+          $list=Ftp "/data/pkg" ([System.Net.WebRequestMethods+Ftp]::ListDirectory)
+          $response=$list.GetResponse()
+          $reader=New-Object IO.StreamReader($response.GetResponseStream())
+          try { $after=@($reader.ReadToEnd() -split "`r?`n" | Where-Object { $_ }) }
+          finally { $reader.Dispose(); $response.Dispose() }
+          $remaining=@($after | Where-Object { $_ -match '(?i)^PS4-Neural-Engine.*\.pkg$' })
+          if ($remaining.Count -ne 1 -or $remaining[0] -ne 'PS4-Neural-Engine-011-HYBRID.pkg') {
+            throw "Unexpected Neural Rendering PKGs remain in /data/pkg: $($remaining -join ', ')"
+          }
+          Write-Host "ARCHIVE_STATUS=SUCCESS"
+          Write-Host "ARCHIVED_COUNT=$($toMove.Count)"
+          Write-Host "CURRENT_HYBRID_REMAINS=/data/pkg/PS4-Neural-Engine-011-HYBRID.pkg"
