@@ -19,7 +19,7 @@ jobs:
           name: ps4-neural-engine-patch-candidate
           path: transfer
           repository: demolidorreddragons/NR
-          run-id: 44856253337
+          run-id: 44858062821
           github-token: ${{ github.token }}
 
       - name: Verify and stage only PATCH 011 into PS4 /data/pkg
@@ -32,7 +32,7 @@ jobs:
 
           $expectedName = "PS4-Neural-Engine-011-PATCH.pkg"
           $expectedSize = [long]4915200
-          $expectedHash = "f85abdea0f4402f1c0627a2343c2196a3a5ed5283b8c8946bc5cb7d1ed17fcdc"
+          $expectedHash = "1c680ad9cc5c64befca3c542703bfbf8955ce64944d2378c03e3dbbfacb9edad"
           $matches = @(Get-ChildItem -LiteralPath (Join-Path $env:GITHUB_WORKSPACE "transfer") -Recurse -File |
             Where-Object { $_.Name -ceq $expectedName })
           if ($matches.Count -ne 1) { throw "Expected exactly one $expectedName in the validated artifact; found $($matches.Count)." }
@@ -58,7 +58,8 @@ jobs:
             return $request
           }
 
-          $target = "/data/pkg/$expectedName"
+          $remoteName = "PS4-Neural-Engine-011-PATCH-FIXED.pkg"
+          $target = "/data/pkg/$remoteName"
           $existing = $false
           try {
             $check = New-FtpRequest $target ([System.Net.WebRequestMethods+Ftp]::GetFileSize)
@@ -83,7 +84,7 @@ jobs:
             if ($existingHash -ne $expectedHash) { throw "Existing PS4 destination has a different SHA-256; refusing to overwrite." }
             Write-Host "PATCH_ALREADY_PRESENT_AND_VERIFIED=$target"
           } else {
-            $staging = "/data/$expectedName"
+            $staging = "/data/$remoteName"
             $upload = New-FtpRequest $staging ([System.Net.WebRequestMethods+Ftp]::UploadFile)
             $upload.ContentLength = $localSize
             $requestStream = $upload.GetRequestStream()
@@ -92,7 +93,7 @@ jobs:
             $response = $upload.GetResponse()
             $response.Dispose()
 
-            $move = New-FtpRequest $staging ([System.Net.WebRequestMethods+Ftp]::Rename) "pkg/$expectedName"
+            $move = New-FtpRequest $staging ([System.Net.WebRequestMethods+Ftp]::Rename) "pkg/$remoteName"
             $response = $move.GetResponse()
             $response.Dispose()
           }
