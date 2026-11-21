@@ -14,7 +14,7 @@ jobs:
     runs-on: [self-hosted, Windows, X64, ps4-lan]
     steps:
       - name: Move root 009 PKGs into /data/pkg/old and verify hashes
-        shell: powershell
+        shell: powershell -NoProfile -ExecutionPolicy Bypass -Command "& '{0}'"
         env:
           PS4_IP: ${{ vars.PS4_IP }}
         run: |
