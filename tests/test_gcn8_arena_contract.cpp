@@ -17,10 +17,16 @@ int main() {
  assert(arena_allocate(&a,32,32,&r)==ArenaError::none && r.offset==32);
  assert(arena_allocate(&a,192,64,&r)==ArenaError::none && r.offset==64);
  assert(a.cursor==256);
+ const auto cursor_before_failure = a.cursor;
  assert(arena_allocate(&a,1,1,&r)==ArenaError::out_of_bounds);
+ assert(a.cursor==cursor_before_failure && r.offset==0 && r.size==0);
  assert(arena_allocate(&a,0,1,&r)==ArenaError::zero_size);
  assert(arena_allocate(&a,1,3,&r)==ArenaError::invalid_alignment);
  assert(arena_allocate(&a,1,0,&r)==ArenaError::invalid_alignment);
+ assert(a.cursor==cursor_before_failure && r.offset==0 && r.size==0);
+ Arena corrupted{16,17};
+ assert(arena_allocate(&corrupted,1,1,&r)==ArenaError::out_of_bounds);
+ assert(corrupted.cursor==17 && r.offset==0 && r.size==0);
  assert(arena_allocate(nullptr,1,1,&r)==ArenaError::null_output);
  assert(arena_init(0,&a)==ArenaError::zero_capacity);
  assert(arena_init(8,nullptr)==ArenaError::null_output);
