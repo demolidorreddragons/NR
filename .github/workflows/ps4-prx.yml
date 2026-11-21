@@ -43,6 +43,11 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
+      - name: Verify exact approved Neural Rendering icon
+        run: |
+          test -f assets/neural-rendering-icon-source.png
+          echo "7fe6a11ad7b4d37e5741c77822730a82487237dbed4a3eca529e995a29421ae4  assets/neural-rendering-icon-source.png" | sha256sum -c -
+          file assets/neural-rendering-icon-source.png
       - name: Install LLVM and SVG rasterizer
         run: |
           sudo apt-get update
