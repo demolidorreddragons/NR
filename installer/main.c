@@ -641,7 +641,7 @@ int main(void) {
         if(!copy_file_to_unique_staged(DEST_TMP,DEST_TMP,recovery_prx_tmp,sizeof(recovery_prx_tmp),error,sizeof(error))){
             write_status(error);notify("PNE: falha ao preparar recuperacao; arquivos preservados.");sceKernelUsleep(3000000);return 6;
         }
-        if(!stage_manifest(manifest_tmp) ||
+        if(!stage_manifest(manifest_tmp,sizeof(manifest_tmp)) ||
            !pne_validate_release_manifest(manifest_tmp,recovery_prx_tmp,error,sizeof(error))){
             int e=errno;remove(recovery_prx_tmp);remove(manifest_tmp);
             snprintf(error,sizeof(error),"ERROR: recovery manifest staging/verification failed (errno=%d); original staged candidate preserved.",e);
