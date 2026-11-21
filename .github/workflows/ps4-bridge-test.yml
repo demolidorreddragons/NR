@@ -189,8 +189,12 @@ jobs:
         shell: powershell -NoProfile -ExecutionPolicy Bypass -Command "& '{0}'"
         env:
           PS4_IP: ${{ vars.PS4_IP }}
+          BUILD_RUN_ID: ${{ github.event.workflow_run.id }}
+          BUILD_COMMIT: ${{ github.event.workflow_run.head_sha }}
+          BUILD_BRANCH: ${{ github.event.workflow_run.head_branch }}
         run: |
           $ErrorActionPreference = "Stop"
+          Write-Host "DIAGNOSTIC_CONTEXT=pre-stage; BUILD_RUN_ID=$env:BUILD_RUN_ID; BUILD_COMMIT=$env:BUILD_COMMIT; BUILD_BRANCH=$env:BUILD_BRANCH"
           $credentials = New-Object System.Net.NetworkCredential("anonymous", "anonymous@example.com")
           function FtpRead([string]$path, [string]$method) {
             $request = [System.Net.FtpWebRequest]::Create("ftp://$($env:PS4_IP):2121$path")
