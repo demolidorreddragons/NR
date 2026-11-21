@@ -533,7 +533,8 @@ int main(void) {
     if(mkdir("/data/GoldHEN",0777)!=0&&errno!=EEXIST){snprintf(error,sizeof(error),"ERROR: cannot create GoldHEN directory (errno=%d).",errno);write_status(error);return 1;}
     if(mkdir(DEST_DIR,0777)!=0&&errno!=EEXIST){snprintf(error,sizeof(error),"ERROR: cannot create plugin directory (errno=%d).",errno);write_status(error);return 1;}
     if(!copy_prx(error,sizeof(error),prx_tmp,sizeof(prx_tmp))){write_status(error);notify("PNE: falha ao copiar PRX.");sceKernelUsleep(3000000);return 2;}
-    if(!stage_manifest(manifest_tmp,sizeof(manifest_tmp)) ||\n       !pne_validate_release_manifest(manifest_tmp,prx_tmp,error,sizeof(error))){int e=errno;remove(prx_tmp);remove(manifest_tmp);snprintf(error,sizeof(error),"ERROR: cannot stage/verify installed manifest (errno=%d).",e);write_status(error);return 3;}
+    if(!stage_manifest(manifest_tmp,sizeof(manifest_tmp)) ||
+       !pne_validate_release_manifest(manifest_tmp,prx_tmp,error,sizeof(error))){int e=errno;remove(prx_tmp);remove(manifest_tmp);snprintf(error,sizeof(error),"ERROR: cannot stage/verify installed manifest (errno=%d).",e);write_status(error);return 3;}
     if(!configure_loader(error,sizeof(error),config_tmp,sizeof(config_tmp),&config_changed)){
         remove(prx_tmp);remove(manifest_tmp);write_status(error);notify("PNE: falha ao preparar plugins.ini.");sceKernelUsleep(3000000);return 3;
     }
