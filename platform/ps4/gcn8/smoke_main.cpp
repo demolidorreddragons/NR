@@ -6,6 +6,7 @@
 
 #include <cstdio>
 #include <cstring>
+#include <cstdint>
 
 #ifndef PNE_GCN8_LOG_UDP_PORT
 #define PNE_GCN8_LOG_UDP_PORT 9999
@@ -72,8 +73,8 @@ int main(int argc, char** argv) {
     stage_log("RESULT_PASS_STARTUP_ONLY_GNM_NOT_LINKED");
 #elif defined(PNE_GCN8_GNM_LINK_ONLY)
     /* Taking the address forces a real import relocation without calling GNM. */
-    const uintptr_t gnm_import_address =
-        reinterpret_cast<uintptr_t>(&sceGnmSubmitDone);
+    const std::uintptr_t gnm_import_address =
+        reinterpret_cast<std::uintptr_t>(&sceGnmSubmitDone);
     stage_log(gnm_import_address != 0 ? "GNM_IMPORT_RESOLVED" :
                                        "GNM_IMPORT_ADDRESS_NULL");
     const int result = gnm_import_address != 0 ? 0 : 1;
