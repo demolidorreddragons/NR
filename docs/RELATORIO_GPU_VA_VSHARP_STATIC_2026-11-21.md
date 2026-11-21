@@ -1,83 +1,36 @@
-# GCN8 — investigação estática de GPU VA e descritores V#
 
-Data: 2026-11-21  
-Branch: `feature/gcn8-numeric-kernels`  
-Base: `56203ef123a88843106982915c3925947d858c14`  
-Referência OpenGNM: `4b295ca54c82c83acf308d1c646a2dfa9ae57350`  
-Classificação: **REVISÃO INTERNA — NÃO INDEPENDENTE**  
-Estado: **BLOCKED para hardware**; análise estática complementar.
 
-## Escopo e segurança
+## 5. Addendum — confronto direto entre helper, kernel mapping e V# (2026-11-21)
 
-Inspeção somente de código-fonte e documentação versionada. Nenhum PKG foi instalado/executado; nenhum PRX foi carregado; nenhum arquivo de configuração do PS4 foi alterado; nenhum dispatch foi submetido. Esta investigação não autoriza teste no console.
+Foi feita uma segunda leitura do código e da documentação do mesmo commit OpenGNM `4b295ca54c82c83acf308d1c646a2dfa9ae57350` para eliminar ambiguidade entre os três domínios de endereço.
 
-## 1. GPU VA — resultado inconclusivo, bloqueio mantido
+### Evidência confirmada
 
-O harness atual deriva `base` de `reinterpret_cast<uintptr_t>(memory.mapped)` e soma offsets para tabela, shader, entrada, saída e fence. Em seguida, esses valores são usados nos pacotes PM4 e nos descritores V#.
+- `src/helpers.c` declara `sceKernelAllocateDirectMemory(..., int64_t* outoffset)` e `sceKernelMapDirectMemory(void** outaddr, ..., int64_t directmemoryoffset, ...)`. Em `sceGnmDirectMemoryAllocate`, o retorno de Allocate é guardado em variável `directmemory`; Map recebe esse offset e devolve `mapped`. A struct recebe `memory->mapped = mapped` e `memory->directmemory = (uint64_t)directmemory`. Portanto, no backend Orbis do helper, são valores distintos e não se deve tratar o offset como CPU pointer.
+- `docs/reference/helpers.md` descreve `mapped` como CPU-mapped pointer e `directmemory` como GPU-side direct memory address. Isso esclarece a semântica pretendida pelo próprio projeto OpenGNM para o campo `directmemory`, mas não especifica uma transformação de offset para o GPU VA de um shader.
+- `include/gnm_buffer.h` implementa `sceGnmBufSetBaseAddress(GnmBuffer*, void*)` copiando os bits do argumento para `baseaddress` e `baseaddresshi`. `docs/reference/buffer.md` chama esses campos de GPU virtual base address. A assinatura aceita `void*`, mas o nome do campo/contrato documental é GPU VA; o tipo C, por si só, não prova que qualquer ponteiro de CPU seja válido para GPU.
+- O backend genérico de `src/helpers.c` atribui `directmemory = (uint64_t)(uintptr_t)mapped`. Esse ramo não deve ser usado como evidência para o comportamento Orbis: é uma implementação de host/genérica e mascara a distinção entre os domínios.
 
-No OpenGNM pinado:
-- `sceGnmDirectMemoryAllocate` chama `sceKernelAllocateDirectMemory` e depois `sceKernelMapDirectMemory`.
-- O objeto `GnmDirectMemory` mantém separadamente `directmemory` (offset de direct memory) e `mapped` (ponteiro CPU mapeado).
-- `sceGnmBufSetBaseAddress` grava o ponteiro recebido nos campos `baseaddress` e `baseaddresshi`; a documentação descreve o campo como GPU virtual base address.
+### Consequência para o harness NR
 
-O material público consultado confirma o fluxo allocate/map e a representação do endereço nos descritores. **Não foi encontrada, nessa revisão, uma garantia explícita de que o ponteiro CPU retornado por `sceKernelMapDirectMemory` é, sem transformação, o GPU VA consumível pelo shader/PM4 em todos os firmwares alvo.** O helper OpenGNM não implementa uma conversão separada, mas isso, isoladamente, também não é prova normativa do firmware.
+O harness usa `reinterpret_cast<uintptr_t>(memory.mapped)` como endereço-base para PM4 e V#. A leitura confirma que `mapped` é o ponteiro CPU de uma região também mapeada com proteção CPU/GPU; **não confirma** que seu valor numérico seja o GPU VA correto no firmware alvo. O campo `directmemory` é um offset/identificador de direct memory retornado pelo kernel, documentado pelo OpenGNM como GPU-side direct-memory address; não foi encontrada nesta fonte uma API de tradução que autorize simplesmente substituir `mapped` por `directmemory` nos descritores.
 
-Consequência: não substituir o endereço atual por uma fórmula especulativa nem remover as guardas. A hipótese permanece aberta até obter evidência de firmware/API primária ou uma validação controlada e reversível no hardware.
+Assim, a hipótese central permanece **BLOCKED**. Não há base para uma correção por troca de campo, cast ou soma de base especulativa. É necessário obter contrato primário da API de mapeamento GPU/firmware (ou implementação de referência que demonstre a conversão) e revisão independente antes de qualquer execução.
 
-## 2. V# — layout conhecido; semântica RW/cache ainda não provada
+### Estado após addendum
 
-O header OpenGNM define `GnmBuffer` como descritor de 16 bytes:
-- endereço baixo: 32 bits;
-- endereço alto: 12 bits;
-- stride: 14 bits;
-- número de records: 32 bits;
-- formato e seleção de canais;
-- campos de memory type/cache nos registradores 1 e 3.
+| Item | Estado |
+|---|---|
+| Offset retornado por ` sceKernelAllocateDirectMemory ` separado do CPU pointer de ` sceKernelMapDirectMemory ` | CONFIRMADO no código OpenGNM |
+| `mapped` é CPU pointer | CONFIRMADO pela documentação OpenGNM |
+| `directmemory` é campo GPU-side direct-memory address | DOCUMENTADO pelo OpenGNM; detalhes de tradução/uso não especificados |
+| CPU pointer numérico equivale a GPU VA para V#/PM4 | NÃO PROVADO — BLOCKED |
+| Offset `directmemory` pode ser gravado diretamente em V#/PM4 | NÃO PROVADO — NÃO FAZER |
+| Execução em PS4 | NOT_RUN; sem autorização para instalação/execução |
 
-O setter `sceGnmBufSetMemoryType` distribui `GnmMemoryType` pelos campos `mtype`, `mtype_l1s` e `mtype_l2`, com opções separadas de bypass. A enumeração documentada lista `READONLY`, `PRIVATE`, `CACHE_UNCOHERENT`, `CACHE_COHERENT` e `UNCACHED`; ela descreve atributos de acesso/cache, não uma prova de que o descritor criado pelo harness corresponde ao contrato de storage-buffer write do shader compilado.
-
-O harness:
-- cria input e output manualmente como `GnmBuffer`;
-- configura ambos com stride de `sizeof(float)`, 64 records e formato R32_FLOAT;
-- usa `GNM_MEMORY_READONLY` na entrada;
-- usa `GNM_MEMORY_UNCACHED` na saída;
-- copia os descritores para a resource table em offsets 0 e 64.
-
-A inspeção confirma coerência estrutural do tamanho e dos campos, mas não confirma:
-1. se os bits de formato/stride/records correspondem exatamente ao lowering GFX8 gerado para os loads/stores;
-2. se `GNM_MEMORY_UNCACHED` é a política correta para o buffer de saída neste tipo de alocação;
-3. se os flags L1/L2 escolhidos são corretos;
-4. se a resource table e a tabela indireta estão no endereço e alinhamento exigidos pelo shader em runtime.
-
-**Não alterar o descritor RW por tentativa.** Próxima prova necessária: confrontar a ISA GFX8 exata do kernel com a codificação dos campos V# e obter revisão GCN8/GNM independente. A confirmação final de escrita e readback exige teste hardware controlado.
-
-## 3. Conclusão técnica
-
-| Área | Resultado estático | Estado |
-|---|---|---|
-| Direct memory allocate/map | Sequência corroborada no OpenGNM | Parcial |
-| CPU mapped pointer = GPU VA | Sem garantia primária suficiente | BLOCKED |
-| GnmBuffer layout 16 bytes | Corroborado pelo header | PASS estrutural |
-| Endereço V# 44-bit | Campo disponível no layout | PASS estrutural |
-| V# RW para shader SSBO | Não demonstrado | BLOCKED |
-| Memory/cache policy | Enum e setter conhecidos; política não provada | BLOCKED |
-| GPU dispatch/readback | Nenhuma execução | NOT_RUN |
-
-## 4. Ações seguintes
-
-1. Extrair e versionar a ISA GFX8 do kernel exato usado pelo smoke; identificar instruções e campos de buffer usados nos loads/stores.
-2. Adicionar testes host que decodifiquem cada palavra dos descritores gerados e comparem com valores esperados; isso valida codificação, não runtime.
-3. Revisão independente por especialista GCN8/GNM sem participação na implementação.
-4. Obter evidência de GPU VA específica do firmware alvo; não inferir de ponteiro CPU ou apenas de headers.
-5. Somente após aprovação dos gates e procedimento reversível aprovado, realizar teste controlado no PS4. O usuário autorizou esta investigação estática; não houve autorização para instalar ou executar o smoke PKG.
-
-## Fontes fixadas
-
-- OpenGNM `src/helpers.c`: allocate/map e armazenamento separado de `directmemory` e `mapped`.
-- OpenGNM `include/gnm_buffer.h`: layout e setters V#.
-- OpenGNM `docs/reference/buffer.md`: descrição dos campos e API V#.
-- OpenGNM `docs/reference/types.md`: enumeração `GnmMemoryType`.
-- OpenGNM `src/drawcommandbuffer.c`: emissão de V# user data.
-- OpenGNM commit: https://github.com/PS4-OpenGNM/opengnm/tree/4b295ca54c82c83acf308d1c646a2dfa9ae57350
-
-Esta nota é evidência de revisão de fonte, não validação independente, firmware, GPU ou hardware.
+Fontes adicionais fixadas no mesmo commit:
+- `src/helpers.c`
+- `include/gnm_helpers.h`
+- `docs/reference/helpers.md`
+- `include/gnm_buffer.h`
+- `docs/reference/buffer.md`
