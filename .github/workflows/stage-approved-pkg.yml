@@ -70,19 +70,38 @@ jobs:
             return $request
           }
           function Get-FtpNames([string]$path) {
-            $request = New-FtpRequest $path ([System.Net.WebRequestMethods+Ftp]::ListDirectory)
-            $response = $request.GetResponse()
-            try {
-              $reader = New-Object System.IO.StreamReader($response.GetResponseStream())
-              try {
-                $items = @()
-                while (-not $reader.EndOfStream) {
-                  $line = $reader.ReadLine()
-                  if ($line) { $items += $line.Trim() }
+            $variants = @($path)
+            if ($path.EndsWith("/")) { $variants += $path.TrimEnd("/") }
+            else { $variants += "$path/" }
+            $lastError = $null
+            foreach ($candidate in $variants) {
+              for ($attempt = 1; $attempt -le 3; $attempt++) {
+                $response = $null
+                $reader = $null
+                try {
+                  $request = New-FtpRequest $candidate ([System.Net.WebRequestMethods+Ftp]::ListDirectory)
+                  $request.Timeout = 30000
+                  $request.ReadWriteTimeout = 30000
+                  $response = $request.GetResponse()
+                  $reader = New-Object System.IO.StreamReader($response.GetResponseStream())
+                  $items = @()
+                  while (-not $reader.EndOfStream) {
+                    $line = $reader.ReadLine()
+                    if ($line) { $items += $line.Trim() }
+                  }
+                  Write-Host "FTP_LIST_OK path=$candidate entries=$($items.Count)"
+                  return ,$items
+                } catch {
+                  $lastError = $_
+                  Write-Host "FTP_LIST_RETRY path=$candidate attempt=$attempt error=$($_.Exception.Message)"
+                  Start-Sleep -Milliseconds 700
+                } finally {
+                  if ($reader) { $reader.Dispose() }
+                  if ($response) { $response.Dispose() }
                 }
-                return ,$items
-              } finally { $reader.Dispose() }
-            } finally { $response.Dispose() }
+              }
+            }
+            throw "Unable to list FTP directory $path after retries: $($lastError.Exception.Message)"
           }
           function Get-RemoteHash([string]$path, [string]$localPath) {
             $request = New-FtpRequest $path ([System.Net.WebRequestMethods+Ftp]::DownloadFile)
