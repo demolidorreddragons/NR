@@ -423,14 +423,14 @@ jobs:
           $newEboot = $newEbootFound.FullName
           $patchSfo = Join-Path $work "patch-param.sfo"
           Copy-Item $baseSfo $patchSfo
-          foreach ($pair in @(@("CATEGORY","gpe"),@("APP_VER","01.07"),@("VERSION","01.06"),@("ATTRIBUTE","8388610"))) {
+          foreach ($pair in @(@("CATEGORY","gpe"),@("APP_VER","01.07"),@("VERSION","01.07"),@("ATTRIBUTE","8388610"))) {
             dotnet "$tool" sfo set "$patchSfo" $pair[0] $pair[1]
             if ($LASTEXITCODE -ne 0) { throw "Patch SFO update failed: $($pair[0])" }
           }
           dotnet "$tool" sfo set "$patchSfo" PUBTOOLINFO "c_date=20261120,img0_l0_size=7,img0_l1_size=0,img0_sc_ksize=512,img0_pc_ksize=832,st_type=digital25"
           if ($LASTEXITCODE -ne 0) { throw "Patch digital25 PUBTOOLINFO update failed." }
           $patchSfoText = (dotnet "$tool" sfo read "$patchSfo" 2>&1) -join "\`n"
-          foreach ($required in @("CATEGORY = gpe","APP_VER = 01.07","VERSION = 01.06","FORMAT = obs","st_type=digital25")) {
+          foreach ($required in @("CATEGORY = gpe","APP_VER = 01.07","VERSION = 01.07","FORMAT = obs","st_type=digital25")) {
             if ($patchSfoText -notmatch [regex]::Escape($required)) { throw "Patch SFO missing $required" }
           }
           $changeDir = Join-Path $work "changeinfo"
@@ -576,7 +576,7 @@ jobs:
           if (-not $sfo) { throw "Patch PARAM.SFO missing." }
           $sfoText = (dotnet "$tool" sfo read "$($sfo.FullName)" 2>&1) -join "\`n"
           $sfoText | Out-File "patch-artifact/audit/embedded-param-sfo.txt"
-          foreach ($required in @("CATEGORY = gpe","APP_VER = 01.07","VERSION = 01.06","TITLE_ID = PNEU00001","CONTENT_ID = IV0000-PNEU00001_00-PS4NEURALENG0000","st_type=digital25")) {
+          foreach ($required in @("CATEGORY = gpe","APP_VER = 01.07","VERSION = 01.07","TITLE_ID = PNEU00001","CONTENT_ID = IV0000-PNEU00001_00-PS4NEURALENG0000","st_type=digital25")) {
             if ($sfoText -notmatch [regex]::Escape($required)) { throw "Patch SFO missing: $required" }
           }
           $basePkg = "base-artifact/pkg/PS4-Neural-Engine-010.pkg"
