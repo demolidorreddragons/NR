@@ -118,6 +118,7 @@ jobs:
           function Move-VerifiedRemoteFile([string]$sourcePath, [string]$targetDirectory, [string]$sourceName) {
             $temp = Join-Path $env:RUNNER_TEMP ("ps4-archive-" + [guid]::NewGuid().ToString("N") + ".pkg")
             try {
+              Write-Host "ARCHIVE_SOURCE_CHECK path=$sourcePath"
               $beforeHash = Get-RemoteHash $sourcePath $temp
               $beforeSize = (Get-Item -LiteralPath $temp).Length
               $targetName = $sourceName
@@ -171,9 +172,11 @@ jobs:
 
           # Move only Neural Rendering PKGs; third-party packages are never selected.
           $rootNames = @(Get-FtpNames "/data/pkg/")
+          foreach ($entry in $rootNames) { Write-Host "PKG_ROOT_ENTRY=[$entry]" }
           $archiveCandidates = @($rootNames | Where-Object {
             $_ -match '^PS4-Neural-Engine-.*\.pkg$' -and $_ -ne "PS4-Neural-Engine-006.pkg"
           })
+          foreach ($candidate in $archiveCandidates) { Write-Host "ARCHIVE_CANDIDATE=[$candidate]" }
           foreach ($name in $archiveCandidates) {
             Move-VerifiedRemoteFile "/data/pkg/$name" "/data/pkg/old" $name
           }
