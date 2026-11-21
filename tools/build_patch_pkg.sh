@@ -71,7 +71,7 @@ PY
 pkg="$(find "$OUT_DIR" -maxdepth 1 -type f -name '*.pkg' -print -quit)"
 test -n "$pkg" && test -s "$pkg"
 final="$OUT_DIR/PS4-Neural-Engine-011-PATCH.pkg"
-cp "$pkg" "$final"
+mv "$pkg" "$final"
 "$PKGTOOL_CORE" pkg_validate --verbose "$final"
 sha256sum "$final"
 echo "PATCH_CANDIDATE=$final"
