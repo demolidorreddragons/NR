@@ -81,15 +81,33 @@ static FILE* fopen_unique_staged_file(const char* base, char* chosen, size_t cap
     return stream;
 }
 
+/* Probe managed files through an opened descriptor. Do not trust st_size on Orbis:
+   only fstat's file-type bits are used. O_NOFOLLOW keeps symlinks fail-closed. */
+#ifndef O_NOFOLLOW
+#error "The Orbis SDK must provide O_NOFOLLOW for safe managed-path inspection."
+#endif
+static int inspect_managed_path(const char* path, struct stat* metadata) {
+    int fd = open(path, O_RDONLY | O_NOFOLLOW);
+    if (fd < 0) return errno == ENOENT ? 0 : -1;
+    if (fstat(fd, metadata) != 0) {
+        int saved_errno = errno;
+        close(fd);
+        errno = saved_errno;
+        return -1;
+    }
+    if (close(fd) != 0) return -1;
+    return 1;
+}
 static int path_exists(const char* path) {
     struct stat st;
-    if (lstat(path, &st) == 0) return 1;
-    return errno == ENOENT ? 0 : -1;
+    return inspect_managed_path(path, &st);
 }
 static int path_is_regular_file(const char* path) {
     struct stat st;
-    if (lstat(path, &st) != 0) return 0;
-    return S_ISREG(st.st_mode);
+    int result = inspect_managed_path(path, &st);
+    if (result != 1) return 0;
+    if (!S_ISREG(st.st_mode)) { errno = EINVAL; return 0; }
+    return 1;
 }
 static int read_release_number(const char* path, unsigned long* release) {
     FILE* file = fopen(path, "rb");
@@ -506,13 +524,25 @@ int main(void) {
     }
     int prx_exists=path_exists(DEST_PRX),manifest_exists=path_exists(INSTALLED_MANIFEST);
     int marker_exists=path_exists(TRANSACTION_MARKER);
-    if (prx_exists < 0 || manifest_exists < 0 || marker_exists < 0 ||
-        (prx_exists && !path_is_regular_file(DEST_PRX)) ||
-        (manifest_exists && !path_is_regular_file(INSTALLED_MANIFEST))) {
-        write_status("ABORTED: CONFLICT; managed path is inaccessible or not a regular file; all data preserved.");
-        notify("PNE: conflito nos arquivos; nada alterado.");
-        sceKernelUsleep(3000000);
-        return 6;
+    if (prx_exists < 0) {
+        snprintf(error,sizeof(error),"ABORTED: CONFLICT; cannot safely open installed PRX without following symlinks (errno=%d); all data preserved.",errno);
+        write_status(error); notify("PNE: conflito ao inspecionar PRX; nada alterado."); sceKernelUsleep(3000000); return 6;
+    }
+    if (manifest_exists < 0) {
+        snprintf(error,sizeof(error),"ABORTED: CONFLICT; cannot safely open installed manifest without following symlinks (errno=%d); all data preserved.",errno);
+        write_status(error); notify("PNE: conflito no manifesto; nada alterado."); sceKernelUsleep(3000000); return 6;
+    }
+    if (marker_exists < 0) {
+        snprintf(error,sizeof(error),"ABORTED: CONFLICT; cannot safely inspect transaction marker (errno=%d); all data preserved.",errno);
+        write_status(error); notify("PNE: conflito no marcador; nada alterado."); sceKernelUsleep(3000000); return 6;
+    }
+    if (prx_exists && !path_is_regular_file(DEST_PRX)) {
+        snprintf(error,sizeof(error),"ABORTED: CONFLICT; installed PRX is not a regular file or cannot be opened safely (errno=%d); all data preserved.",errno);
+        write_status(error); notify("PNE: PRX nao e arquivo regular; nada alterado."); sceKernelUsleep(3000000); return 6;
+    }
+    if (manifest_exists && !path_is_regular_file(INSTALLED_MANIFEST)) {
+        snprintf(error,sizeof(error),"ABORTED: CONFLICT; installed manifest is not a regular file or cannot be opened safely (errno=%d); all data preserved.",errno);
+        write_status(error); notify("PNE: manifesto nao e arquivo regular; nada alterado."); sceKernelUsleep(3000000); return 6;
     }
     int manifest_valid=manifest_exists&&prx_exists&&
         pne_validate_release_manifest(INSTALLED_MANIFEST,DEST_PRX,error,sizeof(error));
