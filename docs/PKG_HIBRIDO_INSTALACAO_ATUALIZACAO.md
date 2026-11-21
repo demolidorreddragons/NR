@@ -1,6 +1,6 @@
 # Arquitetura do PKG híbrido — instalação inicial e atualização do Neural Engine
 
-**Estado:** Release 010 (APP_VER 01.06) foi buildada, passou QA independente PC-only e foi staged no PS4; o usuário reportou a instalação do app. Diagnóstico read-only de 2026-11-21 encontrou o PRX 010 verificado ainda em `.pne-tmp`, enquanto o PRX ativo tem hash diferente; o carregamento do PRX 010 não foi confirmado. Correção de recuperação transacional em desenvolvimento para release 011. Não ativar PRX nem instalar novo PKG sem autorização explícita.  
+**Estado:** Release 010 (APP_VER 01.06) foi buildada, passou QA independente PC-only e foi staged no PS4; o usuário reportou a instalação do app. Diagnóstico read-only de 2026-11-21 encontrou o PRX 010 verificado ainda em `.pne-tmp`, enquanto o PRX ativo tem hash diferente; o carregamento do PRX 010 não foi confirmado. Correção de recuperação transacional implementada em código para release 011 (APP_VER 01.07); host tests, build Orbis e QA independente ainda precisam concluir. Não ativar PRX nem instalar novo PKG sem autorização explícita.  
 **Alvo:** PS4 Pro / Orbis + GoldHEN.  
 **Branch:** `feature/gcn8-numeric-kernels`.  
 **Identidade atual:** TITLE_ID `PNEU00001`, CONTENT_ID `IV0000-PNEU00001_00-PS4NEURALENG0000`.
