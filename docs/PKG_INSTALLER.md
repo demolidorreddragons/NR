@@ -73,8 +73,12 @@ O diagnóstico remoto do console identificou errno=17 (EEXIST) ao criar ps4_neur
 - Os caminhos efetivamente reservados são transportados pela cópia, verificação, commit e rollback. Arquivos temporários antigos permanecem intactos.
 - PKG_BUILD_NUMBER=007; APP_VER=01.03; TITLE_ID e CONTENT_ID permanecem estáveis para a mesma aplicação.
 
-### Sobre instalar por cima
+### Arquitetura híbrida: instalar e atualizar o plugin
 
-O PKG 007 continua sendo um full base application (CATEGORY=gde), não um patch (CATEGORY=gp). Portanto, não afirmamos que o instalador do PS4 aceitará atualizar a instalação anterior diretamente. A atualização sem desinstalação exige gerar e validar um patch PKG associado ao base instalado e conferir a compatibilidade de CONTENT_ID/APP_VER. O comportamento relatado — precisar desinstalar o base anterior — é compatível com a forma atual de empacotamento e não é corrigido apenas aumentando APP_VER.
+A especificação normativa é [PKG_HIBRIDO_INSTALACAO_ATUALIZACAO.md](PKG_HIBRIDO_INSTALACAO_ATUALIZACAO.md). O objetivo acordado é **um único PKG full/base (CATEGORY=gde) cujo eboot instala o plugin GoldHEN na primeira execução e atualiza o plugin nas execuções seguintes**, preservando a versão anterior, mantendo plugins.ini sem duplicatas e operando de forma idempotente. Para esse fluxo do plugin, não se deve exigir um PKG patch separado nem desinstalação do aplicativo.
 
-A criação de um patch não será simulada alterando somente CATEGORY: é necessário gerar GP4/PKG de patch corretamente associado ao base. Para este release, manteremos o formato base já validado e deixaremos explícito se a substituição exigir desinstalação. Não desinstalar nem alterar aplicativos no console automaticamente.
+É essencial distinguir duas camadas:
+- **Plugin GoldHEN:** instalação inicial e atualização são responsabilidade do mesmo eboot híbrido, conforme a especificação acima.
+- **Aplicativo instalador no Package Manager do PS4:** o PKG atual é base (gde), não patch. A substituição do próprio aplicativo sem desinstalar é um fluxo separado do sistema de pacotes PS4 e ainda não foi comprovada. Não confundir essa limitação com a atualização do PRX pelo instalador híbrido.
+
+O usuário relatou que o Package Manager exigiu desinstalar a versão anterior do aplicativo. Isso evidencia que a atualização do próprio app ainda não está resolvida; não altera o requisito já acordado de que o eboot do único PKG deve instalar/atualizar o plugin. Não declarar H2/H4 concluídas até a máquina de estados NEW/UPDATE/LEGACY/RECOVERY/CONFLICT, detecção de versão/hash e idempotência estarem implementadas e testadas.
