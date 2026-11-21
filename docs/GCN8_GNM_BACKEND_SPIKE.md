@@ -1,6 +1,6 @@
 # GCN8 GNM backend spike — API audit
 
-Status: **PSBC GFX8 host compilation and five shader container/ISA artifacts pass; no GNM runtime backend or hardware validation.**
+Status: **An experimental compute smoke harness and PM4 packet writers exist in source; neither is a validated/approved runtime backend. No PS4 Pro hardware dispatch/readback evidence.**
 
 ## Findings
 
@@ -150,3 +150,26 @@ It does not prove firmware runtime availability on a particular console,
 valid resource binding, command submission, synchronization, or GPU execution.
 
 A separate workflow, `.github/workflows/gcn8-shader-build.yml`, pins `opengnm-psbc` and its header dependencies, builds the host compiler, compiles all five NR compute shaders for GFX8/NEO, validates all five containers and CRCs, checks the indirect-resource-table pointer, and disassembles the five GCN code ranges. Run `44739871394` passed; artifact details are in `docs/GCN8_GFX8_ARTIFACT_44739871394.md`. This is host/compiler evidence, not a runtime dispatch.
+
+
+## HEAD reconciliation — 2026-11-21
+
+The current branch HEAD (`f602a436d6efe87e2a54fd7e5185c2e583c7473f`) contains:
+- `platform/ps4/gcn8/compute_smoke.cpp`: an experimental end-to-end attempt at direct-memory allocation/mapping, shader copy, manual V# construction, DCB setup, CS binding, indirect table pointer, dispatch, EOP fence, submission, polling and a 64-element readback comparison.
+- `platform/ps4/gcn8/gnm_resource_binding.cpp/.h`: local PM4 packet writers.
+- `platform/ps4/gcn8/smoke_main.cpp`: app entry point for the smoke harness, plus a startup-only branch.
+- `tools/build_compute_smoke_pkg.sh`: isolated smoke PKG build path with compute/startup modes and payload hash verification. Its manifest explicitly sets `hardware_status=not_run`.
+
+This corrects the broad phrase “no GNM runtime backend” in earlier notes: **a source-level experimental dispatch harness exists**. It is not yet a validated backend and must not be described as working on PS4 Pro.
+
+### Static-review blockers (not resolved)
+1. The harness treats the mapped CPU virtual pointer as the candidate GPU VA. The project has no proof that this address is GPU-valid for the target firmware.
+2. It manually constructs the output V# and selects `GNM_MEMORY_UNCACHED`; writable SSBO descriptor encoding and access/cache policy are not validated on hardware.
+3. `sceGnmFlushGarlic()` is used around submission/readback, but its sufficiency for CPU→GPU and GPU→CPU visibility of these buffers is not established.
+4. Return values from local shader/dispatch/fence packet writers are not consistently checked; checking packet dword deltas does not substitute for checking the writer's error enum.
+5. Submit/fence lifetime and failure cleanup need a separate review; some timeout paths deliberately retain memory until process exit.
+6. The smoke harness has not been compiled/linked for the exact current HEAD in a confirmed run and has not been executed on the console.
+
+Task tracking: [GNM-001](https://github.com/demolidorreddragons/NR/issues/16). Do not run this application on the PS4 until the review, reversible test plan approval and explicit console authorization gates are met. No install, PRX activation, plugin.ini change or console dispatch was performed during this audit.
+
+The successful shader artifact in run [44743915113](https://github.com/demolidorreddragons/NR/actions/runs/44743915113) belongs to commit `5141ed44fe3202dbdec78f0a69700d34ef76e039`, 267 commits behind the audited HEAD. It is historical compiler evidence only; the current HEAD GFX8 build remains NOT_RUN.
