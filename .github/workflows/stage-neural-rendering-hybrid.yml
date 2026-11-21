@@ -33,7 +33,7 @@ jobs:
           github-token: ${{ github.token }}
 
       - name: Validate and stage Full Base PKG
-        shell: powershell
+        shell: powershell -ExecutionPolicy Bypass -command ". '{0}'"
         env:
           PS4_IP: ${{ vars.PS4_IP }}
         run: |
