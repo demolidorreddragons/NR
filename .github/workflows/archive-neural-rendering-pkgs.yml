@@ -28,13 +28,7 @@ jobs:
             return $r
           }
 
-          # Ensure archive directory exists; do not alter anything already inside it.
-          try { $x=Ftp "/data/pkg/old" ([System.Net.WebRequestMethods+Ftp]::MakeDirectory); $z=$x.GetResponse(); $z.Dispose() }
-          catch {
-            if (-not $_.Exception.Response -or $_.Exception.Response.StatusCode -notin @(
-              [System.Net.FtpStatusCode]::ActionNotTakenFileUnavailable,
-              [System.Net.FtpStatusCode]::ActionNotTakenFilenameNotAllowed)) { throw }
-          }
+          # /data/pkg/old already exists; never recreate or alter it.
 
           $list=Ftp "/data/pkg" ([System.Net.WebRequestMethods+Ftp]::ListDirectory)
           $response=$list.GetResponse()
