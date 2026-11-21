@@ -148,3 +148,15 @@ Especificação: [Plano de automação e eficiência](PLANO_AUTOMACAO_E_EFICIENC
 - [Workflow GFX8](https://github.com/demolidorreddragons/NR/actions/runs/44863096651): em execução; inclui teste PM4, compilação dos seis shaders e build/QA do PKG de smoke.
 - [Workflow PRX/PKG](https://github.com/demolidorreddragons/NR/actions/runs/44863096656): em execução; inclui compile/link smoke GNM e build do PRX.
 - Até ambos terminarem, resultado da correção = **PENDING CI**. Mesmo com sucesso, isso não valida dispatch no hardware.
+
+
+## Atualização CI — commit `734b3aa1` — 2026-11-21
+
+- Commit auditado: `734b3aa1ec9dd3d465e90c57c4f2f223fd9f7902`.
+- Host Tests: [run 44869051638](https://github.com/demolidorreddragons/NR/actions/runs/44869051638), job `136739200322`: success; Configure, Build e Test passaram, incluindo contratos GCN8 resource table/EOP PM4, offsets GNM, layout tensorial 71-block e intake verifier.
+- PRX/PKG: [run 44869051627](https://github.com/demolidorreddragons/NR/actions/runs/44869051627): build e QA independente success; jobs `136739407561` e `136739799751`. Jobs de patch foram `skipped`, conforme política Full/Base.
+- GFX8: [run 44869051626](https://github.com/demolidorreddragons/NR/actions/runs/44869051626): compilador PSBC construído; seis shaders SPIR-V/GFX8 emitidos; parser C++ e verificações estruturais/CRC passaram; auditoria byte-level passou sob interpretação OpenGNM.
+- Artefatos GFX8: `nr-gcn8-spirv` ID `14693780653` (17,561 bytes); `nr-gcn8-compute-shaders-gfx8` ID `14693426426` (26,071 bytes; ZIP SHA-256 `0830f0a77b5d3b8827719609d1508eabe9a8ec8ce57e31c3ef1deca6f8a8035c`).
+- Smoke PKG: artifact `nr-gcn8-compute-smoke-ps4-pkg` ID `14693371031` (25,267,698 bytes). Compute payload PASS; PKG SHA-256 `d8f7935493013722cf37834713b9de3c8f81c077d3bb5e777e83269e1ad966ad`; manifest SHA-256 `659a8d491b2feb71a3e6a0d49ea577748068592f4dea157c3d3b9cee22edbb89`. Startup-only PKG payload PASS, compute shader ausente por projeto; SHA-256 `578964f74b3f9335a1d467f53f84a15dfafdb5320bb2b6bf54e334e67e5b36ca`.
+- Limite crítico: `runtime_semantics=UNRESOLVED`; OpenGNM aponta slot start 88 dwords e fpPS4 84 dwords. `pointer_hypotheses_agree=false`. Nenhum dispatch/readback no PS4 ocorreu. Não promover GNM runtime a validado.
+- Próxima tarefa: resolver a semântica do `chunkUsageBaseOffsetDwords`/`numInputUsageSlots` com evidência de implementação/ABI e testes binários direcionados, sem escolher hipótese por conveniência. Em paralelo, manter bloqueado o teste de hardware até contrato de memória/V# e plano reversível aprovados.
