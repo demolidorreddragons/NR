@@ -38,6 +38,12 @@ jobs:
           assert 'rename(prx_tmp,DEST_PRX)' in installer and 'rename(manifest_tmp,INSTALLED_MANIFEST)' in installer, 'transaction must commit PRX and installed manifest'
           assert 'loader_entry_is_canonical' in installer, 'ALREADY_CURRENT must require a canonical loader entry'
           assert 'pne_classify_install_state' in installer and 'PNE_STATE_RECOVERY' in installer and 'PNE_STATE_CONFLICT' in installer, 'hybrid state detection missing'
+          assert 'copy_file_to_unique_staged' in installer, 'recovery must preserve the original staged candidate while preparing a commit copy'
+          assert 'pne_validate_release_manifest(INSTALLED_MANIFEST,DEST_TMP' in installer, 'recovery candidate must be verified against its installed manifest'
+          assert 'staged_release==incoming_release' in installer and 'strcmp(staged_hash,incoming_hash)==0' in installer, 'recovery must require exact incoming release and PRX hash'
+          assert 'RECOVERY_CANDIDATE:' in installer and 'RECOVERY_COMMIT:' in installer, 'recovery path must be explicitly logged'
+          assert 'STARTED: installer entered main' in installer, 'installer must emit a fresh startup log marker before validation'
+
           assert 'ALREADY_CURRENT' in installer and 'downgrade refused' in installer, 'hash idempotency and downgrade protection missing'
           assert 'TRANSACTION_MARKER' in installer and 'INSTALLED_MANIFEST' in installer, 'recovery marker/installed manifest missing'
           assert 'path_is_regular_file' in installer and 'inspect_managed_path' in installer, 'managed destination regular-file and symlink protection missing'
