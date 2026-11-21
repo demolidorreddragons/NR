@@ -86,7 +86,24 @@ static FILE* fopen_unique_staged_file(const char* base, char* chosen, size_t cap
    check closes the lstat/open race before callers trust the result. */
 static int inspect_managed_path(const char* path, struct stat* metadata) {
     struct stat before;
-    if (lstat(path, &before) != 0) return errno == ENOENT ? 0 : -1;
+    int used_stat_fallback = 0;
+    if (lstat(path, &before) != 0) {
+        int inspect_errno = errno;
+        if (inspect_errno == ENOENT) return 0;
+        /* Orbis reports ENOSYS (78) for lstat on some firmware builds.
+           Fall back to stat only after explicitly probing the directory entry
+           with readlink; EINVAL means it is not a symlink. */
+        if (inspect_errno != ENOSYS) return -1;
+        char link_target[2];
+        if (readlink(path, link_target, sizeof(link_target)) >= 0) {
+            errno = ELOOP;
+            return -1;
+        }
+        if (errno == ENOENT) return 0;
+        if (errno != EINVAL) return -1;
+        if (stat(path, &before) != 0) return errno == ENOENT ? 0 : -1;
+        used_stat_fallback = 1;
+    }
     if (S_ISLNK(before.st_mode)) {
         errno = ELOOP;
         return -1;
@@ -103,6 +120,15 @@ static int inspect_managed_path(const char* path, struct stat* metadata) {
     int close_result = close(fd);
     if (close_result != 0) return -1;
 
+    if (used_stat_fallback) {
+        /* Re-probe after opening to reject a symlink substituted during open. */
+        char link_target[2];
+        if (readlink(path, link_target, sizeof(link_target)) >= 0) {
+            errno = ELOOP;
+            return -1;
+        }
+        if (errno != EINVAL) return -1;
+    }
     if (metadata->st_dev != before.st_dev ||
         metadata->st_ino != before.st_ino ||
         ((metadata->st_mode ^ before.st_mode) & S_IFMT) != 0) {
