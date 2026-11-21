@@ -69,17 +69,23 @@ COMMON=(--target=x86_64-pc-freebsd12-elf -std=c++17 -fPIC -fno-exceptions -fno-r
   -I"$OPEN_GNM_INCLUDE" -I"$ROOT/platform/ps4/gcn8" \
   -I"$ROOT/platform/ps4/gcn8/host")
 RUN_DEFINE="-DPNE_GCN8_SMOKE_RUN_ID=\"$RUN_ID\""
+LOGGER_FLAGS=()
+if [[ "${GCN8_LOG_UDP:-0}" == "1" ]]; then
+  LOGGER_FLAGS+=(-DSTAGE_LOG_UDP "-DPNE_GCN8_LOG_UDP_IP=\"${GCN8_LOG_UDP_IP:-}\"" "-DPNE_GCN8_LOG_UDP_PORT=${GCN8_LOG_UDP_PORT:-9999}")
+fi
+COMMON_C=(--target=x86_64-pc-freebsd12-elf -std=c11 -fPIC -isysroot "$OO_PS4_TOOLCHAIN" -isystem "$OO_PS4_TOOLCHAIN/include" -I"$ROOT/platform/ps4/gcn8")
+clang "${COMMON_C[@]}" "${LOGGER_FLAGS[@]}" -c "$ROOT/platform/ps4/gcn8/stage_log.c" -o "$STAGE/stage_log.o"
 if [[ "$MODE" == "startup" ]]; then
-  clang++ "${COMMON[@]}" "$RUN_DEFINE" -DPNE_GCN8_STARTUP_ONLY=1 -c "$ROOT/platform/ps4/gcn8/smoke_main.cpp" -o "$STAGE/smoke_main.o"
+  clang++ "${COMMON[@]}" "${LOGGER_FLAGS[@]}" "$RUN_DEFINE" -DPNE_GCN8_STARTUP_ONLY=1 -c "$ROOT/platform/ps4/gcn8/smoke_main.cpp" -o "$STAGE/smoke_main.o"
   # Deliberately omit every GNM/compute object and import from this probe.
-  ld.lld -m elf_x86_64 -pie --script "$OO_PS4_TOOLCHAIN/link.x" --eh-frame-hdr -L"$OO_PS4_TOOLCHAIN/lib" "$STAGE/smoke_main.o" "$OO_PS4_TOOLCHAIN/lib/crt1.o" -o "$STAGE/smoke.elf" -lc -lc++ -lkernel
+  ld.lld -m elf_x86_64 -pie --script "$OO_PS4_TOOLCHAIN/link.x" --eh-frame-hdr -L"$OO_PS4_TOOLCHAIN/lib" "$STAGE/smoke_main.o" "$STAGE/stage_log.o" "$OO_PS4_TOOLCHAIN/lib/crt1.o" -o "$STAGE/smoke.elf" -Map="$STAGE/smoke.map" -lc -lc++ -lkernel
 else
-  clang++ "${COMMON[@]}" "$RUN_DEFINE" -c "$ROOT/platform/ps4/gcn8/smoke_main.cpp" -o "$STAGE/smoke_main.o"
+  clang++ "${COMMON[@]}" "${LOGGER_FLAGS[@]}" "$RUN_DEFINE" -c "$ROOT/platform/ps4/gcn8/smoke_main.cpp" -o "$STAGE/smoke_main.o"
   clang++ "${COMMON[@]}" -c "$ROOT/platform/ps4/gcn8/compute_smoke.cpp" -o "$STAGE/compute_smoke.o"
   clang++ "${COMMON[@]}" -c "$ROOT/platform/ps4/gcn8/gnm_resource_binding.cpp" -o "$STAGE/gnm_resource_binding.o"
   clang++ "${COMMON[@]}" -c "$ROOT/platform/ps4/gcn8/host/resource_table_contract.cpp" -o "$STAGE/resource_table_contract.o"
   clang++ "${COMMON[@]}" -c "$ROOT/platform/ps4/gcn8/host/shader_binary_contract.cpp" -o "$STAGE/shader_binary_contract.o"
-  ld.lld -m elf_x86_64 -pie --script "$OO_PS4_TOOLCHAIN/link.x" --eh-frame-hdr -L"$OO_PS4_TOOLCHAIN/lib" "$STAGE/smoke_main.o" "$STAGE/compute_smoke.o" "$STAGE/gnm_resource_binding.o" "$STAGE/resource_table_contract.o" "$STAGE/shader_binary_contract.o" "$OO_PS4_TOOLCHAIN/lib/crt1.o" -o "$STAGE/smoke.elf" -lc -lc++ -lkernel -lSceGnmDriver
+  ld.lld -m elf_x86_64 -pie --script "$OO_PS4_TOOLCHAIN/link.x" --eh-frame-hdr -L"$OO_PS4_TOOLCHAIN/lib" "$STAGE/smoke_main.o" "$STAGE/compute_smoke.o" "$STAGE/gnm_resource_binding.o" "$STAGE/resource_table_contract.o" "$STAGE/shader_binary_contract.o" "$STAGE/stage_log.o" "$OO_PS4_TOOLCHAIN/lib/crt1.o" -o "$STAGE/smoke.elf" -Map="$STAGE/smoke.map" -lc -lc++ -lkernel -lSceGnmDriver
 fi
 test -s "$STAGE/smoke.elf"
 readelf -h "$STAGE/smoke.elf" | grep -Eq 'Class:[[:space:]]+ELF64'
@@ -166,8 +172,16 @@ shader_sha256=$SHADER_SHA256
 pkg_file=$(basename "$numbered_pkg")
 pkg_sha256=$PKG_SHA256
 pointer_semantics=psbc_source_confirmed_orbshdr_minus_chunkusagebaseoffsetdwords
+elf_file=smoke.elf
+elf_sha256=$ELF_SHA256
+map_file=smoke.map
+map_sha256=$MAP_SHA256
 hardware_status=not_run
 EOF
+cp "$STAGE/smoke.elf" "$OUT/smoke.elf"
+cp "$STAGE/smoke.map" "$OUT/smoke.map"
+ELF_SHA256="$(sha256sum "$OUT/smoke.elf" | awk '{print $1}')"
+MAP_SHA256="$(sha256sum "$OUT/smoke.map" | awk '{print $1}')"
 cp "$STAGE/package.gp4" "$OUT/package.gp4"
 cp "$STAGE/sce_sys/param.sfo" "$OUT/param.sfo"
 sha256sum "$numbered_pkg" "$OUT/SMOKE_PKG_MANIFEST.txt" "$OUT/package.gp4"
