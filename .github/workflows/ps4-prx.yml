@@ -376,14 +376,14 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "Base PKG restructure failed." }
           $baseSfo = Join-Path $image "sce_sys/param.sfo"
           if (-not (Test-Path $baseSfo)) { throw "Base Image0 PARAM.SFO missing." }
-          foreach ($pair in @(@("CATEGORY","gde"),@("APP_VER","01.06"),@("VERSION","01.06"),@("FORMAT","obs"))) {
+          foreach ($pair in @(@("CATEGORY","gde"),@("APP_VER","01.00"),@("VERSION","01.06"),@("FORMAT","obs"))) {
             dotnet "$tool" sfo set "$baseSfo" $pair[0] $pair[1]
             if ($LASTEXITCODE -ne 0) { throw "Base SFO normalization failed: $($pair[0])" }
           }
           dotnet "$tool" sfo set "$baseSfo" PUBTOOLINFO "c_date=20261120,img0_l0_size=7,img0_l1_size=0,img0_sc_ksize=512,img0_pc_ksize=832,st_type=digital50"
           if ($LASTEXITCODE -ne 0) { throw "Base digital50 PUBTOOLINFO update failed." }
           $baseSfoText = (dotnet "$tool" sfo read "$baseSfo" 2>&1) -join "\`n"
-          foreach ($required in @("CATEGORY = gde","APP_VER = 01.06","VERSION = 01.06","FORMAT = obs","st_type=digital50")) {
+          foreach ($required in @("CATEGORY = gde","APP_VER = 01.00","VERSION = 01.06","FORMAT = obs","st_type=digital50")) {
             if ($baseSfoText -notmatch [regex]::Escape($required)) { throw "Rebuilt base SFO missing $required" }
           }
           $about = Join-Path $image "sce_sys/about"
@@ -561,7 +561,7 @@ jobs:
           $associationSfo = Get-ChildItem $associationExtract -Recurse -File -Filter param.sfo | Select-Object -First 1
           if (-not $associationSfo) { throw "Associated base PARAM.SFO missing." }
           $associationSfoText = (dotnet "$tool" sfo read "$($associationSfo.FullName)" 2>&1) -join "`n"
-          foreach ($required in @("CATEGORY = gde","APP_VER = 01.06","st_type=digital50")) {
+          foreach ($required in @("CATEGORY = gde","APP_VER = 01.00","VERSION = 01.06","st_type=digital50")) {
             if ($associationSfoText -notmatch [regex]::Escape($required)) { throw "Associated base SFO missing $required" }
           }
           dotnet "$tool" validate "$pkg"
