@@ -66,3 +66,7 @@ add_test(NAME gcn8_arena_contract COMMAND test_gcn8_arena_contract)
 add_executable(test_gnm_runtime_abi tests/test_gnm_runtime_abi.cpp)
 target_include_directories(test_gnm_runtime_abi PRIVATE platform/ps4/gcn8)
 add_test(NAME gnm_runtime_abi_contract COMMAND test_gnm_runtime_abi)
+
+add_executable(test_gnm_runtime_resolver tests/test_gnm_runtime_resolver.cpp)
+target_include_directories(test_gnm_runtime_resolver PRIVATE platform/ps4/gcn8)
+add_test(NAME gnm_runtime_resolver_contract COMMAND test_gnm_runtime_resolver)
