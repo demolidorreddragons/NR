@@ -52,6 +52,10 @@ if [[ "$MODE" == "compute" ]]; then
 else
   SHADER_SHA256="none"
 fi
+GNM_PROBE="none"
+if [[ "$MODE" == "gnm-link" ]]; then
+  GNM_PROBE="sceGnmSubmitDone_address_only_no_call"
+fi
 
 for required in "$SAMPLE/sce_module/libc.prx" \
                 "$SAMPLE/sce_module/libSceFios2.prx" \
@@ -187,6 +191,8 @@ content_id=$CONTENT_ID
 app_version=$APP_VERSION
 shader_file=$( [[ "$MODE" == "compute" ]] && echo compute_smoke_add.sb || echo none )
 shader_sha256=$SHADER_SHA256
+gnm_import_probe=$GNM_PROBE
+gnm_function_calls=none
 pkg_file=$(basename "$numbered_pkg")
 pkg_sha256=$PKG_SHA256
 pointer_semantics=psbc_source_confirmed_orbshdr_minus_chunkusagebaseoffsetdwords
