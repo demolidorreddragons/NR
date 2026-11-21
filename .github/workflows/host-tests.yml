@@ -40,7 +40,7 @@ jobs:
           assert 'pne_classify_install_state' in installer and 'PNE_STATE_RECOVERY' in installer and 'PNE_STATE_CONFLICT' in installer, 'hybrid state detection missing'
           assert 'copy_file_to_unique_staged' in installer, 'recovery must preserve the original staged candidate while preparing a commit copy'
           assert 'pne_validate_release_manifest(INSTALLED_MANIFEST,DEST_TMP' in installer, 'recovery candidate must be verified against its installed manifest'
-          assert 'staged_release==incoming_release' in installer and 'strcmp(staged_hash,incoming_hash)==0' in installer, 'recovery must require exact incoming release and PRX hash'
+          assert 'pne_compare_release(staged_release,incoming_release)>=0' in installer and 'strcmp(staged_hash,incoming_hash)==0' in installer, 'recovery must reject newer staged releases and require exact incoming PRX hash'
           assert 'RECOVERY_CANDIDATE:' in installer and 'RECOVERY_COMMIT:' in installer, 'recovery path must be explicitly logged'
           assert 'STARTED: installer entered main' in installer, 'installer must emit a fresh startup log marker before validation'
 
