@@ -10,7 +10,6 @@
 #include <string.h>
 #include <unistd.h>
 #include <sys/types.h>
-#include <sys/ucontext.h>
 #ifdef STAGE_LOG_UDP
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -107,34 +106,56 @@ void stage_log(const char *stage) {
     line[n++]='\n';
     if (g_initialized) emit_normal(line,n);
 }
-static void on_signal(int sig, siginfo_t *info, void *context) {
-    const ucontext_t *uc=(const ucontext_t *)context;
-    uint64_t rip=0,rsp=0;
-#if defined(__FreeBSD__)
-    rip=(uint64_t)uc->uc_mcontext.mc_rip;
-    rsp=(uint64_t)uc->uc_mcontext.mc_rsp;
-#elif defined(__linux__)
-    rip=(uint64_t)uc->uc_mcontext.gregs[REG_RIP];
-    rsp=(uint64_t)uc->uc_mcontext.gregs[REG_RSP];
-#else
-#error "Unsupported x86_64 ucontext register layout"
+static size_t append_dec(char *out, size_t cap, size_t n, unsigned value) {
+    char digits[10]; size_t count=0;
+    do { digits[count++]=(char)('0'+(value%10u)); value/=10u; } while(value && count<sizeof(digits));
+    while(count && n<cap) out[n++]=digits[--count];
+    return n;
+}
+static void emit_crash_line(const char *line, size_t len) {
+    write_record(g_fd,line,len);
+#ifdef STAGE_LOG_UDP
+    write_udp_record(line,len);
 #endif
+}
+static void on_signal(int sig, siginfo_t *info, void *context) {
+    /* OpenOrbis v0.5.4 exposes musl ucontext declarations, while the PS4
+     * kernel supplies a FreeBSD-derived signal frame. Do not cast it to the
+     * SDK's incompatible ucontext_t: preserve raw words for offline decoding. */
+    const volatile uint64_t *words=(const volatile uint64_t *)context;
     char line[256]; size_t n=0;
     n=append_text(line,sizeof(line),n,"CRASH sig=");
     n=append_hex(line,sizeof(line),n,(uint64_t)(unsigned)sig);
-    n=append_text(line,sizeof(line),n," rip=");
-    n=append_hex(line,sizeof(line),n,rip);
-    n=append_text(line,sizeof(line),n," rsp=");
-    n=append_hex(line,sizeof(line),n,rsp);
     n=append_text(line,sizeof(line),n," addr=");
     n=append_hex(line,sizeof(line),n,info?(uint64_t)(uintptr_t)info->si_addr:0);
     n=append_text(line,sizeof(line),n," anchor=");
     n=append_hex(line,sizeof(line),n,(uint64_t)(uintptr_t)&stage_log_init);
-    if (n<sizeof(line)) line[n++]='\n';
-    write_record(g_fd,line,n);
-#ifdef STAGE_LOG_UDP
-    write_udp_record(line,n);
-#endif
+    n=append_text(line,sizeof(line),n," ctx_w22=");
+    n=append_hex(line,sizeof(line),n,words[22]);
+    n=append_text(line,sizeof(line),n," ctx_w25=");
+    n=append_hex(line,sizeof(line),n,words[25]);
+    n=append_text(line,sizeof(line),n," ctx_w28=");
+    n=append_hex(line,sizeof(line),n,words[28]);
+    n=append_text(line,sizeof(line),n," ctx_w31=");
+    n=append_hex(line,sizeof(line),n,words[31]);
+    if (n<sizeof(line)) line[n++]='\\n';
+    emit_crash_line(line,n);
+
+    /* The context ABI offsets differ across OpenOrbis headers and the PS4
+     * kernel. Dump a bounded prefix so RIP/RSP can be decoded later without
+     * inventing a register layout. */
+    for (unsigned base=0;base<48;base+=4) {
+        n=0;
+        n=append_text(line,sizeof(line),n,"CRASH_CTX[");
+        n=append_dec(line,sizeof(line),n,base);
+        n=append_text(line,sizeof(line),n,"]");
+        for (unsigned i=0;i<4;i++) {
+            n=append_text(line,sizeof(line),n," ");
+            n=append_hex(line,sizeof(line),n,words[base+i]);
+        }
+        if (n<sizeof(line)) line[n++]='\\n';
+        emit_crash_line(line,n);
+    }
     _exit(128+(sig&0x7f));
 }
 int stage_log_install_signals(void) {
@@ -142,7 +163,12 @@ int stage_log_install_signals(void) {
     ss.ss_sp=g_altstack; ss.ss_size=sizeof(g_altstack);
     if (sigaltstack(&ss,NULL)!=0) return -1;
     struct sigaction action; memset(&action,0,sizeof(action));
-    action.sa_sigaction=on_signal; action.sa_flags=SA_SIGINFO|SA_ONSTACK;
+    #if defined(__FreeBSD__) && !defined(__linux__)
+    action.__sa_handler.__sa_sigaction=on_signal;
+#else
+    action.sa_sigaction=on_signal;
+#endif
+    action.sa_flags=SA_SIGINFO|SA_ONSTACK;
     sigemptyset(&action.sa_mask);
     const int signals[]={SIGSEGV,SIGBUS,SIGILL,SIGABRT,SIGFPE};
     for (size_t i=0;i<sizeof(signals)/sizeof(signals[0]);++i)
