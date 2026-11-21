@@ -442,7 +442,7 @@ jobs:
           $patchPkg = Join-Path $out "PS4-Neural-Engine-011-PATCH.pkg"
           & $pubCmd gp4_proj_create --volume_type pkg_ps4_patch --content_id IV0000-PNEU00001_00-PS4NEURALENG0000 --passcode $zero --entitlement_key $zero --storage_type digital25 --app_path $baseRebuilt $patchGp4
           if ($LASTEXITCODE -ne 0 -or -not (Test-Path $patchGp4)) { throw "Associated patch GP4 creation failed." }
-          foreach ($item in @(@($newEboot,"eboot.bin"),@($updatePrx,"ps4_neural_engine.prx"),@($patchSfo,"sce_sys/param.sfo"),@($changeInfo,"sce_sys/changeinfo/changeinfo.xml"))) {
+          foreach ($item in @(@($newEboot,"eboot.bin"),@($updatePrx,"ps4_neural_engine.prx"),@($updateManifest,"pne-release.ini"),@($patchSfo,"sce_sys/param.sfo"),@($changeInfo,"sce_sys/changeinfo/changeinfo.xml"))) {
             & $pubCmd gp4_file_add --force --pfs_compression enable $item[0] $item[1] $patchGp4
             if ($LASTEXITCODE -ne 0) { throw "Adding patch payload failed: $($item[1])" }
           }
@@ -478,8 +478,9 @@ jobs:
             "PATCH_QA_STATUS=BUILT_STRUCTURALLY_VALIDATED_PC_ONLY_NOT_HARDWARE_TESTED"
           )
           $report | Out-File "$out/BUILD_REPORT.txt"
-          Copy-Item $patchGp4 "$out/PS4-Neural-Engine-011-PATCH.gp4"
-          Copy-Item $baseGp4 "$out/PS4-Neural-Engine-Installed-Base.gp4"
+          New-Item -ItemType Directory -Force -Path "$out/audit" | Out-Null
+          Copy-Item $patchGp4 "$out/audit/PS4-Neural-Engine-011-PATCH.gp4"
+          Copy-Item $baseGp4 "$out/audit/PS4-Neural-Engine-Installed-Base.gp4"
       - name: Upload patch candidate and audit inputs
         uses: actions/upload-artifact@v4
         with:
@@ -537,15 +538,33 @@ jobs:
           $ErrorActionPreference = "Stop"
           $tool = "OrbisPkgTool-src/OrbisPkgTool/bin/Release/net10.0-windows/OrbisPkgTool.dll"
           $pkg = (Resolve-Path "patch-artifact/PS4-Neural-Engine-011-PATCH.pkg").Path
-          $gp4 = Get-Content "patch-artifact/audit/PS4-Neural-Engine-011-PATCH.gp4" -Raw
-          if ($gp4 -notmatch '<volume_type>pkg_ps4_patch</volume_type>') { throw "GP4 is not a patch volume." }
-          if ($gp4 -notmatch 'storage_type="digital25"') { throw "GP4 storage type is not digital25." }
-          if ($gp4 -notmatch 'IV0000-PNEU00001_00-PS4NEURALENG0000') { throw "GP4 CONTENT_ID mismatch." }
+          $gp4Path = "patch-artifact/audit/PS4-Neural-Engine-011-PATCH.gp4"
+          [xml]$gp4 = Get-Content $gp4Path
+          if ($gp4.psproject.volume.volume_type -ne "pkg_ps4_patch") { throw "GP4 is not a patch volume." }
+          if ($gp4.psproject.volume.package.storage_type -ne "digital25") { throw "GP4 storage type is not digital25." }
+          if ($gp4.psproject.volume.package.content_id -ne "IV0000-PNEU00001_00-PS4NEURALENG0000") { throw "GP4 CONTENT_ID mismatch." }
+          if ([IO.Path]::GetFileName($gp4.psproject.volume.package.app_path) -ne "PS4-Neural-Engine-Installed-Base.pkg") { throw "Patch GP4 does not associate the rebuilt base PKG." }
+          if ($gp4.psproject.files.file.Count -lt 5) { throw "Patch GP4 payload incomplete." }
+          $associationBase = "patch-artifact/PS4-Neural-Engine-Installed-Base.pkg"
+          if (-not (Test-Path $associationBase)) { throw "Sony-associated base package missing." }
+          dotnet "$tool" validate $associationBase
+          if ($LASTEXITCODE -ne 0) { throw "Associated base package validation failed." }
+          $associationInfo = (dotnet "$tool" info $associationBase 2>&1) -join "`n"
+          if ($associationInfo -notmatch '01.06') { throw "Associated base package version mismatch." }
+          $associationExtract = Join-Path $env:RUNNER_TEMP "associated-base-extracted"
+          dotnet "$tool" extract $associationBase $associationExtract
+          if ($LASTEXITCODE -ne 0) { throw "Associated base extraction failed." }
+          $associationSfo = Get-ChildItem $associationExtract -Recurse -File -Filter param.sfo | Select-Object -First 1
+          if (-not $associationSfo) { throw "Associated base PARAM.SFO missing." }
+          $associationSfoText = (dotnet "$tool" sfo read "$($associationSfo.FullName)" 2>&1) -join "`n"
+          foreach ($required in @("CATEGORY = gde","APP_VER = 01.06","st_type=digital50")) {
+            if ($associationSfoText -notmatch [regex]::Escape($required)) { throw "Associated base SFO missing $required" }
+          }
           dotnet "$tool" validate "$pkg"
           if ($LASTEXITCODE -ne 0) { throw "Independent patch PKG validation failed." }
           $info = (dotnet "$tool" info "$pkg" 2>&1) -join "\`n"
           $info | Out-File "patch-artifact/audit/patch-info.txt"
-          if ($info -notmatch 'Patch') { throw "Independent parser did not identify patch package: $info" }
+          if ($info -notmatch 'PNEU00001' -or $info -notmatch '01.07') { throw "Independent parser identity/version mismatch: $info" }
           $out = Join-Path $env:RUNNER_TEMP "patch-extracted"
           dotnet "$tool" extract "$pkg" "$out"
           if ($LASTEXITCODE -ne 0) { throw "Patch extraction failed." }
@@ -567,6 +586,12 @@ jobs:
           $prx = Get-ChildItem $out -Recurse -File | Where-Object Name -eq "ps4_neural_engine.prx" | Select-Object -First 1
           $manifest = Get-ChildItem $out -Recurse -File | Where-Object Name -eq "pne-release.ini" | Select-Object -First 1
           if (-not $eboot -or -not $prx -or -not $manifest) { throw "Patch payload incomplete." }
+          $updateExtract = Join-Path $env:RUNNER_TEMP "update-011-extracted"
+          dotnet "$tool" extract "update-artifact/pkg/PS4-Neural-Engine-011.pkg" $updateExtract
+          if ($LASTEXITCODE -ne 0) { throw "Release 011 source PKG extraction failed." }
+          $sourceEboot = Get-ChildItem $updateExtract -Recurse -File -Filter eboot.bin | Select-Object -First 1
+          if (-not $sourceEboot) { throw "Release 011 source eboot missing." }
+          if ((Get-FileHash $sourceEboot.FullName -Algorithm SHA256).Hash -ne (Get-FileHash $eboot.FullName -Algorithm SHA256).Hash) { throw "Patch eboot does not match release 011." }
           $expectedPrx = (Get-FileHash "update-artifact/ps4/ps4_neural_engine.prx" -Algorithm SHA256).Hash
           $actualPrx = (Get-FileHash $prx.FullName -Algorithm SHA256).Hash
           if ($actualPrx -ne $expectedPrx) { throw "Patch PRX digest mismatch." }
@@ -578,6 +603,7 @@ jobs:
             "PATCH_BASE_VERSION=01.06"
             "PATCH_APP_VERSION=01.07"
             "PATCH_BASE_SHA256=$baseHash"
+            "PATCH_ASSOCIATION_BASE_SHA256=$((Get-FileHash $associationBase -Algorithm SHA256).Hash.ToLowerInvariant())"
             "PATCH_BYTES=$((Get-Item $pkg).Length)"
             "PATCH_SHA256=$patchHash"
             "PATCH_PRX_SHA256=$actualPrx"
