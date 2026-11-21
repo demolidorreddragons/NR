@@ -28,10 +28,13 @@ jobs:
 
           function Read-FtpText([string]$remote, [string]$label, [bool]$required = $false) {
             $out = Join-Path $temp ($label -replace '[^A-Za-z0-9_.-]','_')
-            $result = & curl.exe --fail --silent --show-error --ftp-pasv --user $cred --output $out "$base$remote" 2>&1
-            if ($LASTEXITCODE -ne 0) {
-              if ($required) { throw "Required FTP read failed for $remote : $result" }
-              Write-Host "FILE_UNAVAILABLE $remote : $result"
+            $stderr = "$out.stderr"
+            $null = & curl.exe --fail --silent --show-error --ftp-pasv --user $cred --output $out "$base$remote" 2> $stderr
+            $exitCode = $LASTEXITCODE
+            $errorText = if (Test-Path -LiteralPath $stderr) { Get-Content -LiteralPath $stderr -Raw } else { "" }
+            if ($exitCode -ne 0) {
+              if ($required) { throw "Required FTP read failed for $remote (curl exit=$exitCode): $errorText" }
+              Write-Host "FILE_UNAVAILABLE $remote (curl exit=$exitCode): $errorText"
               return
             }
             Write-Host "===== BEGIN $remote ====="
@@ -64,13 +67,16 @@ jobs:
           )) {
             $leaf = [System.IO.Path]::GetFileName($remote)
             $out = Join-Path $temp $leaf
-            $result = & curl.exe --fail --silent --show-error --ftp-pasv --user $cred --output $out "$base$remote" 2>&1
-            if ($LASTEXITCODE -eq 0 -and (Test-Path -LiteralPath $out)) {
+            $stderr = "$out.stderr"
+            $null = & curl.exe --fail --silent --show-error --ftp-pasv --user $cred --output $out "$base$remote" 2> $stderr
+            $exitCode = $LASTEXITCODE
+            $errorText = if (Test-Path -LiteralPath $stderr) { Get-Content -LiteralPath $stderr -Raw } else { "" }
+            if ($exitCode -eq 0 -and (Test-Path -LiteralPath $out)) {
               $item = Get-Item -LiteralPath $out
               $hash = (Get-FileHash -LiteralPath $out -Algorithm SHA256).Hash.ToLowerInvariant()
               Write-Host "BINARY_FILE $remote SIZE=$($item.Length) SHA256=$hash"
             } else {
-              Write-Host "BINARY_FILE_UNAVAILABLE $remote : $result"
+              Write-Host "BINARY_FILE_UNAVAILABLE $remote (curl exit=$exitCode): $errorText"
             }
           }
           Read-FtpText "/data/install.log" "data-install.log.txt"
