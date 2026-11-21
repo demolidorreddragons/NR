@@ -81,13 +81,18 @@ static FILE* fopen_unique_staged_file(const char* base, char* chosen, size_t cap
     return stream;
 }
 
-/* Probe managed files through an opened descriptor. Do not trust st_size on Orbis:
-   only fstat's file-type bits are used. O_NOFOLLOW keeps symlinks fail-closed. */
-#ifndef O_NOFOLLOW
-#error "The Orbis SDK must provide O_NOFOLLOW for safe managed-path inspection."
-#endif
+/* Inspect paths without relying on O_NOFOLLOW, which is not consistently
+   implemented by Orbis libc. lstat rejects symlinks; the descriptor identity
+   check closes the lstat/open race before callers trust the result. */
 static int inspect_managed_path(const char* path, struct stat* metadata) {
-    int fd = open(path, O_RDONLY | O_NOFOLLOW);
+    struct stat before;
+    if (lstat(path, &before) != 0) return errno == ENOENT ? 0 : -1;
+    if (S_ISLNK(before.st_mode)) {
+        errno = ELOOP;
+        return -1;
+    }
+
+    int fd = open(path, O_RDONLY);
     if (fd < 0) return errno == ENOENT ? 0 : -1;
     if (fstat(fd, metadata) != 0) {
         int saved_errno = errno;
@@ -95,7 +100,15 @@ static int inspect_managed_path(const char* path, struct stat* metadata) {
         errno = saved_errno;
         return -1;
     }
-    if (close(fd) != 0) return -1;
+    int close_result = close(fd);
+    if (close_result != 0) return -1;
+
+    if (metadata->st_dev != before.st_dev ||
+        metadata->st_ino != before.st_ino ||
+        ((metadata->st_mode ^ before.st_mode) & S_IFMT) != 0) {
+        errno = EAGAIN;
+        return -1;
+    }
     return 1;
 }
 static int path_exists(const char* path) {
