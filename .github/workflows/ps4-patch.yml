@@ -1,0 +1,176 @@
+name: PS4 application patch build and QA
+
+on:
+  workflow_run:
+    workflows: ["PS4 PRX and PKG build"]
+    types: [completed]
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  build-patch:
+    if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'feature/gcn8-numeric-kernels' && github.event.workflow_run.head_repository.full_name == github.repository
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: \${{ github.event.workflow_run.head_sha }}
+
+      - name: Download exact release 010 base artifact (installed base)
+        uses: actions/download-artifact@v4
+        with:
+          name: ps4-neural-engine-build
+          path: base-artifact
+          repository: \${{ github.repository }}
+          run-id: 44851147057
+          github-token: \${{ github.token }}
+
+      - name: Download exact release artifact from triggering build
+        uses: actions/download-artifact@v4
+        with:
+          name: ps4-neural-engine-build
+          path: update-artifact
+          repository: \${{ github.repository }}
+          run-id: \${{ github.event.workflow_run.id }}
+          github-token: \${{ github.token }}
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Install pinned OpenOrbis create-gp4
+        run: |
+          curl -fL --retry 3 -o /tmp/openorbis.tar.gz https://github.com/OpenOrbis/OpenOrbis-PS4-Toolchain/releases/download/v0.5.4/toolchain-llvm-18.tar.gz
+          echo "3c7cd5bb593ca74fa1c13fd59f3938dc0fc07985167f7275063019e63abe4526  /tmp/openorbis.tar.gz" | sha256sum -c -
+          tar -xzf /tmp/openorbis.tar.gz -C "$GITHUB_WORKSPACE"
+          echo "OO_PS4_TOOLCHAIN=$GITHUB_WORKSPACE/OpenOrbis/PS4Toolchain" >> "$GITHUB_ENV"
+
+      - name: Checkout pinned LibOrbisPkg
+        uses: actions/checkout@v4
+        with:
+          repository: OpenOrbis/LibOrbisPkg
+          ref: 92a4e7f8e5914cb06b52ba3ae6b0675da438a051
+          path: LibOrbisPkg-src
+
+      - name: Compile patch-aware PkgTool.Core
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path("LibOrbisPkg-src/LibOrbisPkg/PKG/PkgBuilder.cs")
+          s = p.read_text(encoding="utf-8-sig")
+          old = 'sfo["PUBTOOLINFO"] = new SFO.Utf8Value("PUBTOOLINFO", date+time+sizeInfo, 0x200);'
+          new = 'sfo["PUBTOOLINFO"] = new SFO.Utf8Value("PUBTOOLINFO", date+time+sizeInfo+",st_type=digital25", 0x200);'
+          if s.count(old) != 1:
+              raise SystemExit("Pinned LibOrbisPkg PUBTOOLINFO anchor changed; refusing ambiguous patch.")
+          p.write_text(s.replace(old, new), encoding="utf-8")
+          if new not in p.read_text(encoding="utf-8"):
+              raise SystemExit("Patch storage metadata edit did not persist.")
+          PY
+          dotnet publish LibOrbisPkg-src/PkgTool.Core/PkgTool.Core.csproj -c Release -r linux-x64 --self-contained false -o "$RUNNER_TEMP/pkgtool-patch"
+          test -x "$RUNNER_TEMP/pkgtool-patch/PkgTool.Core"
+          echo "PKGTOOL_CORE=$RUNNER_TEMP/pkgtool-patch/PkgTool.Core" >> "$GITHUB_ENV"
+
+      - name: Build patch candidate against installed release 010
+        env:
+          BASE_PKG: \${{ github.workspace }}/base-artifact/pkg/PS4-Neural-Engine-010.pkg
+          UPDATE_PKG: \${{ github.workspace }}/update-artifact/pkg/PS4-Neural-Engine-011.pkg
+          UPDATE_PRX: \${{ github.workspace }}/update-artifact/ps4/ps4_neural_engine.prx
+          UPDATE_MANIFEST: \${{ github.workspace }}/update-artifact/pkg/audit/pne-release.ini
+          OUT_DIR: \${{ github.workspace }}/dist/patch
+          PATCH_APP_VERSION: "01.07"
+        run: |
+          bash tools/build_patch_pkg.sh
+          mkdir -p dist/patch/audit
+          cp build/patch-stage/package.gp4 dist/patch/audit/PS4-Neural-Engine-011-PATCH.gp4
+          cp build/patch-stage/sce_sys/param.sfo dist/patch/audit/param.sfo
+          sha256sum dist/patch/*.pkg > dist/patch/audit/SHA256SUMS
+
+      - name: Upload patch candidate and audit inputs
+        uses: actions/upload-artifact@v4
+        with:
+          name: ps4-neural-engine-patch-candidate
+          path: dist/patch/**
+          if-no-files-found: error
+
+  independent-patch-qa:
+    needs: build-patch
+    runs-on: windows-latest
+    permissions:
+      actions: read
+      contents: read
+    steps:
+      - name: Checkout independent PKG inspector
+        uses: actions/checkout@v4
+        with:
+          repository: pearlxcore/OrbisPkgTool
+          ref: 3de6da849b64a8ad0d5ba00dd4e8919934b868b0
+          path: OrbisPkgTool-src
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Download patch candidate
+        uses: actions/download-artifact@v4
+        with:
+          name: ps4-neural-engine-patch-candidate
+          path: patch-artifact
+
+      - name: Download exact installed base 010
+        uses: actions/download-artifact@v4
+        with:
+          name: ps4-neural-engine-build
+          path: base-artifact
+          repository: \${{ github.repository }}
+          run-id: 44851147057
+          github-token: \${{ github.token }}
+
+      - name: Build independent inspector
+        shell: pwsh
+        run: |
+          dotnet build OrbisPkgTool-src/OrbisPkgTool/OrbisPkgTool.csproj --configuration Release
+          if ($LASTEXITCODE -ne 0) { throw "Independent inspector build failed." }
+
+      - name: Verify patch type, base identity, SFO and payload
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $tool = "OrbisPkgTool-src/OrbisPkgTool/bin/Release/net10.0-windows/OrbisPkgTool.dll"
+          $pkg = (Resolve-Path "patch-artifact/PS4-Neural-Engine-011-PATCH.pkg").Path
+          $gp4 = Get-Content "patch-artifact/audit/PS4-Neural-Engine-011-PATCH.gp4" -Raw
+          if ($gp4 -notmatch '<volume_type>pkg_ps4_patch</volume_type>') { throw "GP4 is not a patch volume." }
+          if ($gp4 -notmatch 'storage_type="digital25"') { throw "GP4 storage type is not digital25." }
+          if ($gp4 -notmatch 'IV0000-PNEU00001_00-PS4NEURALENG0000') { throw "GP4 content ID mismatch." }
+          dotnet "$tool" validate "$pkg"
+          if ($LASTEXITCODE -ne 0) { throw "Independent patch validation failed." }
+          $info = (dotnet "$tool" info "$pkg" 2>&1) -join "\`n"
+          $info | Out-File "patch-artifact/audit/patch-info.txt"
+          if ($info -notmatch 'Patch') { throw "Independent parser did not identify a patch: $info" }
+          $out = Join-Path $env:RUNNER_TEMP "patch-extracted"
+          dotnet "$tool" extract "$pkg" "$out"
+          if ($LASTEXITCODE -ne 0) { throw "Patch extraction failed." }
+          $sfo = Get-ChildItem $out -Recurse -File -Filter param.sfo | Select-Object -First 1
+          if (-not $sfo) { throw "Patch PARAM.SFO missing." }
+          $sfoText = (dotnet "$tool" sfo read "$($sfo.FullName)" 2>&1) -join "\`n"
+          $sfoText | Out-File "patch-artifact/audit/embedded-param-sfo.txt"
+          foreach ($required in @("CATEGORY = gpe","APP_VER = 01.07","VERSION = 01.07","TITLE_ID = PNEU00001","CONTENT_ID = IV0000-PNEU00001_00-PS4NEURALENG0000","st_type=digital25")) {
+            if ($sfoText -notmatch [regex]::Escape($required)) { throw "Patch SFO missing: $required" }
+          }
+          $basePkg = "base-artifact/pkg/PS4-Neural-Engine-010.pkg"
+          $baseInfo = (dotnet "$tool" info "$basePkg" 2>&1) -join "\`n"
+          if ($baseInfo -notmatch '01.06') { throw "Base artifact is not APP_VER 01.06: $baseInfo" }
+          $baseSfo = "base-artifact/pkg/audit/param.sfo"
+          $baseSfoText = (dotnet "$tool" sfo read "$baseSfo" 2>&1) -join "\`n"
+          if ($baseSfoText -notmatch 'CATEGORY = gde' -or $baseSfoText -notmatch 'APP_VER = 01.06') { throw "Base SFO identity/version mismatch." }
+          $eboot = Get-ChildItem $out -Recurse -File | Where-Object Name -eq "eboot.bin" | Select-Object -First 1
+          $prx = Get-ChildItem $out -Recurse -File | Where-Object Name -eq "ps4_neural_engine.prx" | Select-Object -First 1
+          $manifest = Get-ChildItem $out -Recurse -File | Where-Object Name -eq "pne-release.ini" | Select-Object -First 1
+          if (-not $eboot -or -not $prx -or -not $manifest) { throw "Patch payload incomplete." }
+          $expectedPrx = (Get-FileHash "update-artifact/ps4/ps4_neural_engine.prx" -Algorithm SHA256).Hash
+          $actualPrx = (Get-FileHash $prx.FullName -Algorithm SHA256).Hash
+          if ($actualPrx -ne $expectedPrx) { throw "Patch PRX digest mismatch." }
+          "PATCH_QA_STATUS=PASS_PC_ONLY_NOT_HARDWARE_TESTED" | Out-File "patch-artifact/audit/QA_STATUS.txt"
