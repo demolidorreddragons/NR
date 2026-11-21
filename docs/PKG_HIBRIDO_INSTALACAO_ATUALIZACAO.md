@@ -1,6 +1,6 @@
 # Arquitetura do PKG híbrido — instalação inicial e atualização do Neural Engine
 
-**Estado:** implementação H2/H4 integrada ao eboot no release candidato 008; testes host/build/QA independente ainda em execução; fault injection completa e teste no console pendentes. Não instalar até todos os gates aplicáveis passarem e haver autorização explícita.  
+**Estado:** H2/H3/H4 integradas ao eboot e host CI aprovado no run `44846814858`; build do PKG 008 e QA independente em execução; fault injection completa e teste no console pendentes. Não instalar até todos os gates aplicáveis passarem e haver autorização explícita.  
 **Alvo:** PS4 Pro / Orbis + GoldHEN.  
 **Branch:** `feature/gcn8-numeric-kernels`.  
 **Identidade atual:** TITLE_ID `PNEU00001`, CONTENT_ID `IV0000-PNEU00001_00-PS4NEURALENG0000`.
@@ -103,7 +103,7 @@ Se a versão empacotada for igual à instalada e os hashes coincidirem, retornar
 | Etapa | Trabalho | Critério de saída |
 |---|---|---|
 | H1 | Manifesto de release e hash do PRX no build/runtime | **IMPLEMENTADO — CI REVALIDAÇÃO PENDENTE** | Build e eboot verificam identidade e hash; teste host do SHA-256 passou. |
-| H2 | Máquina de estados NEW/UPDATE/LEGACY/RECOVERY/CONFLICT | **IMPLEMENTADO — CI PENDENTE** | Eboot classifica presença/validade do PRX, manifesto instalado e marcador transacional; symlink/destino não regular é conflito. |
+| H2 | Máquina de estados NEW/UPDATE/LEGACY/RECOVERY/CONFLICT | **IMPLEMENTADO — HOST CI PASS** | Eboot classifica presença/validade do PRX, manifesto instalado e marcador transacional; symlink/destino não regular é conflito. |
 | H3 | Temporários exclusivos e proteção contra symlink | **IMPLEMENTADO — CI PENDENTE** | `O_CREAT+O_EXCL`, caminhos exclusivos, rejeição de destinos não regulares e marcador de transação. Falta fault injection Orbis. |
 | H4 | Idempotência e detecção de versão/hash | **IMPLEMENTADO — CI PENDENTE** | Hash igual + release igual retorna `ALREADY_CURRENT` sem backup; release menor é recusado; release igual com hash diferente é conflito. |
 | H5 | Fault injection de cada write/fsync/rename/rollback | **PENDENTE** — adicionar harness de falhas e provar restauração de PRX, manifesto e `plugins.ini`. |
@@ -117,7 +117,7 @@ Se a versão empacotada for igual à instalada e os hashes coincidirem, retornar
 - O build gera `pne-release.ini` com identidade e SHA-256 do PRX; o eboot agora valida schema, TITLE_ID, CONTENT_ID, nome do PRX e SHA-256 antes de criar diretórios ou alterar destinos. A validação usa SHA-256 implementado localmente e vetores de teste host.
 - Temporários de PRX, manifesto e `plugins.ini` usam nomes exclusivos com `O_CREAT | O_EXCL`; arquivos temporários preexistentes não são truncados. `plugins.ini` não é regravado quando a entrada gerenciada já existe.
 - A transação PRX + configuração preserva backups e tenta rollback, mas os dois caminhos não podem ser trocados atomicamente em conjunto.
-- O release candidato 008 integra a máquina de estados, manifesto instalado ao lado do PRX, marcador de transação persistente, migração LEGACY com backup, recusa de downgrade e `ALREADY_CURRENT` por release/hash. A validação CI ainda precisa passar.
+- O release candidato 008 integra a máquina de estados, manifesto instalado ao lado do PRX, marcador de transação persistente, migração LEGACY com backup, recusa de downgrade e `ALREADY_CURRENT` por release/hash. Host CI passou no run `44846814858`; o build/QA do PKG 008 ainda é um gate separado.
 - O workflow de build preserva GP4/SFO/manifest e QA independente; o resultado do PKG 006 não pode ser reaproveitado como evidência para o PKG 008.
 - Não há evidência de instalação/atualização do pacote no PS4 Pro nem de carregamento bem-sucedido do PRX.
 
