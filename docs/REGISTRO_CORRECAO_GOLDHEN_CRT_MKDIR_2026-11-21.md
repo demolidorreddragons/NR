@@ -72,3 +72,12 @@ confirmar geração do CRT, linkagem GNM, PRX, PKG e QA independente.
 
 **Não declarar aprovado até os gates executarem com sucesso. Nenhuma
 instalação ou alteração no console foi realizada.**
+
+
+## Reincidência identificada na rodada seguinte — escopo de variável no linker
+
+A rodada do commit `5de9a7a3fd244538fc7e38b97a18b83b0cd6fbbd` confirmou que a geração/verificação de `GoldHEN_Plugins_SDK/build/crtprx.o` passou e que o smoke de compilação da API/ABI GNM passou. A etapa seguinte, porém, falhou no linker porque o comando ainda usava `$GOLDHEN_SDK/build/crtprx.o`; essa variável não estava definida no ambiente daquele step e o shell resolveu o caminho como `/build/crtprx.o`.
+
+Correção aplicada no workflow: o linker agora usa o caminho explícito e estável `$GITHUB_WORKSPACE/GoldHEN_Plugins_SDK/build/crtprx.o`, alinhado ao caminho usado pela etapa de geração. Isso elimina dependência de variável de ambiente fora do seu escopo. Commit corretivo: `119bda23c9abbbf224e694b600bac7959543c3fb`.
+
+A falha impediu a execução das etapas seguintes; PRX final, PKG e QA independente continuam não produzidos/não executados nesta rodada. A nova execução disparada pelo push deverá confirmar a correção. Não houve instalação nem execução no PS4.
