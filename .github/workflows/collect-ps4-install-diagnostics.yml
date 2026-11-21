@@ -13,7 +13,7 @@ jobs:
     runs-on: [self-hosted, Windows, X64, ps4-lan]
     steps:
       - name: Read PS4 logs and package directory without modifying console
-        shell: powershell
+        shell: powershell -NoProfile -ExecutionPolicy Bypass -Command "& '{0}'"
         env:
           PS4_IP: ${{ vars.PS4_IP }}
         run: |
