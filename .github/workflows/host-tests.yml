@@ -78,6 +78,8 @@ jobs:
         run: |
           cc -std=c11 -Wall -Wextra -Werror -Iplatform/ps4/gcn8 platform/ps4/gcn8/stage_log.c tests/test_stage_log.c -o "$RUNNER_TEMP/test_stage_log"
           "$RUNNER_TEMP/test_stage_log"
+          cc -std=c11 -Wall -Wextra -Werror -DSTAGE_LOG_UDP -Iplatform/ps4/gcn8 platform/ps4/gcn8/stage_log.c tests/test_stage_log.c -o "$RUNNER_TEMP/test_stage_log_udp"
+          "$RUNNER_TEMP/test_stage_log_udp"
       - name: Validate GCN8 numeric reference and tiled mapping
         run: python3 tools/test_gcn8_numeric.py
       - name: Validate GNM input-usage offset arithmetic
