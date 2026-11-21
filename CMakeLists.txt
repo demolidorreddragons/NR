@@ -54,3 +54,11 @@ target_include_directories(pne_gcn8_vsharp_codec PUBLIC platform/ps4/gcn8/host)
 add_executable(test_gcn8_vsharp_codec tests/test_gcn8_vsharp_codec.cpp)
 target_link_libraries(test_gcn8_vsharp_codec PRIVATE pne_gcn8_vsharp_codec)
 add_test(NAME gcn8_vsharp_codec COMMAND test_gcn8_vsharp_codec)
+
+add_library(pne_gcn8_arena
+    platform/ps4/gcn8/host/arena_contract.cpp
+)
+target_include_directories(pne_gcn8_arena PUBLIC platform/ps4/gcn8/host)
+add_executable(test_gcn8_arena_contract tests/test_gcn8_arena_contract.cpp)
+target_link_libraries(test_gcn8_arena_contract PRIVATE pne_gcn8_arena)
+add_test(NAME gcn8_arena_contract COMMAND test_gcn8_arena_contract)
