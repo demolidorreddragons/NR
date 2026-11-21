@@ -1,5 +1,8 @@
 #include "compute_smoke.h"
 #include "stage_log.h"
+#ifdef PNE_GCN8_GNM_LINK_ONLY
+#include "gnmdriver.h"
+#endif
 
 #include <cstdio>
 #include <cstring>
@@ -68,9 +71,15 @@ int main(int argc, char** argv) {
     const int result = 0;
     stage_log("RESULT_PASS_STARTUP_ONLY_GNM_NOT_LINKED");
 #elif defined(PNE_GCN8_GNM_LINK_ONLY)
-    const int result = 0;
-    stage_log("GNM_LINK_ONLY_MAIN_REACHED");
-    stage_log("RESULT_PASS_GNM_LINK_ONLY_NO_GNM_CALLS");
+    /* Taking the address forces a real import relocation without calling GNM. */
+    const uintptr_t gnm_import_address =
+        reinterpret_cast<uintptr_t>(&sceGnmSubmitDone);
+    stage_log(gnm_import_address != 0 ? "GNM_IMPORT_RESOLVED" :
+                                       "GNM_IMPORT_ADDRESS_NULL");
+    const int result = gnm_import_address != 0 ? 0 : 1;
+    stage_log("GNM_LINK_ONLY_MAIN_REACHED_NO_GNM_CALLS");
+    stage_log(result == 0 ? "RESULT_PASS_GNM_LINK_ONLY" :
+                            "RESULT_FAIL_GNM_IMPORT_ADDRESS");
 #else
     const int result = pne_gcn8_compute_smoke_run(
         "app0:/compute_smoke_add.sb", persistent_log ? log_path : nullptr);
