@@ -32,3 +32,19 @@ Este arquivo preserva decisões aprovadas e seus motivos. Novas decisões devem 
 - **Impacto em arquivos/código:**
 - **Evidências:**
 - **Decisões substituídas:**
+
+
+## DEC-2026-11-21-02 — Sistema de eficiência, automação e controle de qualidade
+
+**Estado:** APROVADA PELO USUÁRIO  
+**Data:** 2026-11-21
+
+**Decisão:** aprovar integralmente fila inteligente por dependências, paralelismo seguro, contratos padronizados, Impact Analyzer, Test Selector, Failure Analyzer, Build Optimizer com cache verificável, Evidence Collector, painel de produtividade e ampliação dos testes numéricos/visuais.
+
+**Motivo:** reduzir tempo de ciclo e retrabalho, antecipar detecção de falhas e melhorar qualidade e rastreabilidade.
+
+**Ordem:** contratos/fila → análise de impacto/seleção de testes → análise de falhas → cache/build → coleta de evidências → métricas → regressão ampliada.
+
+**Salvaguardas:** testes direcionados não removem suítes obrigatórias; cache não substitui build limpo; diagnósticos automáticos não aprovam nem corrigem sozinhos; métricas não substituem gates; host/CI não equivale a hardware. Regras de autorização do console e PKG Full/Base permanecem inalteradas.
+
+**Documentos:** `PLANO_AUTOMACAO_E_EFICIENCIA.md`, `CONTRATO_PIPELINE_CI_QA.md`, `METRICAS_PRODUTIVIDADE_E_QUALIDADE.md`, Plano Mestre, Painel e Matriz QA.
