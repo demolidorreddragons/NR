@@ -64,6 +64,10 @@ jobs:
           assert 'abi_status=unverified' in build_script and 'hardware_status=not_tested' in build_script, 'manifest must not claim unproven compatibility'
           print('Installer transaction and release-manifest invariants passed')
           PY
+      - name: Validate GCN8 diagnostic build modes
+        run: |
+          bash -n tools/build_compute_smoke_pkg.sh
+          python3 tests/test_gcn8_diagnostic_modes.py
       - name: Test hybrid installer state machine
         run: |
           mkdir -p "$RUNNER_TEMP/pne-installer-test"
