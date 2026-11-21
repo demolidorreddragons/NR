@@ -308,3 +308,15 @@ Ajustes já publicados:
 **Nova execução solicitada pelo push:** [build run 44670068072](https://github.com/demolidorreddragons/NR/actions/runs/44670068072), pendente na fila no momento deste registro. O QA independente só será acionado se esse build terminar com sucesso.
 
 Nenhum FTP de escrita, staging, instalação, alteração de `plugins.ini`, ativação de PRX ou reinício do GoldHEN foi realizado.
+
+
+## 8. Governança de execução aprovada (2026-11-21)
+
+A execução passa a ser controlada também pelos seguintes documentos versionados:
+
+- [Painel de execução](PAINEL_EXECUCAO.md): fila priorizada, estado das frentes, gates e Definition of Done.
+- [Matriz de QA e evidências](MATRIZ_QA.md): níveis de validação, verificações e evidências obrigatórias.
+- [Registro de decisões](REGISTRO_DECISOES.md): decisões aprovadas, justificativas e histórico.
+- [Regras operacionais](REGRAS_OPERACIONAIS_DO_PROJETO.md): limites de autorização, preservação de dados, PKG e fluxo de staging.
+
+**Regra de execução:** concluir tarefas em unidades pequenas e verificáveis; após aprovação de um gate, avançar para a próxima tarefa desbloqueada. Nenhum gate pode ser considerado aprovado sem as evidências definidas na matriz QA. Validação host/CI não equivale a validação no PS4 Pro. Esta governança não amplia as autorizações para instalação, ativação de PRX, reinício de GoldHEN ou operações destrutivas.
