@@ -23,9 +23,9 @@ Este painel é a fonte operacional para retomar o trabalho. Atualizar após cada
 ## Fila prioritária
 
 ### P0 — Fechar auditoria da linha de base
-- [ ] Conferir branch, commit, PRs e workflows ativos.
+- [x] Conferir branch, commit, PR #5 e workflows relevantes (snapshot em 2026-11-21).
 - [ ] Reconciliar inventário de código, shaders, instalador, artefatos e testes com o estado atual do repositório.
-- [ ] Atualizar a matriz de QA com comandos reproduzíveis e resultados reais.
+- [x] Registrar resultado real do CI host na matriz; reconciliação integral ainda em andamento.
 - [ ] Identificar dependências e bloqueios sem presumir ferramentas ou recursos inexistentes.
 
 **Saída:** baseline versionada, com estados comprovado / parcial / ausente / bloqueado.
@@ -126,3 +126,16 @@ Especificação: [Plano de automação e eficiência](PLANO_AUTOMACAO_E_EFICIENC
 - Testes direcionados aceleram feedback, mas não substituem suítes obrigatórias, QA independente ou gates de hardware.
 - Cache só pode ser reutilizado com chave que inclua todos os inputs relevantes; registrar hit/miss e hashes.
 - Após um gate aprovado, avançar para a próxima tarefa segura e desbloqueada; parar apenas por bloqueio real ou autorização necessária.
+
+
+## Execução P0/E0 — 2026-11-21
+
+- Baseline inicial: [Relatório P0](RELATORIO_P0_BASELINE_2026-11-21.md), commit de criação `9f4fb59fecf21d2ec82e811cf5116dd9ade4c1b0`.
+- [E0-001 — contratos/fila](https://github.com/demolidorreddragons/NR/issues/14): **IN_PROGRESS**. Contrato formalizado; fila automatizada e grafo de dependências ainda não implementados.
+- [P0-001 — baseline](https://github.com/demolidorreddragons/NR/issues/15): **IN_PROGRESS**. Branch/PR/workflows confirmados; CI host PASS; GFX8 artifact disponível apenas em commit histórico.
+- [GNM-001 — auditoria do smoke](https://github.com/demolidorreddragons/NR/issues/16): **IN_PROGRESS**. Fonte contém harness experimental com tentativa de dispatch, ainda sem build verificado no HEAD ou execução hardware.
+- CI host HEAD `f602a436d6efe87e2a54fd7e5185c2e583c7473f`: run `44862586387`, job `136719063324`, success.
+- GFX8 compile histórico: run `44743915113`, commit `5141ed44fe3202dbdec78f0a69700d34ef76e039`; não promover ao HEAD (267 commits de diferença).
+- Bloqueadores runtime: GPU VA do mapeamento, V# writable, cache/coerência, submissão/fence/readback e revisão independente.
+- Ferramentas no runner Windows: **NOT_RUN**; probe não executado.
+- Console: nenhuma instalação, ativação, dispatch ou alteração persistente realizada.
