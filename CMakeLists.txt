@@ -62,3 +62,7 @@ target_include_directories(pne_gcn8_arena PUBLIC platform/ps4/gcn8/host)
 add_executable(test_gcn8_arena_contract tests/test_gcn8_arena_contract.cpp)
 target_link_libraries(test_gcn8_arena_contract PRIVATE pne_gcn8_arena)
 add_test(NAME gcn8_arena_contract COMMAND test_gcn8_arena_contract)
+
+add_executable(test_gnm_runtime_abi tests/test_gnm_runtime_abi.cpp)
+target_include_directories(test_gnm_runtime_abi PRIVATE platform/ps4/gcn8)
+add_test(NAME gnm_runtime_abi_contract COMMAND test_gnm_runtime_abi)
