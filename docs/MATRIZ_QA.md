@@ -144,3 +144,8 @@ Relatório estático: [RELATORIO_AUDITORIA_INPUT_USAGE_OFFSET_2026-11-21.md](REL
 Os três jobs passaram por: installer newline/state machine/release manifest, GCN8 numeric reference/tiled mapping, GNM InputUsage offset arithmetic, layout DLSS-NR 71-block e model input intake verifier. Os commits são atualizações documentais sequenciais, não três revisões independentes. Nenhuma execução no PS4, staging ou instalação decorre desses resultados.
 
 **Gate não promovido:** a semântica de runtime do `chunkUsageBaseOffsetDwords` continua UNRESOLVED devido à divergência entre o cálculo de slot-table start no PSBC/OpenGNM e a subtração adicional no fpPS4. Sem ABI independente ou amostra oficial validada, não alterar parser/offset nem autorizar dispatch/readback.
+
+
+## Limite da evidência upstream PSBC — 2026-11-21
+
+O upstream PS4-OpenGNM/opengnm-psbc relata validação VS+PS em PS4 base GFX7/FW 9.00 (600 frames), mas declara teste compute em hardware como futuro. Isso não cobre compute GFX8/PS4 Pro/FW 14.02 e não promove o NR a hardware validated. Fonte documental upstream, não teste reproduzido pelo NR. Manter runtime_semantics=UNRESOLVED.
