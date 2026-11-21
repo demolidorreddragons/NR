@@ -105,3 +105,24 @@ A equipe passa a ter dez especialidades organizacionais: coordenação; IA neura
 - [Matriz QA](MATRIZ_QA.md)
 
 Toda tarefa nova deve ter contrato de tarefa, critérios mensuráveis, responsáveis/revisores sem conflito, evidências e estado explícito. QA/auditoria devem receber pacote neutro e podem reprovar sem interferência. Se não houver executor separado, classificar a revisão como interna/não independente. Os dez itens são papéis definidos, não prova de dez agentes autônomos ativos.
+
+
+## Sistema de eficiência e automação — aprovado em 2026-11-21
+
+Especificação: [Plano de automação e eficiência](PLANO_AUTOMACAO_E_EFICIENCIA.md).
+
+### Fila de implantação
+- [ ] E0 — Contratos de tarefa, fila priorizada, dependências e estados explícitos.
+- [ ] E1 — Impact Analyzer: mapear módulos, interfaces e testes potencialmente afetados por cada diff.
+- [ ] E2 — Test Selector: executar testes rápidos relevantes, preservando suítes completas obrigatórias nos gates.
+- [ ] E3 — Failure Analyzer: agrupar logs/falhas e apresentar hipóteses rastreáveis, sem corrigir/aprovar sozinho.
+- [ ] E4 — Build Optimizer: medir baseline, cache determinístico e builds limpos de controle.
+- [ ] E5 — Evidence Collector: vincular commit, workflow/job, ambiente, comandos, logs, artefatos e SHA-256.
+- [ ] E6 — Painel automático: tempos, bloqueios, retrabalho, cobertura de evidências e estado de hardware.
+- [ ] E7 — Regressão ampliada: precisão numérica, casos-limite, camadas intermediárias, qualidade visual e estabilidade.
+
+### Regras
+- Paralelizar somente tarefas independentes, com dependências resolvidas e interfaces definidas.
+- Testes direcionados aceleram feedback, mas não substituem suítes obrigatórias, QA independente ou gates de hardware.
+- Cache só pode ser reutilizado com chave que inclua todos os inputs relevantes; registrar hit/miss e hashes.
+- Após um gate aprovado, avançar para a próxima tarefa segura e desbloqueada; parar apenas por bloqueio real ou autorização necessária.
