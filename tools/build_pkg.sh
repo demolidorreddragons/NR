@@ -68,7 +68,7 @@ clang "${INSTALLER_CFLAGS[@]}" -c "$ROOT/installer/hybrid_state.c" -o "$STAGE/hy
 
 # Match the OpenOrbis sample linker flags: let link.x/crt1.o define startup.
 ld.lld -m elf_x86_64 -pie --script "$OO_PS4_TOOLCHAIN/link.x" \
-  --eh-frame-hdr -L"$OO_PS4_TOOLCHAIN/lib" "$STAGE/installer.o" "$STAGE/sha256.o" "$STAGE/release_manifest.o" \
+  --eh-frame-hdr -L"$OO_PS4_TOOLCHAIN/lib" "$STAGE/installer.o" "$STAGE/sha256.o" "$STAGE/release_manifest.o" "$STAGE/hybrid_state.o" \
   -lc -lkernel -lSceSystemService "$OO_PS4_TOOLCHAIN/lib/crt1.o" \
   -o "$STAGE/installer.elf"
 test -s "$STAGE/installer.elf"
