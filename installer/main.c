@@ -85,6 +85,11 @@ static int path_exists(const char* path) {
     struct stat st;
     return lstat(path, &st) == 0;
 }
+static int path_is_regular_file(const char* path) {
+    struct stat st;
+    if (lstat(path, &st) != 0) return 0;
+    return S_ISREG(st.st_mode);
+}
 static int read_release_number(const char* path, unsigned long* release) {
     FILE* file = fopen(path, "rb");
     if (!file) return 0;
@@ -274,7 +279,17 @@ static int configure_loader(char* error, size_t error_size, char* temp_path, siz
     char input[MAX_CONFIG];
     char output[MAX_CONFIG + 256];
     size_t length = 0, used = 0;
-    struct stat config_stat;\n    if (lstat(CONFIG, &config_stat) == 0 && !S_ISREG(config_stat.st_mode)) {\n        snprintf(error, error_size, "ERROR: plugins.ini is not a regular file; preserving it.");\n        return 0;\n    }\n    if (errno != 0 && errno != ENOENT) {\n        snprintf(error, error_size, "ERROR: cannot inspect plugins.ini (errno=%d).", errno);\n        return 0;\n    }\n    FILE* in = fopen(CONFIG, "rb");
+    struct stat config_stat;
+    int config_stat_result = lstat(CONFIG, &config_stat);
+    if (config_stat_result == 0) {
+        if (!S_ISREG(config_stat.st_mode)) {
+            snprintf(error, error_size, "ERROR: plugins.ini is not a regular file; preserving it.");
+            return 0;
+        }
+    } else if (errno != ENOENT) {
+        snprintf(error, error_size, "ERROR: cannot inspect plugins.ini (errno=%d).", errno);
+        return 0;
+    }\n    FILE* in = fopen(CONFIG, "rb");
     if (in) {
         length = fread(input, 1, sizeof(input)-1, in);
         if (ferror(in) || !feof(in)) {
