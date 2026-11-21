@@ -90,21 +90,12 @@ jobs:
           Write-Host "PLUGIN_FILE_COUNT=$($pluginFiles.Count)"
           Write-Host "GOLDHEN_FILE_COUNT=$($goldhenFiles.Count)"
 
-          # Preserve and collect crash evidence without modifying anything on the console.
+          # Read crash dumps and system log without changing console state.
           $dumpDir = Join-Path $temp "sce_coredumps"
           New-Item -ItemType Directory -Force -Path $dumpDir | Out-Null
           $coreListing = List-Ftp "/data/sce_coredumps/"
           foreach ($name in $coreListing) {
-            if ($name -notmatch '\\.(dmp|core|bin|log|dat|elf|mdmp)
-
-      - name: Preserve collected PS4 diagnostics as workflow artifact
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: ps4-neural-engine-crash-diagnostics
-          path: ${{ runner.temp }}/pne-transaction-diagnostics/
-          if-no-files-found: warn
-          retention-days: 14
+            if ($name -notmatch '\.(dmp|core|bin|log|dat|elf|mdmp)
 
 # Re-run read-only PS4 transaction diagnostics.
 # Triggered by commit message: Fetch PS4 PNE installer log
@@ -112,10 +103,10 @@ jobs:
             $safeName = [System.IO.Path]::GetFileName($name)
             if (-not $safeName) { continue }
             $out = Join-Path $dumpDir $safeName
-            $remote = "/data/sce_coredumps/$safeName"
             $stderr = "$out.stderr"
             $stdout = "$out.stdout"
-            $process = Start-Process -FilePath "curl.exe" -ArgumentList @("--fail","--silent","--show-error","--ftp-pasv","--user",$cred,"--output",$out,""$base$remote"") -NoNewWindow -Wait -PassThru -RedirectStandardOutput $stdout -RedirectStandardError $stderr
+            $args = @("--fail","--silent","--show-error","--ftp-pasv","--user",$cred,"--output",$out,($base + "/data/sce_coredumps/" + $safeName))
+            $process = Start-Process -FilePath "curl.exe" -ArgumentList $args -NoNewWindow -Wait -PassThru -RedirectStandardOutput $stdout -RedirectStandardError $stderr
             if ($process.ExitCode -eq 0 -and (Test-Path -LiteralPath $out)) {
               $item = Get-Item -LiteralPath $out
               $hash = (Get-FileHash -LiteralPath $out -Algorithm SHA256).Hash.ToLowerInvariant()
@@ -127,22 +118,30 @@ jobs:
 
           $sceLogsDir = Join-Path $temp "sce_logs"
           New-Item -ItemType Directory -Force -Path $sceLogsDir | Out-Null
-          foreach ($remote in @("/data/sce_logs/log.bin")) {
-            $leaf = [System.IO.Path]::GetFileName($remote)
-            $out = Join-Path $sceLogsDir $leaf
-            $stderr = "$out.stderr"
-            $stdout = "$out.stdout"
-            $process = Start-Process -FilePath "curl.exe" -ArgumentList @("--fail","--silent","--show-error","--ftp-pasv","--user",$cred,"--output",$out,""$base$remote"") -NoNewWindow -Wait -PassThru -RedirectStandardOutput $stdout -RedirectStandardError $stderr
-            if ($process.ExitCode -eq 0 -and (Test-Path -LiteralPath $out)) {
-              $item = Get-Item -LiteralPath $out
-              $hash = (Get-FileHash -LiteralPath $out -Algorithm SHA256).Hash.ToLowerInvariant()
-              Write-Host "SCE_LOG=$remote SIZE=$($item.Length) SHA256=$hash"
-            } else {
-              Write-Host "SCE_LOG_UNAVAILABLE=$remote EXIT=$($process.ExitCode)"
-            }
+          $out = Join-Path $sceLogsDir "log.bin"
+          $stderr = "$out.stderr"
+          $stdout = "$out.stdout"
+          $args = @("--fail","--silent","--show-error","--ftp-pasv","--user",$cred,"--output",$out,($base + "/data/sce_logs/log.bin"))
+          $process = Start-Process -FilePath "curl.exe" -ArgumentList $args -NoNewWindow -Wait -PassThru -RedirectStandardOutput $stdout -RedirectStandardError $stderr
+          if ($process.ExitCode -eq 0 -and (Test-Path -LiteralPath $out)) {
+            $item = Get-Item -LiteralPath $out
+            $hash = (Get-FileHash -LiteralPath $out -Algorithm SHA256).Hash.ToLowerInvariant()
+            Write-Host "SCE_LOG=/data/sce_logs/log.bin SIZE=$($item.Length) SHA256=$hash"
+          } else {
+            Write-Host "SCE_LOG_UNAVAILABLE=/data/sce_logs/log.bin EXIT=$($process.ExitCode)"
           }
 
           Write-Host "PNE_TRANSACTION_DIAGNOSTICS_READ_ONLY_COMPLETE"
+
+
+      - name: Preserve collected PS4 diagnostics as workflow artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ps4-neural-engine-crash-diagnostics
+          path: \${{ runner.temp }}/pne-transaction-diagnostics/
+          if-no-files-found: warn
+          retention-days: 14
 
 # Re-run read-only PS4 transaction diagnostics.
 # Triggered by commit message: Fetch PS4 PNE installer log
