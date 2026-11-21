@@ -75,3 +75,38 @@ A evidência agora permite dizer:
 - OpenGNM `src/driver_orbis.c`: assinaturas de `sceGnmMapComputeQueue` e parâmetros de ring/read pointer; não oferecem conversão explícita de direct-memory physical address para GPU VA.
 
 Esta análise permanece estática e interna. Não foi executado teste no PS4.
+
+
+
+## 7. Confronto adicional com o hardware smoke atual do OpenGNM (2026-11-21)
+
+Foi inspecionada a implementação pública atual de `PS4-OpenGNM/opengnm/tests/hardware_smoke.c` e `src/helpers.c`. Esta leitura é complementar: o código consultado na branch pública atual não foi fixado ao commit usado pelo workflow NR e não deve ser tratado como ABI Sony nem como resultado reproduzido pelo NR.
+
+### Evidência de implementação
+
+- O helper Orbis do OpenGNM chama `sceKernelAllocateDirectMemory(0, sceKernelGetDirectMemorySize(), size, alignment, memorytype, &directmemory)`, depois `sceKernelMapDirectMemory(&mapped, size, protection, 0, directmemory, alignment)`; em caso de falha do map, libera o offset físico. Mantém `mapped` e `directmemory` em campos distintos.
+- O hardware smoke upstream aloca um bloco Garlic de 2 MiB com alinhamento de 2 MiB, usando `ORBIS_KERNEL_WC_GARLIC`; pede proteção CPU read/RW e GPU read/write.
+- O smoke usa o ponteiro `mapped` para o command buffer e para um label EOP de 64 bits localizado no fim do bloco.
+- O evento EOP usa `GNM_CACHE_FLUSH_AND_INV_TS_EVENT`, `GNM_DATA_SEL_SEND_DATA64` e espera o valor escrito no label. O teste é um draw de contagem zero, não compute; a fonte inspecionada não fornece log de execução com identificação de firmware/console nesta consulta.
+
+### Comparação com o harness NR
+
+| Item | NR atual | Precedente OpenGNM consultado | Conclusão |
+|---|---|---|---|
+| Alocação | Garlic WC, 1 MiB, 64 KiB | Garlic WC, 2 MiB, 2 MiB | Ambos são candidatos de alocação; alinhamento/pool do smoke de display não aprova SSBO compute |
+| Proteção | `GNM_PROT_CPU_GPU_RW` | CPU read/RW + GPU read/write | Compatível em intenção, mas confirmar valores/semântica dos macros pinned |
+| DCB | endereço derivado de `mapped` | `mapped` | Precedente de implementação reforça o uso para DCB |
+| EOP label | 32 bits no mesmo bloco Garlic | 64 bits no mesmo bloco Garlic | Precedente para Garlic/EOP, mas tamanho/data selection diferem |
+| Evento | Flush+invalidate TS event | Flush+invalidate TS event | Mesma classe de evento |
+| V#/SSBO compute | V# writable manual | Não exercitado | Continua sem evidência |
+| GPU VA abaixo de 4 GiB | pressupõe valor numérico de `mapped` | não exige/relata esse limite | Continua sem prova para o ponteiro de tabela 32-bit PSBC |
+
+### Achados e decisão
+
+1. A separação `mapped` versus `directmemory` permanece correta; não substituir o primeiro pelo segundo.
+2. O uso de `mapped` em DCB/EOP ganha mais um precedente de código upstream. Isso ainda não demonstra que o valor numérico de `mapped` seja a GPU VA correta para os V# do shader NR, nem que possa satisfazer o requisito de tabela abaixo de 4 GiB.
+3. O EOP NR usa o mesmo tipo de evento de flush/invalidate, porém seu label é de 32 bits e sua região é Garlic. A referência upstream usa 64 bits; não mudar a largura sem alinhar o packet e o contrato do harness.
+4. O hardware smoke upstream não executa compute, não cria V# writable e não valida cache policy de SSBO. Não resolve os bloqueios principais.
+5. O harness NR não deve ser executado no PS4 neste estado. A próxima correção segura é obter um contrato específico para GPU VA/low-4-GiB e V# writable, além de validar a sincronização e a política de cache do output. A evidência atual não autoriza trocar macros, endereços ou descritores por tentativa.
+
+**Classificação:** STATIC_REVIEW adicional. GPU VA para V# / tabela 32-bit = BLOCKED; V# writable/cache = BLOCKED; compute dispatch/readback = NOT_RUN.
