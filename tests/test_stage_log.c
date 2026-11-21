@@ -51,6 +51,7 @@ int main(void) {
     assert(WIFEXITED(wait_status));
     assert(WEXITSTATUS(wait_status) == 128 + SIGABRT);
     read_file_contains(crash_path, "CRASH sig=0x");
+    read_file_contains(crash_path, "CRASH_CTX[0]");
     unlink(crash_path);
     unlink(path);
     puts("stage_log host tests: PASS");
