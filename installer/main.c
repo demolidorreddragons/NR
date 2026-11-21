@@ -355,7 +355,7 @@ static int configure_loader(char* error, size_t error_size, char* temp_path, siz
         memcpy(output + used, input + start, line_len);
         used += line_len;
 
-        if (in_default && strcmp(line, "[default]") == 0) {
+        if (in_default && strcmp(line, "[default]") == 0 && entry_count == 0) {
             if (used && output[used-1] != '\n') output[used++] = '\n';
             int n = snprintf(output + used, sizeof(output)-used, "%s\n", DEST_PRX);
             if (n < 0 || (size_t)n >= sizeof(output)-used) {
