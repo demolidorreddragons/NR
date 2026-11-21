@@ -1,7 +1,7 @@
 name: PS4 PRX and PKG build
 
 # Trigger a fresh artifact for the configured PS4 Windows bridge.
-# Successful feature-branch builds also feed the separately validated 010->011 patch staging workflow.
+# Feature-branch bridge maintenance archives existing Neural Rendering PKGs under /data/pkg/old.
 
 concurrency:
   # Keep a reproducible PRX/PKG build running while later commits queue.
