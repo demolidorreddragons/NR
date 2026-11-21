@@ -139,3 +139,12 @@ Especificação: [Plano de automação e eficiência](PLANO_AUTOMACAO_E_EFICIENC
 - Bloqueadores runtime: GPU VA do mapeamento, V# writable, cache/coerência, submissão/fence/readback e revisão independente.
 - Ferramentas no runner Windows: **NOT_RUN**; probe não executado.
 - Console: nenhuma instalação, ativação, dispatch ou alteração persistente realizada.
+
+
+### Atualização após revisão do harness — 2026-11-21
+
+- Commit: `edbb7f8e017016fc826b2fa231747c56ccaaee94`.
+- Correção: o harness agora verifica e registra os retornos de `pne_gcn8_set_cs_shader`, `pne_gcn8_dispatch_direct` e `pne_gcn8_emit_eop_fence`, além das contagens de dwords.
+- [Workflow GFX8](https://github.com/demolidorreddragons/NR/actions/runs/44863096651): em execução; inclui teste PM4, compilação dos seis shaders e build/QA do PKG de smoke.
+- [Workflow PRX/PKG](https://github.com/demolidorreddragons/NR/actions/runs/44863096656): em execução; inclui compile/link smoke GNM e build do PRX.
+- Até ambos terminarem, resultado da correção = **PENDING CI**. Mesmo com sucesso, isso não valida dispatch no hardware.
