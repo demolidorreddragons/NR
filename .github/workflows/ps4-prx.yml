@@ -135,9 +135,10 @@ jobs:
           echo "GCN8_GNM_API_SMOKE=compiled; no firmware calls or GPU dispatch executed"
       - name: Link GCN8 GNM firmware import smoke PRX
         run: |
-          ld.lld -m elf_x86_64 -pie --script "$OO_PS4_TOOLCHAIN/link.x" -e _init --eh-frame-hdr -L"$OO_PS4_TOOLCHAIN/lib" "$RUNNER_TEMP/gcnm-smoke/gcn8_gnm_api_smoke.o" "$RUNNER_TEMP/gcnm-smoke/gnm_resource_binding.o" "$RUNNER_TEMP/gcnm-smoke/resource_table_contract.o" -o "$RUNNER_TEMP/gcnm-smoke/gcn8_gnm_link_smoke.elf" -lSceLibcInternal -lSceGnmDriver -lkernel
+          ld.lld -m elf_x86_64 -pie --script "$OO_PS4_TOOLCHAIN/link.x" -e _init --eh-frame-hdr -L"$OO_PS4_TOOLCHAIN/lib" "$GoldHEN_SDK/build/crtprx.o" "$RUNNER_TEMP/gcnm-smoke/gcn8_gnm_api_smoke.o" "$RUNNER_TEMP/gcnm-smoke/gnm_resource_binding.o" "$RUNNER_TEMP/gcnm-smoke/resource_table_contract.o" -o "$RUNNER_TEMP/gcnm-smoke/gcn8_gnm_link_smoke.elf" -lSceLibcInternal -lSceGnmDriver -lkernel
           test -s "$RUNNER_TEMP/gcnm-smoke/gcn8_gnm_link_smoke.elf"
-          echo "GCN8_GNM_LINK_SMOKE=resolved; no firmware calls or GPU dispatch executed"
+          readelf -h "$RUNNER_TEMP/gcnm-smoke/gcn8_gnm_link_smoke.elf" | grep -Eq 'Entry point address:[[:space:]]+0x[1-9a-fA-F]'
+          echo "GCN8_GNM_LINK_SMOKE=resolved_with_valid_entry; no firmware calls or GPU dispatch executed"
       - name: Build GoldHEN hook library
         run: |
           echo "GOLDHEN_SDK=$GITHUB_WORKSPACE/GoldHEN_Plugins_SDK" >> "$GITHUB_ENV"
