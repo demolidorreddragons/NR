@@ -336,11 +336,18 @@ jobs:
           s = p.read_text(encoding="utf-8-sig")
           old = 'sfo["PUBTOOLINFO"] = new SFO.Utf8Value("PUBTOOLINFO", date+time+sizeInfo, 0x200);'
           new = 'sfo["PUBTOOLINFO"] = new SFO.Utf8Value("PUBTOOLINFO", date+time+sizeInfo+",st_type=digital25", 0x200);'
-          if s.count(old) != 1:
-              raise SystemExit("Pinned LibOrbisPkg PUBTOOLINFO anchor changed; refusing ambiguous patch.")
-          p.write_text(s.replace(old, new), encoding="utf-8")
-          if new not in p.read_text(encoding="utf-8"):
-              raise SystemExit("Patch storage metadata edit did not persist.")
+          copy_before = '        pkg.ParamSfo = new SfoEntry(sfo);'
+          copy_after = '        pkg.ParamSfo = new SfoEntry(sfo);'
+          marker = '        sfo["PUBTOOLVER"] = new SFO.IntegerValue("PUBTOOLVER", 0x02890000);'
+          if s.count(old) != 1 or s.count(copy_before) != 1 or s.count(marker) != 1:
+              raise SystemExit("Pinned LibOrbisPkg metadata anchors changed; refusing ambiguous patch.")
+          s = s.replace(old, new)
+          s = s.replace(copy_before + "\\n", "", 1)
+          s = s.replace(marker, marker + "\\n" + copy_after, 1)
+          p.write_text(s, encoding="utf-8")
+          check = p.read_text(encoding="utf-8")
+          if new not in check or check.count(copy_after) != 1 or check.index(copy_after) < check.index(marker):
+              raise SystemExit("Patch SFO must be copied only after digital25 PUBTOOLINFO/PUBTOOLVER finalization.")
           PY
           dotnet publish LibOrbisPkg-src/PkgTool.Core/PkgTool.Core.csproj -c Release -r linux-x64 --self-contained false -o "$RUNNER_TEMP/pkgtool-patch"
           test -x "$RUNNER_TEMP/pkgtool-patch/PkgTool.Core"
