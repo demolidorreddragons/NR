@@ -29,8 +29,9 @@ jobs:
           function Read-FtpText([string]$remote, [string]$label, [bool]$required = $false) {
             $out = Join-Path $temp ($label -replace '[^A-Za-z0-9_.-]','_')
             $stderr = "$out.stderr"
-            $null = & curl.exe --fail --silent --show-error --ftp-pasv --user $cred --output $out "$base$remote" 2> $stderr
-            $exitCode = $LASTEXITCODE
+            $stdout = "$out.stdout"
+            $process = Start-Process -FilePath "curl.exe" -ArgumentList @("--fail","--silent","--show-error","--ftp-pasv","--user",$cred,"--output",$out,"$base$remote") -NoNewWindow -Wait -PassThru -RedirectStandardOutput $stdout -RedirectStandardError $stderr
+            $exitCode = $process.ExitCode
             $errorText = if (Test-Path -LiteralPath $stderr) { Get-Content -LiteralPath $stderr -Raw } else { "" }
             if ($exitCode -ne 0) {
               if ($required) { throw "Required FTP read failed for $remote (curl exit=$exitCode): $errorText" }
@@ -45,8 +46,12 @@ jobs:
 
           function List-Ftp([string]$remote) {
             Write-Host "===== DIRECTORY $remote ====="
-            $listing = & curl.exe --fail --silent --show-error --ftp-pasv --user $cred --list-only "$base$remote" 2>&1
-            if ($LASTEXITCODE -ne 0) { Write-Host "DIRECTORY_UNAVAILABLE $remote : $listing"; return @() }
+            $out = Join-Path $temp (($remote -replace '[^A-Za-z0-9_.-]','_') + ".listing")
+            $stderr = "$out.stderr"
+            $process = Start-Process -FilePath "curl.exe" -ArgumentList @("--fail","--silent","--show-error","--ftp-pasv","--user",$cred,"--list-only","$base$remote") -NoNewWindow -Wait -PassThru -RedirectStandardOutput $out -RedirectStandardError $stderr
+            $errorText = if (Test-Path -LiteralPath $stderr) { Get-Content -LiteralPath $stderr -Raw } else { "" }
+            if ($process.ExitCode -ne 0) { Write-Host "DIRECTORY_UNAVAILABLE $remote (curl exit=$($process.ExitCode)): $errorText"; return @() }
+            $listing = @(Get-Content -LiteralPath $out)
             $listing | ForEach-Object { Write-Host $_ }
             return @($listing)
           }
@@ -68,8 +73,9 @@ jobs:
             $leaf = [System.IO.Path]::GetFileName($remote)
             $out = Join-Path $temp $leaf
             $stderr = "$out.stderr"
-            $null = & curl.exe --fail --silent --show-error --ftp-pasv --user $cred --output $out "$base$remote" 2> $stderr
-            $exitCode = $LASTEXITCODE
+            $stdout = "$out.stdout"
+            $process = Start-Process -FilePath "curl.exe" -ArgumentList @("--fail","--silent","--show-error","--ftp-pasv","--user",$cred,"--output",$out,"$base$remote") -NoNewWindow -Wait -PassThru -RedirectStandardOutput $stdout -RedirectStandardError $stderr
+            $exitCode = $process.ExitCode
             $errorText = if (Test-Path -LiteralPath $stderr) { Get-Content -LiteralPath $stderr -Raw } else { "" }
             if ($exitCode -eq 0 -and (Test-Path -LiteralPath $out)) {
               $item = Get-Item -LiteralPath $out
