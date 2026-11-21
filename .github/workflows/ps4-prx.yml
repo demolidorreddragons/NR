@@ -201,12 +201,12 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "Independent PKG inspector build failed." }
           $tool = "OrbisPkgTool-src/OrbisPkgTool/bin/Release/net10.0-windows/OrbisPkgTool.dll"
           if (-not (Test-Path $tool)) { throw "Inspector DLL missing." }
-          "TOOL=$tool" | Out-File "$env:RUNNER_TEMP\pkg006-tool.txt"
+          "TOOL=$tool" | Out-File "$env:RUNNER_TEMP\pkg007-tool.txt"
       - name: Independently validate GP4, PKG, SFO, manifest and payload
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
-          $tool = (Get-Content "$env:RUNNER_TEMP\pkg006-tool.txt" | Select-Object -First 1).Substring(5)
+          $tool = (Get-Content "$env:RUNNER_TEMP\pkg007-tool.txt" | Select-Object -First 1).Substring(5)
           $artifact = Join-Path $env:GITHUB_WORKSPACE "build-artifact"
           $pkg = Join-Path $artifact "pkg/PS4-Neural-Engine-007.pkg"
           $gp4 = Join-Path $artifact "pkg/audit/PS4-Neural-Engine-007.gp4"
@@ -231,7 +231,7 @@ jobs:
           }
           dotnet "$tool" validate "$pkg" 2>&1 | Tee-Object qa-output/pkg-validation.txt
           if ($LASTEXITCODE -ne 0) { throw "Independent PKG validation failed." }
-          $out = Join-Path $env:RUNNER_TEMP "pkg006-extracted"
+          $out = Join-Path $env:RUNNER_TEMP "pkg007-extracted"
           dotnet "$tool" extract "$pkg" "$out" --verbose 2>&1 | Tee-Object qa-output/pkg-extract.txt
           if ($LASTEXITCODE -ne 0) { throw "Independent PKG extraction failed." }
           $embeddedSfo = Get-ChildItem $out -Recurse -File -Filter param.sfo | Select-Object -First 1
@@ -268,7 +268,7 @@ jobs:
           "PARAM_SFO_SEMANTIC_FIELDS=PASS" | Out-File qa-output/qa-report.txt -Append
           "PRX_SHA256=$embeddedPrxHash" | Out-File qa-output/qa-report.txt -Append
           "EBOOT_BYTES=$($eboot.Length)" | Out-File qa-output/qa-report.txt -Append
-          "CATEGORY=gde; APP_VER=01.02; VERSION=01.02; STORAGE=digital50" | Out-File qa-output/qa-report.txt -Append
+          "CATEGORY=gde; APP_VER=01.03; VERSION=01.03; STORAGE=digital50" | Out-File qa-output/qa-report.txt -Append
           "QA_STATUS=PASS_PC_ONLY_NOT_HARDWARE_TESTED" | Out-File qa-output/qa-report.txt -Append
           Get-Content qa-output/qa-report.txt | Out-File $env:GITHUB_STEP_SUMMARY -Append
       - name: Upload independent QA evidence
