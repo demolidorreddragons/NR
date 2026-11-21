@@ -119,11 +119,23 @@ jobs:
           path: GoldHEN_Plugins_SDK
       - name: Build and verify pinned GoldHEN SDK PRX CRT object
         run: |
-          echo "GOLDHEN_SDK=$GITHUB_WORKSPACE/GoldHEN_Plugins_SDK" >> "$GITHUB_ENV"
-          make -C GoldHEN_Plugins_SDK crt
-          test -s "$GITHUB_WORKSPACE/GoldHEN_Plugins_SDK/build/crtprx.o"
-          file "$GITHUB_WORKSPACE/GoldHEN_Plugins_SDK/build/crtprx.o"
-          sha256sum "$GITHUB_WORKSPACE/GoldHEN_Plugins_SDK/build/crtprx.o"
+          # Do not call the upstream `crt` Make target here: at pinned SDK
+          # bcea3c7 its recipe uses plain "mkdir build", which fails because
+          # checkout/build tooling may already have created that directory.
+          # Mirror the exact upstream compile recipe, but make directory setup idempotent.
+          SDK="$GITHUB_WORKSPACE/GoldHEN_Plugins_SDK"
+          CRT="$SDK/build/crtprx.o"
+          mkdir -p "$SDK/build"
+          clang -target x86_64-pc-linux-gnu -ffreestanding -nostdlib -fno-builtin -fPIC \
+            -isysroot "$OO_PS4_TOOLCHAIN" \
+            -isystem "$OO_PS4_TOOLCHAIN/include" \
+            -c "$SDK/crt/crtprx.c" -o "$CRT"
+          test -s "$CRT"
+          file "$CRT"
+          readelf -h "$CRT" | grep -Eq 'Class:[[:space:]]+ELF64'
+          readelf -h "$CRT" | grep -Eq 'Machine:[[:space:]]+Advanced Micro Devices X86-64'
+          sha256sum "$CRT"
+          echo "GOLDHEN_CRT=PASS; source=crt/crtprx.c; upstream flags preserved; idempotent mkdir"
       - name: Checkout pinned OpenGNM API headers
         uses: actions/checkout@v4
         with:
