@@ -10,7 +10,7 @@
  * Do not derive these signatures from OpenOrbis GnmDriver.h: that header
  * exposes several incomplete void(void) stubs.
  */
-#if defined(__x86_64__) && defined(PNE_GNM_REQUIRE_SYSV_ABI)
+#if defined(__x86_64__)
 #define PNE_GNM_SYSV_ABI __attribute__((sysv_abi))
 #else
 #define PNE_GNM_SYSV_ABI
