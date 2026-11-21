@@ -47,22 +47,29 @@ static ssize_t read_block(int fd, void* buffer, size_t capacity) {
 #define STATUS "/data/GoldHEN/ps4_neural_engine_install.log"
 #define MAX_CONFIG 65536
 
-/* O_EXCL makes stale files and symlinks at staging paths a hard stop, never a target to truncate. */
-static int open_staged_file(const char* path, int* fd_out) {
-    int fd = open(path, O_WRONLY | O_CREAT | O_EXCL, 0600);
-    if (fd < 0) return 0;
-    *fd_out = fd;
-    return 1;
+/* Reserve a fresh staging path atomically. Existing stale files are never touched. */
+static int open_unique_staged_file(const char* base, char* chosen, size_t capacity, int* fd_out) {
+    for (unsigned index = 0; index < 10000; ++index) {
+        int n = index == 0
+            ? snprintf(chosen, capacity, "%s", base)
+            : snprintf(chosen, capacity, "%s.%03u", base, index);
+        if (n <= 0 || (size_t)n >= capacity) { errno = ENAMETOOLONG; return 0; }
+        int fd = open(chosen, O_WRONLY | O_CREAT | O_EXCL, 0600);
+        if (fd >= 0) { *fd_out = fd; return 1; }
+        if (errno != EEXIST) return 0;
+    }
+    errno = ENOSPC;
+    return 0;
 }
 
-static FILE* fopen_staged_file(const char* path) {
+static FILE* fopen_unique_staged_file(const char* base, char* chosen, size_t capacity) {
     int fd = -1;
-    if (!open_staged_file(path, &fd)) return NULL;
+    if (!open_unique_staged_file(base, chosen, capacity, &fd)) return NULL;
     FILE* stream = fdopen(fd, "wb");
     if (!stream) {
         int saved_errno = errno;
         close(fd);
-        remove(path);
+        remove(chosen);
         errno = saved_errno;
     }
     return stream;
@@ -88,7 +95,7 @@ static void write_status(const char* message) {
     fclose(f);
 }
 
-static int copy_prx(char* error, size_t error_size) {
+static int copy_prx(char* error, size_t error_size, char* temp_path, size_t temp_path_size) {
     int in = open(SOURCE_PRX, O_RDONLY);
     if (in < 0) {
         snprintf(error, error_size, "ERROR: cannot open source PRX %s (errno=%d).", SOURCE_PRX, errno);
@@ -96,7 +103,7 @@ static int copy_prx(char* error, size_t error_size) {
     }
 
     int out = -1;
-    if (!open_staged_file(DEST_TMP, &out)) out = -1;
+    if (!open_unique_staged_file(DEST_TMP, temp_path, temp_path_size, &out)) out = -1;
     if (out < 0) {
         int saved_errno = errno;
         close(in);
@@ -152,13 +159,13 @@ static int copy_prx(char* error, size_t error_size) {
     }
 
     if (!ok) {
-        remove(DEST_TMP);
+        remove(temp_path);
         snprintf(error, error_size, "ERROR: PRX copy failed after reading %lld and writing %lld bytes (errno=%d).",
                  source_bytes, written_bytes, saved_errno);
         return 0;
     }
     if (source_bytes <= 0 || written_bytes != source_bytes) {
-        remove(DEST_TMP);
+        remove(temp_path);
         snprintf(error, error_size, "ERROR: PRX copy count mismatch (read=%lld written=%lld).",
                  source_bytes, written_bytes);
         return 0;
@@ -167,12 +174,12 @@ static int copy_prx(char* error, size_t error_size) {
     /* Do not trust st_size/fstat here: PS4's observed stat values do not match
        the byte stream. Verify the temporary file by reading and comparing it. */
     int verify_src = open(SOURCE_PRX, O_RDONLY);
-    int verify_dst = open(DEST_TMP, O_RDONLY);
+    int verify_dst = open(temp_path, O_RDONLY);
     if (verify_src < 0 || verify_dst < 0) {
         saved_errno = errno;
         if (verify_src >= 0) close(verify_src);
         if (verify_dst >= 0) close(verify_dst);
-        remove(DEST_TMP);
+        remove(temp_path);
         snprintf(error, error_size, "ERROR: cannot reopen PRX files for verification (errno=%d).", saved_errno);
         return 0;
     }
@@ -196,7 +203,7 @@ static int copy_prx(char* error, size_t error_size) {
     close(verify_dst);
 
     if (!ok || verified_bytes != source_bytes) {
-        remove(DEST_TMP);
+        remove(temp_path);
         snprintf(error, error_size, "ERROR: PRX read-back verification failed (source=%lld verified=%lld errno=%d).",
                  source_bytes, verified_bytes, saved_errno);
         return 0;
@@ -213,7 +220,7 @@ static void trim_line(char* line) {
     if (p != line) memmove(line, p, strlen(p) + 1);
 }
 
-static int configure_loader(char* error, size_t error_size) {
+static int configure_loader(char* error, size_t error_size, char* temp_path, size_t temp_path_size) {
     char input[MAX_CONFIG];
     char output[MAX_CONFIG + 256];
     size_t length = 0, used = 0;
@@ -251,7 +258,7 @@ static int configure_loader(char* error, size_t error_size) {
         if (in_default && strcmp(line, DEST_PRX) == 0) found_entry = 1;
     }
     if (found_entry) {
-        FILE* staged = fopen_staged_file(CONFIG_TMP);
+        FILE* staged = fopen_unique_staged_file(CONFIG_TMP, temp_path, temp_path_size);
         if (!staged) {
             snprintf(error, error_size, "ERROR: cannot stage unchanged plugins.ini (errno=%d).", errno);
             return 0;
@@ -261,7 +268,7 @@ static int configure_loader(char* error, size_t error_size) {
         if (fclose(staged) != 0) staged_ok = 0;
         if (!staged_ok) {
             int saved_errno = errno;
-            remove(CONFIG_TMP);
+            remove(temp_path);
             snprintf(error, error_size, "ERROR: cannot verify staged plugins.ini (errno=%d).", saved_errno);
             return 0;
         }
@@ -312,7 +319,7 @@ static int configure_loader(char* error, size_t error_size) {
         used += n;
     }
 
-    FILE* out = fopen_staged_file(CONFIG_TMP);
+    FILE* out = fopen_unique_staged_file(CONFIG_TMP, temp_path, temp_path_size);
     if (!out) {
         snprintf(error, error_size, "ERROR: cannot create temporary plugins.ini (errno=%d).", errno);
         return 0;
@@ -322,7 +329,7 @@ static int configure_loader(char* error, size_t error_size) {
     if (fclose(out) != 0) ok = 0;
     if (!ok) {
         int saved_errno = errno;
-        remove(CONFIG_TMP);
+        remove(temp_path);
         snprintf(error, error_size, "ERROR: cannot stage updated plugins.ini (errno=%d).", saved_errno);
         return 0;
     }
@@ -351,7 +358,7 @@ static int choose_backup_path(const char* base, char* output, size_t capacity) {
     return 0;
 }
 
-static int commit_install(char* error, size_t error_size) {
+static int commit_install(char* error, size_t error_size, const char* prx_tmp, const char* config_tmp) {
     char prx_backup[256] = {0};
     char config_backup[256] = {0};
     int had_prx = path_exists(DEST_PRX);
@@ -392,12 +399,12 @@ static int commit_install(char* error, size_t error_size) {
         }
         moved_config = 1;
     }
-    if (rename(DEST_TMP, DEST_PRX) != 0) {
+    if (rename(prx_tmp, DEST_PRX) != 0) {
         failure = errno;
         goto rollback;
     }
     installed_prx = 1;
-    if (rename(CONFIG_TMP, CONFIG) != 0) {
+    if (rename(config_tmp, CONFIG) != 0) {
         failure = errno;
         goto rollback;
     }
@@ -409,8 +416,8 @@ rollback:
         if (installed_prx && remove(DEST_PRX) != 0 && errno != ENOENT) rollback_errno = errno;
         if (moved_config && rename(config_backup, CONFIG) != 0 && rollback_errno == 0) rollback_errno = errno;
         if (moved_prx && rename(prx_backup, DEST_PRX) != 0 && rollback_errno == 0) rollback_errno = errno;
-        remove(DEST_TMP);
-        remove(CONFIG_TMP);
+        remove(prx_tmp);
+        remove(config_tmp);
         if (rollback_errno) {
             snprintf(error, error_size,
                      "ERROR: transactional commit failed (errno=%d); rollback incomplete (errno=%d); inspect %s and %s.",
@@ -426,6 +433,8 @@ rollback:
 
 int main(void) {
     char error[256];
+    char prx_tmp[256] = {0};
+    char config_tmp[256] = {0};
     /* Validate immutable package identity and PRX bytes before creating or changing destinations. */
     if (!pne_validate_release_manifest(RELEASE_MANIFEST, SOURCE_PRX, error, sizeof(error))) {
         write_status(error);
@@ -448,20 +457,20 @@ int main(void) {
         return 1;
     }
 
-    if (!copy_prx(error, sizeof(error))) {
+    if (!copy_prx(error, sizeof(error), prx_tmp, sizeof(prx_tmp))) {
         write_status(error);
         notify("PNE: falha ao copiar PRX. O log agora informa a etapa e errno.");
         sceKernelUsleep(3000000);
         return 2;
     }
-    if (!configure_loader(error, sizeof(error))) {
-        remove(DEST_TMP);
+    if (!configure_loader(error, sizeof(error), config_tmp, sizeof(config_tmp))) {
+        remove(prx_tmp);
         write_status(error);
         notify("PNE: falha ao preparar plugins.ini. Arquivos ativos preservados.");
         sceKernelUsleep(3000000);
         return 3;
     }
-    if (!commit_install(error, sizeof(error))) {
+    if (!commit_install(error, sizeof(error), prx_tmp, config_tmp)) {
         write_status(error);
         notify("PNE: falha na transacao. Verifique backups e install.log.");
         sceKernelUsleep(3000000);
