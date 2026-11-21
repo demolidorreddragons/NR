@@ -1,0 +1,109 @@
+name: Collect PS4 Neural Engine crash diagnostics
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/ps4-crash-diagnostics.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  collect:
+    if: \${{ github.event.head_commit.message == 'Fetch PS4 PNE installer log' }}
+    runs-on: [self-hosted, Windows, X64, ps4-lan]
+    timeout-minutes: 10
+    steps:
+      - name: Collect logs and crash dumps read-only
+        shell: powershell -NoProfile -ExecutionPolicy Bypass -Command "& '{0}'"
+        env:
+          PS4_IP: \${{ vars.PS4_IP }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          if (-not $env:PS4_IP) { throw "PS4_IP missing" }
+          $base = "ftp://$($env:PS4_IP):2121"
+          $cred = "anonymous:anonymous@example.com"
+          $outDir = Join-Path $env:RUNNER_TEMP "nr-crash-diagnostics"
+          New-Item -ItemType Directory -Force -Path $outDir | Out-Null
+
+          function Invoke-Curl([string[]]$curlArgs, [string]$label) {
+            $stdout = Join-Path $outDir ($label + ".stdout")
+            $stderr = Join-Path $outDir ($label + ".stderr")
+            $p = Start-Process -FilePath "curl.exe" -ArgumentList $curlArgs -NoNewWindow -Wait -PassThru -RedirectStandardOutput $stdout -RedirectStandardError $stderr
+            $err = if (Test-Path $stderr) { Get-Content $stderr -Raw } else { "" }
+            return @{ ExitCode = $p.ExitCode; Error = $err; Stdout = $stdout }
+          }
+
+          function Download-Remote([string]$remote, [string]$local, [bool]$required = $false) {
+            $label = ([System.IO.Path]::GetFileName($local) -replace '[^A-Za-z0-9_.-]','_')
+            $args = @("--fail","--silent","--show-error","--ftp-pasv","--user",$cred,"--output",$local,($base + $remote))
+            $r = Invoke-Curl $args $label
+            if ($r.ExitCode -ne 0) {
+              Write-Host "UNAVAILABLE=$remote EXIT=$($r.ExitCode) $($r.Error)"
+              if ($required) { throw "Required file unavailable: $remote" }
+              return
+            }
+            $item = Get-Item -LiteralPath $local
+            $hash = (Get-FileHash -LiteralPath $local -Algorithm SHA256).Hash.ToLowerInvariant()
+            Write-Host "DOWNLOADED=$remote SIZE=$($item.Length) SHA256=$hash"
+            if ([System.IO.Path]::GetExtension($local) -in @(".txt",".log",".ini")) {
+              Write-Host "===== $remote ====="
+              Get-Content -LiteralPath $local -Raw | Write-Host
+              Write-Host "===== END $remote ====="
+            }
+          }
+
+          function List-Remote([string]$remote, [string]$label) {
+            $local = Join-Path $outDir ($label + ".listing")
+            $args = @("--fail","--silent","--show-error","--ftp-pasv","--user",$cred,"--list-only",($base + $remote))
+            $r = Invoke-Curl $args $label
+            if ($r.ExitCode -ne 0) {
+              Write-Host "LIST_UNAVAILABLE=$remote EXIT=$($r.ExitCode) $($r.Error)"
+              return @()
+            }
+            $names = @(Get-Content -LiteralPath $r.Stdout | Where-Object { $_ -and $_.Trim() })
+            $names | ForEach-Object { Write-Host "ENTRY=$remote$_" }
+            return $names
+          }
+
+          Write-Host "DIAGNOSTIC_TIME_UTC=$([DateTime]::UtcNow.ToString('o'))"
+          Write-Host "PS4_IP=$env:PS4_IP"
+          $null = List-Remote "/data/GoldHEN/" "goldhen-root"
+          $pluginEntries = List-Remote "/data/GoldHEN/plugins/" "goldhen-plugins"
+          $null = List-Remote "/data/pkg/" "pkg-root"
+          $dumpNames = List-Remote "/data/sce_coredumps/" "sce-coredumps"
+          $null = List-Remote "/data/sce_logs/" "sce-logs"
+
+          Download-Remote "/data/GoldHEN/ps4_neural_engine_install.log" (Join-Path $outDir "installer.log")
+          Download-Remote "/data/GoldHEN/plugins.ini" (Join-Path $outDir "plugins.ini")
+          Download-Remote "/data/GoldHEN/plugins.ini.pne-backup" (Join-Path $outDir "plugins.ini.pne-backup")
+          Download-Remote "/data/GoldHEN/plugins.ini.pne-tmp" (Join-Path $outDir "plugins.ini.pne-tmp")
+          Download-Remote "/data/GoldHEN/plugins/ps4_neural_engine.prx" (Join-Path $outDir "ps4_neural_engine.prx")
+          Download-Remote "/data/GoldHEN/plugins/ps4_neural_engine.prx.pne-backup" (Join-Path $outDir "ps4_neural_engine.prx.pne-backup")
+          Download-Remote "/data/GoldHEN/plugins/ps4_neural_engine.prx.pne-tmp" (Join-Path $outDir "ps4_neural_engine.prx.pne-tmp")
+          Download-Remote "/data/sce_logs/log.bin" (Join-Path $outDir "sce-log.bin")
+          Download-Remote "/data/install.log" (Join-Path $outDir "data-install.log")
+          Download-Remote "/data/pkg/install.log" (Join-Path $outDir "pkg-install.log")
+
+          $dumpDir = Join-Path $outDir "coredumps"
+          New-Item -ItemType Directory -Force -Path $dumpDir | Out-Null
+          foreach ($entry in $dumpNames) {
+            $name = [System.IO.Path]::GetFileName($entry.Trim())
+            if (-not $name -or $name -match '[\\/]') { continue }
+            $local = Join-Path $dumpDir $name
+            Download-Remote ("/data/sce_coredumps/" + $name) $local
+          }
+
+          Write-Host "PLUGIN_ENTRIES=$($pluginEntries.Count)"
+          Write-Host "COREDUMP_ENTRIES=$($dumpNames.Count)"
+          Write-Host "READ_ONLY_DIAGNOSTICS_COMPLETE"
+
+      - name: Upload diagnostics artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ps4-neural-engine-crash-diagnostics
+          path: \${{ runner.temp }}/nr-crash-diagnostics/
+          if-no-files-found: warn
+          retention-days: 14
