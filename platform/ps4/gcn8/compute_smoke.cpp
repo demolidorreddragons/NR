@@ -1,4 +1,5 @@
 #include "compute_smoke.h"
+#include "stage_log.h"
 
 #include <orbis/libkernel.h>
 
@@ -134,6 +135,7 @@ bool address_range(uint64_t address, uint64_t size, uint64_t limit) {
 extern "C" int pne_gcn8_compute_smoke_run(const char* shader_path,
                                            const char* log_path) {
     Logger log(log_path);
+    stage_log("COMPUTE_SMOKE_ENTERED");
     log.message("PNE_GCN8_COMPUTE_SMOKE_BEGIN");
     log.message("STAGE=ENTER_COMPUTE_SMOKE");
 
@@ -165,6 +167,7 @@ extern "C" int pne_gcn8_compute_smoke_run(const char* shader_path,
         std::free(shader_file);
         return 12;
     }
+    stage_log("SHADER_LOADED_AND_PARSED");
     log.line("SHADER_FILE_BYTES", shader_file_size);
     log.line("SHADER_CODE_BYTES", shader_view.code_size);
     log.line("SHADER_CODE_OFFSET", shader_view.code_offset);
@@ -181,6 +184,7 @@ extern "C" int pne_gcn8_compute_smoke_run(const char* shader_path,
         std::free(shader_file);
         return 13;
     }
+    stage_log("MEM_ALLOC_OK");
     log.message("STAGE=DIRECT_MEMORY_ALLOCATED");
     const uint64_t base = static_cast<uint64_t>(
         reinterpret_cast<uintptr_t>(memory.mapped));
@@ -360,6 +364,7 @@ extern "C" int pne_gcn8_compute_smoke_run(const char* shader_path,
         log.message("RESULT=FAIL; REASON=SUBMIT_COMMAND_BUFFERS");
         return 23;
     }
+    stage_log("DISPATCH_SUBMITTED");
     const int submit_done = sceGnmSubmitDone();
     if (submit_done != 0) {
         log.line("SUBMIT_DONE_ERROR", static_cast<uint32_t>(submit_done));
@@ -380,6 +385,7 @@ extern "C" int pne_gcn8_compute_smoke_run(const char* shader_path,
         return 25;
     }
 
+    stage_log("DISPATCH_DONE_FENCE_CONFIRMED");
     sceGnmFlushGarlic();
     for (uint32_t i = 0; i < kElementCount; ++i) {
         const float expected = input[i] + 1.0f;
