@@ -1,5 +1,6 @@
 #include "compute_smoke.h"
 #include "stage_log.h"
+#include "gnm_runtime_resolver.h"
 
 #include <orbis/libkernel.h>
 
@@ -130,6 +131,48 @@ bool read_file(const char* path, uint8_t** bytes, size_t* size) {
 bool address_range(uint64_t address, uint64_t size, uint64_t limit) {
     return address != 0 && address < limit && size <= limit - address;
 }
+
+bool kernel_dlsym_lookup(void* context, const char* name, void** address) {
+    if (!context || !name || !address) return false;
+    *address = nullptr;
+    const auto module = *static_cast<const int32_t*>(context);
+    return sceKernelDlsym(module, name, address) == 0 && *address != nullptr;
+}
+
+bool load_gnm_runtime_module(int32_t* module_handle, Logger& log) {
+    if (!module_handle) return false;
+    *module_handle = -1;
+    OrbisKernelModule modules[256]{};
+    size_t count = 0;
+    const int32_t list_rc = sceKernelGetModuleList(modules, 256, &count);
+    log.line("GNM_MODULE_LIST_RC", static_cast<uint32_t>(list_rc));
+    if (list_rc == 0) {
+        const size_t limit = count < 256 ? count : 256;
+        for (size_t i = 0; i < limit; ++i) {
+            OrbisKernelModuleInfo info{};
+            info.size = sizeof(info);
+            if (sceKernelGetModuleInfo(modules[i], &info) == 0 &&
+                std::strstr(info.name, "libSceGnmDriver") != nullptr) {
+                *module_handle = static_cast<int32_t>(modules[i]);
+                break;
+            }
+        }
+    }
+    if (*module_handle >= 0) return true;
+
+    const char* word = sceKernelGetFsSandboxRandomWord();
+    if (!word || !word[0]) return false;
+    char path[192]{};
+    std::snprintf(path, sizeof(path),
+                  "/%s/common/lib/libSceGnmDriver.sprx", word);
+    const uint32_t raw = sceKernelLoadStartModule(
+        path, 0, nullptr, 0, nullptr, nullptr);
+    log.line("GNM_LOAD_RESULT", raw);
+    const int32_t loaded = static_cast<int32_t>(raw);
+    if (loaded < 0) return false;
+    *module_handle = loaded;
+    return true;
+}
 } // namespace
 
 extern "C" int pne_gcn8_compute_smoke_run(const char* shader_path,
@@ -138,6 +181,25 @@ extern "C" int pne_gcn8_compute_smoke_run(const char* shader_path,
     stage_log("COMPUTE_SMOKE_ENTERED");
     log.message("PNE_GCN8_COMPUTE_SMOKE_BEGIN");
     log.message("STAGE=ENTER_COMPUTE_SMOKE");
+
+#ifndef PNE_GCN8_ENABLE_UNVALIDATED_COMPUTE
+    log.message("RESULT=BLOCKED; REASON=COMPUTE_HARDWARE_GATES_NOT_CLEARED");
+    log.message("COMPUTE_DISPATCH_NOT_ATTEMPTED");
+    return 27;
+#endif
+
+    int32_t gnm_module_handle = -1;
+    if (!load_gnm_runtime_module(&gnm_module_handle, log)) {
+        log.message("RESULT=BLOCKED; REASON=GNM_RUNTIME_MODULE_UNAVAILABLE");
+        return 28;
+    }
+    pne::gcn8::runtime::GnmRuntimeFunctions gnm{};
+    if (!pne::gcn8::runtime::resolve_gnm_runtime_functions(
+            kernel_dlsym_lookup, &gnm_module_handle, &gnm)) {
+        log.message("RESULT=BLOCKED; REASON=GNM_REQUIRED_EXPORT_MISSING");
+        return 29;
+    }
+    log.message("GNM_RUNTIME_EXPORTS_RESOLVED=4");
 
     uint8_t* shader_file = nullptr;
     size_t shader_file_size = 0;
@@ -296,7 +358,7 @@ extern "C" int pne_gcn8_compute_smoke_run(const char* shader_path,
 
     log.message("STAGE=BEFORE_GNM_DEFAULT_STATE");
     const uint32_t initial_dwords =
-        sceGnmDispatchInitDefaultHardwareState(dcb, kDcbDwords);
+        gnm.dispatch_init_default_hardware_state(dcb, kDcbDwords);
     if (initial_dwords == 0 || initial_dwords >= kDcbDwords) {
         log.message("RESULT=FAIL; REASON=DEFAULT_COMPUTE_STATE");
         return 18;
@@ -352,12 +414,12 @@ extern "C" int pne_gcn8_compute_smoke_run(const char* shader_path,
     log.line("DCB_USED_DWORDS", static_cast<uint64_t>(cmd.cmdptr - dcb));
 
     log.message("STAGE=BEFORE_GNM_SUBMIT");
-    sceGnmFlushGarlic();
+    gnm.flush_garlic();
     void* dcb_addresses[1] = {dcb};
     uint32_t dcb_sizes[1] = {
         static_cast<uint32_t>((cmd.cmdptr - dcb) * sizeof(uint32_t))};
     log.message("STAGE=GNM_SUBMIT_CALL");
-    const int32_t submit_result = sceGnmSubmitCommandBuffers(
+    const int32_t submit_result = gnm.submit_command_buffers(
         1, dcb_addresses, dcb_sizes, nullptr, nullptr);
     if (submit_result != 0) {
         log.line("SUBMIT_ERROR", static_cast<uint32_t>(submit_result));
@@ -365,7 +427,7 @@ extern "C" int pne_gcn8_compute_smoke_run(const char* shader_path,
         return 23;
     }
     stage_log("DISPATCH_SUBMITTED");
-    const int submit_done = sceGnmSubmitDone();
+    const int submit_done = gnm.submit_done();
     if (submit_done != 0) {
         log.line("SUBMIT_DONE_ERROR", static_cast<uint32_t>(submit_done));
         memory.keep_until_process_exit = true;
