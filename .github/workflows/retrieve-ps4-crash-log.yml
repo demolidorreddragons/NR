@@ -187,3 +187,5 @@ jobs:
           path: ${{ runner.temp }}/ps4-crash-evidence/
           if-no-files-found: error
           retention-days: 7
+
+# Trigger fresh read-only evidence retrieval for GNM-Load-Only diagnostic.
