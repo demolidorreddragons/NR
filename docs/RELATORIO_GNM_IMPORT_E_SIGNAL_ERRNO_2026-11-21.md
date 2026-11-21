@@ -142,3 +142,28 @@ A validação independente terminou com sucesso no job `independent-pkg-qa` do w
 4. Não fazer novo teste de dispatch/shader enquanto a resolução de import e a inicialização do logger permanecerem sem explicação.
 
 Nenhum pacote foi instalado ou enviado ao PS4 nesta auditoria.
+
+
+## Staging autorizado do GNM-Load-Only
+
+O usuário autorizou explicitamente o staging, sem instalação. Execução:
+https://github.com/demolidorreddragons/NR/actions/runs/44876962323
+
+Resultado do job `stage-diagnostic`: `completed / success`.
+
+Verificações realizadas pelo runner PS4:
+- Download dos artefatos de build e QA com digest SHA-256 conferido.
+- QA independente validado antes de qualquer alteração no console.
+- PKG anterior GNM-Link-Only movido para `/data/pkg/old/` e readback confirmado:
+  - `PS4-Neural-Rendering-GCN8-gnm-link-44873622760.pkg`
+  - 6.619.136 bytes
+  - SHA-256 `e68da9f35981aa32e788ebe3f0461360167c0194b0c408c47c945745ebab5847`
+- Novo GNM-Load-Only enviado para arquivo temporário fora de `/data/pkg/`, readback verificado e promovido por rename.
+- Destino final: `/data/pkg/PS4-Neural-Rendering-GCN8-gnm-load-44876293567.pkg`
+- Tamanho remoto: 6.619.136 bytes
+- SHA-256 remoto: `bc5cdd06e73578281c66498decab293abc907043488b8a1dc351c2c5001cc9a6`
+- Exatamente um PKG Neural Rendering permaneceu na raiz de `/data/pkg/`.
+- Pacotes de terceiros preservados.
+- `INSTALLATION_PERFORMED=FALSE`.
+
+O staging foi concluído. O pacote está disponível no PS4, mas não foi instalado nem executado. O próximo resultado necessário é a execução manual do GNM-Load-Only e a coleta do log atualizado; não inferir sucesso de carregamento até obter `GNM_LOAD`/ `GNM_DLSYM` do console.
