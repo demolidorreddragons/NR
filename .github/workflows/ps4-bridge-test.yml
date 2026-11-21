@@ -440,11 +440,11 @@ jobs:
 
 
   archive-neural-rendering-pkgs:
-    if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'feature/gcn8-numeric-kernels' && github.event.workflow_run.head_repository.full_name == github.repository
+    if: false # Archiving is performed transactionally by stage-neural-rendering-hybrid.yml after QA
     runs-on: [self-hosted, Windows, X64, ps4-lan]
     steps:
       - name: Move every Neural Rendering PKG from /data/pkg into /data/pkg/old
-        shell: powershell
+        shell: powershell -NoProfile -ExecutionPolicy Bypass -Command "& '{0}'"
         env:
           PS4_IP: ${{ vars.PS4_IP }}
         run: |
