@@ -77,3 +77,17 @@ Atualizar esta matriz com IDs de workflow/job, commits, hashes e links de logs a
 - Falha crítica ou critério obrigatório não atendido bloqueia a promoção, independentemente de qualquer pontuação agregada.
 
 Consultar [Protocolo de independência, revisão cruzada e qualidade dos agentes](PROTOCOLO_INDEPENDENCIA_AGENTES.md) para papéis, matriz de revisão, contrato de tarefa, critérios e modelo de relatório.
+
+
+## Automação, seleção de testes e evidências — aprovado em 2026-11-21
+
+| Controle | Verificação | Evidência obrigatória | Restrição |
+|---|---|---|---|
+| Impact Analyzer | Diff → módulos/interfaces/testes afetados | Mapa, versão e revisão de falsos negativos | Não dispensa testes sozinho |
+| Test Selector | Seleção de testes rápidos por impacto | Testes selecionados/omitidos, motivo, comando e resultado | Suítes completas continuam obrigatórias nos gates |
+| Failure Analyzer | Agrupamento e diagnóstico de falhas | Logs de origem, hipótese e confirmação humana | Não aplica correção não revisada |
+| Build Optimizer | Cache e build incremental | Chave, inputs, hit/miss, hashes e build limpo de controle | Cache não prova correção |
+| Evidence Collector | Rastreabilidade da execução | Commit, ambiente, comandos, logs, artefatos e SHA-256 | Não sintetiza evidência ausente |
+| Regressão visual/numérica | Comparação com fixtures/oráculos | Dataset, métricas, tolerâncias prévias e resultados | Host não aprova GPU/hardware |
+
+Automação acelera feedback, mas não reduz o nível mínimo de validação. `PS4_HARDWARE_VALIDATED` exige execução real e evidência direta no PS4 Pro. QA independente permanece separado da implementação.
