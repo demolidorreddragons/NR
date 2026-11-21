@@ -265,3 +265,5 @@ jobs:
           "INSTALLATION_PERFORMED=FALSE" | Out-File $env:GITHUB_STEP_SUMMARY -Append
 
 # Retry marker: trigger a fresh inspection after FTP listing hardening.
+
+# Diagnostic retry marker.
