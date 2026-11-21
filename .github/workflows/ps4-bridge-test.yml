@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   ps4-connectivity:
-    if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_repository.full_name == github.repository
+    if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main' && github.event.workflow_run.head_repository.full_name == github.repository
     runs-on: [self-hosted, Windows, X64, ps4-lan]
 
     steps:
@@ -435,3 +435,127 @@ jobs:
             Remove-Item -LiteralPath $verifyPath -Force -ErrorAction SilentlyContinue
           }
 
+
+  stage-feature-patch:
+    if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'feature/gcn8-numeric-kernels' && github.event.workflow_run.head_repository.full_name == github.repository
+    runs-on: [self-hosted, Windows, X64, ps4-lan]
+    steps:
+      - name: Download exact patch candidate from completed build
+        uses: actions/download-artifact@v4
+        with:
+          name: ps4-neural-engine-patch-candidate
+          path: patch-artifact
+          repository: demolidorreddragons/NR
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+
+      - name: Validate 010-to-011 patch artifact
+        shell: powershell
+        run: |
+          $ErrorActionPreference = "Stop"
+          $pkg = Join-Path $env:GITHUB_WORKSPACE "patch-artifact/PS4-Neural-Engine-011-PATCH.pkg"
+          $report = Join-Path $env:GITHUB_WORKSPACE "patch-artifact/BUILD_REPORT.txt"
+          if (-not (Test-Path -LiteralPath $pkg -PathType Leaf)) { throw "Patch PKG missing." }
+          if (-not (Test-Path -LiteralPath $report -PathType Leaf)) { throw "Patch report missing." }
+          $text = Get-Content -LiteralPath $report -Raw
+          $expected = "f85abdea0f4402f1c0627a2343c2196a3a5ed5283b8c8946bc5cb7d1ed17fcdc"
+          foreach ($line in @(
+            "PATCH_KIND=PACKAGE_MANAGER_PATCH",
+            "PATCH_BASE_VERSION=01.06",
+            "PATCH_APP_VERSION=01.07",
+            "PATCH_SHA256=$expected",
+            "PATCH_BYTES=4915200",
+            "PATCH_QA_STATUS=BUILT_STRUCTURALLY_VALIDATED_PC_ONLY_NOT_HARDWARE_TESTED"
+          )) {
+            if (-not $text.Contains($line)) { throw "Patch report mismatch: $line" }
+          }
+          $actual = (Get-FileHash -LiteralPath $pkg -Algorithm SHA256).Hash.ToLowerInvariant()
+          $size = (Get-Item -LiteralPath $pkg).Length
+          if ($actual -ne $expected -or $size -ne 4915200) { throw "Patch digest/size mismatch: $size/$actual" }
+          "PATCH_FILE=$pkg" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "PATCH_SHA256=$actual" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "PATCH_SIZE=$size" | Out-File -FilePath $env:GITHUB_ENV -Append
+          Write-Host "PATCH_KIND=PACKAGE_MANAGER_PATCH"
+          Write-Host "PATCH_SHA256=$actual"
+
+      - name: Upload patch to /data/pkg and verify remote read-back
+        shell: powershell
+        env:
+          PS4_IP: ${{ vars.PS4_IP }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          if (-not $env:PS4_IP) { throw "PS4_IP variable is missing." }
+          $fileName = "PS4-Neural-Engine-011-PATCH-f85abdea0f44.pkg"
+          $remotePath = "/data/pkg/$fileName"
+          $uri = "ftp://$($env:PS4_IP):2121$remotePath"
+          $credentials = New-Object System.Net.NetworkCredential("anonymous", "anonymous@example.com")
+
+          function New-Request([string]$method) {
+            $request = [System.Net.FtpWebRequest]::Create($uri)
+            $request.Method = $method
+            $request.Credentials = $credentials
+            $request.UsePassive = $true
+            $request.UseBinary = $true
+            $request.KeepAlive = $false
+            $request.Timeout = 120000
+            $request.ReadWriteTimeout = 120000
+            return $request
+          }
+
+          $exists = $false
+          try {
+            $request = New-Request ([System.Net.WebRequestMethods+Ftp]::GetFileSize)
+            $response = $request.GetResponse()
+            $remoteSize = $response.ContentLength
+            $response.Dispose()
+            if ($remoteSize -ne [long]$env:PATCH_SIZE) { throw "Existing patch destination has unexpected size; refusing overwrite." }
+            $exists = $true
+          } catch {
+            if ($_.Exception.Message -like "*refusing overwrite*") { throw }
+            if ($_.Exception.Response -and $_.Exception.Response.StatusCode -ne [System.Net.FtpStatusCode]::ActionNotTakenFileUnavailable) { throw }
+          }
+
+          if (-not $exists) {
+            $request = New-Request ([System.Net.WebRequestMethods+Ftp]::UploadFile)
+            $request.ContentLength = [long]$env:PATCH_SIZE
+            $requestStream = $null
+            $response = $null
+            try {
+              $requestStream = $request.GetRequestStream()
+              $input = [System.IO.File]::OpenRead($env:PATCH_FILE)
+              try { $input.CopyTo($requestStream) } finally { $input.Dispose() }
+              $requestStream.Dispose()
+              $requestStream = $null
+              $response = $request.GetResponse()
+              Write-Host "FTP_UPLOAD=$($response.StatusDescription.Trim())"
+            } finally {
+              if ($requestStream) { $requestStream.Dispose() }
+              if ($response) { $response.Dispose() }
+            }
+          }
+
+          $verifyPath = Join-Path $env:RUNNER_TEMP "pne-patch-readback.pkg"
+          $request = New-Request ([System.Net.WebRequestMethods+Ftp]::DownloadFile)
+          $response = $null
+          $stream = $null
+          $output = $null
+          try {
+            $response = $request.GetResponse()
+            $stream = $response.GetResponseStream()
+            $output = [System.IO.File]::Create($verifyPath)
+            $stream.CopyTo($output)
+            $output.Dispose()
+            $output = $null
+            $remoteSize = (Get-Item -LiteralPath $verifyPath).Length
+            $remoteHash = (Get-FileHash -LiteralPath $verifyPath -Algorithm SHA256).Hash.ToLowerInvariant()
+            if ($remoteSize -ne [long]$env:PATCH_SIZE -or $remoteHash -ne $env:PATCH_SHA256) { throw "PS4 read-back mismatch: $remoteSize/$remoteHash" }
+            Write-Host "STAGING=SUCCESS"
+            Write-Host "REMOTE_PATH=$remotePath"
+            Write-Host "REMOTE_SIZE=$remoteSize"
+            Write-Host "REMOTE_SHA256=$remoteHash"
+          } finally {
+            if ($output) { $output.Dispose() }
+            if ($stream) { $stream.Dispose() }
+            if ($response) { $response.Dispose() }
+            Remove-Item -LiteralPath $verifyPath -Force -ErrorAction SilentlyContinue
+          }
