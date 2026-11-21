@@ -34,24 +34,24 @@ Sources reviewed:
 ## 4. Required validation before safe use
 
 1. The exact installed base is release 010 (`APP_VER=01.06`), confirmed by the prior project deployment history. Its preserved build artifact is workflow run `44851147057`, artifact `ps4-neural-engine-build`, PKG SHA-256 `015c9e2c266561fda005c15766fe4833412c658d9a8d0b7334fd2cfe3fec8ae2` (6,619,136 bytes). Release 011 was not installed.
-2. Build output with `pkg_ps4_patch`, non-game patch SFO category (`gpe`), `digital25`, matching identity/passcode, and explicit `app_path` association to a Sony-rebuilt copy of the exact 010 base.
+2. <escape>[x]</escape> Build output with `pkg_ps4_patch`, non-game patch SFO category (`gpe`), `digital25`, matching identity/passcode, and explicit `app_path` association to a Sony-rebuilt copy of the exact 010 base.
 3. A versão do patch é `APP_VER=01.07` e `VERSION=01.07`; a base 010 original é `APP_VER=01.06` e `VERSION=01.06`. A base sintética de associação usa `APP_VER=01.00`, `VERSION=01.06`, preservando a identidade e a versão-base para o publisher.
-4. Independent QA that reads the final PKG and GP4, verifies package type is patch (not app/base), confirms SFO values, content/title identity, base association, package hashes/signatures and extracted eboot/payload hashes.
+4. <escape>[x]</escape> Independent QA reads the final PKG and GP4, verifies patch volume type, SFO values, content/title identity, base association and extracted eboot/payload hashes. The independent inspector reports `Type: Addon` for the package header, while the embedded SFO is `CATEGORY=gpe` and GP4 is `pkg_ps4_patch`; the SFO/GP4 pair is the validated non-game patch classification.
 5. Only after PC QA passes, stage the patch separately. Installation on the console remains a separate user-authorized operation. Never uninstall the base app as a workaround.
 
 ## 5. Fail-closed acceptance checklist
 
 A candidate is **not ready** unless all checks pass:
 
-- [ ] Base package matches the app version installed on the PS4.
-- [ ] GP4 volume type is exactly `pkg_ps4_patch`.
-- [ ] GP4 package storage type is `digital25` and `app_path` points to the audited Sony-rebuilt base derived from exact 010.
-- [ ] PARAM.SFO `CATEGORY=gpe` for this non-game mini-app family.
-- [ ] `TITLE_ID` and `CONTENT_ID` match the intended installed base identity.
-- [ ] Patch version relationship is verified and newer than the installed app version.
-- [ ] Builder output is structurally validated as a patch and independently extracted; GP4 volume and base association both agree.
+- [x] Base package matches the app version installed on the PS4 (exact 010 PKG SHA-256).
+- [x] GP4 volume type is exactly `pkg_ps4_patch`.
+- [x] GP4 package storage type is `digital25` and `app_path` points to the audited Sony-rebuilt base derived from exact 010.
+- [x] PARAM.SFO `CATEGORY=gpe` for this non-game mini-app family.
+- [x] `TITLE_ID` and `CONTENT_ID` match the intended installed base identity.
+- [x] Patch version relationship is verified and newer than the installed app version.
+- [x] Builder output is structurally validated as a patch and independently extracted; GP4 volume and base association both agree.
 - [x] Package validation and extraction pass; embedded SFO and all payload hashes match the audited inputs (PC-only, run `44856253337`).
-- [ ] No installation, uninstallation, PRX activation, or reboot is performed by build/QA automation.
+- [x] No installation, uninstallation, PRX activation, or reboot is performed by build/QA automation.
 
 ## 6. Current decision
 
