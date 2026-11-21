@@ -93,7 +93,7 @@ static int read_release_number(const char* path, unsigned long* release) {
         if (strncmp(line, "release_number=", 15) == 0) {
             char* end = NULL; errno = 0;
             unsigned long value = strtoul(line + 15, &end, 10);
-            if (errno || end == line + 15 || (*end != '\\n' && *end != '\\r' && *end != '\\0')) { fclose(file); return 0; }
+            if (errno || end == line + 15 || (*end != '\n' && *end != '\r' && *end != '\\0')) { fclose(file); return 0; }
             *release = value; found = 1; break;
         }
     }
