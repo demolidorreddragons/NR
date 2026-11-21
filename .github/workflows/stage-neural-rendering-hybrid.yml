@@ -45,7 +45,7 @@ jobs:
           foreach ($required in @("PKG_KIND=FULL_BASE_APPLICATION_NOT_PATCH","PARAM_SFO_SEMANTIC_FIELDS=PASS","CATEGORY=gde","QA_STATUS=PASS_PC_ONLY_NOT_HARDWARE_TESTED")) {
             if (-not $qaText.Contains($required)) { throw "Independent QA evidence missing: $required" }
           }
-          $expectedSize = [long]([regex]::Match($qaText, '(?m)^PKG_BYTES=(\d+)$').Groups[1].Value)
+          $expectedSize = [long]([regex]::Match($qaText, '(?m)^PKG_BYTES=([0-9]+)$').Groups[1].Value)
           $expectedHash = [regex]::Match($qaText, '(?m)^PKG_SHA256=([0-9a-f]{64})$').Groups[1].Value
           if ($expectedSize -le 0 -or $expectedHash.Length -ne 64) { throw "QA report has invalid PKG size/hash." }
 
@@ -57,7 +57,7 @@ jobs:
           if ($localSize -ne $expectedSize -or $localHash -ne $expectedHash) {
             throw "Build artifact differs from independently QA-validated PKG. Size=$localSize SHA256=$localHash"
           }
-          $release = [regex]::Match((Split-Path $pkg -Leaf), '^PS4-Neural-Engine-(\d+)\.pkg$')
+          $release = [regex]::Match((Split-Path $pkg -Leaf), '^PS4-Neural-Engine-([0-9]+)\.pkg$')
           if (-not $release.Success) { throw "Unexpected PKG filename." }
           $releaseNumber = $release.Groups[1].Value
           $remoteName = "PS4-Neural-Engine-$releaseNumber-HYBRID.pkg"
