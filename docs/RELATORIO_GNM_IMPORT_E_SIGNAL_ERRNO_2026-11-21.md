@@ -167,3 +167,56 @@ Verificações realizadas pelo runner PS4:
 - `INSTALLATION_PERFORMED=FALSE`.
 
 O staging foi concluído. O pacote está disponível no PS4, mas não foi instalado nem executado. O próximo resultado necessário é a execução manual do GNM-Load-Only e a coleta do log atualizado; não inferir sucesso de carregamento até obter `GNM_LOAD`/ `GNM_DLSYM` do console.
+
+
+## Resultado real no PS4: GNM-Load-Only (21/11/2026)
+
+Coleta feita pelo runner PS4, sem instalação ou alteração no console:
+- Workflow de coleta: https://github.com/demolidorreddragons/NR/actions/runs/44919921684
+- Artifact: `ps4-crash-logger-evidence`, ID `14713467252`
+- SHA-256 do ZIP: `f930172f94f787f24ff6dbd6aef5e75a18979a3d2ea4bfd119bb91d40fe1d0f2`
+- Log do probe: `/data/pne_gcn8_compute_smoke_44876293567.log`
+- Tamanho: 1.484 bytes
+- SHA-256: `a273ac0a9ef042efeabcb6db18a2a172cc77c2ce726ae3bb05b98c28608df791`
+
+Trechos decisivos observados no hardware:
+```
+STAGE=GNM_MODULE_LIST rc=0x00000000 count=5
+STAGE=GNM_MODULE_ENTRY name=eboot.bin handle=0x00000000
+STAGE=GNM_MODULE_ENTRY name=libkernel_sys.sprx handle=0x00002001
+STAGE=GNM_MODULE_ENTRY name=libSceLibcInternal.sprx handle=0x00000002
+STAGE=GNM_MODULE_ENTRY name=libSceSysmodule.sprx handle=0x00000012
+STAGE=GNM_MODULE_ENTRY name=libkernel.sprx handle=0x00000014
+STAGE=GNM_SANDBOX_WORD=5T3geF0DJY
+STAGE=GNM_LOAD path=/5T3geF0DJY/common/lib/libSceGnmDriver.sprx rc=0x00000015
+STAGE=GNM_DLSYM symbol=sceGnmSubmitDone rc=0x00000000 address=0x800319720
+STAGE=RESULT_PASS_GNM_DYNAMIC_LOAD_AND_DLSYM
+STAGE=PNE_GCN8_SMOKE_EXIT=0
+```
+
+### Conclusões confirmadas
+
+1. O aplicativo chegou ao `main`; o probe não morreu antes da inicialização do processo.
+2. A enumeração inicial mostrou somente cinco módulos e **não** mostrou `libSceGnmDriver`.
+3. O caminho sandboxed `/<word>/common/lib/libSceGnmDriver.sprx` foi aceito por `sceKernelLoadStartModule`, retornando handle positivo `0x15`.
+4. `sceKernelDlsym` resolveu `sceGnmSubmitDone` com retorno zero e endereço não nulo `0x800319720`.
+5. O probe terminou com código zero. Não há coredump presente no diretório raiz `/data/sce_coredumps/` na coleta posterior.
+
+**Resultado:** a hipótese prioritária agora é confirmada: no estado inicial observado, o módulo GNM não estava carregado; carregá-lo explicitamente e resolver o símbolo por DLSYM funciona no firmware/console testado. Isso explica por que depender exclusivamente da relocação/import estática não era um teste confiável de disponibilidade do driver. Não prova ainda que todos os símbolos necessários ao compute estejam exportados nem que a fila/dispatch funcionem.
+
+### Sinais e telemetria
+
+- `sigaltstack` retornou `-1`, `errno=22` (EINVAL) no ABI `stack_t` apresentado pelo OpenOrbis.
+- O fallback sem `SA_ONSTACK` funcionou: `sigaction` retornou zero para SIGSEGV, SIGBUS, SIGILL, SIGABRT e SIGFPE; o logger registrou `SIGNAL_INSTALL_COMPLETE_NO_ALTSTACK`.
+- Portanto, o handler de sinal foi instalado, mas sem pilha alternativa. A divergência do ABI da pilha alternativa continua aberta.
+- O arquivo contém alguns trechos de texto corrompidos/intercalados nas linhas iniciais da telemetria. Os marcadores GNM posteriores estão legíveis e coerentes; a coleta binária deve ser preservada para futura análise do logger.
+
+### Próxima etapa técnica
+
+1. Não repetir o teste de carga: ele já passou no hardware.
+2. Criar uma camada de runtime GNM que carregue o módulo uma vez e resolva por DLSYM, com assinatura PS4_SYSV_ABI conferida, todos os exports usados pelo compute: pelo menos `sceGnmDispatchInitDefaultHardwareState`, `sceGnmFlushGarlic`, `sceGnmSubmitCommandBuffers`, `sceGnmSubmitDone` e `sceGnmBufSetMemoryType` (confirmar se este último é função exportada ou helper inline no OpenGNM).
+3. Fazer um modo de auditoria que apenas resolva e reporte todos esses endereços, sem chamar GNM. Exigir que todos estejam presentes antes de habilitar o caminho compute.
+4. Remover do executável final a dependência estática `libSceGnmDriver.prx`; não deixar referências de link que voltem a introduzir relocations GNM.
+5. Só depois da auditoria de exports, preparar compute smoke com chamadas dinâmicas. O bloqueio GPU VA/V# e InputUsage continua independente e não pode ser ignorado.
+6. O novo pacote de auditoria ainda não foi staged nem executado. Qualquer novo staging/execução de pacote diagnóstico no console exige autorização específica.
+
