@@ -1,6 +1,9 @@
 name: PS4 Windows Bridge Test
 
 on:
+  push:
+    branches: [main]
+    paths: [".github/workflows/ps4-bridge-test.yml"]
   workflow_run:
     workflows: ["PS4 PRX and PKG build"]
     types: [completed]
@@ -580,3 +583,114 @@ jobs:
 
           Write-Host "ARCHIVED_COUNT=$moved"
           Write-Host "ARCHIVE_RESULT=SUCCESS"
+
+  archive-now:
+    if: github.event_name == 'push'
+    runs-on: [self-hosted, Windows, X64, ps4-lan]
+    steps:
+      - name: Move Neural Rendering PKGs from /data/pkg into /data/pkg/old (no build)
+        shell: powershell
+        env:
+          PS4_IP: ${{ vars.PS4_IP }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          if (-not $env:PS4_IP) { throw "PS4_IP repository variable is missing." }
+          $credentials = New-Object System.Net.NetworkCredential("anonymous", "anonymous@example.com")
+
+          function Ftp([string]$path, [string]$method, [string]$renameTo = $null) {
+            $request = [System.Net.FtpWebRequest]::Create("ftp://$($env:PS4_IP):2121$path")
+            $request.Method = $method
+            $request.Credentials = $credentials
+            $request.UsePassive = $true
+            $request.UseBinary = $true
+            $request.KeepAlive = $false
+            $request.Timeout = 120000
+            $request.ReadWriteTimeout = 120000
+            if ($renameTo) { $request.RenameTo = $renameTo }
+            return $request
+          }
+
+          function Listing([string]$path) {
+            $request = Ftp $path ([System.Net.WebRequestMethods+Ftp]::ListDirectory)
+            $response = $request.GetResponse()
+            try {
+              $reader = New-Object System.IO.StreamReader($response.GetResponseStream())
+              try {
+                $items = @()
+                while (-not $reader.EndOfStream) {
+                  $line = $reader.ReadLine()
+                  if ($line) { $items += $line.Trim() }
+                }
+                return $items
+              } finally { $reader.Dispose() }
+            } finally { $response.Dispose() }
+          }
+
+          try {
+            $request = Ftp "/data/pkg/old/" ([System.Net.WebRequestMethods+Ftp]::MakeDirectory)
+            $response = $request.GetResponse()
+            $response.Dispose()
+            Write-Host "CREATED=/data/pkg/old"
+          } catch {
+            $null = Listing "/data/pkg/old/"
+            Write-Host "EXISTS=/data/pkg/old"
+          }
+
+          $items = @(Listing "/data/pkg/")
+          $pkgs = @($items | Where-Object { $_ -match '(?i)(neural[-_ ]?rendering|neural[-_ ]?engine|pne).*\.pkg$' })
+          Write-Host "NEURAL_RENDERING_PKGS_FOUND=$($pkgs.Count)"
+          $moved = 0
+
+          foreach ($name in $pkgs) {
+            if ($name -match '[/\\]') { throw "Unexpected FTP entry: $name" }
+            $source = "/data/pkg/$name"
+            $sizeRequest = Ftp $source ([System.Net.WebRequestMethods+Ftp]::GetFileSize)
+            $sizeResponse = $sizeRequest.GetResponse()
+            $size = [long]$sizeResponse.ContentLength
+            $sizeResponse.Dispose()
+
+            $targetName = $name
+            $target = "/data/pkg/old/$targetName"
+            try {
+              $check = Ftp $target ([System.Net.WebRequestMethods+Ftp]::GetFileSize)
+              $checkResponse = $check.GetResponse()
+              $existingSize = [long]$checkResponse.ContentLength
+              $checkResponse.Dispose()
+              if ($existingSize -ne $size) {
+                throw "Archive destination already exists with different size: $target"
+              }
+              throw "Archive destination already exists; refusing to overwrite or delete source: $target"
+            } catch {
+              if ($_.Exception.Message -like "*Archive destination already exists*") { throw }
+              if ($_.Exception.Response -and $_.Exception.Response.StatusCode -ne [System.Net.FtpStatusCode]::ActionNotTakenFileUnavailable) { throw }
+            }
+
+            $rename = Ftp $source ([System.Net.WebRequestMethods+Ftp]::Rename) "old/$targetName"
+            $renameResponse = $rename.GetResponse()
+            $renameResponse.Dispose()
+
+            $verify = Ftp $target ([System.Net.WebRequestMethods+Ftp]::GetFileSize)
+            $verifyResponse = $verify.GetResponse()
+            $targetSize = [long]$verifyResponse.ContentLength
+            $verifyResponse.Dispose()
+            if ($targetSize -ne $size) { throw "Archive verification failed for $target" }
+
+            try {
+              $sourceCheck = Ftp $source ([System.Net.WebRequestMethods+Ftp]::GetFileSize)
+              $sourceResponse = $sourceCheck.GetResponse()
+              $sourceResponse.Dispose()
+              throw "Source still exists after rename: $source"
+            } catch {
+              if ($_.Exception.Message -like "*Source still exists*") { throw }
+              if ($_.Exception.Response -and $_.Exception.Response.StatusCode -ne [System.Net.FtpStatusCode]::ActionNotTakenFileUnavailable) { throw }
+            }
+
+            Write-Host "MOVED=$name"
+            Write-Host "SIZE=$targetSize"
+            $moved++
+          }
+
+          $remaining = @(Listing "/data/pkg/" | Where-Object { $_ -match '(?i)(neural[-_ ]?rendering|neural[-_ ]?engine|pne).*\.pkg$' })
+          if ($remaining.Count -ne 0) { throw "Neural Rendering PKGs remain in /data/pkg: $($remaining -join ', ')" }
+          Write-Host "MOVED_COUNT=$moved"
+          Write-Host "CLEANUP_RESULT=SUCCESS"
