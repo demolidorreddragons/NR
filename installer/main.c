@@ -395,6 +395,35 @@ static int configure_loader(char* error, size_t error_size, char* temp_path, siz
     return 1;
 }
 
+static int loader_entry_is_canonical(void) {
+    if (!path_exists(CONFIG) || !path_is_regular_file(CONFIG)) return 0;
+    FILE* file = fopen(CONFIG, "rb");
+    if (!file) return 0;
+    char input[MAX_CONFIG];
+    size_t length = fread(input, 1, sizeof(input)-1, file);
+    int ok = !ferror(file) && feof(file);
+    fclose(file);
+    if (!ok) return 0;
+    input[length] = 0;
+    int in_default = 0;
+    unsigned count = 0;
+    size_t pos = 0;
+    while (pos < length) {
+        size_t start = pos;
+        while (pos < length && input[pos] != '\n') pos++;
+        if (pos < length) pos++;
+        size_t n = pos-start;
+        char line[512];
+        size_t copy = n < sizeof(line)-1 ? n : sizeof(line)-1;
+        memcpy(line,input+start,copy);
+        line[copy] = 0;
+        trim_line(line);
+        if (line[0] == '[') in_default = strcmp(line,"[default]") == 0;
+        if (in_default && strcmp(line,DEST_PRX) == 0) count++;
+    }
+    return count == 1;
+}
+
 /* Commit PRX and loader config with retained, collision-free recovery copies. */
 static int path_exists(const char* path) {
     struct stat st;
@@ -493,7 +522,7 @@ int main(void) {
         int order=pne_compare_release(installed_release,incoming_release);
         if(order<0){write_status("ABORTED: downgrade refused; installed release is newer.");notify("PNE: downgrade bloqueado.");sceKernelUsleep(3000000);return 7;}
         if(order==0){
-            if(strcmp(installed_hash,incoming_hash)==0){
+            if(strcmp(installed_hash,incoming_hash)==0 && loader_entry_is_canonical()){
                 write_status("ALREADY_CURRENT: release and PRX SHA-256 match; no writes or backups created.");
                 notify("PNE: Neural Engine ja esta atualizado.");sceKernelUsleep(2500000);return 0;
             }
