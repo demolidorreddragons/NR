@@ -94,3 +94,14 @@ Depois que uma tarefa passa seu gate, selecionar a próxima tarefa desbloqueada 
 - [Plano mestre](PLANO_MESTRE_NEURAL_RENDERING.md)
 - [Contrato de runtime GCN8](GCN8_COMPUTE_RUNTIME_CONTRACT.md)
 - [Plano de teste reversível GCN8](GCN8_PS4_PRO_REVERSIBLE_COMPUTE_TEST_PLAN.md)
+
+
+## Estrutura de agentes aprovada — 2026-11-21
+
+A equipe passa a ter dez especialidades organizacionais: coordenação; IA neural; GPU AMD GCN8; GNM/Orbis; sistemas PS4; build/release; QA independente; auditoria técnica independente; desempenho/estabilidade; segurança/cadeia de suprimentos.
+
+- [Protocolo de independência, revisão cruzada e qualidade](PROTOCOLO_INDEPENDENCIA_AGENTES.md)
+- [Plano mestre](PLANO_MESTRE_NEURAL_RENDERING.md)
+- [Matriz QA](MATRIZ_QA.md)
+
+Toda tarefa nova deve ter contrato de tarefa, critérios mensuráveis, responsáveis/revisores sem conflito, evidências e estado explícito. QA/auditoria devem receber pacote neutro e podem reprovar sem interferência. Se não houver executor separado, classificar a revisão como interna/não independente. Os dez itens são papéis definidos, não prova de dez agentes autônomos ativos.
