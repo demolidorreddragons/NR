@@ -163,6 +163,55 @@ jobs:
             }
           }
 
+
+          $legacyLog = '/data/pne_gcn8_compute_smoke_44873622760.log'
+          $legacyDest = Join-Path $outDir 'pne_gcn8_compute_smoke_44873622760.log'
+          try {
+            $req = [System.Net.FtpWebRequest]::Create($base + $legacyLog)
+            $req.Method = [System.Net.WebRequestMethods+Ftp]::DownloadFile
+            $req.Credentials = $credential
+            $req.UsePassive = $true
+            $req.UseBinary = $true
+            $req.KeepAlive = $false
+            $req.Timeout = 20000
+            $resp = $req.GetResponse()
+            $inputStream = $resp.GetResponseStream()
+            $file = [System.IO.File]::Create($legacyDest)
+            $inputStream.CopyTo($file)
+            $file.Dispose()
+            $inputStream.Dispose()
+            $resp.Dispose()
+            $hash = (Get-FileHash -Algorithm SHA256 -Path $legacyDest).Hash.ToLowerInvariant()
+            Write-Host "LEGACY_LOG_DOWNLOADED bytes=$((Get-Item $legacyDest).Length) sha256=$hash"
+            $found = $true
+          } catch {
+            Write-Host "LEGACY_LOG_NOT_FOUND detail=$($_.Exception.Message)"
+          }
+
+          foreach ($dir in @('/data/sce_coredumps/', '/data/sce_logs/')) {
+            $name = ($dir.Trim('/') -replace '/', '_')
+            $dest = Join-Path $outDir ("listing-" + $name + ".txt")
+            try {
+              $req = [System.Net.FtpWebRequest]::Create($base + $dir)
+              $req.Method = [System.Net.WebRequestMethods+Ftp]::ListDirectoryDetails
+              $req.Credentials = $credential
+              $req.UsePassive = $true
+              $req.UseBinary = $true
+              $req.KeepAlive = $false
+              $req.Timeout = 15000
+              $resp = $req.GetResponse()
+              $reader = New-Object System.IO.StreamReader($resp.GetResponseStream())
+              $listing = $reader.ReadToEnd()
+              $reader.Dispose()
+              $resp.Dispose()
+              Set-Content -Path $dest -Value $listing -Encoding UTF8
+              Write-Host "FTP_LIST_OK $dir"
+            } catch {
+              Set-Content -Path $dest -Value ("LIST_ERROR: " + $_.Exception.Message) -Encoding UTF8
+              Write-Host "FTP_LIST_UNAVAILABLE $dir"
+            }
+          }
+
           if ($found) {
             "LOGGER_FOUND=true" | Set-Content (Join-Path $outDir 'result.txt')
           } else {
