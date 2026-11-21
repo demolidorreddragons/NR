@@ -56,6 +56,21 @@ Quando a entrega exigir instalação no console, o fluxo obrigatório é:
 
 Se o pacote não precisar ser instalado naquela etapa (por exemplo, artefato diagnóstico ainda bloqueado), não sugerir instalação. Informar apenas que o artefato não deve ser instalado e explicar o bloqueio técnico.
 
+### 2.2 Retorno imediato do usuário, coleta de evidências e ciclo de correção
+
+Depois que o usuário instalar manualmente o PKG e enviar o feedback, iniciar imediatamente a etapa de diagnóstico, sem pedir que ele repita informações já disponíveis:
+
+1. Reconhecer o feedback e classificar o resultado relatado (inicialização normal, falha de instalação, tela preta, travamento/CE, comportamento incorreto ou outro).
+2. Coletar primeiro, de forma não destrutiva, os dados já acessíveis pelo fluxo autorizado: logs do aplicativo e do sistema, relatórios de crash/coredump, arquivos de diagnóstico em `/data/`, timestamps, versão/firmware/GoldHEN informados, identificador do PKG instalado, commit/build correspondente e hashes dos artefatos. Usar o runner Windows bridge e workflows existentes para leitura/recuperação; não acessar a rede do PS4 diretamente pelo ambiente ChatGPT.
+3. Preservar os arquivos originais. Copiar evidências para análise, calcular SHA-256, registrar tamanho, origem e horário; nunca apagar, truncar, sobrescrever ou “limpar” logs/dados do console durante a coleta.
+4. Correlacionar o feedback com o commit, workflow, PKG e logs da mesma execução. Separar fatos observados de hipóteses; não atribuir causa sem evidência.
+5. Se a coleta automática não encontrar os dados necessários, pedir somente o dado específico que falta, com instrução objetiva para obtê-lo. Não solicitar novamente logs/versões que já estejam acessíveis.
+6. Examinar as evidências, reproduzir o problema em host/CI quando possível, identificar a causa raiz e implementar a correção mínima segura. Não mascarar falhas, remover diagnósticos úteis ou relaxar gates para obter PASS.
+7. Executar testes direcionados e a suíte obrigatória aplicável, revisar o diff e registrar causa, correção, resultados e limitações. Se a correção exigir novo teste no PS4, repetir o ciclo de build, QA, staging verificado e aviso de instalação previsto na seção 2.1.
+8. Não instalar, executar testes destrutivos, ativar PRX, reiniciar GoldHEN ou alterar configurações/dados do console durante a coleta/correção sem autorização explícita e específica. A autorização para instalar um pacote anterior não se estende automaticamente ao próximo.
+
+**Regra de continuidade:** o feedback do usuário é o gatilho para iniciar coleta e análise imediatamente; não encerrar a resposta apenas com agradecimento ou status. Entregar diagnóstico/correção verificável ou indicar precisamente o bloqueio que impede avançar.
+
 ## 3. Limites de autorização no console
 
 Sem autorização explícita do usuário, é proibido:
