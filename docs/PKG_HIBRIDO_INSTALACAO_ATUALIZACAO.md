@@ -1,6 +1,6 @@
 # Arquitetura do PKG híbrido — instalação inicial e atualização do Neural Engine
 
-**Estado:** Release 008 foi staged; diagnóstico PS4 confirmou arquivos PRX/config regulares e temporários antigos preservados. Release 009 corrige a detecção de arquivos gerenciados com `open(O_NOFOLLOW)` + `fstat` somente para bits de tipo; build, QA independente e teste de hardware pendentes. Não instalar até todos os gates aplicáveis passarem e haver autorização explícita.  
+**Estado:** Release 009 (APP_VER 01.05) foi compilado, aprovado por QA independente PC-only e staged em `/data/pkg/PS4-Neural-Engine-009.pkg`. Diagnóstico do PS4 confirmou arquivos PRX/config regulares e temporários antigos preservados. A correção usa `open(O_NOFOLLOW)` + `fstat` somente para bits de tipo. Não instalado nem ativado; hardware/runtime ainda não testados. Não instalar até haver autorização explícita.  
 **Alvo:** PS4 Pro / Orbis + GoldHEN.  
 **Branch:** `feature/gcn8-numeric-kernels`.  
 **Identidade atual:** TITLE_ID `PNEU00001`, CONTENT_ID `IV0000-PNEU00001_00-PS4NEURALENG0000`.
@@ -104,10 +104,10 @@ Se a versão empacotada for igual à instalada e os hashes coincidirem, retornar
 |---|---|---|
 | H1 | Manifesto de release e hash do PRX no build/runtime | **IMPLEMENTADO — CI REVALIDAÇÃO PENDENTE** | Build e eboot verificam identidade e hash; teste host do SHA-256 passou. |
 | H2 | Máquina de estados NEW/UPDATE/LEGACY/RECOVERY/CONFLICT | **IMPLEMENTADO — HOST CI PASS** | Eboot classifica presença/validade do PRX, manifesto instalado e marcador transacional; erro de inspeção e destino não regular/symlink são conflito. |
-| H3 | Temporários exclusivos e proteção contra symlink | **IMPLEMENTADO — CI PENDENTE** | `O_CREAT+O_EXCL`, caminhos exclusivos, rejeição de destinos não regulares e marcador de transação. Falta fault injection Orbis. |
-| H4 | Idempotência e detecção de versão/hash | **IMPLEMENTADO — CI PENDENTE** | Hash igual + release igual retorna `ALREADY_CURRENT` sem backup; release menor é recusado; release igual com hash diferente é conflito. |
+| H3 | Temporários exclusivos e proteção contra symlink | **IMPLEMENTADO — HOST CI PASS; ORBIS BUILD PASS** | `O_CREAT+O_EXCL`, caminhos exclusivos, inspeção por `open(O_NOFOLLOW)`/`fstat` dos bits de tipo e marcador de transação. Falta fault injection Orbis. |
+| H4 | Idempotência e detecção de versão/hash | **IMPLEMENTADO — HOST CI PASS; ORBIS BUILD PASS** | Hash igual + release igual retorna `ALREADY_CURRENT` sem backup; release menor é recusado; release igual com hash diferente é conflito. |
 | H5 | Fault injection de cada write/fsync/rename/rollback | **PENDENTE** — adicionar harness de falhas e provar restauração de PRX, manifesto e `plugins.ini`. |
-| H6 | QA independente do PKG exato | **PENDENTE — RELEASE 008** | O QA anterior do PKG 006 não valida este novo eboot. Exigir inspeção independente do artefato 008 exato. |
+| H6 | QA independente do PKG exato | **PASS — RELEASE 009 (PC-ONLY)** | QA independente validou PKG SHA-256 `242e032dc19ae9fc22cdd0b977241bd9ef8edf93bc5eb31777063575430699ba`, estrutura, digests, SFO semântico e PRX embarcado; não é teste de hardware. |
 | H7 | Teste controlado de instalação inicial e atualização | Evidência de console, logs, rollback e carregamento |
 | H8 | Decisão sobre atualização do próprio app via Package Manager | Somente após prova separada do fluxo base/patch ou reinstalação |
 
@@ -117,8 +117,10 @@ Se a versão empacotada for igual à instalada e os hashes coincidirem, retornar
 - O build gera `pne-release.ini` com identidade e SHA-256 do PRX; o eboot agora valida schema, TITLE_ID, CONTENT_ID, nome do PRX e SHA-256 antes de criar diretórios ou alterar destinos. A validação usa SHA-256 implementado localmente e vetores de teste host.
 - Temporários de PRX, manifesto e `plugins.ini` usam nomes exclusivos com `O_CREAT | O_EXCL`; arquivos temporários preexistentes não são truncados. `plugins.ini` não é regravado quando a entrada gerenciada já existe.
 - A transação PRX + configuração preserva backups e tenta rollback, mas os dois caminhos não podem ser trocados atomicamente em conjunto.
-- O release candidato 008 integra a máquina de estados, manifesto instalado ao lado do PRX, marcador de transação persistente, migração LEGACY com backup, recusa de downgrade e `ALREADY_CURRENT` por release/hash. Host CI passou no run `44847096221` no commit `b05968a`; build do PKG 008 passou no run `44847096234`; QA independente do artefato exato continua sendo gate separado.
-- O workflow de build preserva GP4/SFO/manifest e QA independente; o resultado do PKG 006 não pode ser reaproveitado como evidência para o PKG 008.
+- O release 009 (APP_VER 01.05) integra a máquina de estados, manifesto instalado ao lado do PRX, marcador de transação persistente, migração LEGACY com backup, recusa de downgrade e `ALREADY_CURRENT` por release/hash. Host CI passou no run `44849066490`; build Orbis/PKG passou e QA independente do artefato exato passou no run `44849066524`.
+- QA independente: PKG SHA-256 `242e032dc19ae9fc22cdd0b977241bd9ef8edf93bc5eb31777063575430699ba`, 6.619.136 bytes, `FULL_BASE_APPLICATION_NOT_PATCH`, `CATEGORY=gde`, `APP_VER=01.05`, `VERSION=01.05`, `TITLE_ID=PNEU00001`, `CONTENT_ID=IV0000-PNEU00001_00-PS4NEURALENG0000`, `st_type=digital50`, PRX SHA-256 `54e8595144a3a7e1d36602a1100bae6189f0955175c355bd3ac67d9cb7f85277`, `QA_STATUS=PASS_PC_ONLY_NOT_HARDWARE_TESTED`.
+- O staging PS4 passou no run `44849611210`: arquivos PKG antigos Neural Rendering foram arquivados com hash e read-back verificados em `/data/pkg/old/`; somente `PS4-Neural-Engine-009.pkg` ficou na raiz `/data/pkg/`; pacotes de terceiros foram preservados. PKG final foi relido do console e SHA/bytes conferidos. `INSTALLATION_PERFORMED=FALSE`.
+- Permanecem pendentes fault injection Orbis e teste de hardware/runtime. O resultado do PKG 006/008 não substitui QA do 009.
 - Não há evidência de instalação/atualização do pacote no PS4 Pro nem de carregamento bem-sucedido do PRX.
 
-**Decisão:** seguir com um único PKG full/base cujo eboot faz instalação inicial e atualização idempotente do plugin GoldHEN. Não rotular o arquivo como base+patch do Package Manager até existir evidência técnica de um mecanismo PS4 válido para isso. O pacote permanece bloqueado para instalação real até CI, QA independente do artefato exato, fault injection e autorização explícita.
+**Decisão:** seguir com um único PKG full/base cujo eboot faz instalação inicial e atualização idempotente do plugin GoldHEN. Não rotular o arquivo como base+patch do Package Manager até existir evidência técnica de um mecanismo PS4 válido para isso. O pacote permanece bloqueado para instalação real até fault injection aplicável e autorização explícita.
