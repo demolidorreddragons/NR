@@ -1,0 +1,147 @@
+name: Archive PS4 Neural Engine 009 packages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/ps4-archive-009.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  archive-009:
+    runs-on: [self-hosted, Windows, X64, ps4-lan]
+    steps:
+      - name: Move root 009 PKGs into /data/pkg/old and verify hashes
+        shell: powershell
+        env:
+          PS4_IP: ${{ vars.PS4_IP }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          if (-not $env:PS4_IP) { throw "PS4_IP variable is missing." }
+
+          $credentials = New-Object System.Net.NetworkCredential("anonymous", "anonymous@example.com")
+          function New-FtpRequest([string]$path, [string]$method) {
+            $request = [System.Net.FtpWebRequest]::Create("ftp://$($env:PS4_IP):2121$path")
+            $request.Method = $method
+            $request.Credentials = $credentials
+            $request.UsePassive = $true
+            $request.UseBinary = $true
+            $request.KeepAlive = $false
+            $request.Timeout = 120000
+            $request.ReadWriteTimeout = 120000
+            return $request
+          }
+          function Get-RemoteBytes([string]$path, [string]$localPath) {
+            $request = New-FtpRequest $path ([System.Net.WebRequestMethods+Ftp]::DownloadFile)
+            $response = $null
+            $stream = $null
+            $output = $null
+            try {
+              $response = $request.GetResponse()
+              $stream = $response.GetResponseStream()
+              $output = [System.IO.File]::Create($localPath)
+              $stream.CopyTo($output)
+            } finally {
+              if ($output) { $output.Dispose() }
+              if ($stream) { $stream.Dispose() }
+              if ($response) { $response.Dispose() }
+            }
+          }
+
+          $listRequest = New-FtpRequest "/data/pkg/" ([System.Net.WebRequestMethods+Ftp]::ListDirectory)
+          $listResponse = $null
+          $reader = $null
+          try {
+            $listResponse = $listRequest.GetResponse()
+            $reader = New-Object System.IO.StreamReader($listResponse.GetResponseStream())
+            $entries = @()
+            while (-not $reader.EndOfStream) {
+              $entry = $reader.ReadLine()
+              if ($entry) { $entries += $entry.Trim() }
+            }
+          } finally {
+            if ($reader) { $reader.Dispose() }
+            if ($listResponse) { $listResponse.Dispose() }
+          }
+
+          $expected = @(
+            "PS4-Neural-Engine-009-43c70c521cbd.pkg",
+            "PS4-Neural-Engine-009-81778f749b33.pkg",
+            "PS4-Neural-Engine-009.pkg"
+          )
+          $root009 = @($entries | Where-Object { $_ -match '^PS4-Neural-Engine-009.*\.pkg$' })
+          if ($root009.Count -ne 3 -or @($expected | Where-Object { $root009 -notcontains $_ }).Count -ne 0) {
+            throw "Unexpected root 009 inventory; refusing to move anything. Found: $($root009 -join ', ')"
+          }
+
+          $oldDir = "/data/pkg/old"
+          $dirRequest = New-FtpRequest "$oldDir/" ([System.Net.WebRequestMethods+Ftp]::ListDirectory)
+          $dirResponse = $null
+          try {
+            $dirResponse = $dirRequest.GetResponse()
+          } catch {
+            $mkdir = New-FtpRequest "$oldDir/" ([System.Net.WebRequestMethods+Ftp]::MakeDirectory)
+            $mkdirResponse = $mkdir.GetResponse()
+            $mkdirResponse.Dispose()
+          } finally {
+            if ($dirResponse) { $dirResponse.Dispose() }
+          }
+
+          $work = Join-Path $env:RUNNER_TEMP "nr-009-archive"
+          New-Item -ItemType Directory -Path $work -Force | Out-Null
+          foreach ($name in $expected) {
+            $source = "/data/pkg/$name"
+            $target = "$oldDir/$name"
+            $sourceLocal = Join-Path $work "$name.source"
+            $targetLocal = Join-Path $work "$name.archived"
+
+            $targetCheck = New-FtpRequest $target ([System.Net.WebRequestMethods+Ftp]::GetFileSize)
+            $targetExists = $false
+            $targetResponse = $null
+            try {
+              $targetResponse = $targetCheck.GetResponse()
+              $targetExists = $true
+            } catch {
+              $targetExists = $false
+            } finally {
+              if ($targetResponse) { $targetResponse.Dispose() }
+            }
+            if ($targetExists) { throw "Archive destination already exists; refusing overwrite: $target" }
+
+            Get-RemoteBytes $source $sourceLocal
+            $sourceHash = (Get-FileHash -LiteralPath $sourceLocal -Algorithm SHA256).Hash.ToLowerInvariant()
+            $sourceSize = (Get-Item -LiteralPath $sourceLocal).Length
+
+            $rename = New-FtpRequest $source ([System.Net.WebRequestMethods+Ftp]::Rename)
+            $rename.RenameTo = "old/$name"
+            $renameResponse = $rename.GetResponse()
+            $renameResponse.Dispose()
+
+            Get-RemoteBytes $target $targetLocal
+            $targetHash = (Get-FileHash -LiteralPath $targetLocal -Algorithm SHA256).Hash.ToLowerInvariant()
+            $targetSize = (Get-Item -LiteralPath $targetLocal).Length
+            if ($sourceHash -ne $targetHash -or $sourceSize -ne $targetSize) {
+              throw "Post-move integrity mismatch for $name. Source=$sourceSize/$sourceHash Target=$targetSize/$targetHash"
+            }
+            Write-Host "ARCHIVED=$name SIZE=$targetSize SHA256=$targetHash DESTINATION=$target"
+          }
+
+          $finalList = New-FtpRequest "/data/pkg/" ([System.Net.WebRequestMethods+Ftp]::ListDirectory)
+          $finalResponse = $null
+          $finalReader = $null
+          try {
+            $finalResponse = $finalList.GetResponse()
+            $finalReader = New-Object System.IO.StreamReader($finalResponse.GetResponseStream())
+            $remaining = @()
+            while (-not $finalReader.EndOfStream) {
+              $entry = $finalReader.ReadLine()
+              if ($entry -match '^PS4-Neural-Engine-009.*\.pkg$') { $remaining += $entry }
+            }
+          } finally {
+            if ($finalReader) { $finalReader.Dispose() }
+            if ($finalResponse) { $finalResponse.Dispose() }
+          }
+          if ($remaining.Count -ne 0) { throw "Root still contains 009 packages: $($remaining -join ', ')" }
+          Write-Host "SUCCESS: all three root 009 PKGs moved to /data/pkg/old and verified; no root 009 remains."
