@@ -21,11 +21,15 @@ case "$MODE" in
     ;;
   startup)
     TITLE_ID="PNEU00003"
-    CONTENT_ID="IV0000-PNEU00003_00-GCN8STARTUP000000"
+    CONTENT_ID="IV0000-PNEU00003_00-GCN8STARTUP00000"
     APP_TITLE="Neural Rendering Startup Probe"
     ;;
   *) echo "Unsupported GCN8_SMOKE_MODE: $MODE" >&2; exit 1 ;;
 esac
+if [[ ${#CONTENT_ID} -ne 36 || ! "$CONTENT_ID" =~ ^[A-Z]{2}[0-9]{4}-[A-Z0-9]{4}[0-9]{5}_00-[A-Z0-9]{16}$ ]]; then
+  echo "Invalid PS4 CONTENT_ID (expected 36 characters and canonical format): $CONTENT_ID" >&2
+  exit 1
+fi
 APP_VERSION="01.00"
 STAGE="$ROOT/build/gcn8-smoke-stage/$RUN_ID/$MODE"
 OUT="$ROOT/dist/gcn8-smoke/$RUN_ID/$MODE"
