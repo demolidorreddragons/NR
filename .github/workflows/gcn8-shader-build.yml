@@ -653,6 +653,9 @@ jobs:
           path: |
             dist/gcn8-smoke/**/*.pkg
             dist/gcn8-smoke/**/SMOKE_PKG_MANIFEST.txt
+            dist/gcn8-smoke/**/smoke.elf
+            dist/gcn8-smoke/**/smoke.oelf
+            dist/gcn8-smoke/**/smoke.map
             dist/gcn8-smoke/**/package.gp4
             dist/gcn8-smoke/**/param.sfo
           if-no-files-found: error
