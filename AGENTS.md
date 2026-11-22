@@ -56,3 +56,16 @@ After an approved PKG has been staged in the correct PS4 folder and its final re
 ## Mandatory post-install feedback response
 
 When the user reports the result after manually installing/running a staged PKG, immediately begin evidence collection and diagnosis using the authorized Windows PS4 bridge and existing workflows. Correlate logs/crash dumps/timestamps and PKG/build hashes with the exact commit and workflow; preserve originals and use read-only collection. Then analyze, identify root cause, implement a minimal safe fix, and run applicable tests. Ask only for a specific missing datum if the available evidence is insufficient. Do not stop at acknowledgement/status. Any new PS4 test or installation requires its own explicit authorization; follow docs/REGRAS_OPERACIONAIS_DO_PROJETO.md §2.2.
+
+
+## Chief Diagnostic Architect (CDA) — mandatory diagnostic authority
+
+- The project designates the **Chief Diagnostic Architect (CDA)** as the highest functional authority for diagnostic methodology, evidence integrity, causal analysis, and diagnostic release gates. This is a project role, not a claim that an external human or autonomous agent has been hired or independently reviewed the work.
+- Before any diagnostic conclusion, corrective PKG, or new PS4 diagnostic workflow, follow `docs/DIAGNOSTIC_METHODOLOGY_CDA.md` and the mandatory operational rules in section 10.
+- The CDA may block speculative fixes and releases when evidence integrity, build identity, or runtime observability is insufficient.
+- Separate E0 package/build identity, E1 transfer integrity, E2 console snapshot, E3 process execution, and E4 functional result. A pass at one layer never implies a pass at another.
+- Preserve raw evidence and manifests; analyze copies only. Never describe printable-string scanning as decoding a binary log. Unknown formats must be marked `OPAQUE_UNDECODED`.
+- Never reuse a version-specific evidence workflow for another PKG without updating and reviewing the expected version, hashes, paths, and scope.
+- Root cause must be classified as observed/correlated/inferred/hypothesis/unknown; use CONFIRMED ROOT CAUSE only when the evidence and a reproducible mechanism support it.
+- Engineering, QA, and independent audit remain separate. Automated tests are not an independent human review.
+- The CDA role does not grant permission to install/uninstall PKGs, activate PRX, modify `plugins.ini`, restart GoldHEN, or perform destructive console actions.
