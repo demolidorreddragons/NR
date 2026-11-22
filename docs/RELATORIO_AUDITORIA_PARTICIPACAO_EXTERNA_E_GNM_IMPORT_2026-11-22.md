@@ -206,3 +206,17 @@ Reprodução independente do algoritmo:
 Isso confirma a coerência dos NIDs no PRX principal e no antigo GNM-Link eboot. A fonte mostra que a geração de imports não é exclusiva de `--lib`; a reauditoria confirmou que o eboot também contém a NID correta. Portanto, o GOT nulo antigo é uma falha de resolução runtime apesar da metadata válida; a causa exata do loader FW 14.02 permanece `UNRESOLVED`.
 
 Fonte: https://github.com/OpenOrbis/create-fself/blob/master/pkg/oelf/OELFGenDynlibData.go
+### 2.7. Auditoria automatizada de OELF e expansão do GNM-Load-Only
+
+Foi adicionado `tools/audit_ps4_self_imports.py`, parser fail-closed para `PT_SCE_DYNLIBDATA` em OELF e fake SELF/PRX. Ele lê `DT_SCE_IMPORT_LIB`, `DT_SCE_NEEDED_MODULE`, Sony string/symbol tables e relocações; exige o NID correto com relocation para imports requeridos e rejeita bibliotecas proibidas.
+
+**Integração CI:**
+- `.github/workflows/ps4-prx.yml` audita o PRX final e exige `libSceGnmDriver:libSceGnmDriver:xbxNatawohc`; run [45017466580](https://github.com/demolidorreddragons/NR/actions/runs/45017466580), build job e auditoria SUCCESS; log `SONY_IMPORT_AUDIT=PASS`. O artifact `14751879616` foi baixado e o ZIP SHA-256 `b1effa...` conferido; PRX hash permanece `f85a69a7165d4fd5ae62e3237fea9bacbdd1232a19ab1e8745f5f52da9e6598e`.
+- `tools/build_compute_smoke_pkg.sh` audita o OELF depois de `create-fself`: compute/startup/GNM-Load devem proibir import estático GNM; GNM-Link exige NID `yvZ73uQUqrk`. O compute OELF passou no run [45017446531](https://github.com/demolidorreddragons/NR/actions/runs/45017446531), artifact `14751474371`, ZIP SHA-256 `2c8738c9abb675102226748df0eea99b38b0b586199be737ef33cfabca404725`, PKG SHA-256 `38c785e6e2d4be10c37270f3143df2d4fb861101508c9e71c393eaaaddb7795d`, OELF SHA-256 `ea1a3527e4184de9196e78d3ac18ba9b837165facf8d46f32ba125680cac3719`.
+- A reauditoria histórica do GNM-Link eboot no run `45018118702` passou com NID `yvZ73uQUqrk#C#C` e relocation `0xc000` (seção 2.3).
+
+**GNM-Load-Only ampliado:** o probe agora resolve cinco exports sem chamar nenhum: `sceGnmSubmitDone`, `sceGnmDispatchInitDefaultHardwareState`, `sceGnmFlushGarlic`, `sceGnmSubmitCommandBuffers` e `sceGnmSubmitAndFlipCommandBuffers` (alvo do hook do PRX). O manifest declara a lista em `gnm_exports_required`. Build [45018436422](https://github.com/demolidorreddragons/NR/actions/runs/45018436422) terminou SUCCESS; o OELF do GNM-Load tem somente `libkernel`, `SONY_IMPORT_AUDIT=PASS`; QA independente `PASS_PC_ONLY_NOT_HARDWARE_TESTED` no job `137196373694`.
+
+Artefato `ps4-neural-engine-build` ID `14752946485`, 38.256.653 bytes, ZIP SHA-256 `db3782f080e561a2d276af3e8da9c3989d7a6412d8393960369dd8b30270ea01` verificado. PKG GNM-Load `PS4-Neural-Rendering-GCN8-gnm-load-45018436422.pkg`, 6.619.136 bytes, SHA-256 `7b0807a882895b9a392f64f0e97bb7aca8e2aaa94c254e0667cc0128996c1051`; ELF `8e2fdcd2b2b49f006ee62920835d3cca38d50b399eb56faab029931674dc1ed1`; OELF `85c329480fb07e229ded29782ad1569204df305e4d5a7af18a8011c071777dc3`; MAP `9f43ec92cdfe773e10f24d3ebfd98458283cf19407d50a567d1de12faf3ae4ba`. Manifest: `gnm_exports_required` contém os cinco símbolos; `gnm_function_calls=none`; `hardware_status=not_run`.
+
+**Limite:** o build e QA de PC confirmam estrutura, payload e import isolation, não a disponibilidade real de `sceGnmSubmitAndFlipCommandBuffers` no firmware 14.02. O novo DLSYM ainda precisa de execução no PS4. O pacote não foi staged nem instalado; o staging exige autorização específica.
