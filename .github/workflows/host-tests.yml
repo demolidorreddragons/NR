@@ -64,6 +64,8 @@ jobs:
           assert 'abi_status=unverified' in build_script and 'hardware_status=not_tested' in build_script, 'manifest must not claim unproven compatibility'
           print('Installer transaction and release-manifest invariants passed')
           PY
+      - name: Enforce read-only PKG preflight entry point
+        run: python3 tests/test_installer_preflight_contract.py
       - name: Validate GCN8 diagnostic build modes
         run: |
           bash -n tools/build_compute_smoke_pkg.sh
