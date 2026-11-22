@@ -119,6 +119,8 @@ static int run_gnm_load_probe(void) {
             {"sceGnmDispatchInitDefaultHardwareState"},
             {"sceGnmFlushGarlic"},
             {"sceGnmSubmitCommandBuffers"},
+            // Main PRX hook target: resolve address only; never call in this probe.
+            {"sceGnmSubmitAndFlipCommandBuffers"},
         };
         bool all_exports_resolved = submit_done_resolved;
         for (const auto& item : required) {
