@@ -129,30 +129,32 @@ Nenhum PKG foi staged, instalado ou executado nesta rodada. Nenhum PRX foi ativa
 
 **Decisão:** `IN_PROGRESS`. A remoção da dependência estática está aprovada no nível ELF/CI do commit `83d15edf`; o build, o marcador de auditoria e o payload do PKG passaram. Não se promove a aprovação para OELF/Sony import metadata, QA independente clean-room ou runtime. Revisão externa e validação de hardware continuam `NOT_RUN`/ `BLOCKED`.
 
-### 2.3. Auditoria forense do linker stub OpenOrbis GNM — run 45015947338
+### 2.3. Auditoria forense do linker stub e reauditoria do GNM-Link eboot
 
-O workflow PRX preservou os arquivos exatos do toolchain OpenOrbis v0.5.4 para auditoria. O artefato `ps4-neural-engine-build`, ID `14752435074`, tem 38.256.476 bytes e SHA-256 `bce83e2fc3eb80c0ea65f14f5fda8721827e61641cebe250eced335d7a782d8e`; o ZIP foi baixado e o hash recalculado com correspondência.
+O workflow PRX preservou os arquivos exatos do toolchain OpenOrbis v0.5.4 para auditoria. O artefato `ps4-neural-engine-build` do run [45015947338](https://github.com/demolidorreddragons/NR/actions/runs/45015947338), ID `14752435074`, tem 38.256.476 bytes e SHA-256 `bce83e2fc3eb80c0ea65f14f5fda8721827e61641cebe250eced335d7a782d8e`; o ZIP foi baixado e o hash recalculado com correspondência.
 
-Arquivo `libSceGnmDriver.so` extraído do artefato: 40.472 bytes, SHA-256 `21d38ac5e7d79ddc9ee9bc7b9a84547f43ea3144883f6ac787d16704c1b5121f`. `file`/`readelf` identificam um ELF64 x86-64 shared object de link, não um SPRX/OELF de sistema. A tabela dinâmica tem apenas tags ELF genéricas (INIT/FINI_ARRAY, GNU_HASH, STRTAB, SYMTAB, STRSZ, SYMENT, RELA/RELASZ/RELAENT e NULL); não há `DT_SCE_*`, `DT_SCE_IMPORT_LIB`, `DT_SCE_NEEDED_MODULE`, SONAME ou DT_NEEDED. A busca de strings não encontrou o NID `CAF67BDEE414AAB9`, sua codificação `yvZ73uQUqrk`, nem metadados `DT_SCE`.
+Arquivo `libSceGnmDriver.so` extraído do artefato: 40.472 bytes, SHA-256 `21d38ac5e7d79ddc9ee9bc7b9a84547f43ea3144883f6ac787d16704c1b5121f`. `file`/`readelf` identificam um ELF64 x86-64 shared object de link, não um SPRX/OELF de sistema. A tabela dinâmica tem apenas tags ELF genéricas; não há `DT_SCE_*`, `DT_SCE_IMPORT_LIB`, `DT_SCE_NEEDED_MODULE`, SONAME ou `DT_NEEDED`. A `.dynsym` contém 203 exports por nome, incluindo as quatro funções GNM usadas pelo harness. `sceGnmSubmitDone` e `sceGnmDispatchInitDefaultHardwareState` têm corpos stub que terminam em loop infinito. O `.so` satisfaz o linker; não é runtime e não deve ser chamado.
 
-A `.dynsym` contém 203 símbolos e exporta por nome as quatro funções GNM usadas pelo harness, incluindo `sceGnmSubmitDone` (valor `0x46cc`), `sceGnmDispatchInitDefaultHardwareState` (`0x40d2`), `sceGnmFlushGarlic` (`0x41fe`) e `sceGnmSubmitCommandBuffers` (`0x46b8`). Porém, o disassembly de `sceGnmSubmitDone` é `endbr64; push rbp; mov rsp,rbp; jmp 0x46d4` — um loop infinito. `sceGnmDispatchInitDefaultHardwareState` também termina em salto para si mesmo. Portanto, os nomes/exportações satisfazem o linker, mas os corpos são stubs não funcionais e não devem ser chamados.
+**Reauditoria do pacote GNM-Link-Only instalado anteriormente:** o run de build [44873622760](https://github.com/demolidorreddragons/NR/actions/runs/44873622760), commit `bb40fb8e23582e8fbae53ca50812c128a7b15c0f`, produziu o artefato `ps4-neural-engine-build` ID `14694982825`, ZIP SHA-256 `490e33b2cb9fb574ffa29e33af8605f538db6cc559e13f3b479d533a56884a11`. O PKG GNM-Link era `PS4-Neural-Rendering-GCN8-gnm-link-44873622760.pkg`, SHA-256 `e68da9f35981aa32e788ebe3f0461360167c0194b0c408c47c945745ebab5847`; ELF SHA-256 `ac9bc3ac522fe2bcaa2768ef1f650aa2396f263e3f251f6a66525002be6eebb3`; MAP SHA-256 `9a840b64fbc8f2800f010af1ab25d4fbc9fee5a1ea4b8f5d880406af21b77c69`.
 
-### Impacto sobre GNM-Link-Only, PRX e decisão
+O PKG antigo foi reaberto com o PkgTool no run de auditoria [45018118702](https://github.com/demolidorreddragons/NR/actions/runs/45018118702), job `137194754008`. A inspeção do `uroot/eboot.bin` corrigiu a conclusão anterior: o OELF **tem** Sony import metadata para GNM. O resultado do audit script foi:
+- `SONY_IMPORT_LIBRARIES=1:libkernel;2:libSceGnmDriver`.
+- `SONY_NEEDED_MODULES=1:libkernel;2:libSceGnmDriver`.
+- NID `yvZ73uQUqrk#C#C`, símbolo Sony índice `2`, relocation `r_offset=0xc000`.
+- `SONY_IMPORT_AUDIT=PASS`.
 
-O arquivo OpenOrbis `libSceGnmDriver.so` é um ELF stub de link, com símbolos C e corpos de funções não funcionais; não é o módulo de runtime e não deve ser chamado. Porém, isso **não** significa que o PRX final ficará sem NID metadata: a auditoria 2.4 demonstrou que `create-fself --lib` converte o import de símbolo em entrada Sony NID/library/module válida no PRX.
-
-O antigo GNM-Link-Only apresentou GOT nulo para `sceGnmSubmitDone` no PS4. A anotação anterior de que seu OELF continha somente libkernel ainda precisa ser revalidada contra o OELF exato daquele build; não há base suficiente para atribuir a falha ao modo `--eboot`. A fonte pública de `create-fself` mostra que `GenerateLibrarySymbolDictionary` e `writeNIDTable` percorrem imports indefinidos independentemente de `IsLibrary`; `--lib` acrescenta também exports e module strings. Portanto, a causa do GOT nulo do eboot permanece **UNRESOLVED** e não deve ser inferida a partir do PRX atual.
+O ELF pré-SELF contém `DT_NEEDED libSceGnmDriver.so`, símbolo indefinido `sceGnmSubmitDone` e relocation `GLOB_DAT` no mesmo offset `0xc000`. O NID `yvZ73uQUqrk` decodifica para `0xCAF67BDEE414AAB9`, correspondendo ao NID conhecido de `sceGnmSubmitDone`. Logo, a causa do GOT nulo observado no PS4 **não é ausência da Sony import metadata nem NID incorreto**. O loader/runtime não preencheu o GOT apesar de a tabela de importação estar estruturalmente correta. A causa exata (carregamento automático do módulo, resolução de import em eboot ou outra condição do loader FW 14.02) permanece `UNRESOLVED`.
 
 **Decisão operacional:**
-- Compute smoke eboot: manter sem `-lSceGnmDriver` e usar `sceKernelLoadStartModule` + `sceKernelDlsym`, caminho já observado funcionando no GNM-Load-Only.
-- PRX principal: o import estático `sceGnmSubmitAndFlipCommandBuffers` tem Sony NID metadata estruturalmente correta (`STATIC_PASS`), mas resolução no loader/ABI do detour ainda não foi validada em hardware.
-- O `.so` OpenOrbis serve apenas para satisfazer o linker; não executar seus corpos de stub.
+- Compute eboot: manter sem import estático GNM e usar `sceKernelLoadStartModule` + `sceKernelDlsym`; o caminho dinâmico já passou no GNM-Load-Only em hardware.
+- GNM-Link eboot: metadata estática `PASS`, mas resolução de GOT em firmware `FAIL`; não repetir instalação/execução até isolar o comportamento do loader.
+- PRX principal: import estático `sceGnmSubmitAndFlipCommandBuffers` tem metadata `STATIC_PASS` (seção 2.4), mas resolução runtime/hook ainda `NOT_RUN`.
+- O `.so` OpenOrbis é apenas um stub de link; o conversor `create-fself` gera os NIDs no OELF a partir dos símbolos indefinidos. A ausência de NID no `.so` não significa ausência no OELF.
 
-### Correção de nomenclatura do workflow
+Fonte do conversor: https://github.com/OpenOrbis/create-fself/blob/master/pkg/oelf/OELFGenDynlibData.go. A fonte percorre imports indefinidos para construir a NID table; a diferença entre `--eboot` e `--lib` não explica a falha antiga.
 
-A etapa do workflow deve distinguir o linker stub da metadata emitida pelo conversor. O marcador adequado é `OPENORBIS_GNM_LINK_STUB=LINKED; CREATE_FSELF_LIB_NID_METADATA=EMITTED; RUNTIME_RESOLUTION=NOT_HARDWARE_VALIDATED`. O primeiro campo descreve o `.so` de link; o segundo descreve o PRX produzido pelo modo `--lib`; o terceiro preserva a limitação de hardware.
+**Classificação:** linker stub = `STATIC_REVIEW`; GNM-Link eboot Sony metadata = `STATIC_PASS`; GOT resolution no PS4 = `FAIL`; causa raiz do loader = `UNRESOLVED`; GNM-Load-Only DLSYM = `PS4_HARDWARE_VALIDATED` para o export testado. Nenhum staging/instalação nesta reauditoria.
 
-**Classificação:** stub de link auditado; Sony import metadata do PRX principal = `STATIC_PASS`; GNM-Link eboot anterior continua falho; runtime PRX/hardware = `NOT_RUN`. Nenhum staging/instalação foi realizado.
 ### 2.4. Auditoria Sony import metadata do PRX principal — PASS estático
 
 O PRX final do run `45015947338` foi aberto como fake SELF, usando a tabela de segmentos SELF para extrair o `PT_SCE_DYNLIBDATA` real. O segmento está no offset SELF `0x30b90`, tamanho `0x6100`; no ELF/OELF corresponde a `PT_SCE_DYNLIBDATA` em offset `0x47850`, tamanho `0x6100`. A tabela dinâmica contém dez módulos e dez bibliotecas, incluindo `libSceGnmDriver.prx` e `libSceGnmDriver`.
