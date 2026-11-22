@@ -1,6 +1,13 @@
 name: Stage GCN8 GNM-Load-Only diagnostic PKG on PS4
 
 on:
+  workflow_dispatch:
+    inputs:
+      confirm_stage:
+        description: "Explicitly authorize staging this exact GNM-Load-only diagnostic PKG to the PS4"
+        required: true
+        type: boolean
+        default: false
   push:
     branches: [feature/gcn8-numeric-kernels]
     paths:
