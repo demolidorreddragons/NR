@@ -1,20 +1,48 @@
 # PS4 PKG installer
 
-## Current release state — PKG 013 candidate (2026-11-22)
+## Current release state — PKG 013 staged (2026-11-22)
 
-Release 013 is being prepared as a **Full/Base** application package (`CATEGORY=gde`), not a patch. It upgrades the PKG 012 preflight with a process-local GNM runtime export audit:
+Release 013 is a **Full/Base** application package (`CATEGORY=gde`), not a patch. It upgrades PKG 012 with a process-local GNM runtime export audit:
 
-- It validates `/app0/pne-release.ini` against the bundled PRX SHA-256.
-- It locates or loads `libSceGnmDriver.sprx` into the app process, then resolves five required GNM exports with `sceKernelDlsym`: `sceGnmSubmitDone`, `sceGnmDispatchInitDefaultHardwareState`, `sceGnmFlushGarlic`, `sceGnmSubmitCommandBuffers`, and `sceGnmSubmitAndFlipCommandBuffers`.
-- It never calls a GNM export, submits command buffers, dispatches a shader, activates the Neural Rendering PRX, edits GoldHEN plugin configuration, restarts GoldHEN, or changes persistent system configuration.
-- A successful notification means only that the five symbol addresses were resolved in this app process. It does not validate ABI invocation, GPU memory, command submission, shader execution, or Neural Rendering.
+- Validates `/app0/pne-release.ini` against the bundled PRX SHA-256.
+- Locates or loads `libSceGnmDriver.sprx` into the app process and resolves five exports with `sceKernelDlsym`: `sceGnmSubmitDone`, `sceGnmDispatchInitDefaultHardwareState`, `sceGnmFlushGarlic`, `sceGnmSubmitCommandBuffers`, and `sceGnmSubmitAndFlipCommandBuffers`.
+- Never invokes a GNM export, submits command buffers, dispatches a shader, installs/activates the Neural Rendering PRX, edits GoldHEN configuration, or changes persistent system configuration.
+- PASS means only that the five symbols were resolved. It does not validate function-call ABI, GPU memory, cache policy, command submission, shader execution, or Neural Rendering.
 - Manifest remains `abi_status=unverified` and `hardware_status=not_tested`.
-- Build/independent QA/staging for 013 are pending in the current branch workflow. Do not install until the build and independent QA gates pass and staging/read-back is verified.
-- The read-only audit confirms TITLE_ID `PNEU00001` is already installed. This is a clean-install Full/Base PKG with the same TITLE_ID; if 013 is eventually approved, the user must manually remove the previous app before installing it. The assistant must not uninstall it.
+
+### Build and independent QA
+
+- Build + independent package QA: run `45069773465`, SUCCESS; source commit `bea3b39df248ed71c7b13064a6a402dea800a32a`.
+- Independent PKG inspector: PKG validation PASS; extraction PASS; SFO semantic fields PASS; GP4/manifest/payload association PASS.
+- QA report: `QA_STATUS=PASS_PC_ONLY_NOT_HARDWARE_TESTED`.
+- PKG: `PS4-Neural-Engine-013.pkg`, 6,619,136 bytes.
+- SHA-256: `73c4c9a43002ae55fadec532a9e97217d23e1742d5f4db2bed8a60abdec6f7d1`.
+- PRX SHA-256 inside package: `1e4531711a0768cfeb29f1d6f66b9541cf087b141eda7a05fed755d12507866c`.
+
+### PS4 staging/read-back
+
+- Staging workflow: run `45070164574`, SUCCESS.
+- Final path: `/data/pkg/PS4-Neural-Engine-013.pkg`.
+- Final remote read-back: 6,619,136 bytes; SHA-256 exactly matches the approved build artifact.
+- Previous PKG 012 archived intact at `/data/pkg/old/PS4-Neural-Engine-012.pkg`; 6,619,136 bytes; SHA-256 `240914f39c1dbfec39b0f21fdd022dd30f10356341860e47fffaacef3aa3825f`.
+- Exactly one Neural Rendering PKG remains in the `/data/pkg/` root: PKG 013.
+- `TITLE_ID=PNEU00001` is still installed. PKG 013 is Full/Base with the same TITLE_ID, so the user must manually remove the existing app before installing 013, considering any saved app data. The assistant did not uninstall it.
+- `INSTALLATION_PERFORMED=FALSE`. Staging is complete; installation and all console execution remain separate and have not been performed.
+
+### Manual installation handoff
+
+Only after the user decides to install:
+1. On the PS4, manually remove the existing Neural Engine app with TITLE_ID `PNEU00001` if a clean install is required. Preserve any app data the user wants to keep.
+2. Open **Configurações → GoldHEN → Package Installer** (or the Package Installer available in the installed environment).
+3. Select `PS4-Neural-Engine-013.pkg` from `/data/pkg/` and confirm installation.
+4. Wait for completion, then launch **PS4 Neural Engine Preflight** from the PS4 content menu.
+5. Report the exact notification shown (PASS/FAIL) and any crash code. Do not enable/activate the PRX or alter GoldHEN configuration.
+
+PKG 013 is a diagnostic preflight only. It must not be described as a Neural Rendering runtime release or as a fix for CE-34878-0. No PRX activation, compute dispatch, or GPU validation is authorized by this staging.
 
 ### PKG 012 evidence and CE-34878-0 distinction
 
-The user's PKG 012 installation is confirmed by the installed `/user/app/PNEU00001/app.pkg` read-back: 6,619,136 bytes and SHA-256 `240914f39c1dbfec39b0f21fdd022dd30f10356341860e47fffaacef3aa3825f`, exactly matching the build artifact. The user reported the preflight PASS notification.
+The user's PKG 012 installation is confirmed by the installed `/user/app/PNEU00001/app.pkg` read-back: 6,619,136 bytes and SHA-256 `240914f39c1dbfec39b0f21fdd022dd30f10356341860e47fffaacef3aa3825f`, exactly matching its build artifact. The user reported the preflight PASS notification.
 
 The expanded read-only collection (workflow `45069491003`) found no coredumps in `/data/sce_coredumps/`. The old RuntimeFixed package remains as a file under `/data/`, SHA-256 `a39ef4e64493b97b9551c287a82e820b9335cc35460f63b4c37bc3027972305b`; it is not the currently installed PNEU00001 package. The CE-34878-0 report remains associated with the earlier experimental RuntimeFixed/compute path, not with a reproduced PKG 012 preflight crash.
 
@@ -23,7 +51,7 @@ The collected prior GNM logs show:
 - GNM-Load-only probe `44876293567`: dynamic module load and `sceGnmSubmitDone` DLSYM succeeded.
 - Expanded export-audit probe `45040217180`: all five required exports resolved; no GNM call or compute dispatch was made.
 
-These observations narrow the earlier failure to the static import path and confirm the dynamic export lookup path on the prior diagnostic build. They do not validate the new integrated PKG 013 executable or clear the compute hardware gates.
+These observations confirm that the old link-only probe had a null static import and the later dynamic lookup probe resolved the exports. They do **not** establish the root cause of CE-34878-0. The new integrated PKG 013 app still requires user execution to validate its own startup path; it does not clear the compute hardware gates.
 
 ### Historical release 012
 
