@@ -30,6 +30,18 @@ This proves only that the five named symbols were resolved in this process. It d
 - The older GNM-Link-only probe `44873622760` observed a null static import address.
 - No coredump was present in the read-only collection for PKG 012. The historical CE-34878-0 report remains tied to the earlier experimental RuntimeFixed/compute path and is not represented as fixed by this preflight.
 
-## Release gate
+## Build, QA and staging result
 
-Do not stage for user installation unless host tests, target compilation, package validation, independent PKG QA, and artifact hash checks all pass. Staging is separate from installation. The user must manually remove the previously installed `PNEU00001` Full/Base app before installing a new Full/Base package with the same TITLE_ID. No automatic installation or PRX activation is authorized.
+- Build + independent QA run: `45069773465`, SUCCESS; commit `bea3b39df248ed71c7b13064a6a402dea800a32a`.
+- PKG: `PS4-Neural-Engine-013.pkg`; 6,619,136 bytes; SHA-256 `73c4c9a43002ae55fadec532a9e97217d23e1742d5f4db2bed8a60abdec6f7d1`.
+- Independent package validation/extraction/SFO/GP4/manifest/payload QA: PASS; `QA_STATUS=PASS_PC_ONLY_NOT_HARDWARE_TESTED`.
+- Staging run: `45070164574`, SUCCESS.
+- Final PS4 path: `/data/pkg/PS4-Neural-Engine-013.pkg`; remote read-back size and SHA-256 match the artifact.
+- PKG 012 archived intact at `/data/pkg/old/PS4-Neural-Engine-012.pkg`; exactly one Neural Rendering PKG remains in the staging root.
+- `PNEU00001` remains installed. Installation was not performed.
+
+## Manual installation handoff
+
+If the user chooses to test PKG 013, the existing app with TITLE_ID `PNEU00001` must first be removed manually (consider saved app data). Then use **Configurações → GoldHEN → Package Installer**, select `PS4-Neural-Engine-013.pkg` from `/data/pkg/`, wait for completion, and launch **PS4 Neural Engine Preflight** from the content menu. Report the exact notification or crash code. Do not activate the PRX, dispatch compute, or alter GoldHEN configuration.
+
+The package remains a diagnostic preflight only; QA is PC-only and hardware status is not tested.
