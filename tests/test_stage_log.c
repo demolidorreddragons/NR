@@ -2,11 +2,27 @@
 #include "stage_log.h"
 #include <assert.h>
 #include <signal.h>
+#include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/wait.h>
 #include <unistd.h>
+
+static void read_file_line_exact(const char *path, const char *expected) {
+    FILE *f = fopen(path, "rb");
+    assert(f != NULL);
+    char data[4096];
+    size_t n = fread(data, 1, sizeof(data) - 1, f);
+    fclose(f);
+    data[n] = '\0';
+    const char *line = strstr(data, expected);
+    assert(line != NULL);
+    assert(line == data || line[-1] == '\n');
+    const char *end = strchr(line, '\n');
+    assert(end != NULL);
+    assert((size_t)(end - line) == strlen(expected));
+}
 
 static void read_file_contains(const char *path, const char *needle) {
     FILE *f = fopen(path, "rb");
@@ -51,9 +67,16 @@ int main(void) {
     assert(WIFEXITED(wait_status));
     assert(WEXITSTATUS(wait_status) == 128 + SIGABRT);
     read_file_contains(crash_path, "SIGNAL_INSTALL_BEGIN");
-    read_file_contains(crash_path, "SIGNAL_ABI stack_t_size=");
-    read_file_contains(crash_path, "SIGNAL_DIAG op=sigaltstack signal=0 rc=0 errno=0");
-    read_file_contains(crash_path, "SIGNAL_DIAG op=sigemptyset signal=0 rc=0 errno=0");
+    char abi_line[160];
+    snprintf(abi_line, sizeof(abi_line),
+             "SIGNAL_ABI stack_t_size=%zu ss_sp_off=%zu ss_size_off=%zu ss_flags_off=%zu altstack_bytes=65536",
+             sizeof(stack_t), offsetof(stack_t, ss_sp),
+             offsetof(stack_t, ss_size), offsetof(stack_t, ss_flags));
+    read_file_line_exact(crash_path, abi_line);
+    read_file_line_exact(crash_path,
+                         "SIGNAL_DIAG op=sigaltstack signal=0 rc=0 errno=0");
+    read_file_line_exact(crash_path,
+                         "SIGNAL_DIAG op=sigemptyset signal=0 rc=0 errno=0");
     char signal_line[96];
     snprintf(signal_line, sizeof(signal_line),
              "SIGNAL_DIAG op=sigaction signal=%d rc=0 errno=0", SIGSEGV);
