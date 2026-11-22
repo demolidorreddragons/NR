@@ -5,19 +5,19 @@ from pathlib import Path
 import sys
 
 EXPECTED = {
-    "compute_smoke_add.gcn.bin": "bd6deda8f6fc7cc04f78b441864a0b57d63f259f8d048d6ac09747f0cc6988e5",
-    "e4m3_decode.gcn.bin": "08ed8e40dbab45038312f3d4db49a2dc49f209e7b393bc2c497a4b42ccb70c60",
-    "e4m3_encode.gcn.bin": "86b8c0a49fc46d513a27f344b1515cc7ab38353878215b29238d27d74e4d0142",
-    "gemm_fp16_accum.gcn.bin": "5bf7129019cab1e40a67b572dba41167c3e5346bfe3360ded939f84894008048",
-    "gemm_fp32.gcn.bin": "ca0325130b9b77294a3fd7c32957d076f90741584901570a2c1be5521a099412",
-    "gemm_fp32_wave64_tiled.gcn.bin": "5dd8cba2710502d5c1f930e4e0ddbe779a56b168900f1040c0e95b28c0f3f8bc",
+    "nr_gcn8_compute_smoke_add.gcn.bin": "bd6deda8f6fc7cc04f78b441864a0b57d63f259f8d048d6ac09747f0cc6988e5",
+    "nr_gcn8_e4m3_decode.gcn.bin": "08ed8e40dbab45038312f3d4db49a2dc49f209e7b393bc2c497a4b42ccb70c60",
+    "nr_gcn8_e4m3_encode.gcn.bin": "86b8c0a49fc46d513a27f344b1515cc7ab38353878215b29238d27d74e4d0142",
+    "nr_gcn8_gemm_fp16_accum.gcn.bin": "5bf7129019cab1e40a67b572dba41167c3e5346bfe3360ded939f84894008048",
+    "nr_gcn8_gemm_fp32.gcn.bin": "ca0325130b9b77294a3fd7c32957d076f90741584901570a2c1be5521a099412",
+    "nr_gcn8_gemm_fp32_wave64_tiled.gcn.bin": "5dd8cba2710502d5c1f930e4e0ddbe779a56b168900f1040c0e95b28c0f3f8bc",
 }
 
 def main() -> int:
     if len(sys.argv) != 2:
         raise SystemExit("usage: verify_gcn8_assets.py EXTRACTED_GCN8_DIR")
     root = Path(sys.argv[1])
-    manifest = (root / "SHA256SUMS").read_text(encoding="ascii").splitlines()
+    manifest = (root / "nr_gcn8_SHA256SUMS").read_text(encoding="ascii").splitlines()
     declared = {}
     for line in manifest:
         digest, name = line.split("  ", 1)
