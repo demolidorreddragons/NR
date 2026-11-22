@@ -77,6 +77,8 @@ static atomic_bool g_recording = ATOMIC_VAR_INIT(false);
 static atomic_bool g_running = ATOMIC_VAR_INIT(false);
 static uint64_t g_frequency = 0;
 static OrbisPthread g_input_thread;
+static bool g_skip_current_title = false;
+static bool g_input_thread_started = false;
 
 int32_t sceGnmSubmitAndFlipCommandBuffers_hook(uint32_t count, void *dcbGpuAddrs[],
  uint32_t *dcbSizesInBytes, void *ccbGpuAddrs[], uint32_t *ccbSizesInBytes,
@@ -171,7 +173,10 @@ static void *input_thread(void *arg) {
 
 s32 attr_public plugin_load(s32 argc, const char *argv[]) {
  (void)argc; (void)argv;
- if (skip_neural_rendering_title()) return 0;
+ if (skip_neural_rendering_title()) {
+  g_skip_current_title = true;
+  return 0;
+ }
  g_frequency = sceKernelGetProcessTimeCounterFrequency();
  if (!g_frequency) return -1;
  atomic_store(&g_running, true);
@@ -185,14 +190,22 @@ s32 attr_public plugin_load(s32 argc, const char *argv[]) {
   remove_gnm_hook();
   return -1;
  }
+ g_input_thread_started = true;
  NotifyStatic(TEX_ICON_SYSTEM, "PNE diagnostics ready: L3+L1+Triangle");
  return 0;
 }
 
 s32 attr_public plugin_unload(s32 argc, const char *argv[]) {
  (void)argc; (void)argv;
+ if (g_skip_current_title) {
+  g_skip_current_title = false;
+  return 0;
+ }
  atomic_store(&g_running, false);
- scePthreadJoin(g_input_thread, NULL);
+ if (g_input_thread_started) {
+  scePthreadJoin(g_input_thread, NULL);
+  g_input_thread_started = false;
+ }
  remove_gnm_hook();
  if (atomic_exchange(&g_recording, false)) pne_telemetry_stop();
  pne_github_disconnect();
