@@ -110,9 +110,24 @@ else
   clang++ "${COMMON[@]}" -c "$ROOT/platform/ps4/gcn8/gnm_resource_binding.cpp" -o "$STAGE/gnm_resource_binding.o"
   clang++ "${COMMON[@]}" -c "$ROOT/platform/ps4/gcn8/host/resource_table_contract.cpp" -o "$STAGE/resource_table_contract.o"
   clang++ "${COMMON[@]}" -c "$ROOT/platform/ps4/gcn8/host/shader_binary_contract.cpp" -o "$STAGE/shader_binary_contract.o"
-  ld.lld -m elf_x86_64 -pie --script "$OO_PS4_TOOLCHAIN/link.x" --eh-frame-hdr -L"$OO_PS4_TOOLCHAIN/lib" "$STAGE/smoke_main.o" "$STAGE/compute_smoke.o" "$STAGE/gnm_resource_binding.o" "$STAGE/resource_table_contract.o" "$STAGE/shader_binary_contract.o" "$STAGE/stage_log.o" "$OO_PS4_TOOLCHAIN/lib/crt1.o" -o "$STAGE/smoke.elf" -Map="$STAGE/smoke.map" -lc -lc++ -lkernel -lSceGnmDriver
+  ld.lld -m elf_x86_64 -pie --script "$OO_PS4_TOOLCHAIN/link.x" --eh-frame-hdr -L"$OO_PS4_TOOLCHAIN/lib" "$STAGE/smoke_main.o" "$STAGE/compute_smoke.o" "$STAGE/gnm_resource_binding.o" "$STAGE/resource_table_contract.o" "$STAGE/shader_binary_contract.o" "$STAGE/stage_log.o" "$OO_PS4_TOOLCHAIN/lib/crt1.o" -o "$STAGE/smoke.elf" -Map="$STAGE/smoke.map" -lc -lc++ -lkernel
 fi
 test -s "$STAGE/smoke.elf"
+
+if [[ "$MODE" == "compute" ]]; then
+  # GNM entry points are resolved at runtime with sceKernelDlsym. A static
+  # import would recreate the null-GOT failure seen in the GNM link probe.
+  if readelf -d "$STAGE/smoke.elf" | grep -Eq 'NEEDED.*libSceGnmDriver'; then
+    echo "COMPUTE_GNM_STATIC_IMPORT_AUDIT=FAIL; DT_NEEDED libSceGnmDriver" >&2
+    exit 1
+  fi
+  if readelf --wide --syms "$STAGE/smoke.elf" | awk '$7 == "UND" && $8 ~ /^sceGnm/ { found=1 } END { exit !found }'; then
+    echo "COMPUTE_GNM_STATIC_IMPORT_AUDIT=FAIL; unresolved sceGnm symbol" >&2
+    exit 1
+  fi
+  echo "COMPUTE_GNM_STATIC_IMPORT_AUDIT=PASS; runtime_dlsym_only"
+fi
+
 readelf -h "$STAGE/smoke.elf" | grep -Eq 'Class:[[:space:]]+ELF64'
 readelf -h "$STAGE/smoke.elf" | grep -Eq 'Machine:[[:space:]]+Advanced Micro Devices X86-64'
 readelf -h "$STAGE/smoke.elf" | grep -Eq 'Entry point address:[[:space:]]+0x[1-9a-fA-F]'
