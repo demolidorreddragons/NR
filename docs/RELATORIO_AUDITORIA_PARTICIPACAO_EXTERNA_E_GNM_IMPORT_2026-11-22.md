@@ -148,3 +148,5 @@ Esta evidência explica por que `-lSceGnmDriver` não pode ser tratado como prov
 O log do workflow `PS4 PRX and PKG build` atualmente emite `GCN8_GNM_LINK_SMOKE=resolved_with_valid_entry`. Interpretar `resolved` somente como link ELF contra o stub e entry point válido; não como resolução no loader do PS4. A etapa deve ser renomeada/registrada como `OPENORBIS_GNM_LINK_STUB=LINKED; SONY_RUNTIME_IMPORT=NOT_VALIDATED` em atualização posterior do workflow.
 
 **Classificação:** evidência estática/forense do toolchain e correlação com falha anterior em hardware; sem nova execução no console. A auditoria não autoriza reintroduzir link estático GNM nem alterar o bloqueio de compute.
+
+**Correção de comunicação CI:** commit `64629afaf49e5268718a11860f35b068d36a3a29` renomeou a etapa para `Link GCN8 OpenOrbis GNM stub (link-only; not a Sony import)` e alterou o marcador para `OPENORBIS_GNM_LINK_STUB=LINKED; SONY_RUNTIME_IMPORT=NOT_VALIDATED`. Isso impede que o sucesso de link seja interpretado como import Sony resolvido.
