@@ -80,11 +80,14 @@ static nr_detour_tx_outcome write_target(void *p, const uint8_t *bytes,
     ++f.write_calls;
     if (f.write_calls == 1 && f.failure == Failure::WriteNoEffect)
         return NR_DETOUR_TX_NO_EFFECT;
-    if (f.write_calls == 1 && (f.failure == Failure::WritePartial ||\n        f.failure == Failure::WritePartialRollbackWrite ||\n        f.failure == Failure::WritePartialVerifyRollback)) {
+    if (f.write_calls == 1 && (f.failure == Failure::WritePartial ||
+        f.failure == Failure::WritePartialRollbackWrite ||
+        f.failure == Failure::WritePartialVerifyRollback)) {
         std::memcpy(f.target.data(), bytes, length / 2);
         return NR_DETOUR_TX_UNKNOWN;
     }
-    if (f.write_calls > 1 && (f.failure == Failure::RollbackWrite ||\n        f.failure == Failure::WritePartialRollbackWrite))
+    if (f.write_calls > 1 && (f.failure == Failure::RollbackWrite ||
+        f.failure == Failure::WritePartialRollbackWrite))
         return NR_DETOUR_TX_UNKNOWN;
     std::memcpy(f.target.data(), bytes, length);
     return NR_DETOUR_TX_COMPLETE;
@@ -92,7 +95,8 @@ static nr_detour_tx_outcome write_target(void *p, const uint8_t *bytes,
 static int verify(void *p, const uint8_t *expected, size_t length) {
     auto &f = *static_cast<Fake *>(p);
     if (f.write_calls == 1 && f.failure == Failure::VerifyPatch) return 0;
-    if (f.write_calls > 1 && (f.failure == Failure::VerifyRollback ||\n        f.failure == Failure::WritePartialVerifyRollback)) return 0;
+    if (f.write_calls > 1 && (f.failure == Failure::VerifyRollback ||
+        f.failure == Failure::WritePartialVerifyRollback)) return 0;
     return std::memcmp(f.target.data(), expected, length) == 0;
 }
 static nr_detour_tx_outcome restore_protection(void *p) {
