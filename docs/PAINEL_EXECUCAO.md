@@ -271,3 +271,11 @@ A pesquisa não justificou mudança de código: parser e offset seguem intactos;
 - `main.c` agora usa detour x64 absoluto, verifica retorno/stub, limpa trampoline x64 em falha parcial e unload. Teste estático `tests/test_goldhen_hook_contract.py` integrado ao host-tests.
 - Host-tests run [45040217146](https://github.com/demolidorreddragons/NR/actions/runs/45040217146) SUCCESS; log: `GoldHEN GNM hook contract ... PASS`.
 - PRX build run [45040217180](https://github.com/demolidorreddragons/NR/actions/runs/45040217180) ainda em execução na última consulta. Sem validação hardware; propagação de erro de `sceKernelMprotect` no SDK continua pendente.
+## Build/QA após correção do hook x64
+
+- Run [45040217180](https://github.com/demolidorreddragons/NR/actions/runs/45040217180) SUCCESS: PRX compilado, Sony import audit PASS, Full/Base PKG gerado e validado.
+- PRX hash `14cdcc71202f80077457229ab30c86547fe3af9cf0e70b701f2789db526aeb1e`; GoldHEN archive 60.989 bytes, SHA-256 `ccd1485b59ed0b0a75e30c19375ae048148e4d1e54377b45cddb2a84b1c30de9`.
+- Independent QA job `137263468105` PASS_PC_ONLY_NOT_HARDWARE_TESTED; artifact ZIP `873cdcc39053e86f1f537676d35a61c83dbb50925e489339f667d72fc970fc78`.
+- Novo GNM-Load PKG `PS4-Neural-Rendering-GCN8-gnm-load-45040217180.pkg`, 6.619.136 bytes, SHA-256 `003baaa305dc6c6c9df20f0d383eba183ce795b873ead6f0f5e59a2d24b7383c`; ELF/OELF/MAP hashes registrados no relatório.
+- `readelf` confirma ELF sem imports `sceGnm*` e OELF com imports de kernel; auditor Sony PASS. O probe resolve cinco exports apenas em hardware futuro, não chama GNM.
+- Staging workflow manual-only, pinned ao build atual e exige `confirm_stage=true`; commit `a5397af4a44148bada62f16551f4f9ff50ab6149`. Staging não executado.
