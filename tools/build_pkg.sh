@@ -10,7 +10,7 @@ OUT="$ROOT/dist/pkg"
 TOOLS="$OO_PS4_TOOLCHAIN/bin/linux"
 PKGTOOL="${PKGTOOL_CORE:-$TOOLS/PkgTool.Core}"
 TITLE_ID="PNEU00001"
-APP_VERSION="${APP_VERSION:-01.08}"
+APP_VERSION="${APP_VERSION:-01.09}"
 if [[ ! "$APP_VERSION" =~ ^[0-9]{2}\.[0-9]{2}$ ]]; then
   echo "APP_VERSION must use Sony XX.YY format (for example 01.01)." >&2
   exit 1
@@ -58,6 +58,9 @@ done
 cp "$SAMPLE/sce_module/libc.prx" "$STAGE/sce_module/libc.prx"
 cp "$SAMPLE/sce_module/libSceFios2.prx" "$STAGE/sce_module/libSceFios2.prx"
 cp "$SAMPLE/sce_sys/about/right.sprx" "$STAGE/sce_sys/about/right.sprx"
+
+# Bundle the exact six GFX8 code objects from the audited shader-build artifact.
+python3 "$ROOT/tools/prepare_gcn8_pkg_assets.py" "$STAGE/gcn8"
 
 INSTALLER_CFLAGS=(--target=x86_64-pc-freebsd12-elf -std=gnu11 -fPIC -funwind-tables \
   -isysroot "$OO_PS4_TOOLCHAIN" -isystem "$OO_PS4_TOOLCHAIN/include" \
@@ -114,13 +117,17 @@ sfo PUBTOOLINFO Utf8 512 "c_date=$(date -u +%Y%m%d),img0_l0_size=7,img0_l1_size=
 for required in "$STAGE/ps4_neural_engine.prx" "$STAGE/pne-release.ini" "$STAGE/eboot.bin" \
                 "$STAGE/sce_sys/param.sfo" "$STAGE/sce_sys/icon0.png" \
                 "$STAGE/sce_sys/about/right.sprx" \
-                "$STAGE/sce_module/libc.prx" "$STAGE/sce_module/libSceFios2.prx"; do
+                "$STAGE/sce_module/libc.prx" "$STAGE/sce_module/libSceFios2.prx" \
+                "$STAGE/gcn8/SHA256SUMS" "$STAGE/gcn8/compute_smoke_add.gcn.bin" \
+                "$STAGE/gcn8/e4m3_decode.gcn.bin" "$STAGE/gcn8/e4m3_encode.gcn.bin" \
+                "$STAGE/gcn8/gemm_fp16_accum.gcn.bin" "$STAGE/gcn8/gemm_fp32.gcn.bin" \
+                "$STAGE/gcn8/gemm_fp32_wave64_tiled.gcn.bin"; do
   test -s "$required" || { echo "PKG_STAGE: missing or empty: $required" >&2; exit 1; }
 done
 
 cd "$STAGE"
 "$TOOLS/create-gp4" -out package.gp4 --content-id="$CONTENT_ID" \
-  --files "eboot.bin ps4_neural_engine.prx pne-release.ini sce_sys/param.sfo sce_sys/icon0.png sce_sys/about/right.sprx sce_module/libc.prx sce_module/libSceFios2.prx"
+  --files "eboot.bin ps4_neural_engine.prx pne-release.ini sce_sys/param.sfo sce_sys/icon0.png sce_sys/about/right.sprx sce_module/libc.prx sce_module/libSceFios2.prx gcn8/SHA256SUMS gcn8/compute_smoke_add.gcn.bin gcn8/e4m3_decode.gcn.bin gcn8/e4m3_encode.gcn.bin gcn8/gemm_fp16_accum.gcn.bin gcn8/gemm_fp32.gcn.bin gcn8/gemm_fp32_wave64_tiled.gcn.bin"
 "$PKGTOOL" pkg_build package.gp4 "$OUT"
 pkg="$(find "$OUT" -maxdepth 1 -type f -name '*.pkg' -print -quit)"
 test -n "$pkg" && test -s "$pkg"
@@ -164,7 +171,20 @@ manifest = open(found["pne-release.ini"], encoding="ascii").read().splitlines()
 if f"prx_sha256={actual}" not in manifest or "schema=1" not in manifest:
     raise SystemExit("VERIFY_STAGE: release manifest does not describe the extracted PRX")
 print(f"VERIFY_STAGE: manifest and PRX SHA-256 match ({actual})")
-print("VERIFY_STAGE: extracted executable payload is complete")
+asset_dir = os.path.join(root, "gcn8")
+asset_manifest = os.path.join(asset_dir, "SHA256SUMS")
+if not os.path.isfile(asset_manifest):
+    raise SystemExit("VERIFY_STAGE: GCN8 SHA256SUMS missing")
+for line in open(asset_manifest, encoding="ascii"):
+    expected, name = line.strip().split("  ", 1)
+    path = os.path.join(asset_dir, name)
+    if not os.path.isfile(path):
+        raise SystemExit(f"VERIFY_STAGE: GCN8 asset missing: {name}")
+    actual = hashlib.sha256(open(path, "rb").read()).hexdigest()
+    if actual != expected:
+        raise SystemExit(f"VERIFY_STAGE: GCN8 asset SHA-256 mismatch: {name}")
+    print(f"VERIFY_STAGE: GCN8 asset PASS {name} sha256={actual}")
+print("VERIFY_STAGE: extracted executable and GCN8 payload complete")
 PY
 sha256sum "$pkg"
 echo "PKG generated and validated: $pkg"
