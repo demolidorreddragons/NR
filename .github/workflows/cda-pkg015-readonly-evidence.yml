@@ -34,10 +34,10 @@ jobs:
               $parsedIp.AddressFamily -ne [System.Net.Sockets.AddressFamily]::InterNetwork) {
             throw 'PS4_IP must be a valid IPv4 literal; refusing network access.'
           }
-          foreach ($field in @(@('OBSERVED_RESULT',$env:OBSERVED_RESULT),@('FEEDBACK_REFERENCE',$env:FEEDBACK_REFERENCE))) {
-            if ([string]::IsNullOrWhiteSpace($field[1])) { throw "$($field[0]) must not be empty." }
-            if ($field[1].Length -gt 4096) { throw "$($field[0]) exceeds the 4096-character evidence limit." }
-          }
+          if ([string]::IsNullOrWhiteSpace($env:OBSERVED_RESULT)) { throw 'OBSERVED_RESULT must not be empty.' }
+          if ($env:OBSERVED_RESULT.Length -gt 4096) { throw 'OBSERVED_RESULT exceeds the 4096-character evidence limit.' }
+          if ([string]::IsNullOrWhiteSpace($env:FEEDBACK_REFERENCE)) { throw 'FEEDBACK_REFERENCE must not be empty.' }
+          if ($env:FEEDBACK_REFERENCE.Length -gt 4096) { throw 'FEEDBACK_REFERENCE exceeds the 4096-character evidence limit.' }
           $runRoot = Join-Path $env:RUNNER_TEMP ("cda-pkg015-" + $env:GITHUB_RUN_ID)
           if (Test-Path -LiteralPath $runRoot) { throw "Evidence directory exists; refusing overwrite: $runRoot" }
           New-Item -ItemType Directory -Path $runRoot | Out-Null
