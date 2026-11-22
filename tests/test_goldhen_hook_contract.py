@@ -19,7 +19,7 @@ assert '#include <orbis/libkernel.h>' in source
 assert 'sceKernelGetAppInfo(getpid(), &app_info)' in source
 assert 'PNE_TITLE_ID_CURRENT "PNEU00004"' in source
 assert 'PNE_TITLE_ID_LEGACY  "PNEU00001"' in source
-guard = source.index('if (skip_neural_rendering_title()) return 0;')
+guard = source.index('if (skip_neural_rendering_title()) {')
 frequency = source.index('g_frequency = sceKernelGetProcessTimeCounterFrequency();')
 hook = source.index('if (!install_gnm_hook())')
 thread = source.index('scePthreadCreate(&g_input_thread')
