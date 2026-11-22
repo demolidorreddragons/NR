@@ -32,7 +32,7 @@ PRX_SHA256="$(sha256sum "$STAGE/ps4_neural_engine.prx" | awk '{print $1}')"
 cat > "$STAGE/pne-release.ini" <<EOF
 schema=1
 release_number=$PKG_NUMBER
-installer_version=1
+installer_version=2
 app_version=$APP_VERSION
 title_id=$TITLE_ID
 content_id=$CONTENT_ID
@@ -62,14 +62,15 @@ cp "$SAMPLE/sce_sys/about/right.sprx" "$STAGE/sce_sys/about/right.sprx"
 INSTALLER_CFLAGS=(--target=x86_64-pc-freebsd12-elf -std=gnu11 -fPIC -funwind-tables \
   -isysroot "$OO_PS4_TOOLCHAIN" -isystem "$OO_PS4_TOOLCHAIN/include" \
   -isystem /usr/include/x86_64-linux-gnu -I"$GOLDHEN_SDK/include" -I"$ROOT/installer")
-clang "${INSTALLER_CFLAGS[@]}" -c "$ROOT/installer/main.c" -o "$STAGE/installer.o"
+# Build the read-only preflight executable. The legacy mutating installer
+# source is retained for audit/history but is deliberately not linked into PKGs.
+clang "${INSTALLER_CFLAGS[@]}" -c "$ROOT/installer/preflight_main.c" -o "$STAGE/preflight.o"
 clang "${INSTALLER_CFLAGS[@]}" -c "$ROOT/installer/sha256.c" -o "$STAGE/sha256.o"
 clang "${INSTALLER_CFLAGS[@]}" -c "$ROOT/installer/release_manifest.c" -o "$STAGE/release_manifest.o"
-clang "${INSTALLER_CFLAGS[@]}" -c "$ROOT/installer/hybrid_state.c" -o "$STAGE/hybrid_state.o"
 
 # Match the OpenOrbis sample linker flags: let link.x/crt1.o define startup.
 ld.lld -m elf_x86_64 -pie --script "$OO_PS4_TOOLCHAIN/link.x" \
-  --eh-frame-hdr -L"$OO_PS4_TOOLCHAIN/lib" "$STAGE/installer.o" "$STAGE/sha256.o" "$STAGE/release_manifest.o" "$STAGE/hybrid_state.o" \
+  --eh-frame-hdr -L"$OO_PS4_TOOLCHAIN/lib" "$STAGE/preflight.o" "$STAGE/sha256.o" "$STAGE/release_manifest.o" \
   -lc -lkernel -lSceSystemService "$OO_PS4_TOOLCHAIN/lib/crt1.o" \
   -o "$STAGE/installer.elf"
 test -s "$STAGE/installer.elf"
@@ -99,7 +100,7 @@ sfo FORMAT Utf8 4 obs
 sfo CONTENT_ID Utf8 48 "$CONTENT_ID"
 sfo DOWNLOAD_DATA_SIZE Integer 4 0
 sfo SYSTEM_VER Integer 4 1020
-sfo TITLE Utf8 128 "PS4 Neural Engine Installer"
+sfo TITLE Utf8 128 "PS4 Neural Engine Preflight"
 sfo TITLE_ID Utf8 12 "$TITLE_ID"
 sfo VERSION Utf8 8 "$APP_VERSION"
 
