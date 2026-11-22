@@ -1,20 +1,25 @@
-# NR bounded HDE64 decoder adapter — implementation and host validation
+# NR bounded HDE64 decoder and stolen-span preflight — implementation results
 
 **Date:** 2026-11-22  
 **Repository:** `demolidorreddragons/NR`  
 **Branch:** `feature/gcn8-numeric-kernels`  
-**Tested commit:** `295851b90f772f91e49eb052b6e7bb44dc4620bc`  
-**Host CI:** [host-tests #1507](https://github.com/demolidorreddragons/NR/actions/runs/45056033603) — telemetry job SUCCESS  
+**Host-tested commit:** `4de424468977f6fcee8f26ef36815db9da8df7fc`  
+**Host CI:** [host-tests #1510](https://github.com/demolidorreddragons/NR/actions/runs/45056225389) — telemetry job SUCCESS  
+**PRX build:** [PS4 PRX and PKG #644](https://github.com/demolidorreddragons/NR/actions/runs/45056164974) — `Build PS4 PRX` step SUCCESS; independent PKG QA was still running when this report was prepared  
 **Pinned GoldHEN SDK:** `bcea3c7ef01dac6d7f9f49ebf9e90fe66d86f5f7`
 
-## Implementation
+## Implemented modules
 
 Added:
 
 - `platform/ps4/goldhen/plugin/hde64_bounded.h`
 - `platform/ps4/goldhen/plugin/hde64_bounded.c`
+- `platform/ps4/goldhen/plugin/hde64_bounded_plan.h`
+- `platform/ps4/goldhen/plugin/hde64_bounded_plan.c`
 
-The PRX Makefile compiles the adapter as a distinct object. The live GNM hook does not call it.
+The PRX Makefile compiles both modules as distinct objects. Neither is called by the live GNM hook.
+
+### Bounded decoder adapter
 
 The API accepts a pointer plus an explicit byte count, copies at most 15 caller-declared bytes into a zero-initialized 32-byte scratch window, invokes the pinned upstream HDE64 decoder on the scratch buffer, and rejects zero-length, incomplete, overlong, or decoder-error results.
 
@@ -29,15 +34,25 @@ The normalized result reports:
 
 The pinned upstream HDE64 implementation does not correctly account for the disp32 field in the address-size-override ModRM `mod=00,r/m=101` form. The adapter therefore rejects this encoding when upstream metadata omits `F_DISP32`, rather than accepting a truncated decode. Operand-size-override rel16 branches are decoded but marked unsupported.
 
-The CI harness calls this project adapter, not the earlier test-local prototype.
+### Fail-closed stolen-span preflight planner
+
+The planner accepts an explicit readable span and a required minimum patch width, then builds an instruction-aligned plan capped at 64 bytes and 16 instructions. It rejects:
+
+- all relative control-flow instructions;
+- relative encodings marked unsupported;
+- all recognized RIP-relative memory operands;
+- truncated/error decodes;
+- spans that exceed its byte or instruction limits.
+
+It publishes the plan only after the full requested minimum is decoded. It does not change target memory, allocate executable memory, generate a trampoline, or perform relocation. This is a conservative preflight policy, not proof that every other possible x86 instruction class is position-independent.
 
 ## Host test coverage and evidence
 
-Run `45056033603` completed the telemetry job successfully. All steps passed, including the bounded-decoder harness, installer checks, GCN8 contract checks, CMake configure/build and CTest.
+Run `45056225389` completed the telemetry job successfully. The bounded decoder/planner step, installer checks, GCN8 contract checks, CMake configure/build and CTest all passed.
 
 The bounded-decoder harness verifies:
 
-1. The five known truncated-input guard-page faults still reproduce in raw upstream HDE64.
+1. Five raw upstream guard-page faults still reproduce for truncated input.
 2. All five truncated windows are rejected by the NR adapter without a fault.
 3. Null pointer, null output and zero-length spans are rejected.
 4. A one-byte NOP at an exact one-byte span is accepted.
@@ -48,37 +63,47 @@ The bounded-decoder harness verifies:
 9. SIB absolute disp32 is not misclassified as RIP-relative.
 10. The unsupported address-size-override disp32 form is rejected.
 11. disp8 memory operand metadata.
+12. A 14-byte NOP prologue produces a complete instruction-aligned preflight plan.
+13. A non-RIP SIB absolute-memory instruction is accepted by the current preflight policy.
+14. Relative branch, RIP-relative operand and unsupported rel16 all fail closed.
+15. Insufficient spans, zero minimum, null output and excessive instruction counts are rejected.
+16. A 64-byte span of 16 four-byte instructions is accepted at the configured maximum.
 
-The test harness compiles the exact pinned SDK source revision above with the NR adapter using `-std=c11 -Wall -Wextra -Werror`.
+The harness compiles the exact pinned SDK source revision above with both NR modules using `-std=c11 -Wall -Wextra -Werror`.
 
 ## Critical contract and limitations
 
 This is a bounded **adapter around the legacy decoder**, not a wholly independent x86 decoder.
 
-The caller must guarantee that the complete supplied byte span is readable and remains stable during the copy. The adapter cannot validate arbitrary pointer provenance, mapping permissions, lifetime, concurrent unmapping, or query/read TOCTOU. The zero-padded scratch window contains the upstream decoder's speculative reads; the decoded-length check ensures the accepted instruction itself fits within the caller-supplied span.
+The caller must guarantee that the complete supplied byte span is readable and remains stable during the copy. The adapter/planner cannot validate arbitrary pointer provenance, mapping permissions, lifetime, concurrent unmapping, or query/read TOCTOU. The zero-padded scratch window contains the upstream decoder's speculative reads; the decoded-length check ensures the accepted instruction itself fits within the caller-supplied span.
 
-The metadata is not relocation. In particular:
+The preflight planner is deliberately conservative, but it is not a relocator. It does not:
 
-- unsupported relative encodings are identified but not rewritten;
-- no branch target remapping for branches into the stolen instruction span exists;
-- no displacement overflow handling or trampoline code generation exists;
-- no live target prologue has been captured or measured on firmware 14.02.
+- relocate any relative branch/call or RIP-relative operand;
+- remap branches targeting instructions inside a stolen span;
+- generate a trampoline or jump-back sequence;
+- handle displacement overflow or branch-to-middle cases;
+- prove that all non-relative decoded instructions are safe to copy for every CPU mode/semantic edge case;
+- acquire or pin a PS4 target mapping.
 
-The adapter is compiled into the PRX build as an unused module and is not connected to `install_gnm_hook`. The existing upstream detour path remains unchanged and must not be enabled on the strength of these tests.
+Neither module is connected to `install_gnm_hook`. The existing upstream detour path remains unchanged and must not be enabled on the strength of these tests.
 
 ## Build and hardware status
 
-Host CI passed for the tested commit. The separate PS4 PRX/PKG build workflow `45055904514` was still running when this report was prepared; no PRX/PKG build result is claimed here. No PKG was staged or installed, and no PRX was activated on the console.
+Host CI passed for the host-tested commit. The PRX workflow's `Build PS4 PRX` step also passed, compiling the two new modules into the PRX object list. The containing build job completed successfully; its independent PKG QA job was still running when this report was prepared.
+
+No PKG was staged or installed, and no PRX was activated on the console. No firmware-14.02 hook execution, GNM dispatch, GPU execution, or hardware stability claim follows from these results.
 
 ## Remaining gates before any hook integration
 
 1. Establish a trustworthy readable-span acquisition contract on PS4, including mapping lifetime and concurrency.
-2. Add instruction/branch support policy and relocation tests for every accepted encoding, including internal branches and branch-to-middle rejection.
-3. Implement a fail-closed trampoline builder with signed displacement range checks.
-4. Check all protection operations, verify writes/restores, and retain resources if restoration is uncertain.
-5. Establish executable-code publication/cache semantics from an authoritative PS4 contract.
-6. Establish callback quiescence before teardown/unmapping.
-7. Validate every relevant firmware 14.02 API/ABI.
-8. Obtain a genuinely independent review; automated CI is not independent review.
+2. Expand instruction semantics coverage and prove the accepted no-relocation policy is complete for the target mode.
+3. Implement relocation for any supported relative/RIP-relative instructions, or continue rejecting them; add internal-branch mapping, branch-to-middle rejection and signed displacement overflow tests.
+4. Implement a fail-closed trampoline builder and verify generated code.
+5. Check all protection operations, verify writes/restores, and retain resources if restoration is uncertain.
+6. Establish executable-code publication/cache semantics from an authoritative PS4 contract.
+7. Establish callback quiescence before teardown/unmapping.
+8. Validate every relevant firmware 14.02 API/ABI.
+9. Obtain a genuinely independent code review; automated CI is not independent review.
 
-**Disposition:** a bounded-input adapter with normalized decode metadata is present, included in the PRX build graph, and host-tested. Live detour integration remains blocked.
+**Disposition:** the bounded decoder adapter and conservative stolen-span preflight planner are implemented, host-tested, and included in the PRX build graph. Live detour integration remains blocked.
