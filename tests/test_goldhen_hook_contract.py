@@ -29,5 +29,5 @@ assert "control application as well as games" in source
 assert "if (g_skip_current_title)" in source
 assert "if (g_input_thread_started)" in source
 assert "control-app Title IDs" in readme
-assert "sceKernelGetAppInfo" in readme
+assert "OrbisAppInfo" in readme
 print("GoldHEN PRX contract: x64 detour, cleanup, own-title exclusion and fail-closed app identity PASS")
