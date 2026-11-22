@@ -243,3 +243,11 @@ A pesquisa não justificou mudança de código: parser e offset seguem intactos;
 - GoldHEN SDK `Detour.c` pinado usa `E9 rel32` em `DetourMode_x32`, aloca trampoline via `malloc` e trunca o deslocamento para `uint32_t` sem checar alcance ±2 GiB. O macro `HOOK32` ignora o retorno da instalação.
 - Modo x64 usa salto absoluto de 14 bytes e exige prólogo suficiente; não trocar sem inspeção do export real.
 - Estado: `HOOK_DETOUR_SAFETY=BLOCKED`. Exige correção/validação do alcance, retorno de instalação, prólogo e ABI antes de qualquer instalação/ativação. Detalhes na seção 2.5 do relatório.
+## OELF import audit e GNM-Load-Only ampliado
+
+- `tools/audit_ps4_self_imports.py` foi integrado ao PRX workflow e ao builder dos eboots. Audita `PT_SCE_DYNLIBDATA`, imports Sony e relocations após `create-fself`.
+- Main PRX: run [45017466580](https://github.com/demolidorreddragons/NR/actions/runs/45017466580), audit `SONY_IMPORT_AUDIT=PASS` para NID `xbxNatawohc#C#C`.
+- Compute eboot: run [45017446531](https://github.com/demolidorreddragons/NR/actions/runs/45017446531), OELF `SONY_IMPORT_AUDIT=PASS`, sem biblioteca GNM.
+- GNM-Load-Only agora faz DLSYM address-only de cinco exports, incluindo `sceGnmSubmitAndFlipCommandBuffers`; nenhum é chamado. Run [45018436422](https://github.com/demolidorreddragons/NR/actions/runs/45018436422) SUCCESS; OELF contém somente libkernel; QA independente `PASS_PC_ONLY_NOT_HARDWARE_TESTED`.
+- PKG GNM-Load: 6.619.136 bytes, SHA-256 `7b0807a882895b9a392f64f0e97bb7aca8e2aaa94c254e0667cc0128996c1051`; artifact ZIP ID `14752946485`, SHA-256 `db3782f080e561a2d276af3e8da9c3989d7a6412d8393960369dd8b30270ea01`. Não staged/instalado.
+- Próximo gate: instalar e verificar por feedback somente após autorização específica de staging; o DLSYM do export `sceGnmSubmitAndFlipCommandBuffers` ainda não foi executado no PS4.
