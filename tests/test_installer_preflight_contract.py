@@ -51,7 +51,7 @@ assert 'installer/main.c" -o "$STAGE/installer.o"' not in build
 assert "installer/hybrid_state.c" not in build
 assert 'PS4 Neural Engine Preflight' in build
 assert "installer_version=3" in build
-assert "APP_VERSION:-01.09" in build
+assert "APP_VERSION:-01.10" in build
 assert 'mv "$pkg" "$numbered_pkg"' in build, "release output must contain only the canonical numbered PKG"
 assert 'cp "$pkg" "$numbered_pkg"' not in build, "do not retain a duplicate generic PKG"
 
