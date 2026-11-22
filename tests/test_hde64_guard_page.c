@@ -65,6 +65,33 @@ static int expect_relative(const uint8_t *bytes, size_t size,
     return 1;
 }
 
+static int test_span_edges(void) {
+    const uint8_t nop[] = {0x90};
+    const uint8_t max_length[] = {
+        0x66, 0x66, 0x66, 0x66, 0x66, 0x66, 0x66,
+        0x66, 0x66, 0x66, 0x66, 0x66, 0x66, 0x66, 0x90
+    };
+    nr_hde64_decoded decoded;
+
+    if (nr_hde64_decode_bounded(NULL, sizeof(nop), &decoded) ||
+        nr_hde64_decode_bounded(nop, 0, &decoded) ||
+        nr_hde64_decode_bounded(nop, sizeof(nop), NULL)) {
+        fprintf(stderr, "FAIL: null/empty span argument validation\\n");
+        return 0;
+    }
+    if (!nr_hde64_decode_bounded(nop, sizeof(nop), &decoded) ||
+        decoded.length != 1) {
+        fprintf(stderr, "FAIL: one-byte instruction at exact span boundary\\n");
+        return 0;
+    }
+    if (!nr_hde64_decode_bounded(max_length, sizeof(max_length), &decoded) ||
+        decoded.length != 15) {
+        fprintf(stderr, "FAIL: maximum-length 15-byte instruction\\n");
+        return 0;
+    }
+    return 1;
+}
+
 static int test_metadata(void) {
     const uint8_t call_rel32[] = {0xe8, 0, 0, 0, 0};
     const uint8_t jmp_rel8[] = {0xeb, 0};
@@ -125,7 +152,8 @@ int main(void) {
     const uint8_t modrm[] = {0x48, 0x8b};
     const uint8_t displacement[] = {0x48, 0x8b, 0x05};
     const uint8_t immediate[] = {0xe8, 0x11, 0x22};
-    int ok = test_metadata();
+    int ok = test_span_edges();
+    ok &= test_metadata();
     ok &= raw_decoder_faults(prefix, sizeof(prefix), "operand prefix");
     ok &= raw_decoder_faults(rex_opcode, sizeof(rex_opcode), "REX prefix");
     ok &= raw_decoder_faults(modrm, sizeof(modrm), "ModRM");
