@@ -30,6 +30,7 @@ assert guard < frequency < hook < thread
 assert "control application as well as games" in source
 assert "if (g_skip_current_title)" in source
 assert "if (g_input_thread_started)" in source
-assert "control-app Title IDs" in readme
+assert "globally inert" in readme
+assert "PNEU00004" in readme and "PNEU00001" in readme
 assert "OrbisAppInfo" in readme
 print("GoldHEN PRX contract: x64 detour remains dormant; no validated title adapter means fail-closed before hook/worker startup PASS")
