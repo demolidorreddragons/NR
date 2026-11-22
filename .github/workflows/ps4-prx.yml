@@ -252,7 +252,11 @@ jobs:
           cp build/pkg-stage/sce_sys/param.sfo dist/pkg/audit/param.sfo
           cp build/pkg-stage/pne-release.ini dist/pkg/audit/pne-release.ini
           cp installer/preflight_main.c dist/pkg/audit/preflight_main.c
+          cp tools/prepare_gcn8_pkg_assets.py dist/pkg/audit/prepare_gcn8_pkg_assets.py
+          cp tools/verify_gcn8_assets.py dist/pkg/audit/verify_gcn8_assets.py
           test -s "dist/pkg/audit/preflight_main.c"
+          test -s "dist/pkg/audit/prepare_gcn8_pkg_assets.py"
+          test -s "dist/pkg/audit/verify_gcn8_assets.py"
           test -s "dist/pkg/audit/PS4-Neural-Engine-${PKG_NUMBER}.gp4"
           test -s dist/pkg/audit/param.sfo
           test -s dist/pkg/audit/pne-release.ini
@@ -328,7 +332,7 @@ jobs:
           $preflightSource = Join-Path $artifact "pkg/audit/preflight_main.c"
           if (-not (Test-Path $preflightSource)) { throw "Read-only preflight source missing from build artifact." }
           $preflightText = Get-Content $preflightSource -Raw
-          foreach ($required in @("pne_validate_release_manifest(RELEASE_MANIFEST, SOURCE_PRX","GNM exports 5/5","sceKernelLoadStartModule","sceKernelDlsym","PRX NOT activated","sceKernelSendNotificationRequest")) {
+          foreach ($required in @("pne_validate_release_manifest(RELEASE_MANIFEST, SOURCE_PRX","GNM exports 5/5","GCN8 assets 6/6","audit_gcn8_assets","pne_sha256_file","sceKernelLoadStartModule","sceKernelDlsym","PRX NOT activated","sceKernelSendNotificationRequest")) {
             if ($preflightText -notmatch [regex]::Escape($required)) { throw "Preflight source contract missing: $required" }
           }
           foreach ($forbidden in @("/data/","plugins.ini","sceKernelMprotect","sceKernelMunmap","scePthreadCreate","sceKernelStopUnloadModule","sceKernelUnloadStartModule","sceGnmSubmitDone(","sceGnmDispatchInitDefaultHardwareState(","sceGnmFlushGarlic(","sceGnmSubmitCommandBuffers(","sceGnmSubmitAndFlipCommandBuffers(","mkdir(","rename(","remove(","unlink(","fopen(","open(","write(","fwrite(","system(")) {
@@ -336,7 +340,7 @@ jobs:
           }
           $gp4Text = Get-Content $gp4 -Raw
           if ($gp4Text -notmatch "IV0000-PNEU00001_00-PS4NEURALENG0000") { throw "GP4 CONTENT_ID mismatch." }
-          foreach ($entry in @("eboot.bin","ps4_neural_engine.prx","pne-release.ini","sce_sys/param.sfo")) {
+          foreach ($entry in @("eboot.bin","ps4_neural_engine.prx","pne-release.ini","sce_sys/param.sfo","gcn8/SHA256SUMS","gcn8/compute_smoke_add.gcn.bin","gcn8/e4m3_decode.gcn.bin","gcn8/e4m3_encode.gcn.bin","gcn8/gemm_fp16_accum.gcn.bin","gcn8/gemm_fp32.gcn.bin","gcn8/gemm_fp32_wave64_tiled.gcn.bin")) {
             if ($gp4Text -notmatch [regex]::Escape($entry)) { throw "GP4 file association missing: $entry" }
           }
           $manifestText = Get-Content $manifest -Raw
@@ -373,6 +377,11 @@ jobs:
           $embeddedPrxHash = (Get-FileHash -Algorithm SHA256 $prx.FullName).Hash.ToLowerInvariant()
           if ($embeddedPrxHash -ne $sourcePrxHash) { throw "Packaged PRX differs from standalone build PRX." }
           if ((Get-Content $embeddedManifest.FullName -Raw) -ne $manifestText) { throw "Packaged manifest differs from staged release manifest." }
+          $gcn8Dir = Get-ChildItem $out -Recurse -Directory -Filter gcn8 | Select-Object -First 1
+          if (-not $gcn8Dir) { throw "Packaged GCN8 asset directory missing." }
+          python tools/verify_gcn8_assets.py $gcn8Dir.FullName
+          if ($LASTEXITCODE -ne 0) { throw "Independent GCN8 asset hash verification failed." }
+          "GCN8_ASSETS=6_OF_6_HASHES_PASS" | Out-File qa-output/qa-report.txt -Append
           "PKG_KIND=FULL_BASE_APPLICATION_NOT_PATCH" | Out-File qa-output/qa-report.txt
           "PKG_BYTES=$((Get-Item $pkg).Length)" | Out-File qa-output/qa-report.txt -Append
           "PKG_SHA256=$pkgHash" | Out-File qa-output/qa-report.txt -Append
