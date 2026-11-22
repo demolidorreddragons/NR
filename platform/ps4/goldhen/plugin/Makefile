@@ -23,7 +23,7 @@ COMMON_FLAGS := --target=x86_64-pc-freebsd12-elf -fPIC -funwind-tables -fno-exce
 CFLAGS := $(COMMON_FLAGS) -std=c11 -c
 CXXFLAGS := $(COMMON_FLAGS) -std=c++17 -isystem $(TOOLCHAIN)/include/c++/v1 -c
 LIBS := -lSceLibcInternal -lSceGnmDriver -lScePad -lGoldHEN_Hook -lkernel -lSceSystemService -lSceUserService -lSceHttp -lSceSsl -lSceNet -lSceSysmodule -lc++
-OBJS := $(OBJDIR)/main.o $(OBJDIR)/plugin_common.o $(OBJDIR)/telemetry.o $(OBJDIR)/telemetry_bridge.o $(OBJDIR)/github_client.o $(OBJDIR)/gnm_resource_binding.o $(OBJDIR)/resource_table_contract.o $(OBJDIR)/shader_binary_contract.o $(OBJDIR)/vsharp_codec.o $(OBJDIR)/stage_log.o $(OBJDIR)/compute_smoke.o
+OBJS := $(OBJDIR)/main.o $(OBJDIR)/plugin_common.o $(OBJDIR)/hde64_bounded.o $(OBJDIR)/telemetry.o $(OBJDIR)/telemetry_bridge.o $(OBJDIR)/github_client.o $(OBJDIR)/gnm_resource_binding.o $(OBJDIR)/resource_table_contract.o $(OBJDIR)/shader_binary_contract.o $(OBJDIR)/vsharp_codec.o $(OBJDIR)/stage_log.o $(OBJDIR)/compute_smoke.o
 
 .PHONY: all clean
 all: $(TARGET_PRX)
@@ -34,6 +34,8 @@ $(OBJDIR) $(OUTDIR):
 $(OBJDIR)/main.o: main.c plugin_common.h | $(OBJDIR)
 	$(CC) $(CFLAGS) -o $@ $<
 $(OBJDIR)/plugin_common.o: plugin_common.c plugin_common.h | $(OBJDIR)
+	$(CC) $(CFLAGS) -o $@ $<
+$(OBJDIR)/hde64_bounded.o: hde64_bounded.c hde64_bounded.h | $(OBJDIR)
 	$(CC) $(CFLAGS) -o $@ $<
 $(OBJDIR)/telemetry.o: $(ROOT)/src/telemetry.cpp $(ROOT)/include/pne/telemetry.hpp | $(OBJDIR)
 	$(CXX) $(CXXFLAGS) -I$(ROOT)/include -o $@ $<
