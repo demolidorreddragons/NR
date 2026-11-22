@@ -46,3 +46,26 @@
 ## Resultado
 
 O próximo passo técnico ficou preparado sem tocar no console: depois que o usuário informar o resultado real da instalação/execução do PKG 015, revisar novamente este workflow e acioná-lo manualmente. Até lá, não gerar outro PKG corretivo nem tratar esta melhoria do coletor como correção do runtime.
+
+## Incidente de automação identificado durante a preparação
+
+A inspeção posterior do workflow `.github/workflows/host-tests.yml` revelou que o job legado `retrieve-ps4-crash-log` era disparado automaticamente em todo `push` para o branch e usava o endereço FTP fixo `192.168.0.17:2121`. Esse job não havia sido identificado antes dos commits desta preparação. Como consequência, quatro execuções automáticas fizeram coleta FTP somente leitura durante a sequência de commits:
+
+| Workflow run | Job | Artifact |
+|---|---:|---:|
+| `45075976809` | `137373159201` | `14775460267` |
+| `45075993679` | `137373212483` | `14775097249` |
+| `45075997031` | `137373223045` | `14774518645` |
+| `45076016345` | `137373284565` | `14775017646` |
+
+Os logs dos jobs mostram LIST de diretórios e GET de logs; não mostram PUT, DELETE, RENAME, instalação, ativação de PRX ou alteração de configuração. O coletor antigo tentou baixar `/user/data/pne.log` e `/data/pne.log` (ambos retornaram FTP 550), e obteve cópias de um log legado de 324 bytes, `/data/sce_logs/log.bin` de 16 MiB, `/data/Loader_Logs.txt` de 282 bytes e `/data/memory.log` de 150 bytes. Isso é somente evidência de que as operações de leitura ocorreram; não identifica a versão instalada, não prova execução do PKG 015 e não deve ser usado para atribuir causa.
+
+Artefatos brutos preservados automaticamente pelo GitHub Actions, sem análise causal nesta etapa:
+- [Run 45075976809 / artifact 14775460267](https://github.com/demolidorreddragons/NR/actions/runs/45075976809)
+- [Run 45075993679 / artifact 14775097249](https://github.com/demolidorreddragons/NR/actions/runs/45075993679)
+- [Run 45075997031 / artifact 14774518645](https://github.com/demolidorreddragons/NR/actions/runs/45075997031)
+- [Run 45076016345 / artifact 14775017646](https://github.com/demolidorreddragons/NR/actions/runs/45076016345)
+
+**Correção preventiva aplicada:** removido integralmente o job de coleta PS4 do workflow geral de host tests no commit `93c56e81df76f49118803eacd824521a0f0394a2`. O host tests continua sendo acionado por push, mas não possui mais job no runner PS4. A coleta futura PKG 015 fica isolada no workflow CDA manual, após feedback. Nenhum arquivo remoto foi alterado segundo as operações/logs observados.
+
+**Classificação:** incidente de automação de coleta não destrutiva; não é incidente de integridade do PKG nem evidência de falha de runtime. Os quatro snapshots são preservados, não correlacionados ao PKG 015 até a identidade instalada ser comprovada.
