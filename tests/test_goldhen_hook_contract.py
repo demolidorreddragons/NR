@@ -31,6 +31,7 @@ assert "control application as well as games" in source
 assert "if (g_skip_current_title)" in source
 assert "if (g_input_thread_started)" in source
 assert "globally inert" in readme
-assert "PNEU00004" in readme and "PNEU00001" in readme
-assert "OrbisAppInfo" in readme
+assert "PNEU00004" in source and "PNEU00001" in source
+assert "OrbisAppInfo" in source
+assert "globally inert" in readme
 print("GoldHEN PRX contract: x64 detour remains dormant; no validated title adapter means fail-closed before hook/worker startup PASS")
