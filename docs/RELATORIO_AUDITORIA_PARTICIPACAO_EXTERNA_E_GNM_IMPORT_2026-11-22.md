@@ -236,3 +236,10 @@ O job self-hosted read-only `137197386898` recolheu novamente os arquivos dispon
 **Correlação:** o log confirma o GOT nulo já observado; a reauditoria do PKG confirmou NID e relocation Sony válidos. A falha continua classificada como `RUNTIME_IMPORT_RESOLUTION_FAIL / ROOT_CAUSE_UNRESOLVED`. A ausência de coredump e o retorno explícito 1 impedem atribuir, com a evidência atual, o CE-34878 a uma chamada GNM ou a um crash dentro do harness.
 
 **Testes unitários do parser:** `tests/test_ps4_self_import_audit.py` cobre OELF cru, fake SELF, NID com relocation, NID incorreto e biblioteca proibida. Run host-tests [45018960242](https://github.com/demolidorreddragons/NR/actions/runs/45018960242), job `137197386692`: `Ran 4 tests ... OK`; workflow SUCCESS.
+### 2.9. Salvaguarda de staging do GNM-Load-Only
+
+Foi corrigido `.github/workflows/stage-gcn8-gnm-link-001.yml`: o gatilho automático `push` foi removido. O workflow agora aceita somente `workflow_dispatch`, exige `confirm_stage=true` e aponta para o build/QA atuais do run `45018436422`, PKG SHA-256 `7b0807a882895b9a392f64f0e97bb7aca8e2aaa94c254e0667cc0128996c1051`. Isso impede que um commit documental dispare transferência ao console e elimina a referência obsoleta ao PKG de 44876293567.
+
+Commit da salvaguarda: `8fd6bde4120a120ebb15d785471345e77c0368d6`. Host-tests run `45039960210` terminou SUCCESS; job telemetry SUCCESS e coleta read-only PS4 SUCCESS. A coleta confirmou novamente o log legado de 324 bytes e os hashes previamente registrados; `/data/pne.log` segue ausente. Nenhum arquivo foi escrito no console.
+
+**Estado de staging:** não executado. `workflow_dispatch` não foi chamado. O campo booleano `confirm_stage` permanece uma barreira adicional; a execução de staging requer autorização explícita do usuário.
