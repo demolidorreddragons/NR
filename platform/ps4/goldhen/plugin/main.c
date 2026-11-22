@@ -23,6 +23,37 @@ int32_t sceGnmSubmitAndFlipCommandBuffers(uint32_t count, void *dcbGpuAddrs[],
  uint32_t videoOutHandle, uint32_t displayBufferIndex, uint32_t flipMode, int64_t flipArg);
 HOOK_INIT(sceGnmSubmitAndFlipCommandBuffers);
 
+// GoldHEN SDK's HOOK32 selects DetourMode_x32 (E9 rel32). This PRX is
+// x86-64; use the SDK's absolute 14-byte x64 detour and own trampoline cleanup.
+static bool install_gnm_hook(void) {
+ Detour_Construct(&Detour_sceGnmSubmitAndFlipCommandBuffers, DetourMode_x64);
+ void *stub = Detour_DetourFunction(
+  &Detour_sceGnmSubmitAndFlipCommandBuffers,
+  (uint64_t)sceGnmSubmitAndFlipCommandBuffers,
+  (void *)&sceGnmSubmitAndFlipCommandBuffers_hook);
+ if (!stub || !Detour_sceGnmSubmitAndFlipCommandBuffers.StubPtr) {
+  if (Detour_sceGnmSubmitAndFlipCommandBuffers.StubPtr)
+   Detour_Destroy(&Detour_sceGnmSubmitAndFlipCommandBuffers);
+  if (Detour_sceGnmSubmitAndFlipCommandBuffers.TrampolinePtr)
+   sceKernelMunmap(Detour_sceGnmSubmitAndFlipCommandBuffers.TrampolinePtr,
+    sizeof(Detour_sceGnmSubmitAndFlipCommandBuffers.JumpInstructions64));
+  std::memset(&Detour_sceGnmSubmitAndFlipCommandBuffers, 0,
+   sizeof(Detour_sceGnmSubmitAndFlipCommandBuffers));
+  return false;
+ }
+ return true;
+}
+
+static void remove_gnm_hook(void) {
+ if (Detour_sceGnmSubmitAndFlipCommandBuffers.StubPtr)
+  Detour_Destroy(&Detour_sceGnmSubmitAndFlipCommandBuffers);
+ if (Detour_sceGnmSubmitAndFlipCommandBuffers.TrampolinePtr)
+  sceKernelMunmap(Detour_sceGnmSubmitAndFlipCommandBuffers.TrampolinePtr,
+   sizeof(Detour_sceGnmSubmitAndFlipCommandBuffers.JumpInstructions64));
+ std::memset(&Detour_sceGnmSubmitAndFlipCommandBuffers, 0,
+  sizeof(Detour_sceGnmSubmitAndFlipCommandBuffers));
+}
+
 static atomic_bool g_recording = ATOMIC_VAR_INIT(false);
 static atomic_bool g_running = ATOMIC_VAR_INIT(false);
 static uint64_t g_frequency = 0;
@@ -124,10 +155,14 @@ s32 attr_public plugin_load(s32 argc, const char *argv[]) {
  g_frequency = sceKernelGetProcessTimeCounterFrequency();
  if (!g_frequency) return -1;
  atomic_store(&g_running, true);
- HOOK32(sceGnmSubmitAndFlipCommandBuffers);
+ if (!install_gnm_hook()) {
+  atomic_store(&g_running, false);
+  NotifyStatic(TEX_ICON_SYSTEM, "PNE: GNM hook installation failed");
+  return -1;
+ }
  if (scePthreadCreate(&g_input_thread, NULL, input_thread, NULL, "pne_input") != 0) {
   atomic_store(&g_running, false);
-  UNHOOK(sceGnmSubmitAndFlipCommandBuffers);
+  remove_gnm_hook();
   return -1;
  }
  NotifyStatic(TEX_ICON_SYSTEM, "PNE diagnostics ready: L3+L1+Triangle");
@@ -136,7 +171,7 @@ s32 attr_public plugin_load(s32 argc, const char *argv[]) {
 
 s32 attr_public plugin_unload(s32 argc, const char *argv[]) {
  (void)argc; (void)argv;
- UNHOOK(sceGnmSubmitAndFlipCommandBuffers);
+ remove_gnm_hook();
  atomic_store(&g_running, false);
  scePthreadJoin(g_input_thread, NULL);
  if (atomic_exchange(&g_recording, false)) pne_telemetry_stop();
