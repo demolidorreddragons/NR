@@ -20,7 +20,7 @@ jobs:
     timeout-minutes: 20
     steps:
       - name: Clean local artifact workspace on persistent runner
-        shell: powershell
+        shell: powershell -NoProfile -ExecutionPolicy Bypass -Command "& '{0}'"
         run: |
           $ErrorActionPreference = "Stop"
           foreach ($directory in @("transfer","qa")) {
@@ -50,7 +50,7 @@ jobs:
           github-token: ${{ github.token }}
 
       - name: Verify exact package, manifest, source contract and independent QA before PS4 writes
-        shell: powershell
+        shell: powershell -NoProfile -ExecutionPolicy Bypass -Command "& '{0}'"
         env:
           EXPECTED_SHA256: 240914f39c1dbfec39b0f21fdd022dd30f10356341860e47fffaacef3aa3825f
           EXPECTED_BYTES: "6619136"
@@ -148,7 +148,7 @@ jobs:
           Write-Host "APPROVED_PREFLIGHT_ARTIFACT_VERIFIED=TRUE"
 
       - name: Archive prior Neural Rendering PKGs and stage verified package with read-back
-        shell: powershell
+        shell: powershell -NoProfile -ExecutionPolicy Bypass -Command "& '{0}'"
         env:
           PS4_IP: ${{ vars.PS4_IP }}
         run: |
