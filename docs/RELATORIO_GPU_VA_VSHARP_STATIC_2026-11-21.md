@@ -177,3 +177,46 @@ Construir um fixture sintético de container, sem PS4, que varie o tamanho do c�
 Esse experimento pode provar consistência estrutural do formato modelado, mas não provar aceitação pelo parser Sony. A evidência pública atualmente disponível não basta para escolher um layout alternativo. Manter o tiled rejeitado e o runtime bloqueado até essa análise.
 
 **Estado:** overflow reproduzido/explicado estaticamente; mitigação por rejeição é válida; solução estrutural ainda BLOCKED; nenhum dispatch ou teste PS4 realizado.
+
+## 11. Rechecagem de endereçamento e política V# para compute — 2026-11-22
+
+### 11.1 Separação entre offset DirectMemory e endereço mapeado
+
+Foi reaberto o código do OpenGNM no commit exato pinado pelo projeto (`4b295ca54c82c83acf308d1c646a2dfa9ae57350`), especialmente `src/helpers.c`, `include/gnm_helpers.h` e `include/gnm_buffer.h`.
+
+- `sceKernelAllocateDirectMemory` retorna um offset/endereço físico de backing em `directmemory`; `sceKernelMapDirectMemory` recebe esse valor e devolve separadamente `mapped`.
+- O helper Orbis conserva ambos: `memory->mapped = mapped` e `memory->directmemory = (uint64_t)directmemory`. O release usa `directmemory` para `sceKernelReleaseDirectMemory`; o mapping CPU é `mapped`.
+- `sceGnmBufSetBaseAddress` grava os bits do argumento nos campos `baseaddress` e `baseaddresshi` (12 bits), e a referência OpenGNM descreve o resultado como GPU virtual base address.
+- O hardware smoke do OpenGNM usa o ponteiro `mapped` para command buffer e EOP label. Isso é precedente de implementação para DCB/EOP, não demonstra por si só a semântica de V# writable compute.
+- Um renderer PS4 público (Moonlight DX PS4) também usa buffers alocados a partir de `mapped` para `sceGnmCreateConstBuffer` e `sceGnmTexSetBaseAddress`; é evidência de uso em caminho gráfico/constante, não prova para SSBO gravável em compute.
+
+**Conclusão delimitada:** não trocar `mapped` por `directmemory`; o último é o offset de backing e também é usado para release. O uso de `mapped` como endereço de recurso é coerente com a API V# e precedentes de renderização. Ainda não existe prova direta de que o valor retornado seja um GPU VA utilizável para V# compute no firmware 14.02, nem de que a alocação/mapa satisfaça a tabela de user-SGPR abaixo de 4 GiB. O gate GPU VA/low-4-GiB permanece BLOCKED.
+
+### 11.2 V# gravável e política de cache
+
+No header OpenGNM pinado, `GnmMemoryType` define `GNM_MEMORY_READONLY=0x10`, `GNM_MEMORY_PRIVATE=0x60`, `GNM_MEMORY_CACHE_UNCOHERENT=0x6d`, `GNM_MEMORY_CACHE_COHERENT=0x6e` e `GNM_MEMORY_UNCACHED=0x6f`. `sceGnmBufSetMemoryType` codifica o tipo nos campos `mtype`, `mtype_l1s` e `mtype_l2`; os parâmetros `l1cachebypass` e `kcachebypass` são bits separados.
+
+O harness atual escolhe `GNM_MEMORY_READONLY` para input e `GNM_MEMORY_UNCACHED` para output, ambos em direct memory Garlic com proteção CPU/GPU RW. A proteção de mapeamento (`GNM_PROT_CPU_GPU_RW`) e o `GnmMemoryType` do descriptor são domínios distintos: a primeira controla permissões do mapping; o segundo programa atributos de acesso/cache no V#. A existência dos enums e a codificação de bits confirmam apenas que os valores são representáveis no header; não demonstram que `UNCACHED` seja a política correta/aceita para um SSBO writable GFX8/NEO, nem que ela resolva visibilidade CPU↔GPU.
+
+O OpenGNM smoke fixado executa um draw de contagem zero, usa Garlic para DCB/EOP e não exercita V# writable compute. A documentação pública de tipos também lista os enums, mas não fornece contrato de writeback/invalidação para esse cenário.
+
+**Decisão:** não alterar `GNM_MEMORY_UNCACHED`, os bypass bits, o pool Garlic/Onion ou a sequência de flush/fence/readback por tentativa. O output V# writable e a política de cache continuam BLOCKED. Para avançar, é necessária evidência primária de ABI/firmware ou um teste mínimo controlado e autorizado que valide separadamente: descriptor aceito, store GPU, conclusão/fence e leitura CPU coerente.
+
+### 11.3 Próxima sequência técnica sem tocar no console
+
+1. Preparar um teste host de codificação V# que compare os 4 dwords construídos manualmente com os campos definidos no header pinado, incluindo base low/high, stride, record count, format, channel selectors e memory-type bits. O resultado só certificará a codificação estrutural, não a semântica de hardware.
+2. Manter o gate para firmware até obter uma fonte autoritativa para writable V#/cache ou revisão externa técnica identificável.
+3. Só depois da evidência estática e da revisão, submeter um plano mínimo de probe reversível; qualquer deploy/execução no PS4 exigirá autorização explícita separada.
+
+**Classificação:** STATIC_REVIEW. Sem alteração de código, sem novo build, sem staging e sem execução no PS4. GPU VA para V# compute = BLOCKED; V# writable/cache = BLOCKED; dispatch/readback = NOT_RUN.
+
+### Fontes primárias e de implementação consultadas
+
+- OpenGNM pinned `src/helpers.c`: https://github.com/PS4-OpenGNM/opengnm/blob/4b295ca54c82c83acf308d1c646a2dfa9ae57350/src/helpers.c
+- OpenGNM pinned `include/gnm_helpers.h`: https://github.com/PS4-OpenGNM/opengnm/blob/4b295ca54c82c83acf308d1c646a2dfa9ae57350/include/gnm_helpers.h
+- OpenGNM pinned `include/gnm_buffer.h`: https://github.com/PS4-OpenGNM/opengnm/blob/4b295ca54c82c83acf308d1c646a2dfa9ae57350/include/gnm_buffer.h
+- OpenGNM pinned `include/gnm_types.h`: https://github.com/PS4-OpenGNM/opengnm/blob/4b295ca54c82c83acf308d1c646a2dfa9ae57350/include/gnm_types.h
+- OpenOrbis Libkernel mapping semantics: https://github.com/OpenOrbis/OpenOrbis-PS4-Toolchain/blob/0a1aaf9dd4a92695538bdeb09fb056d06dd11725/docs/MD/PS4%20Libraries/Libkernel.md
+- OpenGNM hardware smoke: https://github.com/PS4-OpenGNM/opengnm/blob/4b295ca54c82c83acf308d1c646a2dfa9ae57350/tests/hardware_smoke.c
+- OpenGNM public GnmMemoryType reference: https://ps4-opengnm.github.io/opengnm/reference/types/
+- Example PS4 graphics renderer using mapped memory in GNM descriptors: https://git.fourletterworkshop.com/moonlight-dx-ps4/blob/v2.00/src/platform/ps4/GpuVideoRenderer.cpp
