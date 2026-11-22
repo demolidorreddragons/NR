@@ -96,6 +96,7 @@ jobs:
 
           $files = @(
             "/data/pne_gcn8_compute_smoke_45040217180.log",
+            "/user/data/pne_gcn8_compute_smoke_45040217180.log",
             "/data/pne_gcn8_compute_smoke_44876293567.log",
             "/data/GoldHEN/ps4_neural_engine_install.log",
             "/data/GoldHEN/plugins.ini",
