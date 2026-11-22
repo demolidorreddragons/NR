@@ -229,3 +229,4 @@ A pesquisa não justificou mudança de código: parser e offset seguem intactos;
 - `sceGnmSubmitDone` e `sceGnmDispatchInitDefaultHardwareState` no stub entram em loop infinito; o arquivo satisfaz o linker, não é implementação runtime.
 - Isso é consistente com o OELF do GNM-Link-Only sem Sony import metadata e com GOT nulo observado no PS4. Melhor hipótese atual: link estático com stub C sem NID/module metadata não gera import Sony válido.
 - Decisão: não usar `-lSceGnmDriver` em caminho runtime/compute; manter `sceKernelLoadStartModule` + `sceKernelDlsym`, já comprovado no probe Load-Only. Link smoke só comprova link ELF, não import PS4. Detalhes na seção 2.3 do relatório.
+- Correção do rótulo do workflow: commit `64629afaf49e5268718a11860f35b068d36a3a29` passou a identificar explicitamente o link smoke como stub OpenOrbis, com `SONY_RUNTIME_IMPORT=NOT_VALIDATED`.
