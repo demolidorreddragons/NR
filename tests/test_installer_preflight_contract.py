@@ -14,11 +14,11 @@ assert "GNM exports 5/5" in source
 assert "GCN8 assets 6/6" in source
 assert "audit_gcn8_assets" in source
 assert "pne_sha256_file" in source
-assert "/app0/gcn8/" in source
+assert "/app0/nr_gcn8_" in source
 assert "prepare_gcn8_pkg_assets.py" in build
 for asset in ("compute_smoke_add", "e4m3_decode", "e4m3_encode", "gemm_fp16_accum", "gemm_fp32", "gemm_fp32_wave64_tiled"):
-    assert f"{asset}.gcn.bin" in build
-assert "gcn8/SHA256SUMS" in build
+    assert f"nr_gcn8_{asset}.gcn.bin" in build
+assert "nr_gcn8_SHA256SUMS" in build
 assert "sceKernelLoadStartModule" in source
 assert "sceKernelDlsym" in source
 assert "sceKernelGetFsSandboxRandomWord" in source
