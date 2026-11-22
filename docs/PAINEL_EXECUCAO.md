@@ -225,11 +225,10 @@ A pesquisa não justificou mudança de código: parser e offset seguem intactos;
 ## Auditoria do linker stub OpenOrbis GNM — run 45015947338
 
 - Artefato `ps4-neural-engine-build` ID `14752435074`, 38.256.476 bytes, ZIP SHA-256 `bce83e2fc3eb80c0ea65f14f5fda8721827e61641cebe250eced335d7a782d8e` verificado após download.
-- `libSceGnmDriver.so` OpenOrbis v0.5.4: 40.472 bytes, SHA-256 `21d38ac5e7d79ddc9ee9bc7b9a84547f43ea3144883f6ac787d16704c1b5121f`. ELF64 host link stub, 203 exports por nome; sem `DT_SCE_*`, sem NID `CAF67BDEE414AAB9`/`yvZ73uQUqrk` e sem tabela Sony de import.
-- `sceGnmSubmitDone` e `sceGnmDispatchInitDefaultHardwareState` no stub entram em loop infinito; o arquivo satisfaz o linker, não é implementação runtime.
-- Isso é consistente com o OELF do GNM-Link-Only sem Sony import metadata e com GOT nulo observado no PS4. Melhor hipótese atual: link estático com stub C sem NID/module metadata não gera import Sony válido.
-- Decisão: não usar `-lSceGnmDriver` em caminho runtime/compute; manter `sceKernelLoadStartModule` + `sceKernelDlsym`, já comprovado no probe Load-Only. Link smoke só comprova link ELF, não import PS4. Detalhes na seção 2.3 do relatório.
-- Correção do rótulo do workflow: commit `64629afaf49e5268718a11860f35b068d36a3a29` passou a identificar explicitamente o link smoke como stub OpenOrbis, com `SONY_RUNTIME_IMPORT=NOT_VALIDATED`.
+- `libSceGnmDriver.so` OpenOrbis v0.5.4: 40.472 bytes, SHA-256 `21d38ac5e7d79ddc9ee9bc7b9a84547f43ea3144883f6ac787d16704c1b5121f`. ELF64 host link stub, 203 exports por nome, sem metadata Sony; corpos de funções como `sceGnmSubmitDone` entram em loop infinito. Não é implementação runtime e não deve ser chamado.
+- Distinção importante: o PRX principal gerado com `create-fself --lib` tem Sony NID metadata válida para `sceGnmSubmitAndFlipCommandBuffers` (`xbxNatawohc#C#C`), conforme seção 2.4. O antigo GNM-Link eboot `--eboot` não tinha esse import e falhou com GOT nulo; não generalizar para PRX `--lib`.
+- Decisão: compute eboot continua sem `-lSceGnmDriver`, usando `sceKernelLoadStartModule` + `sceKernelDlsym` (GNM-Load-Only observado em hardware). O PRX principal mantém o import estático com metadata `STATIC_PASS`, mas runtime/ABI/detour ainda `NOT_RUN`.
+- O rótulo do workflow `64629afaf49e5268718a11860f35b068d36a3a29` descreve somente o link smoke contra o stub, não a metadata do PRX final.
 ## Auditoria do import GNM no PRX principal
 
 - PRX/ELF do run [45015947338](https://github.com/demolidorreddragons/NR/actions/runs/45015947338): ELF pré-SELF SHA-256 `92551a101ad8999f6b6db3fda3da8708bbaa5f8d8256311e09b7b34cea7e4eba`; PRX SHA-256 `f85a69a7165d4fd5ae62e3237fea9bacbdd1232a19ab1e8745f5f52da9e6598e`.
