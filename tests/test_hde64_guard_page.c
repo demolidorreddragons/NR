@@ -106,9 +106,8 @@ static int test_metadata(void) {
         fprintf(stderr, "FAIL: SIB absolute displacement classification\n");
         return 0;
     }
-    if (!nr_hde64_decode_bounded(addr_override, sizeof(addr_override), &decoded) ||
-        decoded.rip_relative || !decoded.address_size_override) {
-        fprintf(stderr, "FAIL: address-size override must not be classified RIP-relative\n");
+    if (nr_hde64_decode_bounded(addr_override, sizeof(addr_override), &decoded)) {
+        fprintf(stderr, "FAIL: unsupported address-size-override disp32 form must fail closed\n");
         return 0;
     }
     if (!nr_hde64_decode_bounded(rbp_disp8, sizeof(rbp_disp8), &decoded) ||
