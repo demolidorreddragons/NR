@@ -78,7 +78,7 @@ jobs:
             $sha = [System.Security.Cryptography.SHA256]::Create()
             try {
               $bytes = [Text.Encoding]::UTF8.GetBytes($remote)
-              return ([Convert]::ToHexString($sha.ComputeHash($bytes))).ToLowerInvariant()
+              return ([BitConverter]::ToString($sha.ComputeHash($bytes))).Replace('-','').ToLowerInvariant()
             } finally { $sha.Dispose() }
           }
           function Save-Listing([string]$remoteDir) {
