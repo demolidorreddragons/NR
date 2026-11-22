@@ -279,3 +279,4 @@ A pesquisa não justificou mudança de código: parser e offset seguem intactos;
 - Novo GNM-Load PKG `PS4-Neural-Rendering-GCN8-gnm-load-45040217180.pkg`, 6.619.136 bytes, SHA-256 `003baaa305dc6c6c9df20f0d383eba183ce795b873ead6f0f5e59a2d24b7383c`; ELF/OELF/MAP hashes registrados no relatório.
 - `readelf` confirma ELF sem imports `sceGnm*` e OELF com imports de kernel; auditor Sony PASS. O probe resolve cinco exports apenas em hardware futuro, não chama GNM.
 - Staging workflow manual-only, pinned ao build atual e exige `confirm_stage=true`; commit `a5397af4a44148bada62f16551f4f9ff50ab6149`. Staging não executado.
+- Hook ABI cross-check: OpenOrbis v0.5.4 and pinned OpenGNM agree on return/argument layout; last argument differs only signedness (`uint64_t` vs `int64_t`) across headers. Current hook follows OpenGNM; source-level discrepancy remains open pending Sony/firmware evidence.
