@@ -201,6 +201,6 @@ A pesquisa não justificou mudança de código: parser e offset seguem intactos;
 - PRs de delegação #9 (modelo), #10 (GNM) e #11 (QA clean-room) foram criados pela conta proprietária do repositório; as consultas de reviews não retornaram revisões formais. Não há evidência verificável de entrega/revisão externa nesses registros. Isso não prova ausência absoluta de atividade fora do GitHub.
 - Achado concreto: o link do modo compute ainda incluía `-lSceGnmDriver`, apesar da resolução dinâmica dos exports. A dependência foi removida e o ELF agora falha fechado se apresentar `DT_NEEDED libSceGnmDriver` ou símbolo `sceGnm*` indefinido.
 - Correção: commit [83d15edf1c3411752f75fdc98172f9e2f8094865](https://github.com/demolidorreddragons/NR/commit/83d15edf1c3411752f75fdc98172f9e2f8094865).
-- Relatório: commit `39747f9668f6e59eb21aa75f947cc86c7ac835d0`.
+- Relatório: criação em `39747f9668f6e59eb21aa75f947cc86c7ac835d0`, complemento técnico em `a798a1c628cbb7e25eff5b414334ab3bdffad3d8`.
 - **Validação do commit corrigido: PENDING CI** nesta atualização. Não marcar auditoria ELF como PASS até inspecionar o log/artefato do novo build.
 - GPU VA/V# writable, InputUsage runtime, cache/coerência e revisão independente permanecem BLOCKED/NOT_RUN. Dispatch/readback PS4 não executado; nenhum PKG staged ou instalado.
