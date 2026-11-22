@@ -74,7 +74,8 @@ typedef struct nr_detour_tx_result {
  * above; in particular, acquire_patch_window must be a real cross-thread
  * execution rendezvous, not an installer-only mutex.
  *
- * original and patch must each contain length readable bytes for the call.
+ * original and patch must be immutable, non-overlapping snapshots containing
+ * length readable bytes; neither may alias the live target range.
  * A POISONED result requires retaining all callback-owned state/resources.
  */
 nr_detour_tx_result nr_detour_tx_install(const nr_detour_tx_ops *ops,
