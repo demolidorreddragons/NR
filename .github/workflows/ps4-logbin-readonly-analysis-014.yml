@@ -71,17 +71,17 @@ jobs:
                 $bytes = [IO.File]::ReadAllBytes($dest)
                 $ascii = [Text.Encoding]::ASCII.GetString($bytes)
                 $utf16 = [Text.Encoding]::Unicode.GetString($bytes)
-                $matches = @()
+                $interestingStrings = @()
                 foreach ($pair in @(@{Name='ASCII';Text=$ascii},@{Name='UTF16LE';Text=$utf16})) {
                   foreach ($m in [regex]::Matches($pair.Text,'[ -~]{6,}')) {
                     if ($m.Value -match '(?i)PNE|PNEU|GNM|GCN|GFX|neural|crash|fault|fatal|error|exception|sceKernel|orbis|module|shader|app0') {
-                      $matches += ("ENCODING={0} OFFSET={1} TEXT={2}" -f $pair.Name,$m.Index,$m.Value.Trim())
+                      $interestingStrings += ("ENCODING={0} OFFSET={1} TEXT={2}" -f $pair.Name,$m.Index,$m.Value.Trim())
                     }
                   }
                 }
                 $extract = Join-Path $out 'sce-log-interesting-strings.txt'
-                $matches | Set-Content -LiteralPath $extract -Encoding UTF8
-                Write-Host "SCE_LOG_STRING_MATCHES=$($matches.Count)"
+                $interestingStrings | Set-Content -LiteralPath $extract -Encoding UTF8
+                Write-Host "SCE_LOG_STRING_MATCHES=$($interestingStrings.Count)"
                 Get-Content -LiteralPath $extract -TotalCount 400 | ForEach-Object { Write-Host $_ }
               }
             } catch { $manifest.Add("DOWNLOAD_UNAVAILABLE path=$remote detail=$($_.Exception.Message)") }
