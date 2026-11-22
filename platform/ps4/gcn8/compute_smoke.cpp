@@ -18,7 +18,7 @@
 #include "gnm_dataformat.h"
 
 #include "gnm_resource_binding.h"
-#include "vsharp_codec.h"
+#include "host/vsharp_codec.h"
 #include "host/resource_table_contract.h"
 #include "host/shader_binary_contract.h"
 
