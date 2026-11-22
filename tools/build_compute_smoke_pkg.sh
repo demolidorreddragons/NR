@@ -141,6 +141,12 @@ readelf -h "$STAGE/smoke.elf" | grep -Eq 'Entry point address:[[:space:]]+0x[1-9
 )
 test -s "$STAGE/eboot.bin"
 
+if [[ "$MODE" == "compute" ]]; then
+  # Audit Sony import metadata after create-fself, not only the pre-SELF ELF.
+  python3 "$ROOT/tools/audit_ps4_self_imports.py" \
+    --input "$STAGE/smoke.oelf" --forbid-library libSceGnmDriver
+fi
+
 "$PKGTOOL" sfo_new "$STAGE/sce_sys/param.sfo"
 sfo() {
   "$PKGTOOL" sfo_setentry "$STAGE/sce_sys/param.sfo" "$1" \
