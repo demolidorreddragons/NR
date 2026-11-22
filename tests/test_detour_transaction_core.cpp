@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
+#include <initializer_list>
 
 enum class Failure {
     None,
@@ -106,7 +107,7 @@ static nr_detour_tx_outcome release_gate(void *p) {
 }
 static nr_detour_tx_outcome release_resources(void *p) {
     auto &f = *static_cast<Fake *>(p);
-    if (f.failure == Failure::ReleaseResources) return NR_DETOUR_TX_UNKNOWN;
+    if (f.failure == Failure::ReleaseResources || f.failure == Failure::PublishNoEffectReleaseResources) return NR_DETOUR_TX_UNKNOWN;
     f.resources_released = true;
     return NR_DETOUR_TX_COMPLETE;
 }
