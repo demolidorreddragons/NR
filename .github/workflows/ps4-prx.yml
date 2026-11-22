@@ -292,6 +292,10 @@ jobs:
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 10.0.x
+      - name: Setup Python for independent GFX8 asset verification
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
       - name: Download exact build artifact
         uses: actions/download-artifact@v4
         with:
