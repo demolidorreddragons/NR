@@ -28,7 +28,18 @@ enum class Failure {
     ReleaseResources,
     PublishNoEffectReleaseResources,
     WritePartialRollbackWrite,
-    WritePartialVerifyRollback
+    WritePartialVerifyRollback,
+    RemoveGateNoEffect,
+    RemoveGateUnknown,
+    RemoveWritableNoEffect,
+    RemoveWritableUnknown,
+    RemoveWriteNoEffect,
+    RemoveWritePartial,
+    RemoveWriteRetryUnknown,
+    RemoveVerifyOriginal,
+    RemoveRestoreProtection,
+    RemoveReleaseGate,
+    RemoveReleaseResources
 };
 
 struct Fake {
@@ -40,6 +51,7 @@ struct Fake {
     bool writable = false;
     bool resources_released = false;
     unsigned write_calls = 0;
+    bool removing = false;
 };
 
 static int preflight(void *, const uint8_t *original,
@@ -67,8 +79,20 @@ static nr_detour_tx_outcome gate(void *p) {
     f.gate = true;
     return NR_DETOUR_TX_COMPLETE;
 }
+static nr_detour_tx_outcome remove_gate(void *p) {
+    auto &f = *static_cast<Fake *>(p);
+    if (f.failure == Failure::RemoveGateNoEffect) return NR_DETOUR_TX_NO_EFFECT;
+    if (f.failure == Failure::RemoveGateUnknown) return NR_DETOUR_TX_UNKNOWN;
+    f.gate = true;
+    f.removing = true;
+    return NR_DETOUR_TX_COMPLETE;
+}
 static nr_detour_tx_outcome writable(void *p) {
     auto &f = *static_cast<Fake *>(p);
+    if (f.removing && f.failure == Failure::RemoveWritableNoEffect)
+        return NR_DETOUR_TX_NO_EFFECT;
+    if (f.removing && f.failure == Failure::RemoveWritableUnknown)
+        return NR_DETOUR_TX_UNKNOWN;
     if (f.failure == Failure::WritableNoEffect) return NR_DETOUR_TX_NO_EFFECT;
     if (f.failure == Failure::WritableUnknown) return NR_DETOUR_TX_UNKNOWN;
     f.writable = true;
@@ -78,6 +102,18 @@ static nr_detour_tx_outcome write_target(void *p, const uint8_t *bytes,
                                          size_t length) {
     auto &f = *static_cast<Fake *>(p);
     ++f.write_calls;
+    if (f.removing) {
+        if (f.write_calls == 1 && f.failure == Failure::RemoveWriteNoEffect)
+            return NR_DETOUR_TX_NO_EFFECT;
+        if (f.write_calls == 1 && f.failure == Failure::RemoveWritePartial) {
+            std::memcpy(f.target.data(), bytes, length / 2);
+            return NR_DETOUR_TX_UNKNOWN;
+        }
+        if (f.write_calls > 1 && f.failure == Failure::RemoveWriteRetryUnknown)
+            return NR_DETOUR_TX_UNKNOWN;
+        std::memcpy(f.target.data(), bytes, length);
+        return NR_DETOUR_TX_COMPLETE;
+    }
     if (f.write_calls == 1 && f.failure == Failure::WriteNoEffect)
         return NR_DETOUR_TX_NO_EFFECT;
     if (f.write_calls == 1 && (f.failure == Failure::WritePartial ||
@@ -94,6 +130,7 @@ static nr_detour_tx_outcome write_target(void *p, const uint8_t *bytes,
 }
 static int verify(void *p, const uint8_t *expected, size_t length) {
     auto &f = *static_cast<Fake *>(p);
+    if (f.removing && f.failure == Failure::RemoveVerifyOriginal) return 0;
     if (f.write_calls == 1 && f.failure == Failure::VerifyPatch) return 0;
     if (f.write_calls > 1 && (f.failure == Failure::VerifyRollback ||
         f.failure == Failure::WritePartialVerifyRollback)) return 0;
@@ -101,19 +138,22 @@ static int verify(void *p, const uint8_t *expected, size_t length) {
 }
 static nr_detour_tx_outcome restore_protection(void *p) {
     auto &f = *static_cast<Fake *>(p);
-    if (f.failure == Failure::RestoreProtection) return NR_DETOUR_TX_UNKNOWN;
+    if ((f.removing && f.failure == Failure::RemoveRestoreProtection) ||
+        f.failure == Failure::RestoreProtection) return NR_DETOUR_TX_UNKNOWN;
     f.writable = false;
     return NR_DETOUR_TX_COMPLETE;
 }
 static nr_detour_tx_outcome release_gate(void *p) {
     auto &f = *static_cast<Fake *>(p);
-    if (f.failure == Failure::ReleaseGate) return NR_DETOUR_TX_UNKNOWN;
+    if ((f.removing && f.failure == Failure::RemoveReleaseGate) ||
+        f.failure == Failure::ReleaseGate) return NR_DETOUR_TX_UNKNOWN;
     f.gate = false;
     return NR_DETOUR_TX_COMPLETE;
 }
 static nr_detour_tx_outcome release_resources(void *p) {
     auto &f = *static_cast<Fake *>(p);
-    if (f.failure == Failure::ReleaseResources || f.failure == Failure::PublishNoEffectReleaseResources) return NR_DETOUR_TX_UNKNOWN;
+    if ((f.removing && f.failure == Failure::RemoveReleaseResources) ||
+        f.failure == Failure::ReleaseResources || f.failure == Failure::PublishNoEffectReleaseResources) return NR_DETOUR_TX_UNKNOWN;
     f.resources_released = true;
     return NR_DETOUR_TX_COMPLETE;
 }
@@ -125,6 +165,7 @@ static nr_detour_tx_ops make_ops(Fake &f) {
     ops.prepare_resources = prepare;
     ops.publish_resources = publish;
     ops.acquire_patch_window = gate;
+    ops.acquire_remove_window_and_drain = remove_gate;
     ops.make_target_writable = writable;
     ops.write_target = write_target;
     ops.verify_target = verify;
@@ -208,6 +249,75 @@ int main() {
         assert(result.patch_window_may_be_held);
         assert(result.resources_may_be_owned);
         assert(!f.resources_released);
+    }
+
+
+    {
+        Fake f;
+        f.target = patch;
+        auto ops = make_ops(f);
+        auto result = nr_detour_tx_remove(&ops, original.data(), patch.data(), patch.size());
+        assert(result.state == NR_DETOUR_TX_RETIRED);
+        assert(f.target == original);
+        assert(!f.gate && !f.writable && f.resources_released);
+    }
+
+    for (Failure failure : {Failure::RemoveGateNoEffect,
+                            Failure::RemoveWritableNoEffect}) {
+        Fake f;
+        f.target = patch;
+        f.failure = failure;
+        auto ops = make_ops(f);
+        auto result = nr_detour_tx_remove(&ops, original.data(), patch.data(), patch.size());
+        assert(result.state == NR_DETOUR_TX_ACTIVE);
+        assert(f.target == patch && !f.gate && !f.resources_released);
+    }
+
+    for (Failure failure : {Failure::RemoveGateUnknown,
+                            Failure::RemoveWritableUnknown}) {
+        Fake f;
+        f.target = patch;
+        f.failure = failure;
+        auto ops = make_ops(f);
+        auto result = nr_detour_tx_remove(&ops, original.data(), patch.data(), patch.size());
+        assert(result.state == NR_DETOUR_TX_POISONED);
+        assert(result.target_may_be_modified && result.resources_may_be_owned);
+    }
+
+    for (Failure failure : {Failure::RemoveWriteNoEffect,
+                            Failure::RemoveWritePartial}) {
+        Fake f;
+        f.target = patch;
+        f.failure = failure;
+        auto ops = make_ops(f);
+        auto result = nr_detour_tx_remove(&ops, original.data(), patch.data(), patch.size());
+        assert(result.state == NR_DETOUR_TX_RETIRED);
+        assert(f.target == original && f.resources_released);
+    }
+
+    for (Failure failure : {Failure::RemoveWriteRetryUnknown,
+                            Failure::RemoveVerifyOriginal}) {
+        Fake f;
+        f.target = patch;
+        f.failure = failure;
+        auto ops = make_ops(f);
+        auto result = nr_detour_tx_remove(&ops, original.data(), patch.data(), patch.size());
+        assert(result.state == NR_DETOUR_TX_POISONED);
+        assert(result.target_may_be_modified && result.patch_window_may_be_held);
+        assert(!f.resources_released);
+    }
+
+    for (Failure failure : {Failure::RemoveRestoreProtection,
+                            Failure::RemoveReleaseGate,
+                            Failure::RemoveReleaseResources}) {
+        Fake f;
+        f.target = patch;
+        f.failure = failure;
+        auto ops = make_ops(f);
+        auto result = nr_detour_tx_remove(&ops, original.data(), patch.data(), patch.size());
+        assert(result.state == NR_DETOUR_TX_POISONED);
+        assert(!result.target_may_be_modified);
+        assert(result.resources_may_be_owned);
     }
 
     std::puts("detour transaction core: success, pre-mutation failures, rollback, and poisoned retention passed");
