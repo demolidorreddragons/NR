@@ -173,3 +173,23 @@ Fontes:
 - shadPS4 NID registration `sceGnmSubmitAndFlipCommandBuffers`: https://github.com/shadps4-emu/shadPS4/blob/main/src/core/libraries/gnmdriver/gnmdriver.cpp
 - GoldHEN SDK hook implementation: https://github.com/GoldHEN/GoldHEN_Plugins_SDK/blob/bcea3c7ef01dac6d7f9f49ebf9e90fe66d86f5f7/include/Utilities.h
 
+
+### 2.5. Auditoria estática do DetourMode_x32 — novo bloqueio de segurança
+
+Após confirmar a NID metadata do PRX, foi inspecionada a implementação exata do GoldHEN SDK pinado (`Detour.c`, commit `bcea3c7ef01dac6d7f9f49ebf9e90fe66d86f5f7`). O macro `HOOK32(sceGnmSubmitAndFlipCommandBuffers)` cria `DetourMode_x32` e chama `Detour_DetourFunction`, descartando o ponteiro de retorno.
+
+Em `Detour_DetourFunction32`, o SDK:
+- calcula o tamanho de instruções para sobrescrever pelo menos 5 bytes;
+- aloca `TrampolinePtr` com `malloc` sem solicitar proximidade ao endereço original;
+- grava um salto x86 `E9 rel32` no endereço da função, calculando `Destination - (Address + 5)` e truncando diretamente para `uint32_t` em `Detour_WriteJump32`;
+- não verifica se a distância assinada está no intervalo `INT32_MIN..INT32_MAX` antes de escrever o deslocamento;
+- não retorna status ao chamador via macro `HOOK32`, que ignora o resultado.
+
+`DetourMode_x32` não significa processo de 32 bits; é um salto relativo de 32 bits dentro de código x86-64. O salto só é válido se o trampoline estiver a menos de 2 GiB do alvo. Como o trampoline vem de `malloc` e não há verificação de alcance, o deslocamento pode truncar e apontar para endereço incorreto. O modo x64 usa salto absoluto de 14 bytes, mas requer um prólogo de instruções suficientemente longo; não é seguro trocar de modo sem medir o prólogo real do export no firmware.
+
+**Decisão:** `PRX GNM NID import metadata=STATIC_PASS`, mas `HOOK_DETOUR_SAFETY=BLOCKED`. Não instalar/ativar o PRX nem executar o hook até corrigir ou substituir a lógica de detour com validação de alcance, conferir retorno de instalação e validar o prólogo/ABI no firmware. A assinatura de nove argumentos coincide estruturalmente com a implementação pública shadPS4, mas isso não valida o prólogo nem o patch.
+
+Fontes:
+- GoldHEN SDK `Utilities.h` (`HOOK32`/`HOOK_CONTINUE`): https://github.com/GoldHEN/GoldHEN_Plugins_SDK/blob/bcea3c7ef01dac6d7f9f49ebf9e90fe66d86f5f7/include/Utilities.h
+- GoldHEN SDK `Detour.c`: https://github.com/GoldHEN/GoldHEN_Plugins_SDK/blob/bcea3c7ef01dac6d7f9f49ebf9e90fe66d86f5f7/source/Detour.c
+- GoldHEN SDK `Detour.h`: https://github.com/GoldHEN/GoldHEN_Plugins_SDK/blob/bcea3c7ef01dac6d7f9f49ebf9e90fe66d86f5f7/include/Detour.h
