@@ -4,7 +4,7 @@
  * This executable validates its bundled release manifest/PRX and performs a
  * process-local GNM module/export audit. It resolves addresses only: it never
  * invokes GNM, dispatches GPU work, installs/activates the Neural Rendering
- * PRX, edits plugins.ini, or changes persistent system configuration.
+ * PRX, edits GoldHEN configuration, or changes persistent system configuration.
  */
 #include <Common.h>
 #include <stdint.h>
