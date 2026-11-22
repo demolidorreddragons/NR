@@ -238,3 +238,9 @@ The first hardware probe must use a tiny scalar/write-read shader, not GEMM or t
   https://github.com/OpenOrbis/OpenOrbis-PS4-Toolchain/blob/0a1aaf9dd4a92695538bdeb09fb056d06dd11725/samples/_common/graphics.cpp
 - OpenOrbis Libkernel notes:
   https://github.com/OpenOrbis/OpenOrbis-PS4-Toolchain/blob/0a1aaf9dd4a92695538bdeb09fb056d06dd11725/docs/MD/PS4%20Libraries/Libkernel.md
+
+## V# descriptor codec shared with host tests — 2026-11-22
+
+The compute harness now uses `host/vsharp_codec.cpp` to pack the four V# dwords instead of constructing the `GnmBuffer` bitfields independently. The PS4 compute build links this same source file. Host golden tests cover the exact `R32_FLOAT` input descriptor using `GNM_MEMORY_READONLY` and output descriptor using `GNM_MEMORY_UNCACHED`; host CI run `45015718289`, job `137187475115`, passed 9/9 tests.
+
+This validates byte encoding consistency only. It does not validate the runtime meaning of the memory type, writable SSBO acceptance, cache policy, GPU VA mapping, low-4-GiB table placement, or compute dispatch. The PS4-target link is pending CI run `45015714804` and must be inspected before marking the integration complete. The compile-time compute gate remains closed.
