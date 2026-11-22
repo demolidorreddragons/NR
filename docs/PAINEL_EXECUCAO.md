@@ -247,7 +247,7 @@ A pesquisa não justificou mudança de código: parser e offset seguem intactos;
 
 - `tools/audit_ps4_self_imports.py` foi integrado ao PRX workflow e ao builder dos eboots. Audita `PT_SCE_DYNLIBDATA`, imports Sony e relocations após `create-fself`.
 - Main PRX: run [45018436422](https://github.com/demolidorreddragons/NR/actions/runs/45018436422), build/QA SUCCESS e audit `SONY_IMPORT_AUDIT=PASS` para NID `xbxNatawohc#C#C`; artifact ZIP `db3782f080e561a2d276af3e8da9c3989d7a6412d8393960369dd8b30270ea01`.
-- Compute eboot: run [45017446531](https://github.com/demolidorreddragons/NR/actions/runs/45017446531), OELF `SONY_IMPORT_AUDIT=PASS`, sem biblioteca GNM.
+- Compute/startup eboots: run [45018436410](https://github.com/demolidorreddragons/NR/actions/runs/45018436410) SUCCESS; ambos OELFs `SONY_IMPORT_AUDIT=PASS`, somente `libkernel`; compute PKG SHA-256 `1ed1b4396a77ad10a21a00d80c231b69527389d510cd5eeef3f6797b6c85a401`, startup PKG SHA-256 `5c5a6837cbe98a49ae9bbf3987cabe5a540e4dedd5faa510cb0c4e34154344f3`.
 - GNM-Load-Only agora faz DLSYM address-only de cinco exports, incluindo `sceGnmSubmitAndFlipCommandBuffers`; nenhum é chamado. Run [45018436422](https://github.com/demolidorreddragons/NR/actions/runs/45018436422) SUCCESS; OELF contém somente libkernel; QA independente `PASS_PC_ONLY_NOT_HARDWARE_TESTED`.
 - PKG GNM-Load: 6.619.136 bytes, SHA-256 `7b0807a882895b9a392f64f0e97bb7aca8e2aaa94c254e0667cc0128996c1051`; artifact ZIP ID `14752946485`, SHA-256 `db3782f080e561a2d276af3e8da9c3989d7a6412d8393960369dd8b30270ea01`. Não staged/instalado.
 - Próximo gate: instalar e verificar por feedback somente após autorização específica de staging; o DLSYM do export `sceGnmSubmitAndFlipCommandBuffers` ainda não foi executado no PS4.
@@ -258,3 +258,4 @@ A pesquisa não justificou mudança de código: parser e offset seguem intactos;
 - `sce_coredumps` vazio; `/data/pne.log` ausente; `sce_logs/log.bin` 16 MiB e ainda não decodificado; logs auxiliares não mostram atividade GNM.
 - Correlacionado com OELF: metadata Sony/NID/relocation válidos; falha runtime de resolução do GOT permanece sem causa raiz. O log não prova que o CE-34878 foi causado por chamada GNM ou crash do harness.
 - Coleta read-only; nenhum dado do console foi alterado.
+- Parser unit tests: run [45018960242](https://github.com/demolidorreddragons/NR/actions/runs/45018960242), 4 testes OELF/SELF passaram (`OK`).
