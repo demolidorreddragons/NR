@@ -1,5 +1,10 @@
 # PS4 PKG installer
 
+## Current release state — PKG 015 candidate (2026-11-22)
+
+Release 015 is a Full/Base candidate (CATEGORY=gde), APP_VER 01.10. It extends PKG 014's six GFX8 asset integrity checks and five GNM symbol lookups with the two missing compute-path exports: `sceGnmSetCsShader` and `sceGnmDispatchDirect`. The resulting audit requires seven exports before PASS. It remains symbol-resolution-only: no GNM calls, command submission, compute dispatch, PRX activation or hardware validation. See `docs/PKG_015_GNM_COMPUTE_EXPORT_PREFLIGHT.md`.
+
+
 ## Current release state — PKG 014 candidate (2026-11-22)
 
 Release 014 is a Full/Base application package candidate (CATEGORY=gde), APP_VER 01.09. It adds a meaningful preflight capability to release 013: the app0 payload now contains six GFX8 code objects emitted by the pinned shader-build workflow, and startup verifies every object by SHA-256 before performing the existing process-local GNM export lookup.
