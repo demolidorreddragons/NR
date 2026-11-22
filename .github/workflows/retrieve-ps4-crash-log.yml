@@ -111,6 +111,26 @@ jobs:
             Set-Content -Path $coreDest -Value $listing -Encoding UTF8
             Write-Host "GNM_LOAD_COREDUMP_DIR_LISTED $coreDir"
           } catch { Set-Content -Path $coreDest -Value $_.Exception.Message -Encoding UTF8 }
+          $currentBuildLog = '/data/pne_gcn8_compute_smoke_45040217180.log'
+          $currentBuildDest = Join-Path $outDir 'pne_gcn8_compute_smoke_45040217180.log'
+          try {
+            $req = [System.Net.FtpWebRequest]::Create($base + $currentBuildLog)
+            $req.Method = [System.Net.WebRequestMethods+Ftp]::DownloadFile
+            $req.Credentials = $credential
+            $req.UsePassive = $true
+            $req.UseBinary = $true
+            $req.KeepAlive = $false
+            $req.Timeout = 20000
+            $resp = $req.GetResponse()
+            $stream = $resp.GetResponseStream()
+            $file = [System.IO.File]::Create($currentBuildDest)
+            $stream.CopyTo($file)
+            $file.Dispose(); $stream.Dispose(); $resp.Dispose()
+            $hash = (Get-FileHash -Algorithm SHA256 -Path $currentBuildDest).Hash.ToLowerInvariant()
+            Write-Host "CURRENT_BUILD_GNM_LOAD_LOG_DOWNLOADED path=$currentBuildLog bytes=$((Get-Item $currentBuildDest).Length) sha256=$hash"
+            $found = $true
+          } catch { Write-Host "CURRENT_BUILD_GNM_LOAD_LOG_NOT_FOUND path=$currentBuildLog detail=$($_.Exception.Message)" }
+
           $legacyLog = '/data/pne_gcn8_compute_smoke_44873622760.log'
           $legacyDest = Join-Path $outDir 'pne_gcn8_compute_smoke_44873622760.log'
           try {
