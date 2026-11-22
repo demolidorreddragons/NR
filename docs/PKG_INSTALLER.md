@@ -6,7 +6,7 @@ Release 014 is a Full/Base application package candidate (CATEGORY=gde), APP_VER
 
 - Bundled objects: compute_smoke_add, e4m3_decode, e4m3_encode, gemm_fp16_accum, gemm_fp32, and gemm_fp32_wave64_tiled.
 - The six binaries are pinned by exact size/hash in tools/prepare_gcn8_pkg_assets.py, and independently checked after PKG extraction by tools/verify_gcn8_assets.py.
-- The app re-hashes the six files from /app0/gcn8/; a missing or altered file fails preflight before GNM symbol lookup.
+- The app re-hashes the six files from /app0/nr_gcn8_* at the app0 root; a missing or altered file fails preflight before GNM symbol lookup.
 - It still resolves five GNM exports only. No GNM function is invoked, no command buffer is submitted, no shader is dispatched, and the NR PRX remains inactive.
 - The new check proves payload integrity and packaging only. It does not prove PSBC/runtime compatibility, GPU VA, ABI, cache coherence, dispatch, readback, inference, or hardware performance.
 - Manifest remains abi_status=unverified and hardware_status=not_tested.
