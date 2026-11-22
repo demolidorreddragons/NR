@@ -141,11 +141,20 @@ readelf -h "$STAGE/smoke.elf" | grep -Eq 'Entry point address:[[:space:]]+0x[1-9
 )
 test -s "$STAGE/eboot.bin"
 
-if [[ "$MODE" == "compute" ]]; then
-  # Audit Sony import metadata after create-fself, not only the pre-SELF ELF.
-  python3 "$ROOT/tools/audit_ps4_self_imports.py" \
-    --input "$STAGE/smoke.oelf" --forbid-library libSceGnmDriver
-fi
+# Audit Sony import metadata after create-fself, not only the pre-SELF ELF.
+case "$MODE" in
+  gnm-link)
+    # This probe intentionally carries one static GNM import; it does not call it.
+    python3 "$ROOT/tools/audit_ps4_self_imports.py" \
+      --input "$STAGE/smoke.oelf" \
+      --require-import libSceGnmDriver:libSceGnmDriver:yvZ73uQUqrk
+    ;;
+  compute|startup|gnm-load)
+    # These paths must not acquire a static GNM import.
+    python3 "$ROOT/tools/audit_ps4_self_imports.py" \
+      --input "$STAGE/smoke.oelf" --forbid-library libSceGnmDriver
+    ;;
+esac
 
 "$PKGTOOL" sfo_new "$STAGE/sce_sys/param.sfo"
 sfo() {
