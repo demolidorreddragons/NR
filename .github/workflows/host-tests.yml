@@ -85,6 +85,7 @@ jobs:
             -I platform/ps4/goldhen/plugin \
             "$GITHUB_WORKSPACE/goldhen-sdk-hde64/source/HDE64.c" \
             platform/ps4/goldhen/plugin/hde64_bounded.c \
+            platform/ps4/goldhen/plugin/hde64_bounded_plan.c \
             tests/test_hde64_guard_page.c \
             -o "$RUNNER_TEMP/test_hde64_guard_page"
           "$RUNNER_TEMP/test_hde64_guard_page"
