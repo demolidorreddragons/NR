@@ -82,6 +82,8 @@ Este arquivo preserva decisões aprovadas e seus motivos. Novas decisões devem 
 ## 2026-11-22 — OpenOrbis GNM linker stub is not a Sony runtime import
 
 - Evidence: artifact `14752435074`, `libSceGnmDriver.so` SHA-256 `21d38ac5e7d79ddc9ee9bc7b9a84547f43ea3144883f6ac787d16704c1b5121f`.
-- The OpenOrbis v0.5.4 file is a generic ELF64 shared-object link stub with 203 named exports, no `DT_SCE_*`/Sony NID metadata, and infinite-loop bodies for `sceGnmSubmitDone` and `sceGnmDispatchInitDefaultHardwareState`.
-- Decision: static `-lSceGnmDriver` is not accepted as evidence of a valid PS4 import and must not be used in runtime compute. Use module load plus `sceKernelDlsym`; the GNM-Load-Only probe previously resolved the required export on hardware. Link-only smoke is not runtime validation.
-- Limits: strong evidence consistent with the prior null GOT/OELF finding; not a complete reverse engineering of the FW 14.02 loader.
+- The OpenOrbis v0.5.4 file is a generic ELF64 shared-object **link stub** with 203 named exports, no `DT_SCE_*`/Sony NID metadata, and infinite-loop bodies; it is not a runtime implementation.
+- Scope correction: the main PRX built with `create-fself --lib` **does** contain Sony NID import metadata. Its `sceGnmSubmitAndFlipCommandBuffers` import is `xbxNatawohc#C#C`, maps to `libSceGnmDriver` and matches the public shadPS4 registration. This is a static metadata PASS, not hardware validation.
+- The older GNM-Link eboot built with `create-fself --eboot` had no GNM import metadata and a null GOT slot. This failure is specific to that artifact/path and must not be generalized to PRX `--lib` mode.
+- Decision: keep compute eboot free of static `-lSceGnmDriver` and use module load plus `sceKernelDlsym` (already observed successful in GNM-Load-Only). The main PRX static import may remain; runtime resolution, hook ABI, and detour safety still require hardware validation.
+- Limits: static OELF metadata was audited, but this is not a complete reverse engineering of the FW 14.02 loader.
