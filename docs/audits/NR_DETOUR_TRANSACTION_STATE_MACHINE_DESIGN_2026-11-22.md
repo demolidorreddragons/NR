@@ -174,3 +174,15 @@ This is a host coordinator contract only. It does not implement a PS4 thread ren
 - The separate self-hosted read-only PS4 log-retrieval job remained queued at inspection time; this does not affect the hosted test result and is not evidence of a console test.
 
 The passing tests validate only the host coordinator against fake injected operations. They do not validate real thread quiescence, firmware protection APIs, cache publication, or PS4 runtime behavior.
+
+
+## Follow-up hard gates: mapping lease and cross-modifying-code handoff
+
+A subsequent evidence review is recorded in `docs/audits/PS4_MAPPING_STABILITY_AND_CODE_PUBLICATION_AUDIT_2026-11-22.md`.
+
+Two requirements are now made explicit:
+
+1. `sceKernelVirtualQuery` and `sceKernelQueryMemoryProtection` are metadata queries. Their public declarations provide no mapping pin/lease token or paired lifetime operation. Query-then-read therefore does not establish that arbitrary title text remains mapped and stable for the complete transaction. A future adapter must prove mapping ownership/lifetime by a separate authoritative contract or reject that target.
+2. AMD64 distinguishes self-modifying from cross-modifying code. For a producer modifying another thread's active instruction stream, AMD's synchronous protocol requires the consumer to execute a serializing instruction (for example CPUID or MFENCE) after the producer signals completion and before entering the modified code. The current 14-byte patch is not eligible for the constrained asynchronous single-naturally-aligned-quadword method. No Orbis evidence shows that `scePthreadResumeAll` performs the required per-consumer handoff.
+
+Accordingly, `PATCH_WINDOW_HELD` must eventually mean more than "threads are suspended": it must guarantee no target fetch during mutation **and** a proven consumer-side serialization path before any resumed thread can execute the modified stream. This remains unimplemented and blocks the PS4 adapter. AMD64 architecture guidance does not itself establish Sony firmware, Orbis mapping, or GNM cache semantics.
