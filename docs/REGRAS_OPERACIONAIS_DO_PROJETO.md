@@ -143,3 +143,18 @@ Sem autorização explícita do usuário, é proibido:
 ---
 
 **Regra de ouro:** preservar os dados, validar antes de promover, transferir o PKG Full/Base aprovado para staging no PS4 como parte do fluxo padrão e nunca instalar, ativar ou declarar validação de hardware sem autorização e evidência.
+
+
+## 10. Autoridade CDA e metodologia forense obrigatória
+
+1. A função **Chief Diagnostic Architect (CDA)** é a autoridade técnica máxima para metodologia, integridade da coleta, análise causal e gates diagnósticos do Neural Rendering. Seu mandato e procedimento estão definidos em `docs/DIAGNOSTIC_METHODOLOGY_CDA.md`.
+2. O CDA pode bloquear conclusões, correções especulativas e novos PKGs quando a cadeia de evidência, a identidade do build ou a observabilidade forem insuficientes.
+3. Toda investigação deve separar as camadas E0 (identidade), E1 (transporte), E2 (estado do console), E3 (execução) e E4 (resultado funcional). PASS em uma camada não implica PASS nas demais.
+4. Cada aquisição deve preservar os bytes originais, produzir manifesto com caminho remoto, tamanho, SHA-256, timestamp UTC, resultado/erro e origem, e analisar somente cópias de trabalho. Arquivos mutáveis devem ter snapshots independentes identificados.
+5. Busca de strings ASCII/UTF-16 em arquivo binário não é decodificação. Sem parser com formato documentado e validação de limites, classificar o conteúdo como `OPAQUE_UNDECODED`; não usar ausência de strings como prova de ausência de evento.
+6. Coleta live no PS4 permanece exclusivamente read-only via runner Windows autorizado, salvo autorização explícita e específica. Nenhuma nomeação CDA amplia permissões operacionais do console.
+7. Workflows versionados para uma release não podem ser reutilizados para outra sem atualizar identidade, hashes, caminhos e escopo e revisar o código antes de executar.
+8. Causa raiz só pode ser declarada confirmada quando evidência íntegra e correlacionada sustentar mecanismo reproduzível. Caso contrário, usar `INFERRED`, `HYPOTHESIS` ou `UNKNOWN / INSUFFICIENT EVIDENCE`.
+9. Engenharia, QA e auditoria independente devem permanecer separados. QA automatizado não é revisor humano independente; quando não houver revisor externo real, declarar `INDEPENDENT_HUMAN_REVIEW=NOT_PERFORMED`.
+10. Se G0 (coleta confiável) ou G1 (identidade correlacionada) falhar, bloquear diagnóstico causal e PKG corretivo. Se G2 (execução observável) falhar, priorizar observabilidade/coleta, não alterações especulativas de runtime.
+11. Para PKG 015, aguardar feedback de instalação/execução do usuário. Só então revisar e usar workflow read-only específico para PKG 015; não reutilizar silenciosamente os workflows PKG 014.
