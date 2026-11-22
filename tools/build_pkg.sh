@@ -171,7 +171,7 @@ manifest = open(found["pne-release.ini"], encoding="ascii").read().splitlines()
 if f"prx_sha256={actual}" not in manifest or "schema=1" not in manifest:
     raise SystemExit("VERIFY_STAGE: release manifest does not describe the extracted PRX")
 print(f"VERIFY_STAGE: manifest and PRX SHA-256 match ({actual})")
-asset_dir = root
+asset_dir = os.path.join(root, "uroot")
 asset_manifest = os.path.join(asset_dir, "nr_gcn8_SHA256SUMS")
 if not os.path.isfile(asset_manifest):
     raise SystemExit("VERIFY_STAGE: GCN8 SHA256SUMS missing")
