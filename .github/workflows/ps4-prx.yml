@@ -336,10 +336,10 @@ jobs:
           $preflightSource = Join-Path $artifact "pkg/audit/preflight_main.c"
           if (-not (Test-Path $preflightSource)) { throw "Read-only preflight source missing from build artifact." }
           $preflightText = Get-Content $preflightSource -Raw
-          foreach ($required in @("pne_validate_release_manifest(RELEASE_MANIFEST, SOURCE_PRX","GNM exports 5/5","GCN8 assets 6/6","audit_gcn8_assets","pne_sha256_file","sceKernelLoadStartModule","sceKernelDlsym","PRX NOT activated","sceKernelSendNotificationRequest")) {
+          foreach ($required in @("pne_validate_release_manifest(RELEASE_MANIFEST, SOURCE_PRX","GNM compute exports 7/7","GCN8 assets 6/6","audit_gcn8_assets","pne_sha256_file","sceKernelLoadStartModule","sceKernelDlsym","sceGnmSetCsShader","sceGnmDispatchDirect","PRX NOT activated","sceKernelSendNotificationRequest")) {
             if ($preflightText -notmatch [regex]::Escape($required)) { throw "Preflight source contract missing: $required" }
           }
-          foreach ($forbidden in @("/data/","plugins.ini","sceKernelMprotect","sceKernelMunmap","scePthreadCreate","sceKernelStopUnloadModule","sceKernelUnloadStartModule","sceGnmSubmitDone(","sceGnmDispatchInitDefaultHardwareState(","sceGnmFlushGarlic(","sceGnmSubmitCommandBuffers(","sceGnmSubmitAndFlipCommandBuffers(","mkdir(","rename(","remove(","unlink(","fopen(","open(","write(","fwrite(","system(")) {
+          foreach ($forbidden in @("/data/","plugins.ini","sceKernelMprotect","sceKernelMunmap","scePthreadCreate","sceKernelStopUnloadModule","sceKernelUnloadStartModule","sceGnmSubmitDone(","sceGnmDispatchInitDefaultHardwareState(","sceGnmSetCsShader(","sceGnmDispatchDirect(","sceGnmFlushGarlic(","sceGnmSubmitCommandBuffers(","sceGnmSubmitAndFlipCommandBuffers(","mkdir(","rename(","remove(","unlink(","fopen(","open(","write(","fwrite(","system(")) {
             if ($preflightText.Contains($forbidden)) { throw "Preflight source contains forbidden side-effect or GNM-call marker: $forbidden" }
           }
           $gp4Text = Get-Content $gp4 -Raw
