@@ -8,6 +8,14 @@ build = Path("tools/build_pkg.sh").read_text(encoding="utf-8")
 assert "pne_validate_release_manifest(RELEASE_MANIFEST, SOURCE_PRX" in source
 assert "sceKernelSendNotificationRequest" in source
 assert "GNM exports 5/5" in source
+assert "GCN8 assets 6/6" in source
+assert "audit_gcn8_assets" in source
+assert "pne_sha256_file" in source
+assert "/app0/gcn8/" in source
+assert "prepare_gcn8_pkg_assets.py" in build
+for asset in ("compute_smoke_add", "e4m3_decode", "e4m3_encode", "gemm_fp16_accum", "gemm_fp32", "gemm_fp32_wave64_tiled"):
+    assert f"{asset}.gcn.bin" in build
+assert "gcn8/SHA256SUMS" in build
 assert "sceKernelLoadStartModule" in source
 assert "sceKernelDlsym" in source
 assert "sceKernelGetFsSandboxRandomWord" in source
@@ -36,6 +44,7 @@ assert 'installer/main.c" -o "$STAGE/installer.o"' not in build
 assert "installer/hybrid_state.c" not in build
 assert 'PS4 Neural Engine Preflight' in build
 assert "installer_version=3" in build
+assert "APP_VERSION:-01.09" in build
 assert 'mv "$pkg" "$numbered_pkg"' in build, "release output must contain only the canonical numbered PKG"
 assert 'cp "$pkg" "$numbered_pkg"' not in build, "do not retain a duplicate generic PKG"
 
@@ -63,4 +72,4 @@ for forbidden in (
 
 assert "abi_status=unverified" in build
 assert "hardware_status=not_tested" in build
-print("PKG 013 preflight contract: manifest/PRX integrity + process-local GNM export resolution; no GNM calls or NR PRX activation PASS")
+print("PKG 014 preflight contract: PRX integrity + six GFX8 asset SHA-256 checks + process-local GNM export resolution; no GNM calls or NR PRX activation PASS")
