@@ -1,0 +1,138 @@
+name: PS4 current-state read-only evidence 014
+
+on:
+  push:
+    branches: [feature/gcn8-numeric-kernels]
+    paths:
+      - ".github/workflows/ps4-current-state-evidence-014.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  collect-readonly:
+    runs-on: [self-hosted, Windows, X64, ps4-lan]
+    timeout-minutes: 8
+    steps:
+      - name: Collect read-only PS4 installation and log evidence
+        shell: powershell -NoProfile -ExecutionPolicy Bypass -File {0}
+        env:
+          PS4_IP: ${{ vars.PS4_IP }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if (-not $env:PS4_IP) { throw 'PS4_IP repository variable is missing; refusing network access.' }
+          $root = Join-Path $env:RUNNER_TEMP ("pne-current-state-014-" + $env:GITHUB_RUN_ID)
+          if (Test-Path -LiteralPath $root) { throw "Evidence directory already exists; refusing to overwrite: $root" }
+          New-Item -ItemType Directory -Path $root -Force | Out-Null
+          $base = "ftp://$($env:PS4_IP):2121"
+          $credential = New-Object System.Net.NetworkCredential('anonymous', 'anonymous@example.com')
+          $manifest = [System.Collections.Generic.List[string]]::new()
+          $manifest.Add("COLLECTION_UTC=$([DateTime]::UtcNow.ToString('o'))")
+          $manifest.Add("WORKFLOW_RUN_ID=$env:GITHUB_RUN_ID")
+          $manifest.Add("EXPECTED_PKG=PS4-Neural-Engine-014.pkg")
+          $manifest.Add("EXPECTED_APP_VERSION=01.09")
+          $manifest.Add("USER_REPORTED_RESULT=NO_NEW_USER_INSTALL_FEEDBACK_SUPPLIED_READ_ONLY_CURRENT_STATE_ONLY")
+          $manifest.Add("EXPECTED_PKG_SHA256=96c15b46e7579c5f728a131279e986af04a9e4683c9903221e418ca52a3842db")
+          $manifest.Add("BUILD_RUN_ID=45072353238")
+          $manifest.Add("BUILD_COMMIT=8aacfe426fac164eca681aa87829a509045cbed1")
+          $manifest.Add("TITLE_ID=PNEU00001")
+          function New-FtpRequest([string]$remote, [string]$method) {
+            $request = [System.Net.FtpWebRequest]::Create($base + $remote)
+            $request.Method = $method
+            $request.Credentials = $credential
+            $request.UsePassive = $true
+            $request.UseBinary = $true
+            $request.KeepAlive = $false
+            $request.Timeout = 30000
+            $request.ReadWriteTimeout = 60000
+            return $request
+          }
+          $directories = @(
+            '/user/app/PNEU00001/',
+            '/user/appmeta/PNEU00001/',
+            '/user/data/',
+            '/data/',
+            '/data/sce_logs/',
+            '/data/sce_coredumps/'
+          )
+          foreach ($remoteDir in $directories) {
+            $safe = ($remoteDir.Trim('/') -replace '[^A-Za-z0-9_-]', '_')
+            $dest = Join-Path $root ("listing-" + $safe + ".txt")
+            try {
+              $response = (New-FtpRequest $remoteDir ([System.Net.WebRequestMethods+Ftp]::ListDirectoryDetails)).GetResponse()
+              try {
+                $reader = New-Object System.IO.StreamReader($response.GetResponseStream())
+                try { $listing = $reader.ReadToEnd() } finally { $reader.Dispose() }
+              } finally { $response.Dispose() }
+              [System.IO.File]::WriteAllText($dest, $listing, [System.Text.UTF8Encoding]::new($false))
+              $manifest.Add("LIST_OK path=$remoteDir bytes=$([System.Text.Encoding]::UTF8.GetByteCount($listing))")
+            } catch {
+              [System.IO.File]::WriteAllText($dest, ("LIST_ERROR path=$remoteDir detail=" + $_.Exception.Message), [System.Text.UTF8Encoding]::new($false))
+              $manifest.Add("LIST_UNAVAILABLE path=$remoteDir detail=$($_.Exception.Message)")
+            }
+          }
+          $files = @(
+            '/user/data/pne.log',
+            '/data/pne.log',
+            '/data/sce_logs/log.bin',
+            '/data/Loader_Logs.txt',
+            '/data/memory.log',
+            '/data/pne_gcn8_compute_smoke_44873622760.log',
+            '/data/pne_gcn8_compute_smoke_44876293567.log',
+            '/data/pne_gcn8_compute_smoke_45040217180.log',
+            '/data/pne_gcn8_gnm_export_audit_013.log',
+            '/data/pne_gnm_export_preflight_013.log',
+            '/data/PS4-Neural-Engine-RuntimeFixed.pkg',
+            '/user/app/PNEU00001/app.pkg',
+            '/user/app/PNEU00001/app.xml',
+            '/user/app/PNEU00001/app.json'
+          )
+          foreach ($remote in $files) {
+            $safe = ($remote.Trim('/') -replace '[^A-Za-z0-9_.-]', '_')
+            $dest = Join-Path $root $safe
+            try {
+              $sizeResponse = (New-FtpRequest $remote ([System.Net.WebRequestMethods+Ftp]::GetFileSize)).GetResponse()
+              try { $remoteSize = [int64]$sizeResponse.ContentLength } finally { $sizeResponse.Dispose() }
+              if ($remoteSize -gt 134217728) {
+                $manifest.Add("DOWNLOAD_SKIPPED_TOO_LARGE path=$remote bytes=$remoteSize")
+                continue
+              }
+              $response = (New-FtpRequest $remote ([System.Net.WebRequestMethods+Ftp]::DownloadFile)).GetResponse()
+              try {
+                $stream = $response.GetResponseStream()
+                $output = [System.IO.File]::Create($dest)
+                try { $stream.CopyTo($output) } finally { $output.Dispose(); $stream.Dispose() }
+              } finally { $response.Dispose() }
+              $item = Get-Item -LiteralPath $dest
+              $hash = (Get-FileHash -LiteralPath $dest -Algorithm SHA256).Hash.ToLowerInvariant()
+              $manifest.Add("DOWNLOAD_OK path=$remote bytes=$($item.Length) sha256=$hash local_utc=$($item.LastWriteTimeUtc.ToString('o'))")
+            } catch {
+              $manifest.Add("DOWNLOAD_UNAVAILABLE path=$remote detail=$($_.Exception.Message)")
+            }
+          }
+          $manifest.Add('REMOTE_OPERATIONS=LIST_AND_GET_ONLY')
+          $manifest.Add('REMOTE_FILES_MODIFIED=FALSE')
+          $manifest.Add('PRX_ACTIVATED=FALSE')
+          $manifest.Add('PLUGINS_INI_TOUCHED=FALSE')
+          $manifest.Add('INSTALLATION_PERFORMED_BY_WORKFLOW=FALSE')
+          $manifest.Add('REMOTE_WRITE_OR_DELETE=FALSE')
+          Write-Host '=== EVIDENCE MANIFEST ==='
+          $manifest | ForEach-Object { Write-Host $_ }
+          Write-Host '=== REMOTE DIRECTORY LISTINGS ==='
+          Get-ChildItem -LiteralPath $root -File -Filter 'listing-*.txt' | ForEach-Object {
+            Write-Host ("--- {0} ---" -f $_.Name)
+            Get-Content -LiteralPath $_.FullName | ForEach-Object { Write-Host $_ }
+          }
+          [System.IO.File]::WriteAllLines((Join-Path $root 'evidence-manifest.txt'), $manifest, [System.Text.UTF8Encoding]::new($false))
+          Get-ChildItem -LiteralPath $root -File | ForEach-Object {
+            $hash = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+            Write-Host ("LOCAL_EVIDENCE file={0} bytes={1} sha256={2}" -f $_.Name, $_.Length, $hash)
+          }
+          Write-Host 'READ_ONLY_COLLECTION_COMPLETE'
+      - name: Preserve collected evidence as workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ps4-current-state-evidence-014
+          path: ${{ runner.temp }}/pne-current-state-014-${{ github.run_id }}/
+          if-no-files-found: error
+          retention-days: 14
