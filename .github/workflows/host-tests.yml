@@ -72,6 +72,20 @@ jobs:
         run: python3 tests/test_ps4_self_import_audit.py
       - name: Test GoldHEN GNM x64 detour contract
         run: python3 tests/test_goldhen_hook_contract.py
+      - name: Checkout pinned GoldHEN SDK for HDE64 guard-page characterization
+        uses: actions/checkout@v4
+        with:
+          repository: GoldHEN/GoldHEN_Plugins_SDK
+          ref: bcea3c7ef01dac6d7f9f49ebf9e90fe66d86f5f7
+          path: ${{ runner.temp }}/goldhen-sdk-hde64
+      - name: Characterize pinned HDE64 decoder bounds on host
+        run: |
+          cc -std=c11 -Wall -Wextra -Werror \
+            -I "$RUNNER_TEMP/goldhen-sdk-hde64/include" \
+            "$RUNNER_TEMP/goldhen-sdk-hde64/source/HDE64.c" \
+            tests/test_hde64_guard_page.c \
+            -o "$RUNNER_TEMP/test_hde64_guard_page"
+          "$RUNNER_TEMP/test_hde64_guard_page"
       - name: Test hybrid installer state machine
         run: |
           mkdir -p "$RUNNER_TEMP/pne-installer-test"
