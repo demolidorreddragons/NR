@@ -58,7 +58,31 @@ Foi inspecionado diretamente `PS4-OpenGNM/opengnm/include/gnm_buffer.h` no commi
 - Host tests e demais jobs obrigatórios passam no commit corrigido.
 - O artefato e seus hashes são correlacionados ao commit exato.
 
-**Estado nesta data:** correção versionada; validação CI do novo commit ainda não confirmada nesta auditoria. Não inferir PASS até inspecionar os jobs e o log contendo o marcador da auditoria.
+**Estado inicial desta seção:** correção versionada; a validação foi concluída posteriormente e está registrada na seção 2.1 abaixo.
+
+## 2.1. Resultado da validação CI — commit corrigido
+
+A validação foi localizada diretamente na lista de execuções do GitHub Actions, não inferida a partir de commits anteriores:
+
+| Verificação | Run / Job | Resultado observado |
+|---|---|---|
+| Build de shaders GFX8 + compute smoke PKG | [45005750367](https://github.com/demolidorreddragons/NR/actions/runs/45005750367), job `137156845303` + `137157762811` | SUCCESS |
+| Host tests | [45005750309](https://github.com/demolidorreddragons/NR/actions/runs/45005750309), job `137156845061` | SUCCESS; Configure, Build e Test concluídos |
+| Coleta read-only do logger | [45005750309](https://github.com/demolidorreddragons/NR/actions/runs/45005750309), job `137156844849` | SUCCESS; FTP read-only e upload de evidência concluídos |
+
+O run de build tem `head_sha=83d15edf1c3411752f75fdc98172f9e2f8094865`, branch `feature/gcn8-numeric-kernels`, evento `push`. No log do job `137157762811` foram inspecionados:
+- `COMPUTE_GNM_STATIC_IMPORT_AUDIT=PASS; runtime_dlsym_only` — o script não encontrou `DT_NEEDED libSceGnmDriver` nem símbolo `sceGnm*` indefinido no ELF;
+- `COMPUTE_SMOKE_PKG_PAYLOAD=PASS`;
+- PKG compute: `PS4-Neural-Rendering-GCN8-compute-45005750367.pkg`, SHA-256 `97b866dfa5cc5bbb655417a4d6ec10700dd22a50055d6e22f06813dde793e5fb`;
+- PKG startup-only separado: `PS4-Neural-Rendering-GCN8-startup-45005750367.pkg`, SHA-256 `e6e1553399f91bf96d03790a5efc6677856d0f8819279f8d1c2144c2da16c1a1`.
+
+O workflow também executou validação e extração do PKG pelo PkgTool, verificando o payload compute e o shader esperado. O artefato ZIP `nr-gcn8-compute-smoke-ps4-pkg` é o ID `14747203138`, 25.268.050 bytes, digest SHA-256 `630e1a9a1f314837796fae560953733b808116aa9fb1b173cf76119d950c5612`. O artefato de shaders GFX8 é o ID `14747912741`, 26.065 bytes, digest SHA-256 `047e83a8cecaaf4799f7ef14ea969ae2c9dbe20d6c6358890bede230429e1717`.
+
+**Classificação correta:** build/shader pipeline = `CI_VALIDATED`; testes host = `HOST_VALIDATED`; validação do PKG executada no job = validação automatizada local do próprio pipeline, não revisão independente clean-room. Não houve job independente de QA de pacote neste workflow. O marcador PASS cobre o ELF; não é uma auditoria do OELF/Sony import metadata.
+
+O compute harness permanece bloqueado por padrão: a compilação não define `PNE_GCN8_ENABLE_UNVALIDATED_COMPUTE`, e `compute_smoke.cpp` retorna `RESULT=BLOCKED; REASON=COMPUTE_HARDWARE_GATES_NOT_CLEARED` antes de carregar GNM ou tentar dispatch. Portanto, o PKG compute é artefato de diagnóstico/CI e **não deve ser instalado** para testar dispatch.
+
+Esta validação não resolve GPU VA/V#, InputUsage runtime, cache/coerência, nem constitui execução de hardware. Nenhum PKG foi staged, instalado ou executado.
 
 ## 3. Bloqueios que permanecem
 
@@ -76,9 +100,9 @@ Nenhum PKG foi staged, instalado ou executado nesta rodada. Nenhum PRX foi ativa
 
 ## 5. Próximas ações
 
-1. Inspecionar o resultado CI do commit `83d15edf1c3411752f75fdc98172f9e2f8094865`, incluindo o marcador de auditoria e ELF/OELF/PKG produzidos.
+1. Completar a inspeção binária do artefato: conferir OELF e metadados Sony de importação, além da auditoria ELF já aprovada.
 2. Se o build/link falhar por símbolo que dependia da biblioteca removida, identificar o símbolo concreto e sua origem; não reintroduzir a dependência inteira sem análise.
 3. Obter evidência primária para GPU VA/V# e InputUsage ou manter os respectivos gates bloqueados.
 4. Solicitar revisão externa real do commit e do pacote neutro de critérios, registrando identidade, escopo, conflitos, achados e decisão somente quando houver submissão verificável.
 
-**Decisão:** `IN_PROGRESS`. A correção de dependência estática foi aplicada, mas não está aprovada até CI/artefato confirmarem o critério. Revisão externa e validação de hardware continuam `NOT_RUN`/ `BLOCKED`.
+**Decisão:** `IN_PROGRESS`. A remoção da dependência estática está aprovada no nível ELF/CI do commit `83d15edf`; o build, o marcador de auditoria e o payload do PKG passaram. Não se promove a aprovação para OELF/Sony import metadata, QA independente clean-room ou runtime. Revisão externa e validação de hardware continuam `NOT_RUN`/ `BLOCKED`.
