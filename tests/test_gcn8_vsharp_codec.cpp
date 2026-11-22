@@ -34,7 +34,8 @@ int main() {
     f.gpu_address = 0x0000000012345000ULL;
     f.stride = 4;
     f.num_records = 64;
-    f.mtype = 4; // GNM_MEMORY_READONLY (0x10), no cache bypass.
+    set_vsharp_memory_type(f, 0x10u, false, false); // GNM_MEMORY_READONLY.
+    assert(f.mtype == 4 && f.mtype_l1s == 0 && f.mtype_l2 == 0);
     f.dstselx = 4; f.dstsely = 0; f.dstselz = 0; f.dstselw = 1;
     f.numformat = 7; f.dataformat = 4;
     assert(pack_vsharp_buffer(f, w) == VSharpCodecError::none);
@@ -42,7 +43,8 @@ int main() {
            w[2] == 64u && w[3] == 0x20027204u);
 
     f.gpu_address = 0x0000000012346000ULL;
-    f.mtype = 0; f.mtype_l1s = 3; f.mtype_l2 = 3; // GNM_MEMORY_UNCACHED (0x6f).
+    set_vsharp_memory_type(f, 0x6fu, false, false); // GNM_MEMORY_UNCACHED.
+    assert(f.mtype == 0 && f.mtype_l1s == 3 && f.mtype_l2 == 3);
     assert(pack_vsharp_buffer(f, w) == VSharpCodecError::none);
     assert(w[0] == 0x12346000u && w[1] == 0x0004f000u &&
            w[2] == 64u && w[3] == 0x00027204u);
