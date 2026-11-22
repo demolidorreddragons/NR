@@ -70,6 +70,8 @@ jobs:
           python3 tests/test_gcn8_diagnostic_modes.py
       - name: Test Sony OELF and fake SELF import audit
         run: python3 tests/test_ps4_self_import_audit.py
+      - name: Test GoldHEN GNM x64 detour contract
+        run: python3 tests/test_goldhen_hook_contract.py
       - name: Test hybrid installer state machine
         run: |
           mkdir -p "$RUNNER_TEMP/pne-installer-test"
