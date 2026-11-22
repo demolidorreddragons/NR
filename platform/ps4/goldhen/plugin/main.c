@@ -22,6 +22,9 @@ int32_t sceGnmSubmitAndFlipCommandBuffers(uint32_t count, void *dcbGpuAddrs[],
  uint32_t *dcbSizesInBytes, void *ccbGpuAddrs[], uint32_t *ccbSizesInBytes,
  uint32_t videoOutHandle, uint32_t displayBufferIndex, uint32_t flipMode, int64_t flipArg);
 HOOK_INIT(sceGnmSubmitAndFlipCommandBuffers);
+int32_t sceGnmSubmitAndFlipCommandBuffers_hook(uint32_t count, void *dcbGpuAddrs[],
+ uint32_t *dcbSizesInBytes, void *ccbGpuAddrs[], uint32_t *ccbSizesInBytes,
+ uint32_t videoOutHandle, uint32_t displayBufferIndex, uint32_t flipMode, int64_t flipArg);
 
 // GoldHEN SDK's HOOK32 selects DetourMode_x32 (E9 rel32). This PRX is
 // x86-64; use the SDK's absolute 14-byte x64 detour and own trampoline cleanup.
