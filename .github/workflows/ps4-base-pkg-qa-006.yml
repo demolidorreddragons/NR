@@ -1,9 +1,7 @@
 name: PS4 Base PKG 006 Independent QA
+# Historical audit for PKG 006; retained for reproducibility, not a current release gate.
 on:
-  workflow_run:
-    workflows: ["PS4 PRX and PKG build"]
-    types: [completed]
-    branches: [main, feature/gcn8-numeric-kernels]
+  workflow_dispatch:
 permissions:
   actions: read
   contents: read
