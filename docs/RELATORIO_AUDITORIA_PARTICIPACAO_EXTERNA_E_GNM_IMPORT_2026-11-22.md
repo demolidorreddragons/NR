@@ -45,6 +45,11 @@ Arquivo: `tools/build_compute_smoke_pkg.sh`
    - emite `COMPUTE_GNM_STATIC_IMPORT_AUDIT=PASS; runtime_dlsym_only` somente quando ambos os testes passam.
 3. A resolução das quatro funções continua dinâmica e atômica pelo resolver existente.
 
+
+### Verificação adicional do setter de memória
+
+Foi inspecionado diretamente `PS4-OpenGNM/opengnm/include/gnm_buffer.h` no commit pinado `4b295ca54c82c83acf308d1c646a2dfa9ae57350`, linhas 90–98. `sceGnmBufSetMemoryType` é `static inline` e apenas escreve os campos `mtype`, `mtype_l1s` e `mtype_l2`; não chama uma exportação GNM externa. Portanto, a chamada existente no harness não justifica manter `-lSceGnmDriver` no link. Os setters de base address/formato do mesmo header podem chamar `sceGnmWriteMsg` em caminhos de erro, mas o harness constrói esses campos manualmente e não chama esses setters. Esta leitura de fonte reduz a hipótese de dependência implícita, mas o ELF final ainda precisa passar pela auditoria automatizada.
+
 ### Critério de aceitação da correção
 
 - Build compute do PS4 conclui sem depender de `-lSceGnmDriver`.
