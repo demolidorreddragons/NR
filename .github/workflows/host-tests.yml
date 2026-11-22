@@ -77,12 +77,12 @@ jobs:
         with:
           repository: GoldHEN/GoldHEN_Plugins_SDK
           ref: bcea3c7ef01dac6d7f9f49ebf9e90fe66d86f5f7
-          path: ${{ runner.temp }}/goldhen-sdk-hde64
+          path: goldhen-sdk-hde64
       - name: Characterize pinned HDE64 decoder bounds on host
         run: |
           cc -std=c11 -Wall -Wextra -Werror \
-            -I "$RUNNER_TEMP/goldhen-sdk-hde64/include" \
-            "$RUNNER_TEMP/goldhen-sdk-hde64/source/HDE64.c" \
+            -I "$GITHUB_WORKSPACE/goldhen-sdk-hde64/include" \
+            "$GITHUB_WORKSPACE/goldhen-sdk-hde64/source/HDE64.c" \
             tests/test_hde64_guard_page.c \
             -o "$RUNNER_TEMP/test_hde64_guard_page"
           "$RUNNER_TEMP/test_hde64_guard_page"
