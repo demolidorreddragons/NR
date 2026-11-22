@@ -6,7 +6,7 @@ Release candidate: Full/Base (gde), TITLE_ID PNEU00001, APP_VER 01.09, PKG 014.
 
 ## Technical change
 
-PKG 014 extends the PKG 013 process-local preflight with six compiled GFX8 shader code objects. At launch, the app computes SHA-256 over each file in /app0/gcn8/ and compares it with the pinned digest compiled into the preflight. A missing or altered file fails closed before GNM module lookup. The existing five GNM exports are then resolved by DLSYM only.
+PKG 014 extends the PKG 013 process-local preflight with six compiled GFX8 shader code objects. At launch, the app computes SHA-256 over each file in /app0/nr_gcn8_ and compares it with the pinned digest compiled into the preflight. A missing or altered file fails closed before GNM module lookup. The existing five GNM exports are then resolved by DLSYM only.
 
 This is a real package-content and runtime-integrity check. It is not a compute backend: none of the binaries is submitted to the GPU, no GNM export is called, no command buffer is submitted, and no Neural Rendering PRX is activated.
 
@@ -24,7 +24,7 @@ Source artifact: nr-gcn8-compute-shaders-gfx8, artifact ID 14770655379, ZIP size
 | gemm_fp32.gcn.bin | 292 | ca0325130b9b77294a3fd7c32957d076f90741584901570a2c1be5521a099412 |
 | gemm_fp32_wave64_tiled.gcn.bin | 948 | 5dd8cba2710502d5c1f930e4e0ddbe779a56b168900f1040c0e95b28c0f3f8bc |
 
-The base64 source files are kept under assets/gcn8/. tools/prepare_gcn8_pkg_assets.py decodes them and checks exact byte counts and SHA-256 before packaging. tools/verify_gcn8_assets.py is the independent post-extraction verifier used by package QA.
+The base64 source files are kept under assets/gcn8/. tools/prepare_gcn8_pkg_assets.py decodes them and checks exact byte counts and SHA-256 before packaging. tools/verify_gcn8_assets.py is the independent post-extraction verifier used by package QA. Files are deliberately flattened into the app0 root because the pinned GP4 generator only builds directory nodes declared in the GP4 tree; file paths alone do not create arbitrary parent directories.
 
 ## Safety and limitations
 
