@@ -5,6 +5,14 @@ constexpr bool fits(std::uint32_t value, unsigned bits) noexcept {
     return bits == 32 || value < (std::uint32_t{1} << bits);
 }
 }
+void set_vsharp_memory_type(VSharpBufferFields& fields,
+                            std::uint32_t memory_type,
+                            bool l1cachebypass,
+                            bool kcachebypass) noexcept {
+    fields.mtype = (l1cachebypass ? 0x3u : 0u) | ((memory_type >> 2) & 0x4u);
+    fields.mtype_l1s = (kcachebypass ? 0x3u : 0u) | ((memory_type >> 5) & 0x3u);
+    fields.mtype_l2 = memory_type & 0x3u;
+}
 VSharpCodecError pack_vsharp_buffer(const VSharpBufferFields& f,
                                     std::uint32_t words[4]) noexcept {
     if (!words) return VSharpCodecError::null_output;
