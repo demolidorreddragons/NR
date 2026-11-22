@@ -45,3 +45,15 @@ This proves only that the five named symbols were resolved in this process. It d
 If the user chooses to test PKG 013, the existing app with TITLE_ID `PNEU00001` must first be removed manually (consider saved app data). Then use **Configurações → GoldHEN → Package Installer**, select `PS4-Neural-Engine-013.pkg` from `/data/pkg/`, wait for completion, and launch **PS4 Neural Engine Preflight** from the content menu. Report the exact notification or crash code. Do not activate the PRX, dispatch compute, or alter GoldHEN configuration.
 
 The package remains a diagnostic preflight only; QA is PC-only and hardware status is not tested.
+
+
+## PKG 013 post-install read-only evidence — 2026-11-22
+
+- Evidence workflow 45070687025, job 137356718064: SUCCESS; artifact ps4-postinstall-preflight-evidence-013, ID 14772794263, 13,184,639 bytes; ZIP SHA-256 64443bf504c2af606be9392138c4bb2801273869e7496b3ecfdcd37598a25e99.
+- The runner read back /user/app/PNEU00001/app.pkg: 6,619,136 bytes, SHA-256 73c4c9a43002ae55fadec532a9e97217d23e1742d5f4db2bed8a60abdec6f7d1, exactly matching PKG 013.
+- /data/sce_coredumps/ listing contained only . and ..; no coredump was present at collection time.
+- /data/sce_logs/log.bin was preserved as a 16 MiB binary, SHA-256 acc3459fca68cb26e456a7b31def600928a152546de2c08fd4ed6db25972eb82. Its content did not yield usable printable NR/GNM diagnostics in the current pass; it is not interpreted as proof of no system errors.
+- The two expected PKG 013-specific text logs were absent (FTP 550): /data/pne_gcn8_gnm_export_audit_013.log and /data/pne_gnm_export_preflight_013.log. The user's reported PASS remains user-provided; it was not independently confirmed from those missing logs.
+- Historical probe logs were recovered: static import probe had a null address; dynamic load resolved sceGnmSubmitDone; expanded audit resolved all five exports. Those are historical probes, not PKG 013 execution logs.
+- Read-only collection used LIST/GET only; no remote files modified, no PRX activation, no plugins.ini change.
+
