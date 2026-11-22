@@ -89,6 +89,16 @@ jobs:
             tests/test_hde64_guard_page.c \
             -o "$RUNNER_TEMP/test_hde64_guard_page"
           "$RUNNER_TEMP/test_hde64_guard_page"
+      - name: Fuzz bounded HDE64 decoder against guard pages under AddressSanitizer
+        run: |
+          cc -std=c11 -Wall -Wextra -Werror -fsanitize=address -fno-omit-frame-pointer \
+            -I "$GITHUB_WORKSPACE/goldhen-sdk-hde64/include" \
+            -I platform/ps4/goldhen/plugin \
+            "$GITHUB_WORKSPACE/goldhen-sdk-hde64/source/HDE64.c" \
+            platform/ps4/goldhen/plugin/hde64_bounded.c \
+            tests/test_hde64_bounded_fuzz.c \
+            -o "$RUNNER_TEMP/test_hde64_bounded_fuzz"
+          ASAN_OPTIONS=detect_leaks=0 "$RUNNER_TEMP/test_hde64_bounded_fuzz"
       - name: Test hybrid installer state machine
         run: |
           mkdir -p "$RUNNER_TEMP/pne-installer-test"
