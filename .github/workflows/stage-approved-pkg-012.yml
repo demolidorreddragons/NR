@@ -26,7 +26,7 @@ jobs:
           path: transfer
           repository: demolidorreddragons/NR
           run-id: 45062759996
-          github-token: \${{ github.token }}
+          github-token: ${{ github.token }}
 
       - name: Download independent QA evidence from the same run
         uses: actions/download-artifact@v4
@@ -35,7 +35,7 @@ jobs:
           path: qa
           repository: demolidorreddragons/NR
           run-id: 45062759996
-          github-token: \${{ github.token }}
+          github-token: ${{ github.token }}
 
       - name: Verify exact package, manifest, source contract and independent QA before PS4 writes
         shell: pwsh
@@ -138,7 +138,7 @@ jobs:
       - name: Archive prior Neural Rendering PKGs and stage verified package with read-back
         shell: pwsh
         env:
-          PS4_IP: \${{ vars.PS4_IP }}
+          PS4_IP: ${{ vars.PS4_IP }}
         run: |
           $ErrorActionPreference = "Stop"
           if (-not $env:PS4_IP) { throw "PS4_IP Actions variable is missing." }
