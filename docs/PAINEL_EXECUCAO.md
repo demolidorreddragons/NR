@@ -237,3 +237,9 @@ A pesquisa não justificou mudança de código: parser e offset seguem intactos;
 - O NID `xbxNatawohc` corresponde ao registro público shadPS4 para `sceGnmSubmitAndFlipCommandBuffers`, versão 1. **Sony import metadata = STATIC_PASS.**
 - O antigo GNM-Link eboot foi criado com `--eboot` e não gerou o import GNM; o PRX principal usa `create-fself --lib`, que gerou a metadata. Não generalizar a falha do eboot para PRX.
 - Limites: loader/runtime FW 14.02, endereço importado e ABI/segurança do detour não foram testados em hardware. QA atual é PC-only. Sem staging/instalação até revisão dos gates e autorização específica. Detalhes na seção 2.4 do relatório.
+## Segurança do hook GNM — DetourMode_x32
+
+- NID/import do PRX = `STATIC_PASS`; hook ainda não é seguro para ativar.
+- GoldHEN SDK `Detour.c` pinado usa `E9 rel32` em `DetourMode_x32`, aloca trampoline via `malloc` e trunca o deslocamento para `uint32_t` sem checar alcance ±2 GiB. O macro `HOOK32` ignora o retorno da instalação.
+- Modo x64 usa salto absoluto de 14 bytes e exige prólogo suficiente; não trocar sem inspeção do export real.
+- Estado: `HOOK_DETOUR_SAFETY=BLOCKED`. Exige correção/validação do alcance, retorno de instalação, prólogo e ABI antes de qualquer instalação/ativação. Detalhes na seção 2.5 do relatório.
