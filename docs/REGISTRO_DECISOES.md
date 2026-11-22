@@ -78,3 +78,10 @@ Este arquivo preserva decisões aprovadas e seus motivos. Novas decisões devem 
 **Limites:** feedback não autoriza instalação adicional, execução destrutiva, ativação de PRX, reinício GoldHEN ou alteração de dados/configurações. A coleta deve ser read-only e preservar os dados do usuário.
 
 **Integração:** `docs/REGRAS_OPERACIONAIS_DO_PROJETO.md` §2.2 e `AGENTS.md`.
+
+## 2026-11-22 — OpenOrbis GNM linker stub is not a Sony runtime import
+
+- Evidence: artifact `14752435074`, `libSceGnmDriver.so` SHA-256 `21d38ac5e7d79ddc9ee9bc7b9a84547f43ea3144883f6ac787d16704c1b5121f`.
+- The OpenOrbis v0.5.4 file is a generic ELF64 shared-object link stub with 203 named exports, no `DT_SCE_*`/Sony NID metadata, and infinite-loop bodies for `sceGnmSubmitDone` and `sceGnmDispatchInitDefaultHardwareState`.
+- Decision: static `-lSceGnmDriver` is not accepted as evidence of a valid PS4 import and must not be used in runtime compute. Use module load plus `sceKernelDlsym`; the GNM-Load-Only probe previously resolved the required export on hardware. Link-only smoke is not runtime validation.
+- Limits: strong evidence consistent with the prior null GOT/OELF finding; not a complete reverse engineering of the FW 14.02 loader.
