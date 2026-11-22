@@ -34,6 +34,19 @@ The bundled PRX remains fail-closed: `has_validated_title_adapter()` returns fal
 - Inspect the final artifact and QA report; do not reuse PKG 011 hashes or reports.
 - Hardware validation remains outstanding. A successful PC build/QA is not proof of PS4 installation or execution.
 
+## Build, independent QA and PS4 staging result
+
+- Exact build run: `45062759996`, commit `2b011b16f095ab48a6e00d03c8a0eab38855c464`, overall SUCCESS.
+- Independent QA job: SUCCESS. It validated the GP4/PKG structure, embedded SFO, manifest, PRX hash and both diagnostic smoke packages. Report status: `PASS_PC_ONLY_NOT_HARDWARE_TESTED`.
+- Exact artifact: `PS4-Neural-Engine-012.pkg`, 6,619,136 bytes.
+- PKG SHA-256: `240914f39c1dbfec39b0f21fdd022dd30f10356341860e47fffaacef3aa3825f`.
+- PRX SHA-256: `1e4531711a0768cfeb29f1d6f66b9541cf087b141eda7a05fed755d12507866c`.
+- PS4 staging run: `45063363596`, SUCCESS. Remote temporary upload was read back and matched before promotion. Final read-back at `/data/pkg/PS4-Neural-Engine-012.pkg` matched exact byte count and SHA-256.
+- Previous root package archived with verified read-back: `/data/pkg/old/PS4-Neural-Rendering-GCN8-gnm-load-45040217180.pkg`, 6,619,136 bytes, SHA-256 `003baaa305dc6c6c9df20f0d383eba183ce795b873ead6f0f5e59a2d24b7383c`.
+- Root directory check: only `PS4-Neural-Engine-012.pkg` remains as a Neural Rendering PKG.
+- Read-only installed-title check: `PNEU00001` is PRESENT under `/user/app/`. Because PKG 012 is Full/Base, it must not be installed over that existing title. Any removal is manual and user-controlled.
+- `INSTALLATION_PERFORMED=FALSE`; no PRX deployment, activation, `plugins.ini` change or GoldHEN restart occurred.
+
 ## Authorization and release disposition
 
 PKG 012 is intended only as a **controlled installation/preflight test candidate** after its exact build and independent package QA pass. Installing it does not authorize PRX deployment or activation; the app is intentionally incapable of either. Any later PRX deployment, `plugins.ini` change, GoldHEN restart, or activation requires its own explicit user authorization.
