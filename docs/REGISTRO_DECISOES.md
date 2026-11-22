@@ -79,7 +79,7 @@ Este arquivo preserva decisões aprovadas e seus motivos. Novas decisões devem 
 
 **Integração:** `docs/REGRAS_OPERACIONAIS_DO_PROJETO.md` §2.2 e `AGENTS.md`.
 
-## 2026-11-22 — OpenOrbis GNM linker stub is not a Sony runtime import
+## 2026-11-22 — OpenOrbis GNM link stub versus PRX Sony import metadata
 
 - Evidence: artifact `14752435074`, `libSceGnmDriver.so` SHA-256 `21d38ac5e7d79ddc9ee9bc7b9a84547f43ea3144883f6ac787d16704c1b5121f`.
 - The OpenOrbis v0.5.4 file is a generic ELF64 shared-object **link stub** with 203 named exports, no `DT_SCE_*`/Sony NID metadata, and infinite-loop bodies; it is not a runtime implementation.
