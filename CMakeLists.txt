@@ -70,3 +70,13 @@ add_test(NAME gnm_runtime_abi_contract COMMAND test_gnm_runtime_abi)
 add_executable(test_gnm_runtime_resolver tests/test_gnm_runtime_resolver.cpp)
 target_include_directories(test_gnm_runtime_resolver PRIVATE platform/ps4/gcn8)
 add_test(NAME gnm_runtime_resolver_contract COMMAND test_gnm_runtime_resolver)
+
+add_library(pne_detour_transaction_core
+    platform/ps4/goldhen/plugin/detour_transaction_core.cpp
+)
+target_include_directories(pne_detour_transaction_core PUBLIC
+    platform/ps4/goldhen/plugin
+)
+add_executable(test_detour_transaction_core tests/test_detour_transaction_core.cpp)
+target_link_libraries(test_detour_transaction_core PRIVATE pne_detour_transaction_core)
+add_test(NAME detour_transaction_core COMMAND test_detour_transaction_core)
