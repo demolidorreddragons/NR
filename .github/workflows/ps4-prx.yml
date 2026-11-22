@@ -251,6 +251,8 @@ jobs:
           cp build/pkg-stage/package.gp4 "dist/pkg/audit/PS4-Neural-Engine-${PKG_NUMBER}.gp4"
           cp build/pkg-stage/sce_sys/param.sfo dist/pkg/audit/param.sfo
           cp build/pkg-stage/pne-release.ini dist/pkg/audit/pne-release.ini
+          cp installer/preflight_main.c dist/pkg/audit/preflight_main.c
+          test -s "dist/pkg/audit/preflight_main.c"
           test -s "dist/pkg/audit/PS4-Neural-Engine-${PKG_NUMBER}.gp4"
           test -s dist/pkg/audit/param.sfo
           test -s dist/pkg/audit/pne-release.ini
@@ -266,7 +268,6 @@ jobs:
             dist/goldhen/*.zip
             dist/goldhen/*.sha256
             dist/gcn8-smoke/**
-            installer/preflight_main.c
           if-no-files-found: error
 
   independent-pkg-qa:
@@ -324,7 +325,7 @@ jobs:
           $pkgHash = (Get-FileHash -Algorithm SHA256 $pkg).Hash.ToLowerInvariant()
           $gp4Hash = (Get-FileHash -Algorithm SHA256 $gp4).Hash.ToLowerInvariant()
           $sourcePrxHash = (Get-FileHash -Algorithm SHA256 $sourcePrx).Hash.ToLowerInvariant()
-          $preflightSource = Join-Path $artifact "installer/preflight_main.c"
+          $preflightSource = Join-Path $artifact "pkg/audit/preflight_main.c"
           if (-not (Test-Path $preflightSource)) { throw "Read-only preflight source missing from build artifact." }
           $preflightText = Get-Content $preflightSource -Raw
           foreach ($required in @("pne_validate_release_manifest(RELEASE_MANIFEST, SOURCE_PRX","PRX NOT installed or activated","sceKernelSendNotificationRequest")) {
