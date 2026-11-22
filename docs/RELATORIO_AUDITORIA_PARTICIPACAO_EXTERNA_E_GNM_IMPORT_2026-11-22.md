@@ -220,3 +220,17 @@ Foi adicionado `tools/audit_ps4_self_imports.py`, parser fail-closed para `PT_SC
 Artefato `ps4-neural-engine-build` ID `14752946485`, 38.256.653 bytes, ZIP SHA-256 `db3782f080e561a2d276af3e8da9c3989d7a6412d8393960369dd8b30270ea01` verificado. PKG GNM-Load `PS4-Neural-Rendering-GCN8-gnm-load-45018436422.pkg`, 6.619.136 bytes, SHA-256 `7b0807a882895b9a392f64f0e97bb7aca8e2aaa94c254e0667cc0128996c1051`; ELF `8e2fdcd2b2b49f006ee62920835d3cca38d50b399eb56faab029931674dc1ed1`; OELF `85c329480fb07e229ded29782ad1569204df305e4d5a7af18a8011c071777dc3`; MAP `9f43ec92cdfe773e10f24d3ebfd98458283cf19407d50a567d1de12faf3ae4ba`. Manifest: `gnm_exports_required` contém os cinco símbolos; `gnm_function_calls=none`; `hardware_status=not_run`.
 
 **Limite:** o build e QA de PC confirmam estrutura, payload e import isolation, não a disponibilidade real de `sceGnmSubmitAndFlipCommandBuffers` no firmware 14.02. O novo DLSYM ainda precisa de execução no PS4. O pacote não foi staged nem instalado; o staging exige autorização específica.
+### 2.8. Recoleta read-only da evidência do PS4 — run 45018960242
+
+O job self-hosted read-only `137197386898` recolheu novamente os arquivos disponíveis no console e publicou o artifact `ps4-crash-logger-evidence`, ID `14753156310`, 19.385 bytes, SHA-256 do ZIP `156c35452979115cdd882398233e81b0797bc127c7c7dc9c5a091147565aa76d` (recalculado após download). Nenhuma operação de escrita foi executada no PS4.
+
+**Log GNM-Link antigo:** `/data/pne_gcn8_compute_smoke_44873622760.log`, 324 bytes, SHA-256 `a6b3b08dcb100a7f9f4468022e14ecab7e20f4b5411b2682d0176ae74a686562`. Registra `MAIN_ENTERED`, `SIGNAL_INSTALL_FAILED`, `BEFORE_COMPUTE_SMOKE`, `GNM_IMPORT_ADDRESS_NULL`, `GNM_LINK_ONLY_MAIN_REACHED_NO_GNM_CALLS`, `RESULT_FAIL_GNM_IMPORT_ADDRESS` e `PNE_GCN8_SMOKE_EXIT=1`. Portanto, o caminho diagnóstico chegou ao main, não chamou GNM e terminou com código 1. O log, isoladamente, não explica a notificação CE-34878 reportada pelo usuário.
+
+**Outros dados:**
+- `/data/sce_coredumps/`: listagem contém apenas `.` e `..`; nenhum coredump encontrado.
+- `/data/pne.log` e `/user/data/pne.log`: não encontrados (FTP 550).
+- `/data/sce_logs/log.bin`: 16.777.216 bytes, SHA-256 `518b0bc57f02bb4d6c6e2935504c3be8e79bade22b10fe0f7e7a51a26800c3ec`. Binário não decodificado; apenas 268 bytes não-zero em sete faixas, incluindo um bloco de 256 bytes em `0x4000–0x40ff`; não foram encontradas strings ASCII/UTF-16 de GNM. Não inferir sem formato/documentação.
+- `Loader_Logs.txt`: 282 bytes, SHA-256 `69084a53487c59ac8695a8a97a3c01bb0f8fd745dba5864c5470b7cd932618f8`; trata de verificação RSA de `NPXS39041`, sem evidência GNM.
+- `memory.log`: 150 bytes, SHA-256 `a28ee9d2a64fc34d3367b0b8e17bab298dc8ccfb7079172f628be2732e70c528`; somente estatísticas `sceLibcMspace`.
+
+**Correlação:** o log confirma o GOT nulo já observado; a reauditoria do PKG confirmou NID e relocation Sony válidos. A falha continua classificada como `RUNTIME_IMPORT_RESOLUTION_FAIL / ROOT_CAUSE_UNRESOLVED`. A ausência de coredump e o retorno explícito 1 impedem atribuir, com a evidência atual, o CE-34878 a uma chamada GNM ou a um crash dentro do harness.
