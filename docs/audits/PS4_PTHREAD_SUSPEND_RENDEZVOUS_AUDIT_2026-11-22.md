@@ -110,3 +110,35 @@ A global thread suspension primitive might be relevant to the first two, but onl
 ## Change boundary
 
 This audit changes documentation only. No executable source, workflow, PRX, PKG, plugin registration, or console state is changed. No PS4 call or hardware test was performed.
+
+
+## 5. Follow-up: 14.02 retail-binary corroboration and implementation gap
+
+A second static pass examined the public `ps4debug-NG` firmware-support notes. Its README states that its author checked the 14.02 kernel and all three libkernel variants (ordinary, web, and system) against decrypted retail binaries, with comparisons to 14.00 and 13.52. It also notes that the ordinary and system libkernel variants retain their 13.52 offsets at 14.00, while the web variant has distinct pthread entry points. This is useful evidence that decrypted 14.02 libkernel variants and symbol-offset work exist in the public research ecosystem.
+
+It does **not** publish, in the inspected README material, a 14.02 `scePthreadSuspendAll` / `scePthreadResumeAll` NID-to-address mapping, disassembly, wrapper body, or behavioral analysis. The README's references to pthread entry points concern thread creation support and do not establish suspend-all behavior. Therefore it does not close any of the unknowns in this audit.
+
+A GitHub code search for the exact symbol names returned:
+- OpenOrbis header declarations only;
+- generic PS4/PS5 SDK symbol stubs or declaration lists;
+- a PS5 clean-room/emulator implementation where `scePthreadSuspendAll` is explicitly unimplemented and `scePthreadResumeAll` delegates to a FreeBSD-named helper. That PS5 project is not evidence for PS4 retail firmware and is excluded from the implementation conclusion;
+- no inspected PS4 retail implementation or firmware-specific disassembly for either function.
+
+The FreeBSD 14.0 manual confirms the analog semantics more precisely: `pthread_suspend_all_np()` suspends active threads except the caller, and warns that the caller must avoid non-async-signal-safe functions until resume unless all threads are known to be at safe points. FreeBSD 14.2's `pthread_resume_all_np()` scans active threads and resumes those previously suspended. These are useful hazard models only. The Sony wrappers may differ in scope, ownership, wait behavior, nesting, and implementation; no equivalence is inferred.
+
+### Updated evidence matrix
+
+| Question | New evidence | Decision |
+|---|---|---|
+| Do decrypted 14.02 libkernel variants exist in public reverse-engineering work? | ps4debug-NG README reports comparison against decrypted retail 14.02 kernel and all three libkernel variants | Corroborated at project-report level |
+| Exact 14.02 suspend-all/resume-all NIDs and module/library identity? | Not present in inspected README or SDK declarations | **BLOCKED** |
+| Exact wrapper implementation / disassembly? | No PS4 retail body found in inspected public sources | **BLOCKED** |
+| Per-thread stop acknowledgement and return semantics? | No PS4-specific contract or implementation evidence | **BLOCKED** |
+| Resume ownership, nested/concurrent behavior, newly created thread coverage? | No PS4-specific evidence | **BLOCKED** |
+| Consumer-side serializing handoff before patched instruction fetch? | No evidence of a per-thread callback or mandatory serialization on resume | **BLOCKED** |
+
+### Revised next step
+
+The useful next static task is now narrowly scoped: obtain a legally accessible, already-decrypted 14.02 `libkernel.sprx` variant and its export metadata from a trustworthy source, identify the exact export records for both functions, then inspect the wrapper implementation and any referenced libthr/kernel routines. This must remain offline/static analysis; do not download or execute unknown payloads, do not ask the user to dump firmware merely to advance a speculative lead, and do not run a console experiment without a separate bounded plan and explicit authorization.
+
+Even a complete wrapper disassembly would still need to establish the underlying thread-domain coverage and consumer-side serialization. If the implementation simply delegates to an opaque kernel/libthr primitive with no such guarantee, the detour gate remains unsupported.
