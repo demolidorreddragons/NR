@@ -2,7 +2,7 @@
 
 ## Current release state — PKG 015 candidate (2026-11-22)
 
-Release 015 is a Full/Base candidate (CATEGORY=gde), APP_VER 01.10. It extends PKG 014's six GFX8 asset integrity checks and five GNM symbol lookups with the two missing compute-path exports: `sceGnmSetCsShader` and `sceGnmDispatchDirect`. The resulting audit requires seven exports before PASS. It remains symbol-resolution-only: no GNM calls, command submission, compute dispatch, PRX activation or hardware validation. See `docs/PKG_015_GNM_COMPUTE_EXPORT_PREFLIGHT.md`.
+Release 015 is a Full/Base package (CATEGORY=gde), APP_VER 01.10, staged at `/data/pkg/PS4-Neural-Engine-015.pkg` after independent PC-only QA. It extends PKG 014's six GFX8 asset integrity checks and five GNM symbol lookups with the two missing compute-path exports: `sceGnmSetCsShader` and `sceGnmDispatchDirect`. The resulting audit requires seven exports before PASS. It remains symbol-resolution-only: no GNM calls, command submission, compute dispatch, PRX activation or hardware validation. See `docs/PKG_015_GNM_COMPUTE_EXPORT_PREFLIGHT.md`.
 
 
 ## Current release state — PKG 014 candidate (2026-11-22)
@@ -31,6 +31,17 @@ PKG 014 must not be described as a functioning neural renderer or as a GNM compu
 - The runner confirmed exactly one Neural Rendering PKG remains in /data/pkg/ (014). Existing installed title PNEU00001 was present. No installation, PRX activation, GNM call, plugins.ini change, or GoldHEN restart was performed.
 - QA is automated and PC-only; no independent human code review or hardware/runtime validation was performed.
 
+
+
+## PKG 015 — build, independent QA and PS4 staging completed
+
+- Build run `45074310271`, SUCCESS; source commit `2c9e3c12aed2791f2973496c31c8993259c64430`.
+- Full/Base package `PS4-Neural-Engine-015.pkg`, 6,619,136 bytes, SHA-256 `2fcaf679766fefbed4bc60cc31beb0227b8bfefd4eb8070160f65a402be747e9`; APP_VER 01.10, TITLE_ID PNEU00001.
+- Independent QA: job `independent-pkg-qa` SUCCESS; artifact 14774516745. PKG validation, extraction, SFO, GP4, manifest, PRX and all six GFX8 asset hashes PASS. `QA_STATUS=PASS_PC_ONLY_NOT_HARDWARE_TESTED`.
+- Host tests: run `45074310300`, SUCCESS.
+- Staging run `45074626193`, job `137368991264`, SUCCESS. PKG 014 archived intact at `/data/pkg/old/PS4-Neural-Engine-014.pkg`, 6,619,136 bytes, SHA-256 `96c15b46e7579c5f728a131279e986af04a9e4683c9903221e418ca52a3842db`. PKG 015 temporary and final remote readbacks matched 6,619,136 bytes and SHA-256 `2fcaf679766fefbed4bc60cc31beb0227b8bfefd4eb8070160f65a402be747e9`.
+- Final path `/data/pkg/PS4-Neural-Engine-015.pkg`; exactly one Neural Rendering PKG remains in `/data/pkg/`. Existing `PNEU00001` title was present. No install or PRX activation was performed.
+- This remains a compute-export preflight, not a functioning neural renderer. Hardware validation and all GNM call/dispatch gates remain open.
 
 ## PKG 014 — post-install read-only audit
 
