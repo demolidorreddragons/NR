@@ -203,12 +203,12 @@ jobs:
           test -s "$RUNNER_TEMP/gcnm-smoke/gnm_resource_binding.o"
           test -s "$RUNNER_TEMP/gcnm-smoke/resource_table_contract.o"
           echo "GCN8_GNM_API_SMOKE=compiled; no firmware calls or GPU dispatch executed"
-      - name: Link GCN8 GNM firmware import smoke PRX
+      - name: Link GCN8 OpenOrbis GNM stub (link-only; not a Sony import)
         run: |
           ld.lld -m elf_x86_64 -pie --script "$OO_PS4_TOOLCHAIN/link.x" -e _init --eh-frame-hdr -L"$OO_PS4_TOOLCHAIN/lib" "$GITHUB_WORKSPACE/GoldHEN_Plugins_SDK/build/crtprx.o" "$RUNNER_TEMP/gcnm-smoke/gcn8_gnm_api_smoke.o" "$RUNNER_TEMP/gcnm-smoke/gnm_resource_binding.o" "$RUNNER_TEMP/gcnm-smoke/resource_table_contract.o" -o "$RUNNER_TEMP/gcnm-smoke/gcn8_gnm_link_smoke.elf" -lSceLibcInternal -lSceGnmDriver -lkernel
           test -s "$RUNNER_TEMP/gcnm-smoke/gcn8_gnm_link_smoke.elf"
           readelf -h "$RUNNER_TEMP/gcnm-smoke/gcn8_gnm_link_smoke.elf" | grep -Eq 'Entry point address:[[:space:]]+0x[1-9a-fA-F]'
-          echo "GCN8_GNM_LINK_SMOKE=resolved_with_valid_entry; no firmware calls or GPU dispatch executed"
+          echo "OPENORBIS_GNM_LINK_STUB=LINKED; SONY_RUNTIME_IMPORT=NOT_VALIDATED; no firmware calls or GPU dispatch executed"
       - name: Build GoldHEN hook library
         run: |
           sed -i 's|-isystem $(TOOLCHAIN)/include|-isystem $(TOOLCHAIN)/include -isystem /usr/include/x86_64-linux-gnu|' GoldHEN_Plugins_SDK/Makefile
