@@ -173,7 +173,7 @@ static void *input_thread(void *arg) {
 
 s32 attr_public plugin_load(s32 argc, const char *argv[]) {
  (void)argc; (void)argv;
- if (skip_neural_rendering_title()) {
+ if (skip_neural_rendering_title() || !has_validated_title_adapter()) {
   g_skip_current_title = true;
   return 0;
  }
