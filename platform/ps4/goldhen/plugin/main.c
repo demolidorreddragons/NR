@@ -37,7 +37,7 @@ static bool install_gnm_hook(void) {
   if (Detour_sceGnmSubmitAndFlipCommandBuffers.TrampolinePtr)
    sceKernelMunmap(Detour_sceGnmSubmitAndFlipCommandBuffers.TrampolinePtr,
     sizeof(Detour_sceGnmSubmitAndFlipCommandBuffers.JumpInstructions64));
-  std::memset(&Detour_sceGnmSubmitAndFlipCommandBuffers, 0,
+  memset(&Detour_sceGnmSubmitAndFlipCommandBuffers, 0,
    sizeof(Detour_sceGnmSubmitAndFlipCommandBuffers));
   return false;
  }
@@ -50,7 +50,7 @@ static void remove_gnm_hook(void) {
  if (Detour_sceGnmSubmitAndFlipCommandBuffers.TrampolinePtr)
   sceKernelMunmap(Detour_sceGnmSubmitAndFlipCommandBuffers.TrampolinePtr,
    sizeof(Detour_sceGnmSubmitAndFlipCommandBuffers.JumpInstructions64));
- std::memset(&Detour_sceGnmSubmitAndFlipCommandBuffers, 0,
+ memset(&Detour_sceGnmSubmitAndFlipCommandBuffers, 0,
   sizeof(Detour_sceGnmSubmitAndFlipCommandBuffers));
 }
 
