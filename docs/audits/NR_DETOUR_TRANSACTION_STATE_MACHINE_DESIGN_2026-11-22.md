@@ -155,3 +155,11 @@ The CMake host suite registers `detour_transaction_core`. The coordinator is int
 - The earlier attempts exposed two test-harness defects (literal escaped line breaks, then rollback-failure cases that did not first force a partial write). Both were corrected before this passing run.
 
 The workflow's separate read-only PS4 log-retrieval job was still queued when this result was recorded; therefore this is a confirmed host-test job result, not a claim that the entire workflow or any PS4 operation completed. No PRX/PKG staging, installation, plugin activation, or hardware validation was performed for this host-only core.
+
+### Teardown coordinator extension
+
+The host coordinator now also exposes `nr_detour_tx_remove()`. It uses a distinct `acquire_remove_window_and_drain` callback, whose contract is stronger than the install gate: it must prevent new hook entries and drain all in-flight execution that can reference the target, hook, stub, or trampoline. Only then may the coordinator restore and verify original bytes, restore target protection, release the gate, and release executable resources.
+
+Removal retries the original-byte write once while the gate remains held if the first restore reports no effect/uncertain completion or read-back does not match. If the retry, verification, protection restoration, gate release, or resource release is uncertain, the result is `POISONED`; it never frees resources in that state. If removal cannot acquire the gate or make the target writable but those operations guarantee no side effect, it returns `ACTIVE` with resources retained.
+
+This is a host coordinator contract only. It does not implement a PS4 thread rendezvous or prove that a GoldHEN callback can be unloaded safely. The callback is intentionally required as an injected operation and remains unavailable for the PS4 adapter until authoritative runtime evidence exists.
