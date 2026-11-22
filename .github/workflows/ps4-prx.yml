@@ -344,7 +344,7 @@ jobs:
           }
           $gp4Text = Get-Content $gp4 -Raw
           if ($gp4Text -notmatch "IV0000-PNEU00001_00-PS4NEURALENG0000") { throw "GP4 CONTENT_ID mismatch." }
-          foreach ($entry in @("eboot.bin","ps4_neural_engine.prx","pne-release.ini","sce_sys/param.sfo","gcn8/SHA256SUMS","gcn8/compute_smoke_add.gcn.bin","gcn8/e4m3_decode.gcn.bin","gcn8/e4m3_encode.gcn.bin","gcn8/gemm_fp16_accum.gcn.bin","gcn8/gemm_fp32.gcn.bin","gcn8/gemm_fp32_wave64_tiled.gcn.bin")) {
+          foreach ($entry in @("eboot.bin","ps4_neural_engine.prx","pne-release.ini","sce_sys/param.sfo","nr_gcn8_SHA256SUMS","nr_gcn8_compute_smoke_add.gcn.bin","nr_gcn8_e4m3_decode.gcn.bin","nr_gcn8_e4m3_encode.gcn.bin","nr_gcn8_gemm_fp16_accum.gcn.bin","nr_gcn8_gemm_fp32.gcn.bin","nr_gcn8_gemm_fp32_wave64_tiled.gcn.bin")) {
             if ($gp4Text -notmatch [regex]::Escape($entry)) { throw "GP4 file association missing: $entry" }
           }
           $manifestText = Get-Content $manifest -Raw
@@ -381,9 +381,9 @@ jobs:
           $embeddedPrxHash = (Get-FileHash -Algorithm SHA256 $prx.FullName).Hash.ToLowerInvariant()
           if ($embeddedPrxHash -ne $sourcePrxHash) { throw "Packaged PRX differs from standalone build PRX." }
           if ((Get-Content $embeddedManifest.FullName -Raw) -ne $manifestText) { throw "Packaged manifest differs from staged release manifest." }
-          $gcn8Dir = Get-ChildItem $out -Recurse -Directory -Filter gcn8 | Select-Object -First 1
-          if (-not $gcn8Dir) { throw "Packaged GCN8 asset directory missing." }
-          python (Join-Path $artifact "pkg/audit/verify_gcn8_assets.py") $gcn8Dir.FullName
+          $gcn8Manifest = Get-ChildItem $out -Recurse -File -Filter nr_gcn8_SHA256SUMS | Select-Object -First 1
+          if (-not $gcn8Manifest) { throw "Packaged GCN8 asset manifest missing." }
+          python (Join-Path $artifact "pkg/audit/verify_gcn8_assets.py") $gcn8Manifest.DirectoryName
           if ($LASTEXITCODE -ne 0) { throw "Independent GCN8 asset hash verification failed." }
           "GCN8_ASSETS=6_OF_6_HASHES_PASS" | Out-File qa-output/qa-report.txt -Append
           "PKG_KIND=FULL_BASE_APPLICATION_NOT_PATCH" | Out-File qa-output/qa-report.txt
