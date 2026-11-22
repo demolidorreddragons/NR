@@ -3,8 +3,8 @@
 **Date:** 2026-11-22  
 **Repository:** `demolidorreddragons/NR`  
 **Branch:** `feature/gcn8-numeric-kernels`  
-**Host-tested commit:** `4de424468977f6fcee8f26ef36815db9da8df7fc`  
-**Host CI:** [host-tests #1510](https://github.com/demolidorreddragons/NR/actions/runs/45056225389) — telemetry job SUCCESS  
+**Host-tested commit:** `e65a8dc817bd8fb07d83c316bfcd7ec8aa7cb0ec`  
+**Host CI:** [host-tests #1512](https://github.com/demolidorreddragons/NR/actions/runs/45056416166) — telemetry job SUCCESS  
 **PRX build and independent PKG QA:** [PS4 PRX and PKG #644](https://github.com/demolidorreddragons/NR/actions/runs/45056164974) — build job SUCCESS; independent QA job SUCCESS; `QA_STATUS=PASS_PC_ONLY_NOT_HARDWARE_TESTED`  
 **Pinned GoldHEN SDK:** `bcea3c7ef01dac6d7f9f49ebf9e90fe66d86f5f7`
 
@@ -48,7 +48,7 @@ It publishes the plan only after the full requested minimum is decoded. It does 
 
 ## Host test coverage and evidence
 
-Run `45056225389` completed the telemetry job successfully. The bounded decoder/planner step, installer checks, GCN8 contract checks, CMake configure/build and CTest all passed.
+Run `45056416166` completed the telemetry job successfully. The bounded decoder/planner step, 150,000-span AddressSanitizer sweep, installer checks, GCN8 contract checks, CMake configure/build and CTest all passed.
 
 The bounded-decoder harness verifies:
 
@@ -69,7 +69,7 @@ The bounded-decoder harness verifies:
 15. Insufficient spans, zero minimum, null output and excessive instruction counts are rejected.
 16. A 64-byte span of 16 four-byte instructions is accepted at the configured maximum.
 
-The harness compiles the exact pinned SDK source revision above with both NR modules using `-std=c11 -Wall -Wextra -Werror`.
+The harness compiles the exact pinned SDK source revision above with both NR modules using `-std=c11 -Wall -Wextra -Werror`. A separate AddressSanitizer binary runs 150,000 randomized spans (10,000 at each length from 1 to 15) positioned directly against a `PROT_NONE` guard page. It completed with 114,310 accepted decodes and 35,690 rejected spans, with no out-of-span read or sanitizer report.
 
 ## Critical contract and limitations
 
