@@ -25,7 +25,7 @@ hook = source.index('if (!install_gnm_hook())')
 thread = source.index('scePthreadCreate(&g_input_thread')
 assert guard < frequency < hook < thread
 
-assert "own control application" in source
+assert "control application as well as games" in source
 assert "if (g_skip_current_title)" in source
 assert "if (g_input_thread_started)" in source
 assert "control-app Title IDs" in readme
