@@ -128,3 +128,23 @@ Nenhum PKG foi staged, instalado ou executado nesta rodada. Nenhum PRX foi ativa
 4. Solicitar revisão externa real do commit e do pacote neutro de critérios, registrando identidade, escopo, conflitos, achados e decisão somente quando houver submissão verificável.
 
 **Decisão:** `IN_PROGRESS`. A remoção da dependência estática está aprovada no nível ELF/CI do commit `83d15edf`; o build, o marcador de auditoria e o payload do PKG passaram. Não se promove a aprovação para OELF/Sony import metadata, QA independente clean-room ou runtime. Revisão externa e validação de hardware continuam `NOT_RUN`/ `BLOCKED`.
+
+### 2.3. Auditoria forense do linker stub OpenOrbis GNM — run 45015947338
+
+O workflow PRX preservou os arquivos exatos do toolchain OpenOrbis v0.5.4 para auditoria. O artefato `ps4-neural-engine-build`, ID `14752435074`, tem 38.256.476 bytes e SHA-256 `bce83e2fc3eb80c0ea65f14f5fda8721827e61641cebe250eced335d7a782d8e`; o ZIP foi baixado e o hash recalculado com correspondência.
+
+Arquivo `libSceGnmDriver.so` extraído do artefato: 40.472 bytes, SHA-256 `21d38ac5e7d79ddc9ee9bc7b9a84547f43ea3144883f6ac787d16704c1b5121f`. `file`/`readelf` identificam um ELF64 x86-64 shared object de link, não um SPRX/OELF de sistema. A tabela dinâmica tem apenas tags ELF genéricas (INIT/FINI_ARRAY, GNU_HASH, STRTAB, SYMTAB, STRSZ, SYMENT, RELA/RELASZ/RELAENT e NULL); não há `DT_SCE_*`, `DT_SCE_IMPORT_LIB`, `DT_SCE_NEEDED_MODULE`, SONAME ou DT_NEEDED. A busca de strings não encontrou o NID `CAF67BDEE414AAB9`, sua codificação `yvZ73uQUqrk`, nem metadados `DT_SCE`.
+
+A `.dynsym` contém 203 símbolos e exporta por nome as quatro funções GNM usadas pelo harness, incluindo `sceGnmSubmitDone` (valor `0x46cc`), `sceGnmDispatchInitDefaultHardwareState` (`0x40d2`), `sceGnmFlushGarlic` (`0x41fe`) e `sceGnmSubmitCommandBuffers` (`0x46b8`). Porém, o disassembly de `sceGnmSubmitDone` é `endbr64; push rbp; mov rsp,rbp; jmp 0x46d4` — um loop infinito. `sceGnmDispatchInitDefaultHardwareState` também termina em salto para si mesmo. Portanto, os nomes/exportações satisfazem o linker, mas os corpos são stubs não funcionais e não devem ser chamados.
+
+### Impacto sobre o GNM-Link-Only e decisão
+
+Esta evidência explica por que `-lSceGnmDriver` não pode ser tratado como prova de import Sony válido. O linker recebe um ELF stub com símbolos C, não uma tabela Sony de NID/module/library. Isso é consistente com o OELF já examinado no antigo GNM-Link-Only: o executável tinha dependência/símbolo ELF, mas não continha a entrada Sony de importação necessária; no PS4 o slot GOT de `sceGnmSubmitDone` apareceu nulo. A ausência de metadata no stub, isoladamente, não prova todos os detalhes internos do loader FW 14.02, mas combinada com o OELF e o resultado de hardware torna a hipótese de import estático sem NID metadata a explicação mais forte disponível.
+
+**Decisão operacional:** manter `-lSceGnmDriver` fora do modo compute e de qualquer caminho que se pretenda executar no PS4. Usar `sceKernelLoadStartModule` + `sceKernelDlsym` para o caminho runtime; esse caminho já teve sucesso observado no probe GNM-Load-Only, com endereço de export válido. O build/link smoke que usa `-lSceGnmDriver` é apenas um teste de que o stub satisfaz o linker, não teste de import Sony nem de chamada GNM. Nenhuma função do stub deve ser executada.
+
+### Correção de nomenclatura do workflow
+
+O log do workflow `PS4 PRX and PKG build` atualmente emite `GCN8_GNM_LINK_SMOKE=resolved_with_valid_entry`. Interpretar `resolved` somente como link ELF contra o stub e entry point válido; não como resolução no loader do PS4. A etapa deve ser renomeada/registrada como `OPENORBIS_GNM_LINK_STUB=LINKED; SONY_RUNTIME_IMPORT=NOT_VALIDATED` em atualização posterior do workflow.
+
+**Classificação:** evidência estática/forense do toolchain e correlação com falha anterior em hardware; sem nova execução no console. A auditoria não autoriza reintroduzir link estático GNM nem alterar o bloqueio de compute.
