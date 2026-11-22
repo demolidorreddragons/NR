@@ -86,6 +86,26 @@ O compute harness permanece bloqueado por padrão: a compilação não define `P
 
 Esta validação não resolve GPU VA/V#, InputUsage runtime, cache/coerência, nem constitui execução de hardware. Nenhum PKG foi staged, instalado ou executado.
 
+### 2.2. Reinspeção binária do artefato preservado — run 45014637939
+
+A correção de retenção do artefato foi exercitada no commit `b2baac371acfbc0b10d17f5ad15cf5f1d7c77171`. O run [45014637939](https://github.com/demolidorreddragons/NR/actions/runs/45014637939) terminou com os dois jobs SUCCESS: `build-gfx8-compute` (job `137184213535`) e `Build standalone PS4 GCN8 compute smoke PKG` (job `137185098537`).
+
+Artefato `nr-gcn8-compute-smoke-ps4-pkg`, ID `14751630143`: 25.433.004 bytes; SHA-256 do ZIP recalculado após download: `8674616f7855d217f57ae7d7002b2cc9581cfa0e03a67b52c8081c21f667b907` (igual ao digest do GitHub). O ZIP contém os dois PKGs, manifests, GP4, SFO e, para ambos os modos, `smoke.elf`, `smoke.oelf` e `smoke.map`.
+
+**Compute PKG e arquivos auditados:**
+- PKG: `PS4-Neural-Rendering-GCN8-compute-45014637939.pkg`, 6.619.136 bytes, SHA-256 `9d00d221e0888b0d2543bee9fecf3ab93fd52796e36856b898b3919d5d37bac0`.
+- ELF: 167.928 bytes, SHA-256 `e8e6cc962e23f11a3f4eb93f288667fd9142be1b18873c0df9cc79cdecc793c4`.
+- OELF: 170.248 bytes, SHA-256 `51473828592f0ad3b5eb11837f91211fb59bd3755a0f9edbfa529285a9cec506`.
+- MAP: 51.490 bytes, SHA-256 `00b938daa630e0070179db063c10c959cdc8661f3d00f00956a3ebdd24012136`.
+- Manifest: shader `compute_smoke_add.sb`, SHA-256 `ab59ebaf6f3c343a2228103205404b15c86f1359a48ac7f55e600c59aa2ed51f`; `gnm_import_probe=none`, `gnm_load_probe=none`, `gnm_function_calls=none`, `hardware_status=not_run`.
+
+Os hashes dos quatro arquivos foram recalculados diretamente dos membros extraídos e conferem com o manifesto. O PKG principal e o alias Content ID dentro do ZIP são byte-idênticos e têm o mesmo SHA-256. O SFO registra categoria `gde`, `APP_TYPE=1`, Title ID `PNEU00002` e Content ID `IV0000-PNEU00002_00-GCN8SMOKE0000000`. O GP4 registra `app_type=full`. O log do job contém `COMPUTE_GNM_STATIC_IMPORT_AUDIT=PASS; runtime_dlsym_only`, `COMPUTE_SMOKE_PKG_PAYLOAD=PASS` e o mesmo SHA-256 do PKG; o PkgTool extraiu e enumerou `eboot.bin`, o shader e os módulos de suporte. O ícone empacotado corresponde ao hash aprovado `7fe6a11ad7b4d37e5741c77822730a82487237dbed4a3eca529e995a29421ae4`.
+
+**Auditoria Sony/OELF:** o OELF contém `PT_SCE_DYNLIBDATA` em offset `0x28ff8`, tamanho `0x910`. A tabela dinâmica foi interpretada usando os offsets Sony: `DT_SCE_STRTAB=0x18`, `DT_SCE_STRSZ=0x159`, `DT_SCE_SYMTAB=0x178`, `DT_SCE_SYMTABSZ=0x1f8`, `DT_SCE_HASH=0x6e8`, `DT_SCE_HASHSZ=0x60`, `DT_SCE_RELA=0x538`, `DT_SCE_RELASZ=0x1b0`, `DT_SCE_JMPREL=0x370` e `DT_SCE_PLTRELSZ=0x1c8`. A string table Sony resolve o offset `0x1` para `libkernel.prx` e `0xf` para o módulo `libkernel`. As tags `DT_NEEDED=1`, `DT_SCE_NEEDED_MODULE=0x101010000000f`, `DT_SCE_IMPORT_LIB=0x100010000000f` e `DT_SCE_IMPORT_LIB_ATTR=0x1000000000009` descrevem esse único módulo/biblioteca de importação. Os 19 NIDs de importação usam o sufixo de IDs `#B#B` e correspondem às 19 funções de sistema/libkernel indefinidas no ELF (close, fsync, sigaltstack, sigaction, _exit, write, poll, __error, _open, _fcntl, mmap, munmap, madvise, _ioctl, _readv, _read, _writev, _write, lseek). Não há `libSceGnmDriver`, módulo GNM, NID GNM ou símbolo `sceGnm*` indefinido no ELF/OELF; as relocações auditadas também não apontam para símbolos GNM. A interpretação segue a especificação OpenOrbis de `PT_SCE_DYNLIBDATA` e tags Sony: https://github.com/OpenOrbis/OpenOrbis-PS4-Toolchain/blob/master/docs/MD/OELF%20Specification/PS4%20ELF%20Specification%20-%20Dynlib%20Data.md.
+
+**Gate de execução:** o modo compute compila `smoke_main.cpp` sem `PNE_GCN8_GNM_LOAD_ONLY`/`PNE_GCN8_GNM_LINK_ONLY` e sem definir `PNE_GCN8_ENABLE_UNVALIDATED_COMPUTE`; a única macro adicional específica é o Run ID. Em `compute_smoke.cpp:185–187`, o código retorna `RESULT=BLOCKED; REASON=COMPUTE_HARDWARE_GATES_NOT_CLEARED` e `COMPUTE_DISPATCH_NOT_ATTEMPTED` antes de qualquer load/resolução GNM ou dispatch. O mapa não registra símbolos GNM. Assim, este PKG não executa GNM e **não deve ser instalado**.
+
+**Classificação atualizada:** artefato/manifest/ELF/OELF/MAP têm rastreabilidade binária reaberta e hashes conferidos; auditoria de import estático GNM = PASS; payload/extração automatizada do PKG = PASS; categoria técnica Full/Base = confirmada. Isto continua sendo validação interna do build e inspeção binária, não QA independente clean-room nem validação de firmware/hardware. Permanecem bloqueados GPU VA/V#, InputUsage runtime, coerência/cache, dispatch/readback no PS4 e revisão independente externa. Nenhum staging, instalação, execução no console ou alteração no PS4 ocorreu.
 ## 3. Bloqueios que permanecem
 
 1. **GPU VA / V# writable:** sem contrato autoritativo demonstrando que o ponteiro mapeado usado pelo harness é o GPU VA válido e representável para a tabela de recursos.
