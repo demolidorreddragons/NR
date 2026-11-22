@@ -78,11 +78,13 @@ jobs:
           repository: GoldHEN/GoldHEN_Plugins_SDK
           ref: bcea3c7ef01dac6d7f9f49ebf9e90fe66d86f5f7
           path: goldhen-sdk-hde64
-      - name: Characterize pinned HDE64 decoder bounds on host
+      - name: Test NR bounded HDE64 decoder and pinned upstream guard-page behavior
         run: |
           cc -std=c11 -Wall -Wextra -Werror \
             -I "$GITHUB_WORKSPACE/goldhen-sdk-hde64/include" \
+            -I platform/ps4/goldhen/plugin \
             "$GITHUB_WORKSPACE/goldhen-sdk-hde64/source/HDE64.c" \
+            platform/ps4/goldhen/plugin/hde64_bounded.c \
             tests/test_hde64_guard_page.c \
             -o "$RUNNER_TEMP/test_hde64_guard_page"
           "$RUNNER_TEMP/test_hde64_guard_page"
