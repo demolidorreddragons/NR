@@ -166,7 +166,7 @@ A entrada GNM está presente e correlacionada com a relocação original:
 - No ELF pré-SELF, a relocação original no mesmo GOT offset `0x28000` aponta para o símbolo indefinido `sceGnmSubmitAndFlipCommandBuffers` (dynsym index `4`).
 - O NID `xbxNatawohc` decodifica para `0xC5BC4D6AD6B0A217` e coincide com o registro público shadPS4: `LIB_FUNCTION("xbxNatawohc", "libSceGnmDriver", 1, "libSceGnmDriver", sceGnmSubmitAndFlipCommandBuffers)`.
 
-**Conclusão:** o `create-fself --lib` usado para o PRX principal gerou Sony import metadata válida e coerente para `sceGnmSubmitAndFlipCommandBuffers`. A ausência de NID no `.so` de link OpenOrbis não significa ausência no PRX final: `create-fself` gera a tabela Sony a partir dos símbolos indefinidos e das bibliotecas identificadas. O PRX principal contém a entrada correta; a causa do GOT nulo no antigo GNM-Link eboot continua sem explicação até reabrir o OELF exato.
+**Conclusão:** o `create-fself --lib` usado para o PRX principal gerou Sony import metadata válida e coerente para `sceGnmSubmitAndFlipCommandBuffers`. A ausência de NID no `.so` de link OpenOrbis não significa ausência no PRX final: `create-fself` gera a tabela Sony a partir dos símbolos indefinidos e das bibliotecas identificadas. O PRX principal contém a entrada correta. O OELF exato do antigo GNM-Link eboot também foi reaberto e contém a NID correta; seu GOT continuou nulo no PS4. A falha é de resolução runtime apesar da metadata correta, com causa raiz ainda `UNRESOLVED`.
 
 **Limites:** isto valida a estrutura estática do import e a correspondência NID/library/module. Não prova que o loader do firmware 14.02 resolva o import em runtime, que o endereço seja detour-safe ou que a ABI do hook esteja correta. `HOOK32` usa o endereço importado e `Detour_DetourFunction`; runtime/hardware continuam `NOT_RUN`. Nenhum staging/instalação foi feito.
 
@@ -203,6 +203,6 @@ Reprodução independente do algoritmo:
 - `sceGnmSubmitDone` → `yvZ73uQUqrk` → NID `0xCAF67BDEE414AAB9`, correspondente ao NID conhecido do export.
 - `sceGnmSubmitAndFlipCommandBuffers` → `xbxNatawohc` → NID `0xC5BC4D6AD6B0A217`, correspondente ao registro público shadPS4.
 
-Isso confirma a coerência do NID presente no PRX principal. A fonte também mostra que a geração de imports não é exclusiva de `--lib`; por isso, o GOT nulo do antigo GNM-Link eboot não pode ser explicado apenas pela escolha `--eboot`. A causa exata permanece pendente da reauditoria do artefato antigo.
+Isso confirma a coerência dos NIDs no PRX principal e no antigo GNM-Link eboot. A fonte mostra que a geração de imports não é exclusiva de `--lib`; a reauditoria confirmou que o eboot também contém a NID correta. Portanto, o GOT nulo antigo é uma falha de resolução runtime apesar da metadata válida; a causa exata do loader FW 14.02 permanece `UNRESOLVED`.
 
 Fonte: https://github.com/OpenOrbis/create-fself/blob/master/pkg/oelf/OELFGenDynlibData.go
