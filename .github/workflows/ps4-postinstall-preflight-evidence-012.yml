@@ -74,7 +74,14 @@ jobs:
             '/data/pne.log',
             '/data/sce_logs/log.bin',
             '/data/Loader_Logs.txt',
-            '/data/memory.log'
+            '/data/memory.log',
+            '/data/pne_gcn8_compute_smoke_44873622760.log',
+            '/data/pne_gcn8_compute_smoke_44876293567.log',
+            '/data/pne_gcn8_compute_smoke_45040217180.log',
+            '/data/PS4-Neural-Engine-RuntimeFixed.pkg',
+            '/user/app/PNEU00001/app.pkg',
+            '/user/app/PNEU00001/app.xml',
+            '/user/app/PNEU00001/app.json'
           )
           foreach ($remote in $files) {
             $safe = ($remote.Trim('/') -replace '[^A-Za-z0-9_.-]', '_')
