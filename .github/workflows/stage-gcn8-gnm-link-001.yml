@@ -29,7 +29,7 @@ jobs:
           name: ps4-neural-engine-build
           path: build-artifact
           repository: demolidorreddragons/NR
-          run-id: 45018436422
+          run-id: 45040217180
           github-token: ${{ github.token }}
 
       - name: Download independent QA evidence
@@ -38,16 +38,16 @@ jobs:
           name: PS4-Neural-Engine-independent-QA
           path: qa
           repository: demolidorreddragons/NR
-          run-id: 45018436422
+          run-id: 45040217180
           github-token: ${{ github.token }}
 
       - name: Verify exact GNM-Load package and independent QA before console changes
         shell: powershell -ExecutionPolicy Bypass -File {0}
         env:
-          EXPECTED_SHA256: 7b0807a882895b9a392f64f0e97bb7aca8e2aaa94c254e0667cc0128996c1051
+          EXPECTED_SHA256: 003baaa305dc6c6c9df20f0d383eba183ce795b873ead6f0f5e59a2d24b7383c
         run: |
           $ErrorActionPreference = "Stop"
-          $pkg = Get-ChildItem "build-artifact" -Recurse -File -Filter "PS4-Neural-Rendering-GCN8-gnm-load-45018436422.pkg" | Select-Object -First 1
+          $pkg = Get-ChildItem "build-artifact" -Recurse -File -Filter "PS4-Neural-Rendering-GCN8-gnm-load-45040217180.pkg" | Select-Object -First 1
           $report = Join-Path $env:GITHUB_WORKSPACE "qa/gnm-load-qa-report.txt"
           if (-not $pkg) { throw "Exact GNM-Load diagnostic PKG missing from build artifact." }
           if (-not (Test-Path -LiteralPath $report -PathType Leaf)) { throw "Independent GNM-Load QA report missing." }
@@ -75,7 +75,7 @@ jobs:
           $pkg = ($envLines | Where-Object { $_ -like "PKG_PATH=*" } | Select-Object -First 1).Substring(9)
           $localSize = [long](($envLines | Where-Object { $_ -like "PKG_BYTES=*" } | Select-Object -First 1).Substring(10))
           $expected = ($envLines | Where-Object { $_ -like "PKG_SHA256=*" } | Select-Object -First 1).Substring(11).ToLowerInvariant()
-          $fileName = "PS4-Neural-Rendering-GCN8-gnm-load-45018436422.pkg"
+          $fileName = "PS4-Neural-Rendering-GCN8-gnm-load-45040217180.pkg"
           $base = "ftp://$($env:PS4_IP):2121"
           $credentials = New-Object System.Net.NetworkCredential("anonymous", "anonymous@example.com")
 
@@ -170,7 +170,7 @@ jobs:
           }
 
           # Upload outside /data/pkg, read back, then atomically promote by FTP rename.
-          $tempRemote = "/data/NR-GCN8-GNM-LOAD-45018436422.uploading"
+          $tempRemote = "/data/NR-GCN8-GNM-LOAD-45040217180.uploading"
           $finalRemote = "/data/pkg/$fileName"
           $root = @(Get-FtpNames "/data/pkg/")
           if ($root -notcontains $fileName) {
