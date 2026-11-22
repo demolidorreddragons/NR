@@ -29,6 +29,15 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           if ([string]::IsNullOrWhiteSpace($env:PS4_IP)) { throw 'PS4_IP missing; refusing network access.' }
+          $parsedIp = $null
+          if (-not [System.Net.IPAddress]::TryParse($env:PS4_IP, [ref]$parsedIp) -or
+              $parsedIp.AddressFamily -ne [System.Net.Sockets.AddressFamily]::InterNetwork) {
+            throw 'PS4_IP must be a valid IPv4 literal; refusing network access.'
+          }
+          foreach ($field in @(@('OBSERVED_RESULT',$env:OBSERVED_RESULT),@('FEEDBACK_REFERENCE',$env:FEEDBACK_REFERENCE))) {
+            if ([string]::IsNullOrWhiteSpace($field[1])) { throw "$($field[0]) must not be empty." }
+            if ($field[1].Length -gt 4096) { throw "$($field[0]) exceeds the 4096-character evidence limit." }
+          }
           $runRoot = Join-Path $env:RUNNER_TEMP ("cda-pkg015-" + $env:GITHUB_RUN_ID)
           if (Test-Path -LiteralPath $runRoot) { throw "Evidence directory exists; refusing overwrite: $runRoot" }
           New-Item -ItemType Directory -Path $runRoot | Out-Null
@@ -46,8 +55,16 @@ jobs:
           $manifest.Add("BUILD_RUN_ID=45074310271")
           $manifest.Add("BUILD_COMMIT=2c9e3c12aed2791f2973496c31c8993259c64430")
           $manifest.Add("PRX_SHA256=1e4531711a0768cfeb29f1d6f66b9541cf087b141eda7a05fed755d12507866c")
-          $manifest.Add("USER_FEEDBACK_REFERENCE=$env:FEEDBACK_REFERENCE")
-          $manifest.Add("USER_OBSERVED_RESULT=$env:OBSERVED_RESULT")
+          # Preserve user-supplied text verbatim outside the line-oriented manifest.
+          # Base64 fields prevent CR/LF input from forging additional manifest records.
+          $feedbackReferenceBytes = [Text.Encoding]::UTF8.GetBytes($env:FEEDBACK_REFERENCE)
+          $observedResultBytes = [Text.Encoding]::UTF8.GetBytes($env:OBSERVED_RESULT)
+          [IO.File]::WriteAllBytes((Join-Path $runRoot 'feedback-reference.utf8.txt'),$feedbackReferenceBytes)
+          [IO.File]::WriteAllBytes((Join-Path $runRoot 'observed-result.utf8.txt'),$observedResultBytes)
+          $manifest.Add("USER_FEEDBACK_REFERENCE_UTF8_BASE64=$([Convert]::ToBase64String($feedbackReferenceBytes))")
+          $manifest.Add("USER_FEEDBACK_REFERENCE_SHA256=$(([BitConverter]::ToString(([Security.Cryptography.SHA256]::Create()).ComputeHash($feedbackReferenceBytes))).Replace('-','').ToLowerInvariant())")
+          $manifest.Add("USER_OBSERVED_RESULT_UTF8_BASE64=$([Convert]::ToBase64String($observedResultBytes))")
+          $manifest.Add("USER_OBSERVED_RESULT_SHA256=$(([BitConverter]::ToString(([Security.Cryptography.SHA256]::Create()).ComputeHash($observedResultBytes))).Replace('-','').ToLowerInvariant())")
           $manifest.Add("REMOTE_MUTATION=PROHIBITED_AND_NOT_PERFORMED")
           $manifest.Add("REMOTE_METHODS=LIST,GETSIZE,GET")
           function New-FtpRequest([string]$remote, [string]$method) {
