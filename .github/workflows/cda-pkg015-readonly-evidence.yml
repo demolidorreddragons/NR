@@ -61,10 +61,15 @@ jobs:
           $observedResultBytes = [Text.Encoding]::UTF8.GetBytes($env:OBSERVED_RESULT)
           [IO.File]::WriteAllBytes((Join-Path $runRoot 'feedback-reference.utf8.txt'),$feedbackReferenceBytes)
           [IO.File]::WriteAllBytes((Join-Path $runRoot 'observed-result.utf8.txt'),$observedResultBytes)
+          function Get-BytesSha256([byte[]]$bytes) {
+            $sha = [Security.Cryptography.SHA256]::Create()
+            try { return ([BitConverter]::ToString($sha.ComputeHash($bytes))).Replace('-','').ToLowerInvariant() }
+            finally { $sha.Dispose() }
+          }
           $manifest.Add("USER_FEEDBACK_REFERENCE_UTF8_BASE64=$([Convert]::ToBase64String($feedbackReferenceBytes))")
-          $manifest.Add("USER_FEEDBACK_REFERENCE_SHA256=$(([BitConverter]::ToString(([Security.Cryptography.SHA256]::Create()).ComputeHash($feedbackReferenceBytes))).Replace('-','').ToLowerInvariant())")
+          $manifest.Add("USER_FEEDBACK_REFERENCE_SHA256=$(Get-BytesSha256 $feedbackReferenceBytes)")
           $manifest.Add("USER_OBSERVED_RESULT_UTF8_BASE64=$([Convert]::ToBase64String($observedResultBytes))")
-          $manifest.Add("USER_OBSERVED_RESULT_SHA256=$(([BitConverter]::ToString(([Security.Cryptography.SHA256]::Create()).ComputeHash($observedResultBytes))).Replace('-','').ToLowerInvariant())")
+          $manifest.Add("USER_OBSERVED_RESULT_SHA256=$(Get-BytesSha256 $observedResultBytes)")
           $manifest.Add("REMOTE_MUTATION=PROHIBITED_AND_NOT_PERFORMED")
           $manifest.Add("REMOTE_METHODS=LIST,GETSIZE,GET")
           function New-FtpRequest([string]$remote, [string]$method) {
