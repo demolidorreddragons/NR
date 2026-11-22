@@ -240,6 +240,7 @@ shader_file=$( [[ "$MODE" == "compute" ]] && echo compute_smoke_add.sb || echo n
 shader_sha256=$SHADER_SHA256
 gnm_import_probe=$GNM_PROBE
 gnm_load_probe=$GNM_LOAD_PROBE
+gnm_exports_required=$( [[ "$MODE" == "gnm-load" ]] && echo "sceGnmSubmitDone;sceGnmDispatchInitDefaultHardwareState;sceGnmFlushGarlic;sceGnmSubmitCommandBuffers;sceGnmSubmitAndFlipCommandBuffers" || echo none )
 gnm_function_calls=none
 pkg_file=$(basename "$numbered_pkg")
 pkg_sha256=$PKG_SHA256
