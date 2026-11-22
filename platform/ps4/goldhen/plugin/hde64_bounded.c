@@ -61,6 +61,17 @@ int nr_hde64_decode_bounded(const uint8_t *bytes, size_t available,
     result.has_sib = (decoded.flags & F_SIB) != 0;
     result.address_size_override = (decoded.flags & F_PREFIX_67) != 0;
 
+    /*
+     * The pinned HDE64 implementation does not account for the disp32 used
+     * by 32-bit address-size override with ModRM mod=00,r/m=101. Reject this
+     * form rather than accepting a truncated instruction or misclassifying
+     * its absolute address as RIP-relative.
+     */
+    if (result.has_modrm && result.address_size_override &&
+        decoded.modrm_mod == 0 && decoded.modrm_rm == 5 &&
+        !(decoded.flags & F_DISP32))
+        return 0;
+
     if (decoded.flags & F_RELATIVE) {
         immediate_size = flag_size(decoded.flags, F_IMM8, F_IMM16,
                                     F_IMM32, F_IMM64);
