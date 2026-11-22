@@ -105,7 +105,8 @@ static nr_detour_tx_outcome write_target(void *p, const uint8_t *bytes,
     if (f.removing) {
         if (f.write_calls == 1 && f.failure == Failure::RemoveWriteNoEffect)
             return NR_DETOUR_TX_NO_EFFECT;
-        if (f.write_calls == 1 && f.failure == Failure::RemoveWritePartial) {
+        if (f.write_calls == 1 && (f.failure == Failure::RemoveWritePartial ||
+            f.failure == Failure::RemoveWriteRetryUnknown)) {
             std::memcpy(f.target.data(), bytes, length / 2);
             return NR_DETOUR_TX_UNKNOWN;
         }
