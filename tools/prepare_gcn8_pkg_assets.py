@@ -32,7 +32,7 @@ def main() -> int:
         (DEST / name).write_bytes(data)
         manifest.append(f"{digest}  {name}")
         print(f"GCN8_ASSET_VERIFIED name={name} bytes={len(data)} sha256={digest}")
-    (DEST / "SHA256SUMS").write_text("\\n".join(manifest) + "\\n", encoding="ascii")
+    (DEST / "SHA256SUMS").write_text("\n".join(manifest) + "\n", encoding="ascii")
     print(f"GCN8_ASSET_BUNDLE=PASS count={len(ASSETS)}")
     return 0
 
