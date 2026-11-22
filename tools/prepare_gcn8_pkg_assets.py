@@ -21,7 +21,7 @@ ASSETS = {
 def main() -> int:
     if DEST is None:
         raise SystemExit("usage: prepare_gcn8_pkg_assets.py DEST_DIR")
-    DEST.mkdir(parents=True, exist_ok=False)
+    DEST.mkdir(parents=True, exist_ok=True)
     manifest = []
     for name, (expected_size, expected_hash) in ASSETS.items():
         encoded = (SOURCE / (name + ".b64")).read_text(encoding="ascii").strip()
@@ -29,10 +29,11 @@ def main() -> int:
         digest = hashlib.sha256(data).hexdigest()
         if len(data) != expected_size or digest != expected_hash:
             raise SystemExit(f"GCN8 asset mismatch: {name}: bytes={len(data)} sha256={digest}")
-        (DEST / name).write_bytes(data)
-        manifest.append(f"{digest}  {name}")
-        print(f"GCN8_ASSET_VERIFIED name={name} bytes={len(data)} sha256={digest}")
-    (DEST / "SHA256SUMS").write_text("\n".join(manifest) + "\n", encoding="ascii")
+        package_name = "nr_gcn8_" + name
+        (DEST / package_name).write_bytes(data)
+        manifest.append(f"{digest}  {package_name}")
+        print(f"GCN8_ASSET_VERIFIED name={package_name} bytes={len(data)} sha256={digest}")
+    (DEST / "nr_gcn8_SHA256SUMS").write_text("\n".join(manifest) + "\n", encoding="ascii")
     print(f"GCN8_ASSET_BUNDLE=PASS count={len(ASSETS)}")
     return 0
 
