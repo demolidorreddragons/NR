@@ -15,6 +15,10 @@ typedef enum nr_detour_tx_state {
     NR_DETOUR_TX_TARGET_WRITE_STARTED,
     NR_DETOUR_TX_TARGET_VERIFIED,
     NR_DETOUR_TX_ACTIVE,
+    NR_DETOUR_TX_REMOVE_WINDOW_HELD,
+    NR_DETOUR_TX_RESTORE_STARTED,
+    NR_DETOUR_TX_RESTORED_VERIFIED,
+    NR_DETOUR_TX_RETIRED,
     NR_DETOUR_TX_ROLLBACK_STARTED,
     NR_DETOUR_TX_ABORTED,
     NR_DETOUR_TX_POISONED
@@ -43,6 +47,8 @@ typedef struct nr_detour_tx_ops {
 
     /* Must exclude execution/fetch from target range until release_patch_window. */
     nr_detour_tx_outcome (*acquire_patch_window)(void *context);
+    /* Removal gate: prevent new entries and drain target/hook/stub/trampoline execution. */
+    nr_detour_tx_outcome (*acquire_remove_window_and_drain)(void *context);
     nr_detour_tx_outcome (*make_target_writable)(void *context);
     /* COMPLETE means all bytes were written; UNKNOWN means any prefix may be written. */
     nr_detour_tx_outcome (*write_target)(void *context,
@@ -75,6 +81,15 @@ nr_detour_tx_result nr_detour_tx_install(const nr_detour_tx_ops *ops,
                                          const uint8_t *original,
                                          const uint8_t *patch,
                                          size_t length);
+
+/* Remove an ACTIVE hook. A failed pre-write gate/protection step returns ACTIVE
+ * only when the target is still patched and the gate is known to be released.
+ * Uncertain restore/drain/cleanup outcomes return POISONED and retain resources.
+ */
+nr_detour_tx_result nr_detour_tx_remove(const nr_detour_tx_ops *ops,
+                                        const uint8_t *original,
+                                        const uint8_t *patch,
+                                        size_t length);
 
 #ifdef __cplusplus
 }
