@@ -95,6 +95,8 @@ static int test_span_edges(void) {
 
 static int test_stolen_span_planner(void) {
     uint8_t nops[65];
+    uint8_t max_plan[64];
+    const uint8_t four_byte_mov[] = {0x48, 0x8b, 0x45, 0xf8};
     uint8_t mixed[14] = {0x48, 0x8b, 0x04, 0x25, 0x78, 0x56, 0x34, 0x12};
     uint8_t relative[14] = {0xe8, 0, 0, 0, 0};
     uint8_t rip_relative[14] = {0x48, 0x8b, 0x05, 0, 0, 0, 0};
@@ -102,6 +104,8 @@ static int test_stolen_span_planner(void) {
     nr_hde64_stolen_plan plan;
 
     memset(nops, 0x90, sizeof(nops));
+    for (size_t i = 0; i < sizeof(max_plan); i += sizeof(four_byte_mov))
+        memcpy(max_plan + i, four_byte_mov, sizeof(four_byte_mov));
     memset(mixed + 8, 0x90, sizeof(mixed) - 8);
     memset(relative + 5, 0x90, sizeof(relative) - 5);
     memset(rip_relative + 7, 0x90, sizeof(rip_relative) - 7);
@@ -138,7 +142,7 @@ static int test_stolen_span_planner(void) {
         fprintf(stderr, "FAIL: stolen-span bounds and argument checks\\n");
         return 0;
     }
-    if (!nr_hde64_plan_stolen_span(nops, sizeof(nops), 64, &plan) ||
+    if (!nr_hde64_plan_stolen_span(max_plan, sizeof(max_plan), 64, &plan) ||
         plan.stolen_length != 64 || plan.instruction_count != 16) {
         fprintf(stderr, "FAIL: maximum planner span and instruction count\\n");
         return 0;
