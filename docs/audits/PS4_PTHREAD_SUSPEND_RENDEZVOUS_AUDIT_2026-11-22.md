@@ -142,3 +142,36 @@ The FreeBSD 14.0 manual confirms the analog semantics more precisely: `pthread_s
 The useful next static task is now narrowly scoped: obtain a legally accessible, already-decrypted 14.02 `libkernel.sprx` variant and its export metadata from a trustworthy source, identify the exact export records for both functions, then inspect the wrapper implementation and any referenced libthr/kernel routines. This must remain offline/static analysis; do not download or execute unknown payloads, do not ask the user to dump firmware merely to advance a speculative lead, and do not run a console experiment without a separate bounded plan and explicit authorization.
 
 Even a complete wrapper disassembly would still need to establish the underlying thread-domain coverage and consumer-side serialization. If the implementation simply delegates to an opaque kernel/libthr primitive with no such guarantee, the detour gate remains unsupported.
+
+
+## 6. Follow-up: inspect the actual public 14.02 libkernel-offset consumer
+
+The current `Pharaoh2k/ps4debug-NG` source was inspected directly, rather than relying only on its README.
+
+In `kdebugger/source/proc.c`, the 14.00 and 14.02 cases are grouped for the ordinary `libkernel.sprx` and system `libkernel_sys.sprx` thread-creation helper offsets. The code also has a separate 14.00/14.02 case for `libkernel_web.sprx`. The symbols resolved by this table are only:
+
+- `scePthreadAttrInit`
+- `scePthreadAttrSetstacksize`
+- `scePthreadCreate`
+- `_thr_initial`
+
+These offsets support creation of a worker thread in a target process. They are **not** offsets for `scePthreadSuspendAll` or `scePthreadResumeAll`, and the source contains no implementation or call site for either suspend-all function. Repository-scoped code searches for both exact Sony names and `pthread_suspend_all_np` returned no matches in this project.
+
+This narrows the earlier evidence statement: the public project provides a concrete, source-level 14.02 reference for three libkernel variants' *thread-creation* entry points, but it does not provide the suspend/resume symbols or semantics needed by the detour gate. Its README's claim that 14.02 libkernel variants were checked against decrypted retail binaries is the project's own provenance statement; it is not a substitute for publishing the underlying binary, export table, or disassembly.
+
+### Evidence matrix — source-level check
+
+| Artifact | What it establishes | What it does not establish |
+|---|---|---|
+| ps4debug-NG README | Project reports checking 14.02 kernel and all three libkernel variants against decrypted retail binaries | No suspend-all NID, export identity, implementation, or behavioral contract |
+| ps4debug-NG `kdebugger/source/proc.c` | Explicit 14.00/14.02 offsets for thread-creation helpers in ordinary, web, and system libkernel variants | No `scePthreadSuspendAll` / `scePthreadResumeAll` offsets or calls |
+| Repository-scoped exact-name search | No suspend-all implementation in the inspected repository | Does not prove no such implementation exists elsewhere |
+| OpenOrbis v0.5.4 header | Public declaration names and void/no-argument surface | No firmware-specific NID, wrapper body, or postcondition |
+
+### Engineering consequence
+
+Do not repurpose the thread-creation offsets as guessed suspend-all offsets, and do not call internal addresses inferred from neighboring symbols. The candidate remains **not approved**. The next useful artifact must specifically expose the 14.02 export records and code path for the two suspend/resume APIs (or an authoritative kernel/libthr implementation they delegate to). If that cannot be obtained from trustworthy, legally accessible static material, this branch of research should be marked unsupported and the project should proceed with a cooperative, title-specific rendezvous design rather than a speculative global suspend.
+
+## 7. Change boundary
+
+Documentation only. No third-party payload was downloaded, built, executed, or transferred. No firmware image or console dump was requested. No PRX, PKG, workflow, plugin configuration, or PS4 state was changed. No hardware test was performed.
