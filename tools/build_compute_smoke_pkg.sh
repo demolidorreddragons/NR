@@ -110,7 +110,8 @@ else
   clang++ "${COMMON[@]}" -c "$ROOT/platform/ps4/gcn8/gnm_resource_binding.cpp" -o "$STAGE/gnm_resource_binding.o"
   clang++ "${COMMON[@]}" -c "$ROOT/platform/ps4/gcn8/host/resource_table_contract.cpp" -o "$STAGE/resource_table_contract.o"
   clang++ "${COMMON[@]}" -c "$ROOT/platform/ps4/gcn8/host/shader_binary_contract.cpp" -o "$STAGE/shader_binary_contract.o"
-  ld.lld -m elf_x86_64 -pie --script "$OO_PS4_TOOLCHAIN/link.x" --eh-frame-hdr -L"$OO_PS4_TOOLCHAIN/lib" "$STAGE/smoke_main.o" "$STAGE/compute_smoke.o" "$STAGE/gnm_resource_binding.o" "$STAGE/resource_table_contract.o" "$STAGE/shader_binary_contract.o" "$STAGE/stage_log.o" "$OO_PS4_TOOLCHAIN/lib/crt1.o" -o "$STAGE/smoke.elf" -Map="$STAGE/smoke.map" -lc -lc++ -lkernel
+  clang++ "${COMMON[@]}" -c "$ROOT/platform/ps4/gcn8/host/vsharp_codec.cpp" -o "$STAGE/vsharp_codec.o"
+  ld.lld -m elf_x86_64 -pie --script "$OO_PS4_TOOLCHAIN/link.x" --eh-frame-hdr -L"$OO_PS4_TOOLCHAIN/lib" "$STAGE/smoke_main.o" "$STAGE/compute_smoke.o" "$STAGE/gnm_resource_binding.o" "$STAGE/resource_table_contract.o" "$STAGE/shader_binary_contract.o" "$STAGE/vsharp_codec.o" "$STAGE/stage_log.o" "$OO_PS4_TOOLCHAIN/lib/crt1.o" -o "$STAGE/smoke.elf" -Map="$STAGE/smoke.map" -lc -lc++ -lkernel
 fi
 test -s "$STAGE/smoke.elf"
 
