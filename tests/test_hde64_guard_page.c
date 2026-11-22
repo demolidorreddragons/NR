@@ -6,23 +6,7 @@
 #include <sys/mman.h>
 #include <sys/wait.h>
 #include <unistd.h>
-#include "HDE64.h"
-
-/* Test-only bounded adapter. The caller must supply a genuinely readable
- * byte count. Padding contains upstream speculative reads; overlong results
- * and all decoder errors are rejected.
- */
-static int hde64_disasm_bounded(const void *code, size_t available, hde64s *out) {
-    uint8_t window[32] = {0};
-    hde64s decoded;
-    if (!code || !out || available == 0) return 0;
-    if (available > 15) available = 15;
-    memcpy(window, code, available);
-    unsigned int length = hde64_disasm(window, &decoded);
-    if (length == 0 || length > available || (decoded.flags & F_ERROR)) return 0;
-    *out = decoded;
-    return 1;
-}
+#include "hde64_bounded.h"
 
 static int raw_decoder_faults(const uint8_t *bytes, size_t length, const char *name) {
     long page_size = sysconf(_SC_PAGESIZE);
@@ -50,7 +34,7 @@ static int raw_decoder_faults(const uint8_t *bytes, size_t length, const char *n
     return ok;
 }
 
-static int bounded_adapter_rejects(const uint8_t *bytes, size_t length, const char *name) {
+static int bounded_rejects(const uint8_t *bytes, size_t length, const char *name) {
     long page_size = sysconf(_SC_PAGESIZE);
     uint8_t *region = mmap(NULL, (size_t)page_size * 2, PROT_READ | PROT_WRITE,
                            MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
@@ -61,26 +45,73 @@ static int bounded_adapter_rejects(const uint8_t *bytes, size_t length, const ch
     }
     uint8_t *start = region + page_size - length;
     memcpy(start, bytes, length);
-    hde64s decoded;
-    int ok = !hde64_disasm_bounded(start, length, &decoded);
+    nr_hde64_decoded decoded;
+    int ok = !nr_hde64_decode_bounded(start, length, &decoded);
     munmap(region, (size_t)page_size * 2);
-    if (!ok) fprintf(stderr, "FAIL: bounded adapter accepted truncated %s\n", name);
+    if (!ok) fprintf(stderr, "FAIL: bounded decoder accepted truncated %s\n", name);
     return ok;
 }
 
-static int test_valid_decode(void) {
-    hde64s hs;
-    const uint8_t call_rel32[] = {0xe8, 0, 0, 0, 0};
-    const uint8_t rip_load[] = {0x48, 0x8b, 0x05, 0, 0, 0, 0};
-    if (!hde64_disasm_bounded(call_rel32, sizeof(call_rel32), &hs) ||
-        hs.len != 5 || !(hs.flags & F_RELATIVE)) {
-        fprintf(stderr, "FAIL: bounded rel32 CALL classification\n");
+static int expect_relative(const uint8_t *bytes, size_t size,
+                           nr_hde64_relative_kind kind,
+                           uint8_t offset, uint8_t width, const char *name) {
+    nr_hde64_decoded decoded;
+    if (!nr_hde64_decode_bounded(bytes, size, &decoded) ||
+        decoded.relative_kind != kind || decoded.relative_offset != offset ||
+        decoded.relative_size != width) {
+        fprintf(stderr, "FAIL: relative metadata for %s\n", name);
         return 0;
     }
-    if (!hde64_disasm_bounded(rip_load, sizeof(rip_load), &hs) ||
-        hs.len != 7 || !(hs.flags & F_DISP32) ||
-        hs.modrm_mod != 0 || hs.modrm_rm != 5) {
-        fprintf(stderr, "FAIL: bounded RIP-relative MOV structural classification\n");
+    return 1;
+}
+
+static int test_metadata(void) {
+    const uint8_t call_rel32[] = {0xe8, 0, 0, 0, 0};
+    const uint8_t jmp_rel8[] = {0xeb, 0};
+    const uint8_t jcc_rel8[] = {0x75, 0};
+    const uint8_t jcc_rel32[] = {0x0f, 0x85, 0, 0, 0, 0};
+    const uint8_t loop_rel8[] = {0xe2, 0};
+    const uint8_t rip_load[] = {0x48, 0x8b, 0x05, 0, 0, 0, 0};
+    const uint8_t rip_store_imm[] = {0xc7, 0x05, 0, 0, 0, 0, 1, 0, 0, 0};
+    const uint8_t sib_absolute[] = {0x48, 0x8b, 0x04, 0x25, 0x78, 0x56, 0x34, 0x12};
+    const uint8_t addr_override[] = {0x67, 0x48, 0x8b, 0x05, 0, 0, 0, 0};
+    const uint8_t rbp_disp8[] = {0x48, 0x8b, 0x45, 0xf8};
+    nr_hde64_decoded decoded;
+
+    if (!expect_relative(call_rel32, sizeof(call_rel32), NR_HDE64_RELATIVE_CALL, 1, 4, "CALL rel32") ||
+        !expect_relative(jmp_rel8, sizeof(jmp_rel8), NR_HDE64_RELATIVE_JUMP, 1, 1, "JMP rel8") ||
+        !expect_relative(jcc_rel8, sizeof(jcc_rel8), NR_HDE64_RELATIVE_CONDITIONAL, 1, 1, "Jcc rel8") ||
+        !expect_relative(jcc_rel32, sizeof(jcc_rel32), NR_HDE64_RELATIVE_CONDITIONAL, 2, 4, "Jcc rel32") ||
+        !expect_relative(loop_rel8, sizeof(loop_rel8), NR_HDE64_RELATIVE_LOOP, 1, 1, "LOOP rel8"))
+        return 0;
+
+    if (!nr_hde64_decode_bounded(rip_load, sizeof(rip_load), &decoded) ||
+        !decoded.rip_relative || decoded.displacement_offset != 3 ||
+        decoded.displacement_size != 4) {
+        fprintf(stderr, "FAIL: RIP-relative MOV metadata\n");
+        return 0;
+    }
+    if (!nr_hde64_decode_bounded(rip_store_imm, sizeof(rip_store_imm), &decoded) ||
+        !decoded.rip_relative || decoded.displacement_offset != 2 ||
+        decoded.displacement_size != 4) {
+        fprintf(stderr, "FAIL: RIP-relative store with trailing immediate metadata\n");
+        return 0;
+    }
+    if (!nr_hde64_decode_bounded(sib_absolute, sizeof(sib_absolute), &decoded) ||
+        decoded.rip_relative || !decoded.has_sib ||
+        decoded.displacement_offset != 4 || decoded.displacement_size != 4) {
+        fprintf(stderr, "FAIL: SIB absolute displacement classification\n");
+        return 0;
+    }
+    if (!nr_hde64_decode_bounded(addr_override, sizeof(addr_override), &decoded) ||
+        decoded.rip_relative || !decoded.address_size_override) {
+        fprintf(stderr, "FAIL: address-size override must not be classified RIP-relative\n");
+        return 0;
+    }
+    if (!nr_hde64_decode_bounded(rbp_disp8, sizeof(rbp_disp8), &decoded) ||
+        decoded.rip_relative || decoded.displacement_offset != 3 ||
+        decoded.displacement_size != 1) {
+        fprintf(stderr, "FAIL: disp8 metadata\n");
         return 0;
     }
     return 1;
@@ -92,20 +123,20 @@ int main(void) {
     const uint8_t modrm[] = {0x48, 0x8b};
     const uint8_t displacement[] = {0x48, 0x8b, 0x05};
     const uint8_t immediate[] = {0xe8, 0x11, 0x22};
-    int ok = test_valid_decode();
+    int ok = test_metadata();
     ok &= raw_decoder_faults(prefix, sizeof(prefix), "operand prefix");
     ok &= raw_decoder_faults(rex_opcode, sizeof(rex_opcode), "REX prefix");
     ok &= raw_decoder_faults(modrm, sizeof(modrm), "ModRM");
     ok &= raw_decoder_faults(displacement, sizeof(displacement), "disp32");
     ok &= raw_decoder_faults(immediate, sizeof(immediate), "rel32 immediate");
-    ok &= bounded_adapter_rejects(prefix, sizeof(prefix), "operand prefix");
-    ok &= bounded_adapter_rejects(rex_opcode, sizeof(rex_opcode), "REX prefix");
-    ok &= bounded_adapter_rejects(modrm, sizeof(modrm), "ModRM");
-    ok &= bounded_adapter_rejects(displacement, sizeof(displacement), "disp32");
-    ok &= bounded_adapter_rejects(immediate, sizeof(immediate), "rel32 immediate");
+    ok &= bounded_rejects(prefix, sizeof(prefix), "operand prefix");
+    ok &= bounded_rejects(rex_opcode, sizeof(rex_opcode), "REX prefix");
+    ok &= bounded_rejects(modrm, sizeof(modrm), "ModRM");
+    ok &= bounded_rejects(displacement, sizeof(displacement), "disp32");
+    ok &= bounded_rejects(immediate, sizeof(immediate), "rel32 immediate");
     if (!ok) return 1;
     puts("HDE64 raw characterization: five truncated-input guard-page faults reproduced.");
-    puts("Test-only bounded adapter: valid relative decodes pass; all five truncated windows rejected.");
-    puts("Not production-integrated; caller must guarantee that the supplied byte count is readable.");
+    puts("NR bounded decoder: five truncated windows rejected; relative/RIP metadata vectors pass.");
+    puts("Input-span readability is a caller precondition; no live detour integration is enabled.");
     return 0;
 }
