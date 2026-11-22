@@ -104,3 +104,21 @@ Therefore the source still has a live generic SDK detour despite the design audi
 ## 7. Change boundary
 
 Documentation only. No executable source, PRX, PKG, workflow, plugin registration, console configuration, or PS4 state changed. No firmware binary or third-party payload was downloaded or executed. No hardware test was performed. The existing source-level hook path remains present and is explicitly recorded above; no package is approved for installation by this audit.
+
+
+## 8. Superseding source disposition — 2026-11-22
+
+This section supersedes the "current source still installs" and "NOT SATISFIED" statements above, which describe the audited baseline rather than the present branch state.
+
+At HEAD `7d01ad3dda7a7568f8cbfd2532101cd5b8c3598e`, `main.c` defines `has_validated_title_adapter()` to return false, and `plugin_load()` returns before frequency setup, GNM hook installation, or worker creation when that predicate is false. The generic SDK detour implementation remains in the source tree but is unreachable through the normal plugin startup path. The own-title identity check remains an additional exclusion.
+
+Host CI run **45061470067** completed with conclusion **success** for this exact HEAD. Its telemetry job completed successfully, including CMake configure, build, and test steps; the crash-log retrieval job also completed successfully. This is host/CI evidence only, not a PS4 load or runtime test.
+
+Updated disposition:
+- Generic live GNM detour startup: **BLOCKED BY FAIL-CLOSED GATE**.
+- Validated title-specific participant adapter: **NOT IMPLEMENTED**.
+- FW 14.02 suspend/resume-all contract: **BLOCKED**.
+- Mapping lifetime, protection, code publication, consumer handoff, and unload quiescence: **BLOCKED**.
+- PRX firmware/runtime and hardware validation: **NOT PERFORMED**.
+
+No PRX/PKG was staged, installed, activated, or tested on console as part of this change. The gate must not be removed until all independent technical contracts are evidenced and tested. This amendment does not authorize enabling the hook.
