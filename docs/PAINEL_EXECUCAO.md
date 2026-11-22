@@ -265,3 +265,9 @@ A pesquisa não justificou mudança de código: parser e offset seguem intactos;
 - Referência atualizada para build/QA run `45018436422` e PKG SHA-256 `7b0807a882895b9a392f64f0e97bb7aca8e2aaa94c254e0667cc0128996c1051`.
 - Commit `8fd6bde4120a120ebb15d785471345e77c0368d6`; host-tests/read-only PS4 run `45039960210` SUCCESS.
 - Staging não executado; workflow dispatch não chamado e nenhuma escrita no PS4 ocorreu.
+## Hook GNM — correção de arquitetura Detour
+
+- GoldHEN SDK pin `bcea3c7ef01dac6d7f9f49ebf9e90fe66d86f5f7`: `HOOK32` escolhia `DetourMode_x32`/`E9 rel32` sem validar alcance; caminho x32 também tinha tamanho de restauração incorreto e o destrutor não liberava trampoline.
+- `main.c` agora usa detour x64 absoluto, verifica retorno/stub, limpa trampoline x64 em falha parcial e unload. Teste estático `tests/test_goldhen_hook_contract.py` integrado ao host-tests.
+- Host-tests run [45040217146](https://github.com/demolidorreddragons/NR/actions/runs/45040217146) SUCCESS; log: `GoldHEN GNM hook contract ... PASS`.
+- PRX build run [45040217180](https://github.com/demolidorreddragons/NR/actions/runs/45040217180) ainda em execução na última consulta. Sem validação hardware; propagação de erro de `sceKernelMprotect` no SDK continua pendente.
