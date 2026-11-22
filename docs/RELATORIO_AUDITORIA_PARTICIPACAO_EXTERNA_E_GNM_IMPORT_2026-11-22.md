@@ -150,21 +150,23 @@ O log do workflow `PS4 PRX and PKG build` atualmente emite `GCN8_GNM_LINK_SMOKE=
 **Classificação:** evidência estática/forense do toolchain e correlação com falha anterior em hardware; sem nova execução no console. A auditoria não autoriza reintroduzir link estático GNM nem alterar o bloqueio de compute.
 
 **Correção de comunicação CI:** commit `64629afaf49e5268718a11860f35b068d36a3a29` renomeou a etapa para `Link GCN8 OpenOrbis GNM stub (link-only; not a Sony import)` e alterou o marcador para `OPENORBIS_GNM_LINK_STUB=LINKED; SONY_RUNTIME_IMPORT=NOT_VALIDATED`. Isso impede que o sucesso de link seja interpretado como import Sony resolvido.
-### 2.4. Risco de import estático GNM no PRX principal
+### 2.4. Auditoria Sony import metadata do PRX principal — PASS estático
 
-O mesmo artefato do run `45015947338` contém o PRX principal e seu ELF pré-SELF. ZIP ID `14752435074` e SHA-256 já verificado em 2.3. Hashes individuais:
-- `ps4_neural_engine.elf`: 292.944 bytes, SHA-256 `92551a101ad8999f6b6db3fda3da8708bbaa5f8d8256311e09b7b34cea7e4eba`.
-- `ps4_neural_engine.prx`: 224.400 bytes, SHA-256 `f85a69a7165d4fd5ae62e3237fea9bacbdd1232a19ab1e8745f5f52da9e6598e`.
+O PRX final do run `45015947338` foi aberto como fake SELF, usando a tabela de segmentos SELF para extrair o `PT_SCE_DYNLIBDATA` real. O segmento está no offset SELF `0x30b90`, tamanho `0x6100`; no ELF/OELF corresponde a `PT_SCE_DYNLIBDATA` em offset `0x47850`, tamanho `0x6100`. A tabela dinâmica contém dez módulos e dez bibliotecas, incluindo `libSceGnmDriver.prx` e `libSceGnmDriver`.
 
-A inspeção do ELF pré-SELF mostra `DT_NEEDED libSceGnmDriver.so` e `sceGnmSubmitAndFlipCommandBuffers` como símbolo global indefinido. O Makefile do plugin ainda inclui `-lSceGnmDriver`. Em `main.c`, o plugin declara a função importada, executa `HOOK_INIT(sceGnmSubmitAndFlipCommandBuffers)` e, em `plugin_load`, chama `HOOK32(sceGnmSubmitAndFlipCommandBuffers)`. O GoldHEN SDK pinado implementa `HOOK32` passando `(uint64_t)name` como endereço-alvo para `Detour_DetourFunction`; portanto, o hook depende de o import fornecer um endereço válido.
+A entrada GNM está presente e correlacionada com a relocação original:
+- `DT_SCE_NEEDED_MODULE=0x20101000000bf` identifica o módulo GNM; `DT_SCE_IMPORT_LIB=0x20001000000bf` identifica a biblioteca `libSceGnmDriver`; `DT_SCE_IMPORT_LIB_ATTR=0x2000000000009`.
+- A Sony string table tem a entrada `xbxNatawohc#C#C` no offset `0x1ae`. O símbolo Sony correspondente é o índice `5` de `DT_SCE_SYMTAB`.
+- A relocação Sony `R_X86_64_GLOB_DAT` em `r_offset=0x28000` aponta para o símbolo índice `5`, isto é, `xbxNatawohc#C#C`.
+- No ELF pré-SELF, a relocação original no mesmo GOT offset `0x28000` aponta para o símbolo indefinido `sceGnmSubmitAndFlipCommandBuffers` (dynsym index `4`).
+- O NID `xbxNatawohc` decodifica para `0xC5BC4D6AD6B0A217` e coincide com o registro público shadPS4: `LIB_FUNCTION("xbxNatawohc", "libSceGnmDriver", 1, "libSceGnmDriver", sceGnmSubmitAndFlipCommandBuffers)`.
 
-O PRX final é um SELF/PRX encapsulado, não um ELF simples. A string `libSceGnmDriver.so` e o nome `sceGnmSubmitAndFlipCommandBuffers` aparecem no arquivo, mas o payload/segmentos não puderam ser auditados com `readelf` padrão; o ELF embutido tem offsets de segmentos fora da janela raw por causa do encapsulamento. Não foi obtida ainda uma leitura confiável de `PT_SCE_DYNLIBDATA`/NID do PRX final. O QA independente do PKG verifica SFO, extração e igualdade de bytes do PRX, mas não valida os imports Sony nem carrega o PRX no firmware.
+**Conclusão:** o `create-fself --lib` usado para o PRX principal gerou Sony import metadata válida e coerente para `sceGnmSubmitAndFlipCommandBuffers`. A ausência de NID no `.so` de link OpenOrbis não significa ausência no PRX final: o conversor `--lib` gera a tabela Sony, ao contrário do OELF do antigo GNM-Link eboot (`--eboot`), que continha somente `libkernel`. Portanto, a hipótese anterior de que o PRX principal necessariamente falharia por ausência de NID está **rejeitada** para este artefato.
 
-**Classificação:** `STATIC_IMPORT_PRESENT_IN_INPUT_ELF; FINAL_PRX_SONY_IMPORT_METADATA=UNVERIFIED; HARDWARE=NOT_RUN`. Dado que o mesmo linker stub OpenOrbis não contém NID metadata e que o GNM-Link-Only anterior produziu GOT nulo no PS4, este é um risco alto de a dependência estática do PRX principal também não resolver. Isso ainda não é prova de que o PRX final falhará: falta auditar o import table do SELF/PRX e a semântica do `create-fself --lib`.
+**Limites:** isto valida a estrutura estática do import e a correspondência NID/library/module. Não prova que o loader do firmware 14.02 resolva o import em runtime, que o endereço seja detour-safe ou que a ABI do hook esteja correta. `HOOK32` usa o endereço importado e `Detour_DetourFunction`; runtime/hardware continuam `NOT_RUN`. Nenhum staging/instalação foi feito.
 
-**Gate de release:** não fazer staging nem instalação do PRX/PKG principal até extrair e auditar o Sony import table do PRX final. A correção possível é resolver `sceGnmSubmitAndFlipCommandBuffers` por `sceKernelDlsym` e passar o endereço resolvido diretamente a `Detour_DetourFunction`, removendo a dependência estática; porém isso fica como proposta, não implementação, até revisar ABI, momento de load do módulo e comportamento de `DetourMode_x32`.
+Fontes:
+- OpenOrbis create-fself documenta `--lib` como modo para gerar PRX library: https://github.com/OpenOrbis/create-fself
+- shadPS4 NID registration `sceGnmSubmitAndFlipCommandBuffers`: https://github.com/shadps4-emu/shadPS4/blob/main/src/core/libraries/gnmdriver/gnmdriver.cpp
+- GoldHEN SDK hook implementation: https://github.com/GoldHEN/GoldHEN_Plugins_SDK/blob/bcea3c7ef01dac6d7f9f49ebf9e90fe66d86f5f7/include/Utilities.h
 
-Fontes de implementação relevantes:
-- GoldHEN SDK `Utilities.h` (HOOK32/HOOK_CONTINUE): https://github.com/GoldHEN/GoldHEN_Plugins_SDK/blob/bcea3c7ef01dac6d7f9f49ebf9e90fe66d86f5f7/include/Utilities.h
-- GoldHEN SDK `Detour.h`: https://github.com/GoldHEN/GoldHEN_Plugins_SDK/blob/bcea3c7ef01dac6d7f9f49ebf9e90fe66d86f5f7/include/Detour.h
-- Projeto `platform/ps4/goldhen/plugin/main.c` e `Makefile`, branch `feature/gcn8-numeric-kernels`.
