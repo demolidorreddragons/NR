@@ -1,5 +1,20 @@
 # Arquitetura do PKG híbrido — instalação inicial e atualização do Neural Engine
 
+## Estado supersedente — PKG 012 (2026-11-22)
+
+O artefato atualmente staged é o **PS4 Neural Engine Preflight 012**, Full/Base `gde`. Ele substitui temporariamente o comportamento mutável do instalador híbrido: apenas verifica manifesto/hash do PRX, notifica e encerra. Não instala o PRX, não altera a configuração do GoldHEN e não reinicia o loader.
+
+- Build + QA independente PC-only: run `45062759996`, SUCCESS.
+- Staging com read-back: run `45063363596`, SUCCESS.
+- Destino: `/data/pkg/PS4-Neural-Engine-012.pkg`.
+- Tamanho: 6.619.136 bytes.
+- SHA-256: `240914f39c1dbfec39b0f21fdd022dd30f10356341860e47fffaacef3aa3825f`.
+- `abi_status=unverified`; `hardware_status=not_tested`.
+- TITLE_ID `PNEU00001` já existe em `/user/app/`; o pacote 012 é Full/Base e não deve ser instalado por cima. Qualquer remoção da versão anterior é exclusivamente manual pelo usuário.
+- Aprovação limitada a teste controlado de instalação limpa e inicialização do app de preflight. Não é aprovação do runtime neural nem do PRX.
+
+As seções seguintes descrevem a arquitetura híbrida histórica e continuam como plano de retomada; não descrevem o comportamento do PKG 012 atualmente staged.
+
 **Estado:** Release 011 (APP_VER 01.07) passou host tests, build e QA independente PC-only e foi staged no PS4. O Package Manager recusou o PKG 011 com `Package already installed`; ele não foi instalado e seu eboot não foi executado. O PRX 011 é byte-idêntico ao 010; a alteração 011 foi no eboot/installer, sem correção comprovada para CE-34878-0. O patch real 010→011 foi gerado no workflow `ps4-prx.yml` e passou QA estrutural independente PC-only no run `44856253337`. Ainda não foi instalado nem validado no PS4. Não desinstalar o aplicativo nem repetir a tentativa com o PKG 011.
 **Alvo:** PS4 Pro / Orbis + GoldHEN.  
 **Branch:** `feature/gcn8-numeric-kernels`.  
