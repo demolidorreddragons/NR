@@ -215,3 +215,10 @@ A pesquisa não justificou mudança de código: parser e offset seguem intactos;
 - O harness compute não define `PNE_GCN8_ENABLE_UNVALIDATED_COMPUTE`; retorna BLOCKED antes de load/dispatch. **PKG diagnóstico não deve ser instalado.**
 - Nível: inspeção binária e payload CI PASS; revisão externa clean-room e hardware `NOT_RUN`; GPU VA/V#, InputUsage, coerência/cache e dispatch/readback continuam bloqueados. Nenhum staging/instalação/execução no PS4.
 - Relatório detalhado: [Auditoria de participação externa e dependência estática GNM](RELATORIO_AUDITORIA_PARTICIPACAO_EXTERNA_E_GNM_IMPORT_2026-11-22.md), seção 2.2.
+## V# descriptor codec — 2026-11-22
+
+- O harness compute agora usa o mesmo `host/vsharp_codec.cpp` exercitado pelos testes host; o build PS4 compute inclui esse objeto. Commits: `d67e18f38ba1ca3e2cd136727cdb64c82c3f40bd`, `fb639157294063853a01f430d59c69ac8f6ba4e9`.
+- Testes golden acrescentados para os quatro dwords de V# `R32_FLOAT` input (`GNM_MEMORY_READONLY`) e output (`GNM_MEMORY_UNCACHED`), commit `2fe2757455a9985177e20ab0af633ee5c2df04ef`.
+- Host CI [45015718289](https://github.com/demolidorreddragons/NR/actions/runs/45015718289), job `137187475115`: 9/9 testes PASS.
+- PS4-target CI [45015714804](https://github.com/demolidorreddragons/NR/actions/runs/45015714804) e [45015714818](https://github.com/demolidorreddragons/NR/actions/runs/45015714818) ainda pendentes na última consulta. Não declarar link PS4 aprovado até os logs passarem.
+- Escopo do PASS: codificação estrutural dos 4 dwords. Sem prova de semântica/writable/cache do descriptor, GPU VA, low-4-GiB mapping ou dispatch. Compute continua bloqueado; não instalar PKG diagnóstico.
