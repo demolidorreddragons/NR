@@ -259,3 +259,9 @@ A pesquisa não justificou mudança de código: parser e offset seguem intactos;
 - Correlacionado com OELF: metadata Sony/NID/relocation válidos; falha runtime de resolução do GOT permanece sem causa raiz. O log não prova que o CE-34878 foi causado por chamada GNM ou crash do harness.
 - Coleta read-only; nenhum dado do console foi alterado.
 - Parser unit tests: run [45018960242](https://github.com/demolidorreddragons/NR/actions/runs/45018960242), 4 testes OELF/SELF passaram (`OK`).
+## Salvaguarda de staging GNM-Load-Only
+
+- Workflow `.github/workflows/stage-gcn8-gnm-link-001.yml` agora é `workflow_dispatch` apenas e exige `confirm_stage=true`; removido o gatilho `push` para impedir staging automático.
+- Referência atualizada para build/QA run `45018436422` e PKG SHA-256 `7b0807a882895b9a392f64f0e97bb7aca8e2aaa94c254e0667cc0128996c1051`.
+- Commit `8fd6bde4120a120ebb15d785471345e77c0368d6`; host-tests/read-only PS4 run `45039960210` SUCCESS.
+- Staging não executado; workflow dispatch não chamado e nenhuma escrita no PS4 ocorreu.
