@@ -26,6 +26,16 @@ PKG 014 must not be described as a functioning neural renderer or as a GNM compu
 - The runner confirmed exactly one Neural Rendering PKG remains in /data/pkg/ (014). Existing installed title PNEU00001 was present. No installation, PRX activation, GNM call, plugins.ini change, or GoldHEN restart was performed.
 - QA is automated and PC-only; no independent human code review or hardware/runtime validation was performed.
 
+
+## PKG 014 — post-install read-only audit
+
+- Current-state collection: workflow 45073902620, job 137366750687, SUCCESS; artifact 14774122951, 13,265,687 bytes, SHA-256 723b79275d71a0b62bb1add2b9873b5a7c6136f27f8f20723a3c5670bb050988.
+- The installed `/user/app/PNEU00001/app.pkg` was read back as 6,619,136 bytes with SHA-256 `96c15b46e7579c5f728a131279e986af04a9e4683c9903221e418ca52a3842db`, exactly matching PKG 014.
+- `/data/sce_coredumps/` was empty at collection time. `/user/data/pne.log` and `/data/pne.log` were not present (FTP 550).
+- System log `/data/sce_logs/log.bin` is 16 MiB and changed between snapshots. Read-only printable-string scan produced only three non-actionable fragments; no current PNE/NR runtime event could be decoded. `Loader_Logs.txt` belongs to RSA verification for NPXS39041_000, not Neural Rendering. `memory.log` contains libc mspace initialization only.
+- Log analysis workflow 45074043686, job 137367175648, SUCCESS; artifact 14774566102, 970,739 bytes, SHA-256 `a85daa8d0e89a90f59bacc3d6372766ec066564ba871300d017870b37c0b0dad`.
+- Finding: installed identity is proven, but the collection does not prove the app was launched or reveal the notification result. No reproducible PKG 014 runtime error was found; no speculative GNM fix was made. Full details: `docs/audits/PKG_014_POSTINSTALL_READONLY_AUDIT_2026-11-22.md`.
+
 ## Previous release — PKG 013
 
 ## Current release state — PKG 013 staged (2026-11-22)
