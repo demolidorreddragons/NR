@@ -1,0 +1,378 @@
+name: Stage QA-approved Neural Engine GFX8 asset preflight PKG 014 on PS4
+
+on:
+  push:
+    branches: [feature/gcn8-numeric-kernels]
+    paths:
+      - ".github/workflows/stage-approved-pkg-014.yml"
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: stage-neural-engine-preflight-pkg-014
+  cancel-in-progress: false
+
+jobs:
+  stage-approved-package:
+    runs-on: [self-hosted, Windows, X64, ps4-lan]
+    timeout-minutes: 20
+    steps:
+      - name: Clean local artifact workspace on persistent runner
+        shell: powershell -NoProfile -ExecutionPolicy Bypass -Command "& '{0}'"
+        run: |
+          $ErrorActionPreference = "Stop"
+          foreach ($directory in @("transfer","qa")) {
+            $path = Join-Path $env:GITHUB_WORKSPACE $directory
+            if (Test-Path -LiteralPath $path) {
+              Remove-Item -LiteralPath $path -Recurse -Force
+            }
+            New-Item -ItemType Directory -Path $path -Force | Out-Null
+          }
+
+      - name: Download exact build artifact from approved run
+        uses: actions/download-artifact@v4
+        with:
+          name: ps4-neural-engine-build
+          path: transfer
+          repository: demolidorreddragons/NR
+          run-id: 45072353238
+          github-token: ${{ github.token }}
+
+      - name: Download independent QA evidence from the same run
+        uses: actions/download-artifact@v4
+        with:
+          name: PS4-Neural-Engine-independent-QA
+          path: qa
+          repository: demolidorreddragons/NR
+          run-id: 45072353238
+          github-token: ${{ github.token }}
+
+      - name: Verify exact package, manifest, source contract and independent QA before PS4 writes
+        shell: powershell -NoProfile -ExecutionPolicy Bypass -Command "& '{0}'"
+        env:
+          EXPECTED_SHA256: 96c15b46e7579c5f728a131279e986af04a9e4683c9903221e418ca52a3842db
+          EXPECTED_BYTES: "6619136"
+          EXPECTED_COMMIT: 8aacfe426fac164eca681aa87829a509045cbed1
+        run: |
+          $ErrorActionPreference = "Stop"
+          $pkg = Join-Path $env:GITHUB_WORKSPACE "transfer/pkg/PS4-Neural-Engine-014.pkg"
+          $manifest = Join-Path $env:GITHUB_WORKSPACE "transfer/pkg/audit/pne-release.ini"
+          $preflight = Join-Path $env:GITHUB_WORKSPACE "transfer/pkg/audit/preflight_main.c"
+          $reportPath = Join-Path $env:GITHUB_WORKSPACE "qa/qa-report.txt"
+          $sfoPath = Join-Path $env:GITHUB_WORKSPACE "qa/embedded-param-sfo.txt"
+          $extractPath = Join-Path $env:GITHUB_WORKSPACE "qa/pkg-extract.txt"
+          foreach ($path in @($pkg,$manifest,$preflight,$reportPath,$sfoPath,$extractPath)) {
+            if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { throw "Required release/QA input missing: $path" }
+          }
+
+          $packageFiles = @(Get-ChildItem -LiteralPath (Join-Path $env:GITHUB_WORKSPACE "transfer/pkg") -Filter "*.pkg" -File)
+          if ($packageFiles.Count -ne 1 -or $packageFiles[0].Name -ne "PS4-Neural-Engine-014.pkg") {
+            throw "Expected exactly one canonical numbered Full/Base PKG; found: $($packageFiles.Name -join ', ')"
+          }
+
+          $actualHash = (Get-FileHash -LiteralPath $pkg -Algorithm SHA256).Hash.ToLowerInvariant()
+          $actualBytes = (Get-Item -LiteralPath $pkg).Length
+          if ($actualHash -ne $env:EXPECTED_SHA256) { throw "PKG SHA-256 mismatch: $actualHash" }
+          if ($actualBytes -ne [long]$env:EXPECTED_BYTES) { throw "PKG size mismatch: $actualBytes" }
+
+          $report = Get-Content -LiteralPath $reportPath -Raw
+          foreach ($required in @(
+            "PKG_KIND=FULL_BASE_APPLICATION_NOT_PATCH",
+            "PKG_BYTES=$actualBytes",
+            "PKG_SHA256=$actualHash",
+            "PARAM_SFO_SEMANTIC_FIELDS=PASS",
+            "QA_STATUS=PASS_PC_ONLY_NOT_HARDWARE_TESTED"
+          )) {
+            if (-not $report.Contains($required)) { throw "Independent QA report mismatch/missing: $required" }
+          }
+
+          $extractText = Get-Content -LiteralPath $extractPath -Raw
+          foreach ($asset in @(
+            "nr_gcn8_SHA256SUMS",
+            "nr_gcn8_compute_smoke_add.gcn.bin",
+            "nr_gcn8_e4m3_decode.gcn.bin",
+            "nr_gcn8_e4m3_encode.gcn.bin",
+            "nr_gcn8_gemm_fp16_accum.gcn.bin",
+            "nr_gcn8_gemm_fp32.gcn.bin",
+            "nr_gcn8_gemm_fp32_wave64_tiled.gcn.bin"
+          )) {
+            if (-not $extractText.Contains("Image0/$asset")) { throw "Independent PKG extraction did not enumerate GFX8 asset: $asset" }
+          }
+
+          $manifestText = Get-Content -LiteralPath $manifest -Raw
+          foreach ($required in @(
+            "release_number=014",
+            "installer_version=3",
+            "title_id=PNEU00001",
+            "content_id=IV0000-PNEU00001_00-PS4NEURALENG0000",
+            "abi_status=unverified",
+            "hardware_status=not_tested"
+          )) {
+            if (-not $manifestText.Contains($required)) { throw "Release manifest mismatch/missing: $required" }
+          }
+
+          $sfo = Get-Content -LiteralPath $sfoPath -Raw
+          foreach ($required in @(
+            "CATEGORY = gde",
+            "TITLE = PS4 Neural Engine Preflight",
+            "APP_VER = 01.09",
+            "TITLE_ID = PNEU00001",
+            "CONTENT_ID = IV0000-PNEU00001_00-PS4NEURALENG0000",
+            "st_type=digital50"
+          )) {
+            if (-not $sfo.Contains($required)) { throw "Embedded PARAM.SFO mismatch/missing: $required" }
+          }
+
+          $source = Get-Content -LiteralPath $preflight -Raw
+          foreach ($required in @(
+            "pne_validate_release_manifest(RELEASE_MANIFEST, SOURCE_PRX",
+            "GNM exports 5/5",
+            "GCN8 assets 6/6",
+            "audit_gcn8_assets",
+            "pne_sha256_file",
+            "sceKernelLoadStartModule",
+            "sceKernelDlsym",
+            "PRX NOT activated",
+            "sceKernelSendNotificationRequest"
+          )) {
+            if (-not $source.Contains($required)) { throw "GFX8 asset and GNM export-only preflight source contract missing: $required" }
+          }
+          foreach ($forbidden in @(
+            "/data/",
+            "plugins.ini",
+            "sceKernelMprotect",
+            "sceKernelMunmap",
+            "scePthreadCreate",
+            "sceKernelStopUnloadModule",
+            "sceKernelUnloadStartModule",
+            "sceGnmSubmitDone(",
+            "sceGnmDispatchInitDefaultHardwareState(",
+            "sceGnmFlushGarlic(",
+            "sceGnmSubmitCommandBuffers(",
+            "sceGnmSubmitAndFlipCommandBuffers(",
+            "mkdir(",
+            "rename(",
+            "remove(",
+            "unlink(",
+            "fopen(",
+            "open(",
+            "write(",
+            "fwrite(",
+            "system("
+          )) {
+            if ($source.Contains($forbidden)) { throw "Preflight source contains forbidden side-effect/GNM-call marker: $forbidden" }
+          }
+
+          "SOURCE_RUN_ID=45072353238" | Out-File $env:GITHUB_STEP_SUMMARY -Append
+          "SOURCE_COMMIT=$env:EXPECTED_COMMIT" | Out-File $env:GITHUB_STEP_SUMMARY -Append
+          "PKG_FILE=PS4-Neural-Engine-014.pkg" | Out-File $env:GITHUB_STEP_SUMMARY -Append
+          "PKG_BYTES=$actualBytes" | Out-File $env:GITHUB_STEP_SUMMARY -Append
+          "PKG_SHA256=$actualHash" | Out-File $env:GITHUB_STEP_SUMMARY -Append
+          "INDEPENDENT_QA=PASS_PC_ONLY_NOT_HARDWARE_TESTED" | Out-File $env:GITHUB_STEP_SUMMARY -Append
+          "GNM_EXPORT_ONLY_PREFLIGHT_CONTRACT=PASS" | Out-File $env:GITHUB_STEP_SUMMARY -Append
+          Write-Host "APPROVED_GNM_AUDIT_ARTIFACT_VERIFIED=TRUE"
+
+      - name: Archive prior Neural Rendering PKGs and stage verified package with read-back
+        shell: powershell -NoProfile -ExecutionPolicy Bypass -Command "& '{0}'"
+        env:
+          PS4_IP: ${{ vars.PS4_IP }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          if (-not $env:PS4_IP) { throw "PS4_IP Actions variable is missing." }
+
+          $base = "ftp://$($env:PS4_IP):2121"
+          $credentials = New-Object System.Net.NetworkCredential("anonymous", "anonymous@example.com")
+          $pkg = Join-Path $env:GITHUB_WORKSPACE "transfer/pkg/PS4-Neural-Engine-014.pkg"
+          $expectedHash = "96c15b46e7579c5f728a131279e986af04a9e4683c9903221e418ca52a3842db"
+          $expectedBytes = [long]6619136
+          $finalRemote = "/data/pkg/PS4-Neural-Engine-014.pkg"
+          $nrPattern = '^(PS4-Neural-(Engine|Rendering)-.*\.pkg|IV0000-(PNEU00001|NRE).*\.pkg)$'
+
+          function New-FtpRequest([string]$path, [string]$method) {
+            $request = [System.Net.FtpWebRequest]::Create("$base$path")
+            $request.Method = $method
+            $request.Credentials = $credentials
+            $request.UsePassive = $true
+            $request.UseBinary = $true
+            $request.KeepAlive = $false
+            $request.Timeout = 120000
+            $request.ReadWriteTimeout = 120000
+            return $request
+          }
+
+          function Get-FtpNames([string]$path) {
+            $request = New-FtpRequest $path ([System.Net.WebRequestMethods+Ftp]::ListDirectory)
+            $response = $null
+            $reader = $null
+            try {
+              $response = $request.GetResponse()
+              $reader = New-Object System.IO.StreamReader($response.GetResponseStream())
+              $items = @()
+              while (-not $reader.EndOfStream) {
+                $line = $reader.ReadLine()
+                if ($line -and $line -ne "." -and $line -ne "..") { $items += $line.Trim() }
+              }
+              return $items
+            } finally {
+              if ($reader) { $reader.Dispose() }
+              if ($response) { $response.Dispose() }
+            }
+          }
+
+          function Get-RemoteInfo([string]$remotePath) {
+            $local = Join-Path $env:RUNNER_TEMP ("pne-remote-" + [guid]::NewGuid().ToString("N") + ".pkg")
+            try {
+              $request = New-FtpRequest $remotePath ([System.Net.WebRequestMethods+Ftp]::DownloadFile)
+              $response = $null
+              $input = $null
+              $output = $null
+              try {
+                $response = $request.GetResponse()
+                $remoteStream = $response.GetResponseStream()
+                $output = [System.IO.File]::Create($local)
+                $remoteStream.CopyTo($output)
+              } finally {
+                if ($output) { $output.Dispose() }
+                if ($remoteStream) { $remoteStream.Dispose() }
+                if ($response) { $response.Dispose() }
+              }
+              return [pscustomobject]@{
+                Bytes = (Get-Item -LiteralPath $local).Length
+                Sha256 = (Get-FileHash -LiteralPath $local -Algorithm SHA256).Hash.ToLowerInvariant()
+              }
+            } finally {
+              Remove-Item -LiteralPath $local -Force -ErrorAction SilentlyContinue
+            }
+          }
+
+          function Rename-RemoteFile([string]$sourcePath, [string]$targetPath) {
+            $request = New-FtpRequest $sourcePath ([System.Net.WebRequestMethods+Ftp]::Rename)
+            $request.RenameTo = $targetPath
+            $response = $request.GetResponse()
+            $response.Dispose()
+          }
+
+          function Move-VerifiedRemotePackage([string]$sourceName) {
+            $sourcePath = "/data/pkg/$sourceName"
+            $before = Get-RemoteInfo $sourcePath
+            $oldNames = @(Get-FtpNames "/data/pkg/old/")
+            $targetName = $sourceName
+            if ($oldNames -contains $targetName) {
+              $stem = [System.IO.Path]::GetFileNameWithoutExtension($sourceName)
+              $extension = [System.IO.Path]::GetExtension($sourceName)
+              $stamp = (Get-Date).ToUniversalTime().ToString("yyyyMMddTHHmmssZ")
+              $index = 1
+              do {
+                $targetName = "$stem.archive-$stamp-$index$extension"
+                $index++
+              } while ($oldNames -contains $targetName)
+            }
+            $targetPath = "/data/pkg/old/$targetName"
+            Rename-RemoteFile $sourcePath $targetPath
+            $after = Get-RemoteInfo $targetPath
+            if ($before.Bytes -ne $after.Bytes -or $before.Sha256 -ne $after.Sha256) {
+              throw "Archived PKG read-back mismatch: $targetPath"
+            }
+            Write-Host "ARCHIVE_VERIFIED path=$targetPath bytes=$($after.Bytes) sha256=$($after.Sha256)"
+          }
+
+          # Create the archive directory if absent; verify it is listable before moving anything.
+          try {
+            $null = Get-FtpNames "/data/pkg/old/"
+          } catch {
+            $mkdir = New-FtpRequest "/data/pkg/old/" ([System.Net.WebRequestMethods+Ftp]::MakeDirectory)
+            $response = $mkdir.GetResponse()
+            $response.Dispose()
+            $null = Get-FtpNames "/data/pkg/old/"
+            Write-Host "CREATED_DIRECTORY=/data/pkg/old/"
+          }
+
+          # Archive only the known PKG 013 predecessor. Preserve and stop on any
+          # unexpected Neural Rendering package instead of moving it speculatively.
+          $rootNames = @(Get-FtpNames "/data/pkg/")
+          $alreadyStaged = $false
+          foreach ($name in @($rootNames | Where-Object { $_ -match $nrPattern })) {
+            if ($name -eq "PS4-Neural-Engine-014.pkg") {
+              $existing = Get-RemoteInfo $finalRemote
+              if ($existing.Bytes -eq $expectedBytes -and $existing.Sha256 -eq $expectedHash) {
+                $alreadyStaged = $true
+                Write-Host "APPROVED_PKG_ALREADY_STAGED_WITH_MATCHING_HASH=TRUE"
+                continue
+              }
+              throw "A different PKG 013 already exists in staging; refusing to overwrite."
+            }
+            if ($name -ne "PS4-Neural-Engine-013.pkg") {
+              throw "Unexpected Neural Rendering PKG in /data/pkg/: $name; preserving it and refusing staging."
+            }
+            $predecessor = Get-RemoteInfo "/data/pkg/$name"
+            if ($predecessor.Bytes -ne [long]6619136 -or
+                $predecessor.Sha256 -ne "73c4c9a43002ae55fadec532a9e97217d23e1742d5f4db2bed8a60abdec6f7d1") {
+              throw "PKG 013 predecessor digest mismatch; preserving it and refusing staging."
+            }
+            Move-VerifiedRemotePackage $name
+          }
+
+          if (-not $alreadyStaged) {
+            # Upload outside /data/pkg first; only promote after a complete remote read-back.
+            $tempRemote = "/data/PS4-Neural-Engine-013.$([guid]::NewGuid().ToString('N')).uploading"
+            $upload = New-FtpRequest $tempRemote ([System.Net.WebRequestMethods+Ftp]::UploadFile)
+            $upload.ContentLength = $expectedBytes
+            $requestStream = $null
+            $inputFile = $null
+            $response = $null
+            try {
+              $requestStream = $upload.GetRequestStream()
+              $inputFile = [System.IO.File]::OpenRead($pkg)
+              $inputFile.CopyTo($requestStream)
+              $requestStream.Dispose()
+              $requestStream = $null
+              $response = $upload.GetResponse()
+            } finally {
+              if ($inputFile) { $inputFile.Dispose() }
+              if ($requestStream) { $requestStream.Dispose() }
+              if ($response) { $response.Dispose() }
+            }
+
+            $temporaryInfo = Get-RemoteInfo $tempRemote
+            if ($temporaryInfo.Bytes -ne $expectedBytes -or $temporaryInfo.Sha256 -ne $expectedHash) {
+              throw "Temporary PS4 staging read-back mismatch; refusing promotion."
+            }
+            Write-Host "TEMP_UPLOAD_VERIFIED path=$tempRemote bytes=$($temporaryInfo.Bytes) sha256=$($temporaryInfo.Sha256)"
+            Rename-RemoteFile $tempRemote $finalRemote
+          }
+
+          $finalInfo = Get-RemoteInfo $finalRemote
+          if ($finalInfo.Bytes -ne $expectedBytes -or $finalInfo.Sha256 -ne $expectedHash) {
+            throw "Final /data/pkg PKG read-back mismatch."
+          }
+
+          $finalRoot = @(Get-FtpNames "/data/pkg/")
+          $rootNeuralPackages = @($finalRoot | Where-Object { $_ -match $nrPattern })
+          if ($rootNeuralPackages.Count -ne 1 -or $rootNeuralPackages[0] -ne "PS4-Neural-Engine-014.pkg") {
+            throw "Unexpected Neural Rendering PKGs remain in /data/pkg/: $($rootNeuralPackages -join ', ')"
+          }
+
+          $previousTitle = "UNKNOWN"
+          try {
+            $installedApps = @(Get-FtpNames "/user/app/")
+            if ($installedApps -contains "PNEU00001") { $previousTitle = "PRESENT" }
+            else { $previousTitle = "NOT_FOUND" }
+          } catch {
+            Write-Host "PREVIOUS_TITLE_CHECK_UNAVAILABLE=$($_.Exception.Message)"
+          }
+
+          Write-Host "FINAL_PKG_VERIFIED path=$finalRemote bytes=$($finalInfo.Bytes) sha256=$($finalInfo.Sha256)"
+          Write-Host "ROOT_NEURAL_RENDERING_PKGS=$($rootNeuralPackages -join ',')"
+          Write-Host "PREVIOUS_TITLE_ID_PNEU00001=$previousTitle"
+          Write-Host "INSTALLATION_PERFORMED=FALSE"
+          "STAGING_STATUS=PASS_NOT_INSTALLED" | Out-File $env:GITHUB_STEP_SUMMARY -Append
+          "SOURCE_RUN_ID=45072353238" | Out-File $env:GITHUB_STEP_SUMMARY -Append
+          "SOURCE_COMMIT=8aacfe426fac164eca681aa87829a509045cbed1" | Out-File $env:GITHUB_STEP_SUMMARY -Append
+          "REMOTE_PATH=$finalRemote" | Out-File $env:GITHUB_STEP_SUMMARY -Append
+          "REMOTE_BYTES=$($finalInfo.Bytes)" | Out-File $env:GITHUB_STEP_SUMMARY -Append
+          "REMOTE_SHA256=$($finalInfo.Sha256)" | Out-File $env:GITHUB_STEP_SUMMARY -Append
+          "PREVIOUS_TITLE_ID_PNEU00001=$previousTitle" | Out-File $env:GITHUB_STEP_SUMMARY -Append
+          "INSTALLATION_PERFORMED=FALSE" | Out-File $env:GITHUB_STEP_SUMMARY -Append
+          Write-Host "STAGING_STATUS=PASS_NOT_INSTALLED"
