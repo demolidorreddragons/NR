@@ -18,6 +18,7 @@
 #include "gnm_dataformat.h"
 
 #include "gnm_resource_binding.h"
+#include "vsharp_codec.h"
 #include "host/resource_table_contract.h"
 #include "host/shader_binary_contract.h"
 
@@ -297,31 +298,53 @@ extern "C" int pne_gcn8_compute_smoke_run(const char* shader_path,
     }
     *fence = 0;
 
-    // Build the four-dword GNM descriptors directly. OpenGNM's convenience
-    // setters call sceGnmWriteMsg on invalid input; that optional diagnostic
-    // import is not exported by the pinned OpenOrbis import library.
+    // Use the same four-dword V# codec exercised by host tests. Avoid the
+    // OpenGNM convenience setters here because their error path imports the
+    // optional sceGnmWriteMsg diagnostic export.
     const auto make_float_buffer = [](GnmBuffer* descriptor, float* address,
                                       GnmMemoryType memory_type) {
-        const uintptr_t gpu_address = reinterpret_cast<uintptr_t>(address);
-        *descriptor = {};
-        descriptor->baseaddress = static_cast<uint32_t>(gpu_address);
-        descriptor->baseaddresshi = (gpu_address >> 32) & 0xFFFu;
-        descriptor->stride = sizeof(float);
-        descriptor->numrecords = kElementCount;
+        if (!descriptor || !address) return pne::gcn8::VSharpCodecError::null_output;
         const GnmDataFormat format = GNM_FMT_R32_FLOAT;
-        descriptor->numformat = static_cast<GnmBufNumFormat>(format.chantype);
-        descriptor->dataformat = static_cast<GnmBufferFormat>(format.surfacefmt);
-        descriptor->dstselx = format.chanx;
-        descriptor->dstsely = format.chany;
-        descriptor->dstselz = format.chanz;
-        descriptor->dstselw = format.chanw;
-        sceGnmBufSetMemoryType(descriptor, memory_type, false, false);
+        const std::uint32_t raw_memory_type =
+            static_cast<std::uint32_t>(memory_type);
+        pne::gcn8::VSharpBufferFields fields{};
+        fields.gpu_address = reinterpret_cast<std::uintptr_t>(address);
+        fields.stride = sizeof(float);
+        fields.num_records = kElementCount;
+        fields.mtype = (raw_memory_type >> 2) & 0x4u;
+        fields.mtype_l1s = (raw_memory_type >> 5) & 0x3u;
+        fields.mtype_l2 = raw_memory_type & 0x3u;
+        fields.dstselx = static_cast<std::uint8_t>(format.chanx);
+        fields.dstsely = static_cast<std::uint8_t>(format.chany);
+        fields.dstselz = static_cast<std::uint8_t>(format.chanz);
+        fields.dstselw = static_cast<std::uint8_t>(format.chanw);
+        fields.numformat = static_cast<std::uint8_t>(format.chantype);
+        fields.dataformat = static_cast<std::uint8_t>(format.surfacefmt);
+        std::uint32_t words[4]{};
+        const auto error = pne::gcn8::pack_vsharp_buffer(fields, words);
+        if (error == pne::gcn8::VSharpCodecError::none)
+            std::memcpy(descriptor, words, sizeof(words));
+        return error;
     };
 
     GnmBuffer input_descriptor{};
-    make_float_buffer(&input_descriptor, input, GNM_MEMORY_READONLY);
+    const auto input_descriptor_error =
+        make_float_buffer(&input_descriptor, input, GNM_MEMORY_READONLY);
+    if (input_descriptor_error != pne::gcn8::VSharpCodecError::none) {
+        log.line("INPUT_VSHARP_CODEC_ERROR",
+                 static_cast<std::uint32_t>(input_descriptor_error));
+        log.message("RESULT=FAIL; REASON=INPUT_VSHARP_DESCRIPTOR_ENCODING");
+        return 15;
+    }
     GnmBuffer output_descriptor{};
-    make_float_buffer(&output_descriptor, output, GNM_MEMORY_UNCACHED);
+    const auto output_descriptor_error =
+        make_float_buffer(&output_descriptor, output, GNM_MEMORY_UNCACHED);
+    if (output_descriptor_error != pne::gcn8::VSharpCodecError::none) {
+        log.line("OUTPUT_VSHARP_CODEC_ERROR",
+                 static_cast<std::uint32_t>(output_descriptor_error));
+        log.message("RESULT=FAIL; REASON=OUTPUT_VSHARP_DESCRIPTOR_ENCODING");
+        return 15;
+    }
 
     std::memset(table_bytes, 0, 80);
     std::memcpy(table_bytes, &input_descriptor, sizeof(input_descriptor));
