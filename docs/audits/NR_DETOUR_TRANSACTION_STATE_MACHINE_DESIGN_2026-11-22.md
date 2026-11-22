@@ -144,3 +144,14 @@ The coordinator enforces preparation and generated-code publication before acqui
 The CMake host suite registers `detour_transaction_core`. The coordinator is intentionally excluded from the PS4 PRX Makefile and is not called by the live hook. Its fake operations do not prove that a real PS4 execution rendezvous, stable mapping lease, cache-publication primitive, or protection API exists.
 
 **Validation status:** source and test files are committed; CI execution must be inspected before claiming the test passes. The current tests cover success, pre-mutation no-effect failures, uncertain setup/protection/window outcomes, partial write rollback, patch verification failure, rollback failure, and failed cleanup retention. They do not yet constitute the complete failure matrix in this design, and no independent review or hardware validation has occurred.
+
+### CI result for the host coordinator
+
+- Tested commit: `532164c10335fcf2e92850a299e43534cdee1c6d`
+- Workflow run: [45057916339](https://github.com/demolidorreddragons/NR/actions/runs/45057916339)
+- Hosted `telemetry` job: **SUCCESS**
+- CMake configure/build: **SUCCESS**
+- CTest: **10/10 passed**, including `detour_transaction_core`
+- The earlier attempts exposed two test-harness defects (literal escaped line breaks, then rollback-failure cases that did not first force a partial write). Both were corrected before this passing run.
+
+The workflow's separate read-only PS4 log-retrieval job was still queued when this result was recorded; therefore this is a confirmed host-test job result, not a claim that the entire workflow or any PS4 operation completed. No PRX/PKG staging, installation, plugin activation, or hardware validation was performed for this host-only core.
