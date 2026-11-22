@@ -5,7 +5,7 @@
 **Branch:** `feature/gcn8-numeric-kernels`  
 **Host-tested commit:** `4de424468977f6fcee8f26ef36815db9da8df7fc`  
 **Host CI:** [host-tests #1510](https://github.com/demolidorreddragons/NR/actions/runs/45056225389) — telemetry job SUCCESS  
-**PRX build:** [PS4 PRX and PKG #644](https://github.com/demolidorreddragons/NR/actions/runs/45056164974) — `Build PS4 PRX` step SUCCESS; independent PKG QA was still running when this report was prepared  
+**PRX build and independent PKG QA:** [PS4 PRX and PKG #644](https://github.com/demolidorreddragons/NR/actions/runs/45056164974) — build job SUCCESS; independent QA job SUCCESS; `QA_STATUS=PASS_PC_ONLY_NOT_HARDWARE_TESTED`  
 **Pinned GoldHEN SDK:** `bcea3c7ef01dac6d7f9f49ebf9e90fe66d86f5f7`
 
 ## Implemented modules
@@ -90,7 +90,7 @@ Neither module is connected to `install_gnm_hook`. The existing upstream detour 
 
 ## Build and hardware status
 
-Host CI passed for the host-tested commit. The PRX workflow's `Build PS4 PRX` step also passed, compiling the two new modules into the PRX object list. The containing build job completed successfully; its independent PKG QA job was still running when this report was prepared.
+Host CI passed for the host-tested commit. The PRX workflow completed successfully. Its build logs show both `hde64_bounded.o` and `hde64_bounded_plan.o` compiled for `x86_64-pc-freebsd12-elf` and linked into the PRX. The independent PKG QA job also completed successfully with `QA_STATUS=PASS_PC_ONLY_NOT_HARDWARE_TESTED`. This is package-structure/host QA only, not console validation.
 
 No PKG was staged or installed, and no PRX was activated on the console. No firmware-14.02 hook execution, GNM dispatch, GPU execution, or hardware stability claim follows from these results.
 
