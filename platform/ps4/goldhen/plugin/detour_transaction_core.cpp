@@ -11,7 +11,7 @@ static nr_detour_tx_result result_for(nr_detour_tx_state state) {
 static int ops_complete(const nr_detour_tx_ops *ops) {
     return ops && ops->preflight && ops->prepare_resources &&
            ops->publish_resources && ops->acquire_patch_window &&
-           ops->make_target_writable && ops->write_target &&
+           ops->acquire_remove_window_and_drain && ops->make_target_writable && ops->write_target &&
            ops->verify_target && ops->restore_target_protection &&
            ops->release_patch_window && ops->release_resources;
 }
@@ -136,4 +136,63 @@ extern "C" nr_detour_tx_result nr_detour_tx_install(
     result.patch_window_may_be_held = 0;
     result.resources_may_be_owned = 1;
     return result;
+}
+
+extern "C" nr_detour_tx_result nr_detour_tx_remove(
+    const nr_detour_tx_ops *ops, const uint8_t *original,
+    const uint8_t *patch, size_t length) {
+    if (!ops_complete(ops) || !original || !patch || length == 0)
+        return result_for(NR_DETOUR_TX_POISONED);
+
+    if (!ops->preflight(ops->context, original, patch, length))
+        return poison(1, 0, 1);
+
+    nr_detour_tx_outcome outcome =
+        ops->acquire_remove_window_and_drain(ops->context);
+    if (outcome == NR_DETOUR_TX_NO_EFFECT) {
+        nr_detour_tx_result active = result_for(NR_DETOUR_TX_ACTIVE);
+        active.target_may_be_modified = 1;
+        active.resources_may_be_owned = 1;
+        return active;
+    }
+    if (outcome != NR_DETOUR_TX_COMPLETE)
+        return poison(1, 1, 1);
+
+    outcome = ops->make_target_writable(ops->context);
+    if (outcome == NR_DETOUR_TX_NO_EFFECT) {
+        if (ops->release_patch_window(ops->context) !=
+            NR_DETOUR_TX_COMPLETE)
+            return poison(1, 1, 1);
+        nr_detour_tx_result active = result_for(NR_DETOUR_TX_ACTIVE);
+        active.target_may_be_modified = 1;
+        active.resources_may_be_owned = 1;
+        return active;
+    }
+    if (outcome != NR_DETOUR_TX_COMPLETE)
+        return poison(1, 1, 1);
+
+    outcome = ops->write_target(ops->context, original, length);
+    if (outcome != NR_DETOUR_TX_COMPLETE ||
+        !ops->verify_target(ops->context, original, length)) {
+        /* The desired state is the original bytes: retry once while the
+         * execution gate is still held and the target remains writable. */
+        if (ops->write_target(ops->context, original, length) !=
+            NR_DETOUR_TX_COMPLETE)
+            return poison(1, 1, 1);
+        if (!ops->verify_target(ops->context, original, length))
+            return poison(1, 1, 1);
+    }
+
+    if (ops->restore_target_protection(ops->context) !=
+        NR_DETOUR_TX_COMPLETE)
+        return poison(0, 1, 1);
+
+    if (ops->release_patch_window(ops->context) !=
+        NR_DETOUR_TX_COMPLETE)
+        return poison(0, 1, 1);
+
+    if (ops->release_resources(ops->context) != NR_DETOUR_TX_COMPLETE)
+        return poison(0, 0, 1);
+
+    return result_for(NR_DETOUR_TX_RETIRED);
 }
