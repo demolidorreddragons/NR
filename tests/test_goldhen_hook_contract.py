@@ -19,10 +19,12 @@ assert '#include <orbis/libkernel.h>' in source
 assert 'sceKernelGetAppInfo(getpid(), &app_info)' in source
 assert 'PNE_TITLE_ID_CURRENT "PNEU00004"' in source
 assert 'PNE_TITLE_ID_LEGACY  "PNEU00001"' in source
-guard = source.index('if (skip_neural_rendering_title()) {')
+guard = source.index('if (skip_neural_rendering_title() || !has_validated_title_adapter()) {')
 frequency = source.index('g_frequency = sceKernelGetProcessTimeCounterFrequency();')
 hook = source.index('if (!install_gnm_hook())')
 thread = source.index('scePthreadCreate(&g_input_thread')
+assert 'static bool has_validated_title_adapter(void)' in source
+assert 'return false;' in source[source.index('static bool has_validated_title_adapter(void)'):source.index('// If app identity cannot be read')]
 assert guard < frequency < hook < thread
 
 assert "control application as well as games" in source
@@ -30,4 +32,4 @@ assert "if (g_skip_current_title)" in source
 assert "if (g_input_thread_started)" in source
 assert "control-app Title IDs" in readme
 assert "OrbisAppInfo" in readme
-print("GoldHEN PRX contract: x64 detour, cleanup, own-title exclusion and fail-closed app identity PASS")
+print("GoldHEN PRX contract: x64 detour remains dormant; no validated title adapter means fail-closed before hook/worker startup PASS")
