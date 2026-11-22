@@ -10,7 +10,7 @@ build = Path("tools/build_pkg.sh").read_text(encoding="utf-8")
 
 assert "pne_validate_release_manifest(RELEASE_MANIFEST, SOURCE_PRX" in source
 assert "sceKernelSendNotificationRequest" in source
-assert "GNM exports 5/5" in source
+assert "GNM compute exports 7/7" in source
 assert "GCN8 assets 6/6" in source
 assert "audit_gcn8_assets" in source
 assert "pne_sha256_file" in source
@@ -25,6 +25,8 @@ assert "sceKernelGetFsSandboxRandomWord" in source
 for export in (
     "sceGnmSubmitDone",
     "sceGnmDispatchInitDefaultHardwareState",
+    "sceGnmSetCsShader",
+    "sceGnmDispatchDirect",
     "sceGnmFlushGarlic",
     "sceGnmSubmitCommandBuffers",
     "sceGnmSubmitAndFlipCommandBuffers",
@@ -35,6 +37,8 @@ for export in (
 for forbidden_call in (
     "sceGnmSubmitDone(",
     "sceGnmDispatchInitDefaultHardwareState(",
+    "sceGnmSetCsShader(",
+    "sceGnmDispatchDirect(",
     "sceGnmFlushGarlic(",
     "sceGnmSubmitCommandBuffers(",
     "sceGnmSubmitAndFlipCommandBuffers(",
@@ -86,4 +90,4 @@ with tempfile.TemporaryDirectory(prefix="nr-gcn8-assets-") as temp:
         check=True,
     )
 
-print("PKG 014 preflight contract: PRX integrity + six GFX8 asset SHA-256 checks + process-local GNM export resolution; no GNM calls or NR PRX activation PASS")
+print("PKG 015 preflight contract: PRX integrity + six GFX8 asset SHA-256 checks + seven process-local GNM compute export resolutions; no GNM calls or NR PRX activation PASS")
