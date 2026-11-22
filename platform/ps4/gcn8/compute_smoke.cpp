@@ -311,9 +311,7 @@ extern "C" int pne_gcn8_compute_smoke_run(const char* shader_path,
         fields.gpu_address = reinterpret_cast<std::uintptr_t>(address);
         fields.stride = sizeof(float);
         fields.num_records = kElementCount;
-        fields.mtype = (raw_memory_type >> 2) & 0x4u;
-        fields.mtype_l1s = (raw_memory_type >> 5) & 0x3u;
-        fields.mtype_l2 = raw_memory_type & 0x3u;
+        pne::gcn8::set_vsharp_memory_type(fields, raw_memory_type, false, false);
         fields.dstselx = static_cast<std::uint8_t>(format.chanx);
         fields.dstsely = static_cast<std::uint8_t>(format.chany);
         fields.dstselz = static_cast<std::uint8_t>(format.chanz);
