@@ -13,9 +13,9 @@ permissions:
 jobs:
   collect:
     runs-on: [self-hosted, Windows, X64, ps4-lan]
-    timeout-minutes: 10
+    timeout-minutes: 5
     steps:
-      - name: Collect current app, system logs and crash dumps without modifying PS4
+      - name: Collect logs and crash dumps only; do not download packages or user data
         shell: powershell -NoProfile -ExecutionPolicy Bypass -File {0}
         env:
           PS4_IP: ${{ vars.PS4_IP }}
@@ -34,8 +34,8 @@ jobs:
             $r.UsePassive = $true
             $r.UseBinary = $true
             $r.KeepAlive = $false
-            $r.Timeout = 60000
-            $r.ReadWriteTimeout = 60000
+            $r.Timeout = 30000
+            $r.ReadWriteTimeout = 30000
             return $r
           }
           function Get-Names([string]$path) {
@@ -47,7 +47,7 @@ jobs:
                 $items = @()
                 while (-not $reader.EndOfStream) {
                   $line = $reader.ReadLine()
-                  if ($line -and $line -notin @(".", "..")) { $items += $line.Trim() }
+                  if ($line -and $line.Trim() -notin @(".", "..")) { $items += $line.Trim() }
                 }
                 return $items
               } finally { $reader.Dispose() }
@@ -70,47 +70,31 @@ jobs:
               Write-Host "===== END $remote ====="
             }
           }
-          function Save-Directory([string]$remoteDir, [string]$label, [int]$depth = 0) {
-            $safe = $label -replace '[^A-Za-z0-9_.-]','_'
-            $listingPath = Join-Path $out "$safe.listing.txt"
+          function Save-Listing([string]$remoteDir, [string]$label) {
             try {
               $names = @(Get-Names $remoteDir)
-              $names | Set-Content -LiteralPath $listingPath
+              $safe = $label -replace '[^A-Za-z0-9_.-]','_'
+              $names | Set-Content -LiteralPath (Join-Path $out "$safe.listing.txt")
               Write-Host "DIRECTORY_OK path=$remoteDir entries=$($names.Count)"
               foreach ($name in $names) { Write-Host "ENTRY=$remoteDir$name" }
-              if ($depth -lt 2) {
-                foreach ($name in $names) {
-                  if ($name -match '[/\\]' -or [string]::IsNullOrWhiteSpace($name)) { continue }
-                  $child = "$remoteDir$name"
-                  $local = Join-Path $out (($safe + "_" + $name) -replace '[^A-Za-z0-9_.-]','_')
-                  try { Save-Remote $child $local }
-                  catch {
-                    try { Save-Directory ($child.TrimEnd('/') + "/") ($safe + "_" + $name) ($depth + 1) }
-                    catch { Write-Host "ENTRY_UNREADABLE path=$child detail=$($_.Exception.Message)" }
-                  }
-                }
-              }
+              return $names
             } catch {
-              "LIST_ERROR=$($_.Exception.Message)" | Set-Content -LiteralPath $listingPath
               Write-Host "DIRECTORY_UNAVAILABLE path=$remoteDir detail=$($_.Exception.Message)"
+              return @()
             }
           }
 
           Write-Host "DIAGNOSTIC_TIME_UTC=$([DateTime]::UtcNow.ToString('o'))"
           Write-Host "PS4_ENDPOINT=$($env:PS4_IP):2121"
-          foreach ($dir in @(
-            "/data/pkg/",
-            "/data/GoldHEN/",
-            "/data/GoldHEN/plugins/",
-            "/data/sce_coredumps/",
-            "/data/sce_logs/",
-            "/user/app/PNEU00004/",
-            "/user/data/"
-          )) {
-            $label = $dir.Trim('/') -replace '/', '_'
-            Save-Directory $dir $label
-          }
-          foreach ($remote in @(
+          # Metadata listings only for package and app directories; never download PKGs or user data.
+          $null = Save-Listing "/data/pkg/" "pkg-root"
+          $null = Save-Listing "/user/app/PNEU00004/" "installed-app-PNEU00004"
+          $null = Save-Listing "/data/GoldHEN/" "goldhen-root"
+          $null = Save-Listing "/data/GoldHEN/plugins/" "goldhen-plugins"
+          $null = Save-Listing "/data/sce_logs/" "sce-logs"
+          $dumpNames = @(Save-Listing "/data/sce_coredumps/" "sce-coredumps")
+
+          $files = @(
             "/data/pne_gcn8_compute_smoke_45040217180.log",
             "/data/pne_gcn8_compute_smoke_44876293567.log",
             "/data/GoldHEN/ps4_neural_engine_install.log",
@@ -118,19 +102,24 @@ jobs:
             "/data/GoldHEN/config.ini",
             "/data/sce_logs/log.bin",
             "/data/install.log",
-            "/data/pkg/install.log",
-            "/user/app/PNEU00004/app.json",
-            "/user/app/PNEU00004/app.xml",
-            "/user/app/PNEU00004/param.sfo",
-            "/user/app/PNEU00004/sce_sys/param.sfo"
-          )) {
+            "/data/pkg/install.log"
+          )
+          foreach ($remote in $files) {
             $name = ($remote.Trim('/') -replace '[\\/]','_')
             $local = Join-Path $out $name
-            if (-not (Test-Path -LiteralPath $local)) {
-              try { Save-Remote $remote $local }
-              catch { Write-Host "FILE_UNAVAILABLE path=$remote detail=$($_.Exception.Message)" }
-            }
+            try { Save-Remote $remote $local }
+            catch { Write-Host "FILE_UNAVAILABLE path=$remote detail=$($_.Exception.Message)" }
           }
+
+          # Only download files explicitly enumerated in the crash-dump directory.
+          foreach ($entry in $dumpNames) {
+            if ($entry -match '[/\\]' -or [string]::IsNullOrWhiteSpace($entry)) { continue }
+            $remote = "/data/sce_coredumps/$entry"
+            $local = Join-Path $out ("coredump_" + ($entry -replace '[^A-Za-z0-9_.-]','_'))
+            try { Save-Remote $remote $local }
+            catch { Write-Host "COREDUMP_UNAVAILABLE path=$remote detail=$($_.Exception.Message)" }
+          }
+
           $manifest = Get-ChildItem -LiteralPath $out -File | ForEach-Object {
             "$($_.Name)|$($_.Length)|$((Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant())"
           }
