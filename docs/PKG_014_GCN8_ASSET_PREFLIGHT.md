@@ -38,3 +38,16 @@ The base64 source files are kept under assets/gcn8/. tools/prepare_gcn8_pkg_asse
 ## Release gate
 
 The candidate is not installable until the current PRX/PKG workflow and its independent QA job pass, the GP4/SFO/payload extraction is reviewed, and the Windows bridge staging/read-back matches the final artifact. QA is PC-only; hardware status remains not tested.
+
+## PKG 014 — build, independent QA and PS4 staging completed
+
+- Build workflow: 45072353238 (SUCCESS), source commit 8aacfe426fac164eca681aa87829a509045cbed1.
+- Build artifact: ps4-neural-engine-build, artifact ID 14773063921, archive SHA-256 2b06d79b0ae4719df4d39884d3407ed691a5cd7c17fe7d657dbe6072df6ea616.
+- Package: PS4-Neural-Engine-014.pkg, Full/Base (gde), APP_VER 01.09, TITLE_ID PNEU00001, 6,619,136 bytes, SHA-256 96c15b46e7579c5f728a131279e986af04a9e4683c9903221e418ca52a3842db.
+- Internal build extraction verified all six root-level GFX8 code objects and their SHA-256 values; the build workflow reported the extracted executable and GFX8 payload complete.
+- Independent automated QA job independent-pkg-qa: SUCCESS. QA artifact ID 14773838427, archive SHA-256 be7ed56fa6df0b73af97a1085c589991e62503a85ca7805f00f2bf8065b0f03c. QA report confirms Full/Base, SFO semantic fields, PRX hash and QA_STATUS=PASS_PC_ONLY_NOT_HARDWARE_TESTED. The independent extraction listing contains the SHA256 manifest and all six GFX8 assets.
+- Host tests: workflow 45072205357 SUCCESS; test suite reports 10/10 and the six-asset decode/hash test reports GCN8_ASSETS=6_OF_6_PASS.
+- PS4 staging workflow: 45072657869, job 137362873852, SUCCESS. The prior PKG 013 was preserved at /data/pkg/old/PS4-Neural-Engine-013.pkg (6,619,136 bytes, SHA-256 73c4c9a43002ae55fadec532a9e97217d23e1742d5f4db2bed8a60abdec6f7d1). The new package was uploaded to a temporary path, read back and verified, then promoted to /data/pkg/PS4-Neural-Engine-014.pkg. Final remote read-back: 6,619,136 bytes, SHA-256 96c15b46e7579c5f728a131279e986af04a9e4683c9903221e418ca52a3842db.
+- The runner confirmed exactly one Neural Rendering PKG remains in /data/pkg/ (014). Existing installed title PNEU00001 was present. No installation, PRX activation, GNM call, plugins.ini change, or GoldHEN restart was performed.
+- QA is automated and PC-only; no independent human code review or hardware/runtime validation was performed.
+
