@@ -69,14 +69,14 @@ int main(void) {
     read_file_contains(crash_path, "SIGNAL_INSTALL_BEGIN");
     char abi_line[160];
     snprintf(abi_line, sizeof(abi_line),
-             "SIGNAL_ABI stack_t_size=%zu ss_sp_off=%zu ss_size_off=%zu ss_flags_off=%zu altstack_bytes=65536",
+             "STAGE=SIGNAL_ABI stack_t_size=%zu ss_sp_off=%zu ss_size_off=%zu ss_flags_off=%zu altstack_bytes=65536",
              sizeof(stack_t), offsetof(stack_t, ss_sp),
              offsetof(stack_t, ss_size), offsetof(stack_t, ss_flags));
     read_file_line_exact(crash_path, abi_line);
     read_file_line_exact(crash_path,
-                         "SIGNAL_DIAG op=sigaltstack signal=0 rc=0 errno=0");
+                         "STAGE=SIGNAL_DIAG op=sigaltstack signal=0 rc=0 errno=0");
     read_file_line_exact(crash_path,
-                         "SIGNAL_DIAG op=sigemptyset signal=0 rc=0 errno=0");
+                         "STAGE=SIGNAL_DIAG op=sigemptyset signal=0 rc=0 errno=0");
     char signal_line[96];
     snprintf(signal_line, sizeof(signal_line),
              "SIGNAL_DIAG op=sigaction signal=%d rc=0 errno=0", SIGSEGV);
