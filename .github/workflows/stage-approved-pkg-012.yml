@@ -19,6 +19,18 @@ jobs:
     runs-on: [self-hosted, Windows, X64, ps4-lan]
     timeout-minutes: 20
     steps:
+      - name: Clean local artifact workspace on persistent runner
+        shell: powershell
+        run: |
+          $ErrorActionPreference = "Stop"
+          foreach ($directory in @("transfer","qa")) {
+            $path = Join-Path $env:GITHUB_WORKSPACE $directory
+            if (Test-Path -LiteralPath $path) {
+              Remove-Item -LiteralPath $path -Recurse -Force
+            }
+            New-Item -ItemType Directory -Path $path -Force | Out-Null
+          }
+
       - name: Download exact build artifact from approved run
         uses: actions/download-artifact@v4
         with:
@@ -38,7 +50,7 @@ jobs:
           github-token: ${{ github.token }}
 
       - name: Verify exact package, manifest, source contract and independent QA before PS4 writes
-        shell: pwsh
+        shell: powershell
         env:
           EXPECTED_SHA256: 240914f39c1dbfec39b0f21fdd022dd30f10356341860e47fffaacef3aa3825f
           EXPECTED_BYTES: "6619136"
@@ -136,7 +148,7 @@ jobs:
           Write-Host "APPROVED_PREFLIGHT_ARTIFACT_VERIFIED=TRUE"
 
       - name: Archive prior Neural Rendering PKGs and stage verified package with read-back
-        shell: pwsh
+        shell: powershell
         env:
           PS4_IP: ${{ vars.PS4_IP }}
         run: |
@@ -191,12 +203,12 @@ jobs:
               $output = $null
               try {
                 $response = $request.GetResponse()
-                $input = $response.GetResponseStream()
+                $remoteStream = $response.GetResponseStream()
                 $output = [System.IO.File]::Create($local)
-                $input.CopyTo($output)
+                $remoteStream.CopyTo($output)
               } finally {
                 if ($output) { $output.Dispose() }
-                if ($input) { $input.Dispose() }
+                if ($remoteStream) { $remoteStream.Dispose() }
                 if ($response) { $response.Dispose() }
               }
               return [pscustomobject]@{
