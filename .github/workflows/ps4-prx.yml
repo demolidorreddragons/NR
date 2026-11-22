@@ -328,11 +328,11 @@ jobs:
           $preflightSource = Join-Path $artifact "pkg/audit/preflight_main.c"
           if (-not (Test-Path $preflightSource)) { throw "Read-only preflight source missing from build artifact." }
           $preflightText = Get-Content $preflightSource -Raw
-          foreach ($required in @("pne_validate_release_manifest(RELEASE_MANIFEST, SOURCE_PRX","PRX NOT installed or activated","sceKernelSendNotificationRequest")) {
+          foreach ($required in @("pne_validate_release_manifest(RELEASE_MANIFEST, SOURCE_PRX","GNM exports 5/5","sceKernelLoadStartModule","sceKernelDlsym","PRX NOT activated","sceKernelSendNotificationRequest")) {
             if ($preflightText -notmatch [regex]::Escape($required)) { throw "Preflight source contract missing: $required" }
           }
-          foreach ($forbidden in @("/data/","plugins.ini","sceKernelLoadStartModule","sceKernelMprotect","scePthreadCreate","mkdir(","rename(","remove(","unlink(","fopen(","open(","write(","fwrite(","system(")) {
-            if ($preflightText.Contains($forbidden)) { throw "Preflight source contains forbidden side-effect marker: $forbidden" }
+          foreach ($forbidden in @("/data/","plugins.ini","sceKernelMprotect","sceKernelMunmap","scePthreadCreate","sceKernelStopUnloadModule","sceKernelUnloadStartModule","sceGnmSubmitDone(","sceGnmDispatchInitDefaultHardwareState(","sceGnmFlushGarlic(","sceGnmSubmitCommandBuffers(","sceGnmSubmitAndFlipCommandBuffers(","mkdir(","rename(","remove(","unlink(","fopen(","open(","write(","fwrite(","system(")) {
+            if ($preflightText.Contains($forbidden)) { throw "Preflight source contains forbidden side-effect or GNM-call marker: $forbidden" }
           }
           $gp4Text = Get-Content $gp4 -Raw
           if ($gp4Text -notmatch "IV0000-PNEU00001_00-PS4NEURALENG0000") { throw "GP4 CONTENT_ID mismatch." }
@@ -340,7 +340,7 @@ jobs:
             if ($gp4Text -notmatch [regex]::Escape($entry)) { throw "GP4 file association missing: $entry" }
           }
           $manifestText = Get-Content $manifest -Raw
-          foreach ($required in @("schema=1","release_number=$releaseNumber","installer_version=2","title_id=PNEU00001","content_id=IV0000-PNEU00001_00-PS4NEURALENG0000","abi_status=unverified","hardware_status=not_tested","prx_sha256=$sourcePrxHash")) {
+          foreach ($required in @("schema=1","release_number=$releaseNumber","installer_version=3","title_id=PNEU00001","content_id=IV0000-PNEU00001_00-PS4NEURALENG0000","abi_status=unverified","hardware_status=not_tested","prx_sha256=$sourcePrxHash")) {
             if ($manifestText -notmatch [regex]::Escape($required)) { throw "Release manifest mismatch: $required" }
           }
           dotnet "$tool" validate "$pkg" 2>&1 | Tee-Object qa-output/pkg-validation.txt
