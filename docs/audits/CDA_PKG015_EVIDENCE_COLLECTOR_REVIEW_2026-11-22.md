@@ -69,3 +69,21 @@ Artefatos brutos preservados automaticamente pelo GitHub Actions, sem análise c
 **Correção preventiva aplicada:** removido integralmente o job de coleta PS4 do workflow geral de host tests no commit `93c56e81df76f49118803eacd824521a0f0394a2`. O host tests continua sendo acionado por push, mas não possui mais job no runner PS4. A coleta futura PKG 015 fica isolada no workflow CDA manual, após feedback. Nenhum arquivo remoto foi alterado segundo as operações/logs observados.
 
 **Classificação:** incidente de automação de coleta não destrutiva; não é incidente de integridade do PKG nem evidência de falha de runtime. Os quatro snapshots são preservados, não correlacionados ao PKG 015 até a identidade instalada ser comprovada.
+
+
+## Segunda revisão estática — integridade dos campos de feedback
+
+Na revisão de endurecimento foi identificado que os campos de texto fornecidos no disparo manual eram interpolados diretamente em linhas do manifesto. Como esses campos podem conter CR/LF, isso permitiria que texto de feedback criasse linhas adicionais visualmente indistinguíveis de metadados emitidos pelo coletor.
+
+Correção aplicada:
+- `PS4_IP` agora precisa ser um literal IPv4 válido antes de qualquer requisição FTP;
+- `observed_result` e `feedback_reference` são obrigatórios também em runtime e limitados a 4.096 caracteres cada;
+- os bytes UTF-8 originais de cada campo são preservados em arquivos separados;
+- o manifesto guarda Base64 e SHA-256 de cada campo, sem inserir texto arbitrário diretamente em linhas;
+- a função de hash descarta corretamente o objeto criptográfico após o uso.
+
+Commits:
+- `215ebd7a4ecb2218095dcf21925128a32f276420` — validação de IPv4, limites e preservação dos inputs;
+- `6fea397cc182bd2b72f49042c1dd6c65e341e459` — descarte determinístico dos recursos SHA-256.
+
+**Validação:** revisão estática do diff e das invariantes do script; nenhuma execução do workflow, conexão FTP ou acesso ao PS4 foi realizada. O coletor continua manual (`workflow_dispatch`) e permanece não executado. Esta alteração melhora a proveniência do manifesto; não é evidência nova de runtime nem correção do PKG 015.
