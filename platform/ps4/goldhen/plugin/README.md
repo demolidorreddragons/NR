@@ -11,6 +11,8 @@ The PRX is currently a diagnostics/capture scaffold, not a neural rendering back
 
 ## Runtime behavior
 
+- The plugin is registered in GoldHEN's `[default]` section, so it can be considered for every title. Before creating threads or installing the global GNM hook, `plugin_load` reads the current `OrbisAppInfo` and skips both known Neural Rendering control-app Title IDs (`PNEU00004` and legacy `PNEU00001`). If app identity cannot be read, it fails closed and leaves that process untouched.
+
 - Capture is disabled until the user explicitly starts a session.
 - Default toggle chord: L3 + L1 + Triangle.
 - A present hook records timing and display-buffer metadata only.
