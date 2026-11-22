@@ -87,3 +87,6 @@ Commits:
 - `6fea397cc182bd2b72f49042c1dd6c65e341e459` — descarte determinístico dos recursos SHA-256.
 
 **Validação:** revisão estática do diff e das invariantes do script; nenhuma execução do workflow, conexão FTP ou acesso ao PS4 foi realizada. O coletor continua manual (`workflow_dispatch`) e permanece não executado. Esta alteração melhora a proveniência do manifesto; não é evidência nova de runtime nem correção do PKG 015.
+
+
+**Ajuste final de validação PowerShell:** no commit `2fd7ae42b7f46dd8087ad336ad38b4ad9cb4d6a7`, a validação dos dois campos foi simplificada para verificações explícitas, evitando depender da enumeração de arrays aninhados do PowerShell 5.1. A revisão continua estática e o workflow continua não executado.
