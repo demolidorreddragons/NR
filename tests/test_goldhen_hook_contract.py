@@ -24,7 +24,7 @@ frequency = source.index('g_frequency = sceKernelGetProcessTimeCounterFrequency(
 hook = source.index('if (!install_gnm_hook())')
 thread = source.index('scePthreadCreate(&g_input_thread')
 assert 'static bool has_validated_title_adapter(void)' in source
-assert 'return false;' in source[source.index('static bool has_validated_title_adapter(void)'):source.index('// If app identity cannot be read')]
+assert 'return false;' in source[source.index('static bool has_validated_title_adapter(void)'):source.index('// The PRX is registered in [default]')]
 assert guard < frequency < hook < thread
 
 assert "control application as well as games" in source
