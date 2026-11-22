@@ -27,6 +27,26 @@ int main() {
         (1u<<25) | (1u<<26) | (3u<<27) | (2u<<30)));
     assert(pack_vsharp_buffer(f, nullptr) == VSharpCodecError::null_output);
 
+    // Exact R32_FLOAT V# fields used by the PS4 compute smoke, from the
+    // pinned OpenGNM GNM_FMT_R32_FLOAT definition (surface=4, num=7,
+    // selectors X/0/0/1). Memory-type fields mirror sceGnmBufSetMemoryType.
+    f = {};
+    f.gpu_address = 0x0000000012345000ULL;
+    f.stride = 4;
+    f.num_records = 64;
+    f.mtype = 4; // GNM_MEMORY_READONLY (0x10), no cache bypass.
+    f.dstselx = 4; f.dstsely = 0; f.dstselz = 0; f.dstselw = 1;
+    f.numformat = 7; f.dataformat = 4;
+    assert(pack_vsharp_buffer(f, w) == VSharpCodecError::none);
+    assert(w[0] == 0x12345000u && w[1] == 0x00040000u &&
+           w[2] == 64u && w[3] == 0x20027204u);
+
+    f.gpu_address = 0x0000000012346000ULL;
+    f.mtype = 0; f.mtype_l1s = 3; f.mtype_l2 = 3; // GNM_MEMORY_UNCACHED (0x6f).
+    assert(pack_vsharp_buffer(f, w) == VSharpCodecError::none);
+    assert(w[0] == 0x12346000u && w[1] == 0x0004f000u &&
+           w[2] == 64u && w[3] == 0x00027204u);
+
     // Maximum legal address and field values must pack without truncation.
     f = {};
     f.gpu_address = (std::uint64_t{1} << 44) - 4;
