@@ -24,7 +24,8 @@ enum class Failure {
     ReleaseGate,
     RollbackWrite,
     VerifyRollback,
-    ReleaseResources
+    ReleaseResources,
+    PublishNoEffectReleaseResources
 };
 
 struct Fake {
@@ -51,7 +52,7 @@ static nr_detour_tx_outcome prepare(void *p) {
 }
 static nr_detour_tx_outcome publish(void *p) {
     auto &f = *static_cast<Fake *>(p);
-    if (f.failure == Failure::PublishNoEffect) return NR_DETOUR_TX_NO_EFFECT;
+    if (f.failure == Failure::PublishNoEffect || f.failure == Failure::PublishNoEffectReleaseResources) return NR_DETOUR_TX_NO_EFFECT;
     if (f.failure == Failure::PublishUnknown) return NR_DETOUR_TX_UNKNOWN;
     f.published = true;
     return NR_DETOUR_TX_COMPLETE;
@@ -148,7 +149,7 @@ int main() {
         auto result = nr_detour_tx_install(&ops, original.data(), patch.data(), patch.size());
         assert(result.state == NR_DETOUR_TX_ACTIVE);
         assert(f.target == patch);
-        assert(f.gate && !f.writable && f.prepared && f.published);
+        assert(!f.gate && !f.writable && f.prepared && f.published);
         assert(!f.resources_released);
     }
 
@@ -160,8 +161,7 @@ int main() {
 
     for (Failure failure : {Failure::PrepareUnknown, Failure::PublishUnknown,
                             Failure::GateUnknown, Failure::WritableUnknown,
-                            Failure::RestoreProtection, Failure::ReleaseGate,
-                            Failure::ReleaseResources}) {
+                            Failure::RestoreProtection, Failure::ReleaseGate}) {
         Fake f;
         f.failure = failure;
         auto ops = make_ops(f);
@@ -170,7 +170,7 @@ int main() {
         assert(result.resources_may_be_owned);
     }
 
-    for (Failure failure : {Failure::WritePartial, Failure::VerifyPatch}) {
+    {\n        Fake f;\n        f.failure = Failure::PublishNoEffectReleaseResources;\n        auto ops = make_ops(f);\n        auto result = nr_detour_tx_install(&ops, original.data(), patch.data(), patch.size());\n        assert(result.state == NR_DETOUR_TX_POISONED);\n        assert(!result.target_may_be_modified && result.resources_may_be_owned);\n    }\n\n    for (Failure failure : {Failure::WritePartial, Failure::VerifyPatch}) {
         Fake f;
         f.failure = failure;
         auto ops = make_ops(f);
