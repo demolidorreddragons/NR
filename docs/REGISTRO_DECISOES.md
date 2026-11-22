@@ -88,3 +88,5 @@ Este arquivo preserva decisões aprovadas e seus motivos. Novas decisões devem 
 - Read-only PS4 recollection (run `45018960242`): legacy app log shows `GNM_IMPORT_ADDRESS_NULL`, no GNM calls, exit code 1; `sce_coredumps` empty and `pne.log` absent. The user-reported CE-34878 is not explained by this log; do not claim a confirmed harness crash.
 - Decision: keep compute eboot free of static `-lSceGnmDriver` and use module load plus `sceKernelDlsym` (already observed successful in GNM-Load-Only). The main PRX static import may remain; runtime resolution, hook ABI, and detour safety still require hardware validation.
 - Limits: static OELF metadata was audited, but this is not a complete reverse engineering of the FW 14.02 loader.
+
+- The GNM hook must use GoldHEN SDK `DetourMode_x64` for this x86_64 PRX. The pinned SDK's `HOOK32` selects x32 E9 rel32 without range validation; x32 restore length also overruns by 9 bytes, and upstream destroy leaks `TrampolinePtr`. Project code uses x64 detour, checks the stub, and explicitly unmaps the x64 trampoline. Host static test passes; hardware and `sceKernelMprotect` return validation remain pending.
