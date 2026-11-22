@@ -171,7 +171,16 @@ int main() {
         assert(result.resources_may_be_owned);
     }
 
-    {\n        Fake f;\n        f.failure = Failure::PublishNoEffectReleaseResources;\n        auto ops = make_ops(f);\n        auto result = nr_detour_tx_install(&ops, original.data(), patch.data(), patch.size());\n        assert(result.state == NR_DETOUR_TX_POISONED);\n        assert(!result.target_may_be_modified && result.resources_may_be_owned);\n    }\n\n    for (Failure failure : {Failure::WritePartial, Failure::VerifyPatch}) {
+    {
+        Fake f;
+        f.failure = Failure::PublishNoEffectReleaseResources;
+        auto ops = make_ops(f);
+        auto result = nr_detour_tx_install(&ops, original.data(), patch.data(), patch.size());
+        assert(result.state == NR_DETOUR_TX_POISONED);
+        assert(!result.target_may_be_modified && result.resources_may_be_owned);
+    }
+
+    for (Failure failure : {Failure::WritePartial, Failure::VerifyPatch}) {
         Fake f;
         f.failure = failure;
         auto ops = make_ops(f);
