@@ -144,8 +144,12 @@ extern "C" nr_detour_tx_result nr_detour_tx_remove(
     if (!ops_complete(ops) || !original || !patch || length == 0)
         return result_for(NR_DETOUR_TX_POISONED);
 
-    if (!ops->preflight(ops->context, original, patch, length))
-        return poison(1, 0, 1);
+    if (!ops->preflight(ops->context, original, patch, length)) {
+        nr_detour_tx_result active = result_for(NR_DETOUR_TX_ACTIVE);
+        active.target_may_be_modified = 1;
+        active.resources_may_be_owned = 1;
+        return active;
+    }
 
     nr_detour_tx_outcome outcome =
         ops->acquire_remove_window_and_drain(ops->context);
