@@ -11,7 +11,7 @@ The PRX is currently a diagnostics/capture scaffold, not a neural rendering back
 
 ## Runtime behavior
 
-- The plugin is registered in GoldHEN's `[default]` section, so it can be considered for every title. Before creating threads or installing the global GNM hook, `plugin_load` reads the current `OrbisAppInfo` and skips both known Neural Rendering control-app Title IDs (`PNEU00004` and legacy `PNEU00001`). If app identity cannot be read, it fails closed and leaves that process untouched.
+- The plugin is registered in GoldHEN's `[default]` section, but **the PRX is now globally inert**: `has_validated_title_adapter()` returns false and `plugin_load` exits before frequency setup, GNM hook installation, or worker creation. This is intentional because no title-owned cooperative rendezvous adapter, mapping-lifetime contract, or per-consumer code-publication handoff is integrated. The previous own-title-ID guard remains an additional exclusion, not the safety mechanism. Do not enable the hook by changing this predicate alone; first integrate and validate the complete title-specific contract.
 
 - Capture is disabled until the user explicitly starts a session.
 - Default toggle chord: L3 + L1 + Triangle.
