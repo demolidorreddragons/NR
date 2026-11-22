@@ -50,6 +50,7 @@ jobs:
           $directories = @(
             '/user/app/PNEU00001/',
             '/user/appmeta/PNEU00001/',
+            '/user/data/pkg/',
             '/user/data/',
             '/data/',
             '/data/sce_logs/',
@@ -83,6 +84,7 @@ jobs:
             '/data/pne_gcn8_gnm_export_audit_013.log',
             '/data/pne_gnm_export_preflight_013.log',
             '/data/PS4-Neural-Engine-RuntimeFixed.pkg',
+            '/user/data/pkg/PS4-Neural-Engine-014.pkg',
             '/user/app/PNEU00001/app.pkg',
             '/user/app/PNEU00001/app.xml',
             '/user/app/PNEU00001/app.json'
