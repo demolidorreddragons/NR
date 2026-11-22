@@ -10,7 +10,7 @@ OUT="$ROOT/dist/pkg"
 TOOLS="$OO_PS4_TOOLCHAIN/bin/linux"
 PKGTOOL="${PKGTOOL_CORE:-$TOOLS/PkgTool.Core}"
 TITLE_ID="PNEU00001"
-APP_VERSION="${APP_VERSION:-01.07}"
+APP_VERSION="${APP_VERSION:-01.08}"
 if [[ ! "$APP_VERSION" =~ ^[0-9]{2}\.[0-9]{2}$ ]]; then
   echo "APP_VERSION must use Sony XX.YY format (for example 01.01)." >&2
   exit 1
@@ -32,7 +32,7 @@ PRX_SHA256="$(sha256sum "$STAGE/ps4_neural_engine.prx" | awk '{print $1}')"
 cat > "$STAGE/pne-release.ini" <<EOF
 schema=1
 release_number=$PKG_NUMBER
-installer_version=2
+installer_version=3
 app_version=$APP_VERSION
 title_id=$TITLE_ID
 content_id=$CONTENT_ID
