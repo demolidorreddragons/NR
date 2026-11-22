@@ -251,3 +251,10 @@ A pesquisa não justificou mudança de código: parser e offset seguem intactos;
 - GNM-Load-Only agora faz DLSYM address-only de cinco exports, incluindo `sceGnmSubmitAndFlipCommandBuffers`; nenhum é chamado. Run [45018436422](https://github.com/demolidorreddragons/NR/actions/runs/45018436422) SUCCESS; OELF contém somente libkernel; QA independente `PASS_PC_ONLY_NOT_HARDWARE_TESTED`.
 - PKG GNM-Load: 6.619.136 bytes, SHA-256 `7b0807a882895b9a392f64f0e97bb7aca8e2aaa94c254e0667cc0128996c1051`; artifact ZIP ID `14752946485`, SHA-256 `db3782f080e561a2d276af3e8da9c3989d7a6412d8393960369dd8b30270ea01`. Não staged/instalado.
 - Próximo gate: instalar e verificar por feedback somente após autorização específica de staging; o DLSYM do export `sceGnmSubmitAndFlipCommandBuffers` ainda não foi executado no PS4.
+## Recoleta read-only do PS4 — run 45018960242
+
+- Artifact `ps4-crash-logger-evidence` ID `14753156310`, ZIP SHA-256 `156c35452979115cdd882398233e81b0797bc127c7c7dc9c5a091147565aa76d`.
+- Log GNM-Link `/data/pne_gcn8_compute_smoke_44873622760.log`, 324 bytes, SHA-256 `a6b3b08dcb100a7f9f4468022e14ecab7e20f4b5411b2682d0176ae74a686562`: `GNM_IMPORT_ADDRESS_NULL`, no GNM calls, exit 1.
+- `sce_coredumps` vazio; `/data/pne.log` ausente; `sce_logs/log.bin` 16 MiB e ainda não decodificado; logs auxiliares não mostram atividade GNM.
+- Correlacionado com OELF: metadata Sony/NID/relocation válidos; falha runtime de resolução do GOT permanece sem causa raiz. O log não prova que o CE-34878 foi causado por chamada GNM ou crash do harness.
+- Coleta read-only; nenhum dado do console foi alterado.
