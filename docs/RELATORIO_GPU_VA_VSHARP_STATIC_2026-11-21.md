@@ -220,3 +220,14 @@ O OpenGNM smoke fixado executa um draw de contagem zero, usa Garlic para DCB/EOP
 - OpenGNM hardware smoke: https://github.com/PS4-OpenGNM/opengnm/blob/4b295ca54c82c83acf308d1c646a2dfa9ae57350/tests/hardware_smoke.c
 - OpenGNM public GnmMemoryType reference: https://ps4-opengnm.github.io/opengnm/reference/types/
 - Example PS4 graphics renderer using mapped memory in GNM descriptors: https://git.fourletterworkshop.com/moonlight-dx-ps4/blob/v2.00/src/platform/ps4/GpuVideoRenderer.cpp
+### 11.4 Codec V# compartilhado entre host e harness — 2026-11-22
+
+Foi identificado que o repositório já possuía `host/vsharp_codec.*` e o teste `test_gcn8_vsharp_codec`; a lacuna era que o harness PS4 ainda construía o V# manualmente, sem reutilizar o código testado. A correção não altera os valores/semântica do descriptor: faz o runtime usar o mesmo packer de quatro dwords validado em host.
+
+- Commit `d67e18f38ba1ca3e2cd136727cdb64c82c3f40bd`: `compute_smoke.cpp` passou a construir `VSharpBufferFields` e chamar `pack_vsharp_buffer`, com falha fechada e log específico para input/output descriptor inválido.
+- Commit `fb639157294063853a01f430d59c69ac8f6ba4e9`: o build PS4 compute passou a compilar e linkar `host/vsharp_codec.cpp` no ELF compute. Startup-only permanece sem esse objeto.
+- Commit `2fe2757455a9985177e20ab0af633ee5c2df04ef`: o teste host recebeu golden cases para os campos exatos do `GNM_FMT_R32_FLOAT` usado no smoke, tanto `GNM_MEMORY_READONLY` (input) quanto `GNM_MEMORY_UNCACHED` (output), verificando os quatro dwords completos.
+- Host CI run `45015718289`, job `137187475115`: Configure/Build e CTest concluíram com **9/9 testes PASS**, incluindo `gcn8_vsharp_codec` e os novos dwords de input/output.
+- PS4-target compute package/build workflows associados ao commit `fb639157...` foram disparados (`45015714804` GCN8 shader/PKG e `45015714818` PRX/PKG), mas ainda estavam `pending` na última consulta; portanto o link do objeto codec no alvo PS4 permanece **PENDING CI** até inspecionar os jobs/logs.
+
+Este avanço fecha a lacuna de divergência entre o packer testado em host e a montagem manual usada pelo harness. Não valida que `GNM_MEMORY_UNCACHED` seja a política correta de write/cache no firmware, nem que o endereço mapeado seja GPU VA válido, nem a execução do shader. Os gates GPU VA, V# writable/cache e dispatch/readback permanecem BLOCKED/NOT_RUN. O bloqueio compile-time de compute continua ativo; nenhum staging, instalação ou execução no console foi feito.
