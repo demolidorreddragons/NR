@@ -7,6 +7,7 @@
 #include <sys/wait.h>
 #include <unistd.h>
 #include "hde64_bounded.h"
+#include "hde64_bounded_plan.h"
 
 static int raw_decoder_faults(const uint8_t *bytes, size_t length, const char *name) {
     long page_size = sysconf(_SC_PAGESIZE);
@@ -92,6 +93,59 @@ static int test_span_edges(void) {
     return 1;
 }
 
+static int test_stolen_span_planner(void) {
+    uint8_t nops[65];
+    uint8_t mixed[14] = {0x48, 0x8b, 0x04, 0x25, 0x78, 0x56, 0x34, 0x12};
+    uint8_t relative[14] = {0xe8, 0, 0, 0, 0};
+    uint8_t rip_relative[14] = {0x48, 0x8b, 0x05, 0, 0, 0, 0};
+    uint8_t rel16[14] = {0x66, 0xe9, 0, 0};
+    nr_hde64_stolen_plan plan;
+
+    memset(nops, 0x90, sizeof(nops));
+    memset(mixed + 8, 0x90, sizeof(mixed) - 8);
+    memset(relative + 5, 0x90, sizeof(relative) - 5);
+    memset(rip_relative + 7, 0x90, sizeof(rip_relative) - 7);
+    memset(rel16 + 4, 0x90, sizeof(rel16) - 4);
+
+    if (!nr_hde64_plan_stolen_span(nops, 14, 14, &plan) ||
+        plan.stolen_length != 14 || plan.instruction_count != 14 ||
+        plan.instructions[13].offset != 13 || plan.instructions[13].length != 1) {
+        fprintf(stderr, "FAIL: ordinary instruction-aligned 14-byte span plan\\n");
+        return 0;
+    }
+    if (!nr_hde64_plan_stolen_span(mixed, sizeof(mixed), 14, &plan) ||
+        plan.stolen_length != 14 || plan.instruction_count != 7) {
+        fprintf(stderr, "FAIL: non-RIP SIB instruction should be eligible for preflight\\n");
+        return 0;
+    }
+
+    memset(&plan, 0xa5, sizeof(plan));
+    if (nr_hde64_plan_stolen_span(relative, sizeof(relative), 14, &plan) ||
+        plan.stolen_length != 0xa5) {
+        fprintf(stderr, "FAIL: relative branch must reject plan without publishing partial output\\n");
+        return 0;
+    }
+    if (nr_hde64_plan_stolen_span(rip_relative, sizeof(rip_relative), 14, &plan) ||
+        nr_hde64_plan_stolen_span(rel16, sizeof(rel16), 14, &plan)) {
+        fprintf(stderr, "FAIL: RIP-relative and unsupported rel16 instructions must fail closed\\n");
+        return 0;
+    }
+    if (nr_hde64_plan_stolen_span(nops, 13, 14, &plan) ||
+        nr_hde64_plan_stolen_span(nops, 17, 17, &plan) ||
+        nr_hde64_plan_stolen_span(nops, 65, 65, &plan) ||
+        nr_hde64_plan_stolen_span(nops, 14, 0, &plan) ||
+        nr_hde64_plan_stolen_span(nops, 14, 14, NULL)) {
+        fprintf(stderr, "FAIL: stolen-span bounds and argument checks\\n");
+        return 0;
+    }
+    if (!nr_hde64_plan_stolen_span(nops, sizeof(nops), 64, &plan) ||
+        plan.stolen_length != 64 || plan.instruction_count != 16) {
+        fprintf(stderr, "FAIL: maximum planner span and instruction count\\n");
+        return 0;
+    }
+    return 1;
+}
+
 static int test_metadata(void) {
     const uint8_t call_rel32[] = {0xe8, 0, 0, 0, 0};
     const uint8_t jmp_rel8[] = {0xeb, 0};
@@ -152,7 +206,8 @@ int main(void) {
     const uint8_t modrm[] = {0x48, 0x8b};
     const uint8_t displacement[] = {0x48, 0x8b, 0x05};
     const uint8_t immediate[] = {0xe8, 0x11, 0x22};
-    int ok = test_span_edges();
+    int ok = test_stolen_span_planner();
+    ok &= test_span_edges();
     ok &= test_metadata();
     ok &= raw_decoder_faults(prefix, sizeof(prefix), "operand prefix");
     ok &= raw_decoder_faults(rex_opcode, sizeof(rex_opcode), "REX prefix");
