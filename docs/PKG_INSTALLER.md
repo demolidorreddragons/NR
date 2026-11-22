@@ -1,5 +1,20 @@
 # PS4 PKG installer
 
+## Current release state — PKG 014 candidate (2026-11-22)
+
+Release 014 is a Full/Base application package candidate (CATEGORY=gde), APP_VER 01.09. It adds a meaningful preflight capability to release 013: the app0 payload now contains six GFX8 code objects emitted by the pinned shader-build workflow, and startup verifies every object by SHA-256 before performing the existing process-local GNM export lookup.
+
+- Bundled objects: compute_smoke_add, e4m3_decode, e4m3_encode, gemm_fp16_accum, gemm_fp32, and gemm_fp32_wave64_tiled.
+- The six binaries are pinned by exact size/hash in tools/prepare_gcn8_pkg_assets.py, and independently checked after PKG extraction by tools/verify_gcn8_assets.py.
+- The app re-hashes the six files from /app0/gcn8/; a missing or altered file fails preflight before GNM symbol lookup.
+- It still resolves five GNM exports only. No GNM function is invoked, no command buffer is submitted, no shader is dispatched, and the NR PRX remains inactive.
+- The new check proves payload integrity and packaging only. It does not prove PSBC/runtime compatibility, GPU VA, ABI, cache coherence, dispatch, readback, inference, or hardware performance.
+- Manifest remains abi_status=unverified and hardware_status=not_tested.
+
+PKG 014 must not be described as a functioning neural renderer or as a GNM compute runtime. It is a GFX8 asset-integrity and GNM-export preflight candidate. Build/QA/staging results will be appended only after the corresponding workflow evidence is inspected.
+
+## Previous release — PKG 013
+
 ## Current release state — PKG 013 staged (2026-11-22)
 
 Release 013 is a **Full/Base** application package (`CATEGORY=gde`), not a patch. It upgrades PKG 012 with a process-local GNM runtime export audit:
