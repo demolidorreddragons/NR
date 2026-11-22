@@ -18,6 +18,12 @@ struct VSharpBufferFields {
     bool addtiden = false, atc = false, hashen = false, heap = false;
     std::uint8_t type = 0;
 };
+// Mirrors the pinned OpenGNM sceGnmBufSetMemoryType bit encoding only;
+// it does not assert that a given memory type is correct for a runtime workload.
+void set_vsharp_memory_type(VSharpBufferFields& fields,
+                            std::uint32_t memory_type,
+                            bool l1cachebypass,
+                            bool kcachebypass) noexcept;
 // Packs the documented four GNM V# registers into four little-endian dwords.
 // Enum meanings and runtime cache policy are deliberately outside this codec.
 VSharpCodecError pack_vsharp_buffer(const VSharpBufferFields& fields,
