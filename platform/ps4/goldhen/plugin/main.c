@@ -29,6 +29,12 @@ int32_t sceGnmSubmitAndFlipCommandBuffers_hook(uint32_t count, void *dcbGpuAddrs
  uint32_t *dcbSizesInBytes, void *ccbGpuAddrs[], uint32_t *ccbSizesInBytes,
  uint32_t videoOutHandle, uint32_t displayBufferIndex, uint32_t flipMode, int64_t flipArg);
 
+// No title-specific cooperative rendezvous adapter is integrated yet.
+// Keep the generic observer PRX inert until the complete contract is validated.
+static bool has_validated_title_adapter(void) {
+ return false;
+}
+
 // The PRX is registered in [default], so GoldHEN may load it into its own
 // control application as well as games. Never install a GNM hook or start
 // controller/telemetry services inside Neural Rendering itself. If app
