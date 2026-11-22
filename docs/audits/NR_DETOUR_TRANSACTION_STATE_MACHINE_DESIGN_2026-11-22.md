@@ -163,3 +163,14 @@ The host coordinator now also exposes `nr_detour_tx_remove()`. It uses a distinc
 Removal retries the original-byte write once while the gate remains held if the first restore reports no effect/uncertain completion or read-back does not match. If the retry, verification, protection restoration, gate release, or resource release is uncertain, the result is `POISONED`; it never frees resources in that state. If removal cannot acquire the gate or make the target writable but those operations guarantee no side effect, it returns `ACTIVE` with resources retained.
 
 This is a host coordinator contract only. It does not implement a PS4 thread rendezvous or prove that a GoldHEN callback can be unloaded safely. The callback is intentionally required as an injected operation and remains unavailable for the PS4 adapter until authoritative runtime evidence exists.
+
+### CI result after adding teardown
+
+- Tested commit: `ddc97a0614f023eff2f60a09260ec0c838fff504`
+- Workflow run: [45058092250](https://github.com/demolidorreddragons/NR/actions/runs/45058092250)
+- Hosted `telemetry` job: **SUCCESS**
+- CMake configure/build: **SUCCESS**
+- CTest: **10/10 passed**, including install/rollback and remove/quiescence-coordinator cases.
+- The separate self-hosted read-only PS4 log-retrieval job remained queued at inspection time; this does not affect the hosted test result and is not evidence of a console test.
+
+The passing tests validate only the host coordinator against fake injected operations. They do not validate real thread quiescence, firmware protection APIs, cache publication, or PS4 runtime behavior.
