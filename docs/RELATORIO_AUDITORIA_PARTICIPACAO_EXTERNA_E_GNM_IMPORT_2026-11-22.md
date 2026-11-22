@@ -243,3 +243,12 @@ Foi corrigido `.github/workflows/stage-gcn8-gnm-link-001.yml`: o gatilho automá
 Commit da salvaguarda: `8fd6bde4120a120ebb15d785471345e77c0368d6`. Host-tests run `45039960210` terminou SUCCESS; job telemetry SUCCESS e coleta read-only PS4 SUCCESS. A coleta confirmou novamente o log legado de 324 bytes e os hashes previamente registrados; `/data/pne.log` segue ausente. Nenhum arquivo foi escrito no console.
 
 **Estado de staging:** não executado. `workflow_dispatch` não foi chamado. O campo booleano `confirm_stage` permanece uma barreira adicional; a execução de staging requer autorização explícita do usuário.
+### 2.10. Correção do modo de detour do hook GNM
+
+Auditei o GoldHEN_Plugins_SDK no pin `bcea3c7ef01dac6d7f9f49ebf9e90fe66d86f5f7` (`include/Utilities.h`, `include/Detour.h`, `source/Detour.c`). `HOOK32` seleciona `DetourMode_x32`, cujo patch usa `E9 rel32`; `Detour_WriteJump32` reduz a diferença a `uint32_t` sem validar o alcance assinado de ±2 GiB. Há ainda uma inconsistência de restauração no modo x32: `StubSize` inclui o salto de retorno de 14 bytes, mas `Detour_RestoreFunction` subtrai somente 5, podendo copiar 9 bytes além das instruções originais. O destrutor upstream também não libera `TrampolinePtr`.
+
+Correção local em `platform/ps4/goldhen/plugin/main.c`: substituído o uso de `HOOK32` por `DetourMode_x64`/salto absoluto de 14 bytes; a instalação agora verifica o ponteiro de stub antes de iniciar a thread; falha parcial libera o trampoline; unload e falha de criação da thread restauram o hook e liberam explicitamente o trampoline x64. Adicionado `tests/test_goldhen_hook_contract.py` e integração ao `host-tests`.
+
+Commits: `1a38c344be23eeb281987a072c4b9683081928fd` (implementação inicial), `92acb5d6e01d9f01b3b196d3d3fbc1b94c4c90b7` (C `memset`), `a23e9d4bcba77e2cb097e966b794d9fa66db2bd3` (forward declaration), `243120b78a51b67e1fa5f7e5143a5079887009c0` (teste), `19c09e59e24f7d272b62bab5cedf1394fc77ed71` (CI), `f86d6ff6db2c4891fe821f070b2b2873417bea03` (documentação).
+
+Host-tests run `45040217146` SUCCESS no HEAD `f86d6ff`; o log confirma `GoldHEN GNM hook contract: ... PASS` e os grupos de testes Python/CMake passaram. PRX build run `45040217180` estava em andamento na última consulta; nenhuma aprovação de runtime/hardware foi atribuída. A implementação ainda precisa de revisão do resultado de build e, depois, teste de hardware autorizado. A checagem de `sceKernelMprotect` do SDK upstream continua sem propagação de erro; é uma limitação residual.
