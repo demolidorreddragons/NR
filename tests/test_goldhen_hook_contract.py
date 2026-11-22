@@ -26,6 +26,8 @@ thread = source.index('scePthreadCreate(&g_input_thread')
 assert guard < frequency < hook < thread
 
 assert "own control application" in source
-assert "own control application" in readme
+assert "if (g_skip_current_title)" in source
+assert "if (g_input_thread_started)" in source
+assert "control-app Title IDs" in readme
 assert "sceKernelGetAppInfo" in readme
 print("GoldHEN PRX contract: x64 detour, cleanup, own-title exclusion and fail-closed app identity PASS")
