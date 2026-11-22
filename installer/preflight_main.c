@@ -2,7 +2,7 @@
  * Neural Rendering package preflight entry point.
  *
  * This executable is intentionally read-only. Installing/running the PKG must
- * not copy or activate the GoldHEN PRX, edit plugins.ini, restart GoldHEN, or
+ * not copy or activate the GoldHEN PRX, edit the GoldHEN plugin configuration, restart GoldHEN, or
  * alter existing console state. PRX deployment/activation is a separate,
  * explicitly authorized operation.
  */
