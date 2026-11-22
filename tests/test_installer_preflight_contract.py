@@ -13,6 +13,8 @@ assert 'installer/main.c" -o "$STAGE/installer.o"' not in build
 assert "installer/hybrid_state.c" not in build
 assert 'PS4 Neural Engine Preflight' in build
 assert "installer_version=2" in build
+assert 'mv "$pkg" "$numbered_pkg"' in build, "release output must contain only the canonical numbered PKG"
+assert 'cp "$pkg" "$numbered_pkg"' not in build, "do not retain a duplicate generic PKG"
 
 # The executable itself must remain read-only. The validator opens the two
 # app0 inputs for reading; it does not mutate the console.
