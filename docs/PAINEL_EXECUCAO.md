@@ -227,7 +227,7 @@ A pesquisa não justificou mudança de código: parser e offset seguem intactos;
 - Artefato `ps4-neural-engine-build` ID `14752435074`, 38.256.476 bytes, ZIP SHA-256 `bce83e2fc3eb80c0ea65f14f5fda8721827e61641cebe250eced335d7a782d8e` verificado após download.
 - `libSceGnmDriver.so` OpenOrbis v0.5.4: 40.472 bytes, SHA-256 `21d38ac5e7d79ddc9ee9bc7b9a84547f43ea3144883f6ac787d16704c1b5121f`. ELF64 host link stub, 203 exports por nome, sem metadata Sony; corpos de funções como `sceGnmSubmitDone` entram em loop infinito. Não é implementação runtime e não deve ser chamado.
 - Distinção importante: o PRX principal gerado com `create-fself --lib` tem Sony NID metadata válida para `sceGnmSubmitAndFlipCommandBuffers` (`xbxNatawohc#C#C`), conforme seção 2.4. O antigo GNM-Link eboot `--eboot` não tinha esse import e falhou com GOT nulo; não generalizar para PRX `--lib`.
-- Decisão: compute eboot continua sem `-lSceGnmDriver`, usando `sceKernelLoadStartModule` + `sceKernelDlsym` (GNM-Load-Only observado em hardware). O PRX principal mantém o import estático com metadata `STATIC_PASS`, mas runtime/ABI/detour ainda `NOT_RUN`. Causa do GOT nulo no GNM-Link eboot permanece `UNRESOLVED`.
+- Decisão: compute eboot continua sem `-lSceGnmDriver`, usando `sceKernelLoadStartModule` + `sceKernelDlsym` (GNM-Load-Only observado em hardware). O PRX principal mantém o import estático com metadata `STATIC_PASS`, mas runtime/ABI/detour ainda `NOT_RUN`. GOT nulo no GNM-Link eboot ocorreu apesar da metadata correta; causa de resolução do loader permanece `UNRESOLVED`.
 - O rótulo do workflow `64629afaf49e5268718a11860f35b068d36a3a29` descreve somente o link smoke contra o stub, não a metadata do PRX final.
 ## Auditoria do import GNM no PRX principal
 
@@ -235,7 +235,7 @@ A pesquisa não justificou mudança de código: parser e offset seguem intactos;
 - O ELF tem `DT_NEEDED libSceGnmDriver.so` e import indefinido `sceGnmSubmitAndFlipCommandBuffers`.
 - O PRX final foi extraído como fake SELF e o `PT_SCE_DYNLIBDATA` auditado: módulo/biblioteca `libSceGnmDriver.prx` / `libSceGnmDriver`; NID `xbxNatawohc#C#C`; relocação `GLOB_DAT` em `0x28000` aponta ao símbolo NID.
 - O NID `xbxNatawohc` corresponde ao registro público shadPS4 para `sceGnmSubmitAndFlipCommandBuffers`, versão 1. **Sony import metadata = STATIC_PASS.**
-- O antigo GNM-Link eboot teve GOT nulo, mas a causa exata e a alegação anterior de ausência de metadata precisam de reauditoria do OELF exato. A fonte `create-fself` gera imports indefinidos em ambos os modos; não atribuir a falha apenas a `--eboot`.
+- Reauditoria do PKG antigo (run `44873622760`, artifact `14694982825`) no run `45018118702`: OELF contém `libSceGnmDriver`, módulo `libSceGnmDriver`, NID `yvZ73uQUqrk#C#C`, relocation `0xc000`; `SONY_IMPORT_AUDIT=PASS`. A conclusão anterior de ausência de metadata estava errada.
 - Limites: loader/runtime FW 14.02, endereço importado e ABI/segurança do detour não foram testados em hardware. QA atual é PC-only. Sem staging/instalação até revisão dos gates e autorização específica. Detalhes na seção 2.4 do relatório.
 ## Segurança do hook GNM — DetourMode_x32
 
