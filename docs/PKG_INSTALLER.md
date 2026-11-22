@@ -1,10 +1,24 @@
 # PS4 PKG installer
 
-## Current release state (2026-11-20)
+## Current release state — PKG 012 (2026-11-22)
+
+Release 012 is a **Full/Base** application package (`CATEGORY=gde`), not a patch. It is a read-only preflight application, not a PRX installer:
+
+- It validates `/app0/pne-release.ini` against the bundled PRX SHA-256, displays a notification, and exits.
+- It does **not** copy or activate the PRX, edit GoldHEN plugin configuration, restart GoldHEN, or change persistent console state.
+- Manifest deliberately remains `abi_status=unverified` and `hardware_status=not_tested`.
+- Build and independent package QA: run `45062759996`, SUCCESS. QA is PC-only, not hardware validation.
+- PS4 staging/read-back: run `45063363596`, SUCCESS. Remote path `/data/pkg/PS4-Neural-Engine-012.pkg`; 6,619,136 bytes; SHA-256 `240914f39c1dbfec39b0f21fdd022dd30f10356341860e47fffaacef3aa3825f`.
+- The read-only staging audit found TITLE_ID `PNEU00001` already present under `/user/app/`. This is a clean-install Full/Base PKG with the same TITLE_ID, so do not try to install it over the existing app. If the user chooses to perform this controlled preflight test, the existing app must first be removed manually by the user, after considering any app data. The assistant must not uninstall it.
+- This is approved only for a **controlled PKG installation and app-startup/preflight test**. It is not a Neural Rendering runtime release and does not authorize PRX deployment or activation.
+
+### Historical release 011
+
+### Release 011 state (2026-11-20)
 
 Release 011 is a full/base application package, not a Package Manager patch. It has `CATEGORY=gde`, `TITLE_ID=PNEU00001`, `CONTENT_ID=IV0000-PNEU00001_00-PS4NEURALENG0000`, `APP_VER=01.07`, and `VERSION=01.07`. The user attempted to install it over the already-installed application and the PS4 Package Manager returned `Package already installed`. The package was not installed and its eboot was not executed.
 
-Do not ask the user to retry release 011, and do not uninstall the installed application. Increasing `APP_VER` does not convert a base PKG into a patch.
+Do not ask the user to retry release 011. At that time the instruction was to preserve the existing installed application; the current PKG 012 clean-install test requires any removal to be decided and performed manually by the user. Increasing `APP_VER` does not convert a base PKG into a patch.
 
 The release 011 build/QA evidence is PC-only:
 - Build commit: `34c9c6ae1412ea71f58f03eedf8e8f0572114654`.
