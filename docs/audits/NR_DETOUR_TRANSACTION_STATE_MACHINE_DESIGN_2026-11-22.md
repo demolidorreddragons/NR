@@ -125,3 +125,22 @@ Public OpenOrbis declarations establish API names and signatures only. The inspe
 ## Change boundary
 
 This document is an architecture/design deliverable only. It does not alter executable code, workflows, PRX, PKG, plugin registration, `plugins.ini`, or PS4 state. No package was staged or installed, no PRX was activated, and no console test was run.
+
+## Host-only coordinator implementation (follow-up)
+
+A host-only coordinator has now been added:
+
+- `platform/ps4/goldhen/plugin/detour_transaction_core.h`
+- `platform/ps4/goldhen/plugin/detour_transaction_core.cpp`
+- `tests/test_detour_transaction_core.cpp`
+
+The API uses explicit operation outcomes:
+- `COMPLETE`: documented postcondition is true;
+- `NO_EFFECT`: operation is guaranteed not to have changed state;
+- `UNKNOWN`: partial side effects or state are possible.
+
+The coordinator enforces preparation and generated-code publication before acquiring the target patch window. It requires the window before changing target protection or bytes, verifies the patch, and attempts exact-byte rollback after an uncertain/failed write verification. Any uncertain protection transition, window release, rollback, or resource cleanup returns `POISONED` and indicates which resources/window may remain owned.
+
+The CMake host suite registers `detour_transaction_core`. The coordinator is intentionally excluded from the PS4 PRX Makefile and is not called by the live hook. Its fake operations do not prove that a real PS4 execution rendezvous, stable mapping lease, cache-publication primitive, or protection API exists.
+
+**Validation status:** source and test files are committed; CI execution must be inspected before claiming the test passes. The current tests cover success, pre-mutation no-effect failures, uncertain setup/protection/window outcomes, partial write rollback, patch verification failure, rollback failure, and failed cleanup retention. They do not yet constitute the complete failure matrix in this design, and no independent review or hardware validation has occurred.
