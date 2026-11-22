@@ -137,19 +137,22 @@ Arquivo `libSceGnmDriver.so` extraído do artefato: 40.472 bytes, SHA-256 `21d38
 
 A `.dynsym` contém 203 símbolos e exporta por nome as quatro funções GNM usadas pelo harness, incluindo `sceGnmSubmitDone` (valor `0x46cc`), `sceGnmDispatchInitDefaultHardwareState` (`0x40d2`), `sceGnmFlushGarlic` (`0x41fe`) e `sceGnmSubmitCommandBuffers` (`0x46b8`). Porém, o disassembly de `sceGnmSubmitDone` é `endbr64; push rbp; mov rsp,rbp; jmp 0x46d4` — um loop infinito. `sceGnmDispatchInitDefaultHardwareState` também termina em salto para si mesmo. Portanto, os nomes/exportações satisfazem o linker, mas os corpos são stubs não funcionais e não devem ser chamados.
 
-### Impacto sobre o GNM-Link-Only e decisão
+### Impacto sobre GNM-Link-Only, PRX e decisão
 
-Esta evidência explica por que `-lSceGnmDriver` não pode ser tratado como prova de import Sony válido. O linker recebe um ELF stub com símbolos C, não uma tabela Sony de NID/module/library. Isso é consistente com o OELF já examinado no antigo GNM-Link-Only: o executável tinha dependência/símbolo ELF, mas não continha a entrada Sony de importação necessária; no PS4 o slot GOT de `sceGnmSubmitDone` apareceu nulo. A ausência de metadata no stub, isoladamente, não prova todos os detalhes internos do loader FW 14.02, mas combinada com o OELF e o resultado de hardware torna a hipótese de import estático sem NID metadata a explicação mais forte disponível.
+O arquivo OpenOrbis `libSceGnmDriver.so` é um ELF stub de link, com símbolos C e corpos de funções não funcionais; não é o módulo de runtime e não deve ser chamado. Porém, isso **não** significa que o PRX final ficará sem NID metadata: a auditoria 2.4 demonstrou que `create-fself --lib` converte o import de símbolo em entrada Sony NID/library/module válida no PRX.
 
-**Decisão operacional:** manter `-lSceGnmDriver` fora do modo compute e de qualquer caminho que se pretenda executar no PS4. Usar `sceKernelLoadStartModule` + `sceKernelDlsym` para o caminho runtime; esse caminho já teve sucesso observado no probe GNM-Load-Only, com endereço de export válido. O build/link smoke que usa `-lSceGnmDriver` é apenas um teste de que o stub satisfaz o linker, não teste de import Sony nem de chamada GNM. Nenhuma função do stub deve ser executada.
+O antigo GNM-Link-Only foi criado como eboot (`create-fself --eboot`); seu OELF continha somente libkernel e o GOT de `sceGnmSubmitDone` ficou nulo no PS4. A diferença entre esse artefato e o PRX (`--lib`) é observada diretamente nos binários. A hipótese de que o modo `--eboot` não emitiu a entrada de import GNM é consistente com as evidências, mas ainda não foi demonstrada por inspeção completa do código de `create-fself`. Não generalizar a falha do eboot para o PRX library.
+
+**Decisão operacional:**
+- Compute smoke eboot: manter sem `-lSceGnmDriver` e usar `sceKernelLoadStartModule` + `sceKernelDlsym`, caminho já observado funcionando no GNM-Load-Only.
+- PRX principal: o import estático `sceGnmSubmitAndFlipCommandBuffers` tem Sony NID metadata estruturalmente correta (`STATIC_PASS`), mas resolução no loader/ABI do detour ainda não foi validada em hardware.
+- O `.so` OpenOrbis serve apenas para satisfazer o linker; não executar seus corpos de stub.
 
 ### Correção de nomenclatura do workflow
 
-O log do workflow `PS4 PRX and PKG build` atualmente emite `GCN8_GNM_LINK_SMOKE=resolved_with_valid_entry`. Interpretar `resolved` somente como link ELF contra o stub e entry point válido; não como resolução no loader do PS4. A etapa deve ser renomeada/registrada como `OPENORBIS_GNM_LINK_STUB=LINKED; SONY_RUNTIME_IMPORT=NOT_VALIDATED` em atualização posterior do workflow.
+A etapa do workflow deve distinguir o linker stub da metadata emitida pelo conversor. O marcador adequado é `OPENORBIS_GNM_LINK_STUB=LINKED; CREATE_FSELF_LIB_NID_METADATA=EMITTED; RUNTIME_RESOLUTION=NOT_HARDWARE_VALIDATED`. O primeiro campo descreve o `.so` de link; o segundo descreve o PRX produzido pelo modo `--lib`; o terceiro preserva a limitação de hardware.
 
-**Classificação:** evidência estática/forense do toolchain e correlação com falha anterior em hardware; sem nova execução no console. A auditoria não autoriza reintroduzir link estático GNM nem alterar o bloqueio de compute.
-
-**Correção de comunicação CI:** commit `64629afaf49e5268718a11860f35b068d36a3a29` renomeou a etapa para `Link GCN8 OpenOrbis GNM stub (link-only; not a Sony import)` e alterou o marcador para `OPENORBIS_GNM_LINK_STUB=LINKED; SONY_RUNTIME_IMPORT=NOT_VALIDATED`. Isso impede que o sucesso de link seja interpretado como import Sony resolvido.
+**Classificação:** stub de link auditado; Sony import metadata do PRX principal = `STATIC_PASS`; GNM-Link eboot anterior continua falho; runtime PRX/hardware = `NOT_RUN`. Nenhum staging/instalação foi realizado.
 ### 2.4. Auditoria Sony import metadata do PRX principal — PASS estático
 
 O PRX final do run `45015947338` foi aberto como fake SELF, usando a tabela de segmentos SELF para extrair o `PT_SCE_DYNLIBDATA` real. O segmento está no offset SELF `0x30b90`, tamanho `0x6100`; no ELF/OELF corresponde a `PT_SCE_DYNLIBDATA` em offset `0x47850`, tamanho `0x6100`. A tabela dinâmica contém dez módulos e dez bibliotecas, incluindo `libSceGnmDriver.prx` e `libSceGnmDriver`.
