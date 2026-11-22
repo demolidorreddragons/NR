@@ -141,7 +141,7 @@ A `.dynsym` contém 203 símbolos e exporta por nome as quatro funções GNM usa
 
 O arquivo OpenOrbis `libSceGnmDriver.so` é um ELF stub de link, com símbolos C e corpos de funções não funcionais; não é o módulo de runtime e não deve ser chamado. Porém, isso **não** significa que o PRX final ficará sem NID metadata: a auditoria 2.4 demonstrou que `create-fself --lib` converte o import de símbolo em entrada Sony NID/library/module válida no PRX.
 
-O antigo GNM-Link-Only foi criado como eboot (`create-fself --eboot`); seu OELF continha somente libkernel e o GOT de `sceGnmSubmitDone` ficou nulo no PS4. A diferença entre esse artefato e o PRX (`--lib`) é observada diretamente nos binários. A hipótese de que o modo `--eboot` não emitiu a entrada de import GNM é consistente com as evidências, mas ainda não foi demonstrada por inspeção completa do código de `create-fself`. Não generalizar a falha do eboot para o PRX library.
+O antigo GNM-Link-Only apresentou GOT nulo para `sceGnmSubmitDone` no PS4. A anotação anterior de que seu OELF continha somente libkernel ainda precisa ser revalidada contra o OELF exato daquele build; não há base suficiente para atribuir a falha ao modo `--eboot`. A fonte pública de `create-fself` mostra que `GenerateLibrarySymbolDictionary` e `writeNIDTable` percorrem imports indefinidos independentemente de `IsLibrary`; `--lib` acrescenta também exports e module strings. Portanto, a causa do GOT nulo do eboot permanece **UNRESOLVED** e não deve ser inferida a partir do PRX atual.
 
 **Decisão operacional:**
 - Compute smoke eboot: manter sem `-lSceGnmDriver` e usar `sceKernelLoadStartModule` + `sceKernelDlsym`, caminho já observado funcionando no GNM-Load-Only.
