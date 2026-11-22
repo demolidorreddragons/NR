@@ -29,9 +29,9 @@ jobs:
           $manifest = [System.Collections.Generic.List[string]]::new()
           $manifest.Add("COLLECTION_UTC=$([DateTime]::UtcNow.ToString('o'))")
           $manifest.Add("WORKFLOW_RUN_ID=$env:GITHUB_RUN_ID")
-          $manifest.Add("EXPECTED_PKG=PS4-Neural-Engine-013.pkg
-EXPECTED_APP_VERSION=01.08
-USER_REPORTED_RESULT=PNE_PREFLIGHT_PASS_GNM_EXPORTS_5_OF_5_NO_GNM_CALLS_PRX_NOT_ACTIVATED")
+          $manifest.Add("EXPECTED_PKG=PS4-Neural-Engine-013.pkg")
+          $manifest.Add("EXPECTED_APP_VERSION=01.08")
+          $manifest.Add("USER_REPORTED_RESULT=PNE_PREFLIGHT_PASS_GNM_EXPORTS_5_OF_5_NO_GNM_CALLS_PRX_NOT_ACTIVATED")
           $manifest.Add("EXPECTED_PKG_SHA256=73c4c9a43002ae55fadec532a9e97217d23e1742d5f4db2bed8a60abdec6f7d1")
           $manifest.Add("BUILD_RUN_ID=45069773465")
           $manifest.Add("BUILD_COMMIT=bea3b39df248ed71c7b13064a6a402dea800a32a")
