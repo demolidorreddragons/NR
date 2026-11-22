@@ -86,6 +86,19 @@ jobs:
 
           Write-Host "DIAGNOSTIC_TIME_UTC=$([DateTime]::UtcNow.ToString('o'))"
           Write-Host "PS4_ENDPOINT=$($env:PS4_IP):2121"
+          # Network preflight separates stale IP/routing/TCP failures from FTP protocol failures.
+          try {
+            $route = Test-NetConnection -ComputerName $env:PS4_IP -DiagnoseRouting -InformationLevel Detailed -WarningAction SilentlyContinue
+            Write-Host "ROUTE_REMOTE=$($route.RemoteAddress) SOURCE=$($route.SelectedSourceAddress) OUT_INTERFACE=$($route.OutgoingInterfaceIndex)"
+          } catch { Write-Host "ROUTE_DIAGNOSTIC_FAILED=$($_.Exception.Message)" }
+          try {
+            $tcp = Test-NetConnection -ComputerName $env:PS4_IP -Port 2121 -InformationLevel Detailed -WarningAction SilentlyContinue
+            Write-Host "TCP2121=$($tcp.TcpTestSucceeded) REMOTE=$($tcp.RemoteAddress) SOURCE=$($tcp.SourceAddress)"
+          } catch { Write-Host "TCP2121_TEST_FAILED=$($_.Exception.Message)" }
+          try {
+            $ping = Test-Connection -ComputerName $env:PS4_IP -Count 2 -Quiet -ErrorAction Stop
+            Write-Host "ICMP_REACHABLE=$ping"
+          } catch { Write-Host "ICMP_REACHABLE=FALSE DETAIL=$($_.Exception.Message)" }
           # Metadata listings only for package and app directories; never download PKGs or user data.
           $null = Save-Listing "/data/pkg/" "pkg-root"
           $null = Save-Listing "/user/app/PNEU00004/" "installed-app-PNEU00004"
