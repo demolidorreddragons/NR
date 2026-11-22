@@ -68,6 +68,8 @@ jobs:
         run: |
           bash -n tools/build_compute_smoke_pkg.sh
           python3 tests/test_gcn8_diagnostic_modes.py
+      - name: Test Sony OELF and fake SELF import audit
+        run: python3 tests/test_ps4_self_import_audit.py
       - name: Test hybrid installer state machine
         run: |
           mkdir -p "$RUNNER_TEMP/pne-installer-test"
