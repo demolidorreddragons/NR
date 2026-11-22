@@ -379,7 +379,7 @@ jobs:
           if ((Get-Content $embeddedManifest.FullName -Raw) -ne $manifestText) { throw "Packaged manifest differs from staged release manifest." }
           $gcn8Dir = Get-ChildItem $out -Recurse -Directory -Filter gcn8 | Select-Object -First 1
           if (-not $gcn8Dir) { throw "Packaged GCN8 asset directory missing." }
-          python tools/verify_gcn8_assets.py $gcn8Dir.FullName
+          python (Join-Path $artifact "pkg/audit/verify_gcn8_assets.py") $gcn8Dir.FullName
           if ($LASTEXITCODE -ne 0) { throw "Independent GCN8 asset hash verification failed." }
           "GCN8_ASSETS=6_OF_6_HASHES_PASS" | Out-File qa-output/qa-report.txt -Append
           "PKG_KIND=FULL_BASE_APPLICATION_NOT_PATCH" | Out-File qa-output/qa-report.txt
