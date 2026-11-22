@@ -1,0 +1,107 @@
+name: PS4 PKG 014 system-log read-only analysis
+
+on:
+  push:
+    branches: [feature/gcn8-numeric-kernels]
+    paths:
+      - ".github/workflows/ps4-logbin-readonly-analysis-014.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  analyze-readonly:
+    runs-on: [self-hosted, Windows, X64, ps4-lan]
+    timeout-minutes: 8
+    steps:
+      - name: Download and analyze existing logs without changing PS4
+        shell: powershell -NoProfile -ExecutionPolicy Bypass -File {0}
+        env:
+          PS4_IP: ${{ vars.PS4_IP }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if (-not $env:PS4_IP) { throw 'PS4_IP missing; refusing network access.' }
+          $out = Join-Path $env:RUNNER_TEMP ("pne-log-analysis-014-" + $env:GITHUB_RUN_ID)
+          if (Test-Path -LiteralPath $out) { throw 'Evidence output directory already exists; refusing overwrite.' }
+          New-Item -ItemType Directory -Path $out | Out-Null
+          $base = "ftp://$($env:PS4_IP):2121"
+          $cred = New-Object System.Net.NetworkCredential('anonymous','anonymous@example.com')
+          $manifest = [System.Collections.Generic.List[string]]::new()
+          $manifest.Add("RUN_ID=$env:GITHUB_RUN_ID")
+          $manifest.Add("COLLECTION_UTC=$([DateTime]::UtcNow.ToString('o'))")
+          $manifest.Add("INSTALLED_PKG_EXPECTED_SHA256=96c15b46e7579c5f728a131279e986af04a9e4683c9903221e418ca52a3842db")
+          $files = @(
+            '/data/sce_logs/log.bin',
+            '/data/Loader_Logs.txt',
+            '/data/memory.log',
+            '/data/pne_gcn8_compute_smoke_44873622760.log',
+            '/data/pne_gcn8_compute_smoke_44876293567.log',
+            '/data/pne_gcn8_compute_smoke_45040217180.log',
+            '/user/app/PNEU00001/app.json',
+            '/user/app/PNEU00001/app.xml'
+          )
+          foreach ($remote in $files) {
+            $safe = $remote.Trim('/') -replace '[^A-Za-z0-9_.-]','_'
+            $dest = Join-Path $out $safe
+            try {
+              $req = [System.Net.FtpWebRequest]::Create($base + $remote)
+              $req.Method = [System.Net.WebRequestMethods+Ftp]::GetFileSize
+              $req.Credentials = $cred; $req.UsePassive = $true; $req.UseBinary = $true; $req.KeepAlive = $false
+              $resp = $req.GetResponse()
+              try { $size = [int64]$resp.ContentLength } finally { $resp.Dispose() }
+              if ($size -gt 67108864) { $manifest.Add("SKIP_TOO_LARGE path=$remote bytes=$size"); continue }
+              $req = [System.Net.FtpWebRequest]::Create($base + $remote)
+              $req.Method = [System.Net.WebRequestMethods+Ftp]::DownloadFile
+              $req.Credentials = $cred; $req.UsePassive = $true; $req.UseBinary = $true; $req.KeepAlive = $false
+              $resp = $req.GetResponse()
+              try {
+                $stream = $resp.GetResponseStream()
+                $file = [System.IO.File]::Create($dest)
+                try { $stream.CopyTo($file) } finally { $file.Dispose(); $stream.Dispose() }
+              } finally { $resp.Dispose() }
+              $item = Get-Item -LiteralPath $dest
+              $hash = (Get-FileHash -LiteralPath $dest -Algorithm SHA256).Hash.ToLowerInvariant()
+              $manifest.Add("DOWNLOAD_OK path=$remote bytes=$($item.Length) sha256=$hash")
+              if ([IO.Path]::GetExtension($dest) -in @('.txt','.json','.xml','.log')) {
+                Write-Host "===== BEGIN $remote ====="
+                Get-Content -LiteralPath $dest -Raw | Write-Host
+                Write-Host "===== END $remote ====="
+              }
+              if ($remote -eq '/data/sce_logs/log.bin') {
+                $bytes = [IO.File]::ReadAllBytes($dest)
+                $ascii = [Text.Encoding]::ASCII.GetString($bytes)
+                $utf16 = [Text.Encoding]::Unicode.GetString($bytes)
+                $matches = @()
+                foreach ($pair in @(@{Name='ASCII';Text=$ascii},@{Name='UTF16LE';Text=$utf16})) {
+                  foreach ($m in [regex]::Matches($pair.Text,'[ -~]{6,}')) {
+                    if ($m.Value -match '(?i)PNE|PNEU|GNM|GCN|GFX|neural|crash|fault|fatal|error|exception|sceKernel|orbis|module|shader|app0') {
+                      $matches += ("ENCODING={0} OFFSET={1} TEXT={2}" -f $pair.Name,$m.Index,$m.Value.Trim())
+                    }
+                  }
+                }
+                $extract = Join-Path $out 'sce-log-interesting-strings.txt'
+                $matches | Set-Content -LiteralPath $extract -Encoding UTF8
+                Write-Host "SCE_LOG_STRING_MATCHES=$($matches.Count)"
+                Get-Content -LiteralPath $extract -TotalCount 400 | ForEach-Object { Write-Host $_ }
+              }
+            } catch { $manifest.Add("DOWNLOAD_UNAVAILABLE path=$remote detail=$($_.Exception.Message)") }
+          }
+          $manifest.Add('REMOTE_OPERATIONS=GET_AND_GETSIZE_ONLY')
+          $manifest.Add('REMOTE_FILES_MODIFIED=FALSE')
+          $manifest.Add('INSTALLATION_PERFORMED=FALSE')
+          $manifest.Add('PRX_ACTIVATED=FALSE')
+          $manifest.Add('PLUGINS_INI_TOUCHED=FALSE')
+          $manifest | Set-Content -LiteralPath (Join-Path $out 'manifest.txt') -Encoding UTF8
+          $manifest | ForEach-Object { Write-Host $_ }
+          Get-ChildItem -LiteralPath $out -File | ForEach-Object {
+            $h=(Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+            Write-Host ("LOCAL_EVIDENCE file={0} bytes={1} sha256={2}" -f $_.Name,$_.Length,$h)
+          }
+          Write-Host 'READ_ONLY_LOG_ANALYSIS_COMPLETE'
+      - name: Preserve analysis artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ps4-logbin-readonly-analysis-014
+          path: ${{ runner.temp }}/pne-log-analysis-014-${{ github.run_id }}/
+          if-no-files-found: error
+          retention-days: 14
