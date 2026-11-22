@@ -51,7 +51,7 @@ The header comments for these functions are empty. The OpenOrbis libkernel docum
 
 ### 2. FreeBSD reference semantics — informative, not transferable proof
 
-FreeBSD 14.0 documents `pthread_suspend_all_np()` as suspending all active threads except the calling thread. It additionally warns that, until threads resume, the caller must not use non-async-signal-safe functions (other than the matching resume function), unless measures ensure all threads are suspended at safe points.
+The FreeBSD 12.1-STABLE manual (a closer version-family reference for this project's `x86_64-pc-freebsd12-elf` target) and the FreeBSD 14.0 manual both document `pthread_suspend_all_np()` as suspending all active threads except the calling thread. Both document the important warning that, until threads resume, the caller must not use non-async-signal-safe functions (other than the matching resume function), unless measures ensure all threads are suspended at safe points.
 
 This warning matters for a detour transaction: a suspended game thread may be stopped while holding allocator, loader, stdio, or other process locks. The suspending PRX thread must not assume it can safely call allocation, logging, dynamic-loader, or other potentially locking routines while other threads remain suspended. Preparation and all fallible allocations therefore must occur before any such suspension if a future, validated implementation ever uses this mechanism.
 
@@ -102,6 +102,7 @@ A global thread suspension primitive might be relevant to the first two, but onl
 
 - OpenOrbis v0.5.4 header: https://github.com/OpenOrbis/OpenOrbis-PS4-Toolchain/blob/v0.5.4/include/orbis/libkernel.h
 - OpenOrbis libkernel documentation: https://github.com/OpenOrbis/OpenOrbis-PS4-Toolchain/blob/v0.5.4/docs/MD/PS4%20Libraries/Libkernel.md
+- FreeBSD 12.1-STABLE `pthread_suspend_all_np(3)`: https://manpage.me/?manpath=FreeBSD+12-CURRENT+and+Ports&q=pthread_suspend_all_np
 - FreeBSD 14.0 `pthread_suspend_all_np(3)`: https://man.freebsd.org/cgi/man.cgi?apropos=0&manpath=FreeBSD+14.0-RELEASE+and+Ports&query=pthread_suspend_all_np&sektion=3
 - PS4 Developer Wiki libkernel symbol index: https://www.psdevwiki.com/ps4/Libkernel
 - GoldHEN public source-status note: https://github.com/GoldHEN/GoldHEN
