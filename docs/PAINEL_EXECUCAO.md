@@ -193,3 +193,14 @@ Estado após fechamento: a investigação estática InputUsage continua sem conc
 A documentação pública upstream do PS4-OpenGNM/opengnm-psbc declara validação em hardware apenas para shaders VS+PS em PS4 base GFX7/FW 9.00, com 600 frames. O próprio plano lista teste de compute shader em hardware como trabalho futuro. Portanto, esse relato não cobre compute GFX8/PS4 Pro nem FW 14.02 e não resolve a divergência InputUsage do NR. Classificação: evidência documental upstream, não validação reproduzida/independente do NR.
 
 A pesquisa não justificou mudança de código: parser e offset seguem intactos; runtime_semantics=UNRESOLVED.
+
+
+## Auditoria externa e correção da dependência GNM — 2026-11-22
+
+- Auditoria registrada em [RELATORIO_AUDITORIA_PARTICIPACAO_EXTERNA_E_GNM_IMPORT_2026-11-22.md](RELATORIO_AUDITORIA_PARTICIPACAO_EXTERNA_E_GNM_IMPORT_2026-11-22.md).
+- PRs de delegação #9 (modelo), #10 (GNM) e #11 (QA clean-room) foram criados pela conta proprietária do repositório; as consultas de reviews não retornaram revisões formais. Não há evidência verificável de entrega/revisão externa nesses registros. Isso não prova ausência absoluta de atividade fora do GitHub.
+- Achado concreto: o link do modo compute ainda incluía `-lSceGnmDriver`, apesar da resolução dinâmica dos exports. A dependência foi removida e o ELF agora falha fechado se apresentar `DT_NEEDED libSceGnmDriver` ou símbolo `sceGnm*` indefinido.
+- Correção: commit [83d15edf1c3411752f75fdc98172f9e2f8094865](https://github.com/demolidorreddragons/NR/commit/83d15edf1c3411752f75fdc98172f9e2f8094865).
+- Relatório: commit `39747f9668f6e59eb21aa75f947cc86c7ac835d0`.
+- **Validação do commit corrigido: PENDING CI** nesta atualização. Não marcar auditoria ELF como PASS até inspecionar o log/artefato do novo build.
+- GPU VA/V# writable, InputUsage runtime, cache/coerência e revisão independente permanecem BLOCKED/NOT_RUN. Dispatch/readback PS4 não executado; nenhum PKG staged ou instalado.
