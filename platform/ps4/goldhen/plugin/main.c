@@ -5,11 +5,14 @@
 #include <stdatomic.h>
 #include <orbis/Pad.h>
 #include <orbis/UserService.h>
+#include <orbis/libkernel.h>
 #include <unistd.h>
 #include "plugin_common.h"
 #include "telemetry_bridge.h"
 
 #define CAPTURE_DIR "/data/PS4NeuralEngine/captures"
+#define PNE_TITLE_ID_CURRENT "PNEU00004"
+#define PNE_TITLE_ID_LEGACY  "PNEU00001"
 extern int pne_github_begin_authorization(void);
 extern int pne_github_upload_confirmed_log(void);
 extern void pne_github_disconnect(void);
@@ -25,6 +28,19 @@ HOOK_INIT(sceGnmSubmitAndFlipCommandBuffers);
 int32_t sceGnmSubmitAndFlipCommandBuffers_hook(uint32_t count, void *dcbGpuAddrs[],
  uint32_t *dcbSizesInBytes, void *ccbGpuAddrs[], uint32_t *ccbSizesInBytes,
  uint32_t videoOutHandle, uint32_t displayBufferIndex, uint32_t flipMode, int64_t flipArg);
+
+// The PRX is registered in [default], so GoldHEN may load it into its own
+// control application as well as games. Never install a GNM hook or start
+// controller/telemetry services inside Neural Rendering itself. If app
+// identity cannot be read, fail closed and leave this process untouched.
+static bool skip_neural_rendering_title(void) {
+ OrbisAppInfo app_info = {0};
+ if (sceKernelGetAppInfo(getpid(), &app_info) < 0) return true;
+ return strncmp(app_info.TitleId, PNE_TITLE_ID_CURRENT,
+                sizeof(app_info.TitleId) - 1) == 0 ||
+        strncmp(app_info.TitleId, PNE_TITLE_ID_LEGACY,
+                sizeof(app_info.TitleId) - 1) == 0;
+}
 
 // GoldHEN SDK's HOOK32 selects DetourMode_x32 (E9 rel32). This PRX is
 // x86-64; use the SDK's absolute 14-byte x64 detour and own trampoline cleanup.
@@ -155,6 +171,7 @@ static void *input_thread(void *arg) {
 
 s32 attr_public plugin_load(s32 argc, const char *argv[]) {
  (void)argc; (void)argv;
+ if (skip_neural_rendering_title()) return 0;
  g_frequency = sceKernelGetProcessTimeCounterFrequency();
  if (!g_frequency) return -1;
  atomic_store(&g_running, true);
@@ -174,9 +191,9 @@ s32 attr_public plugin_load(s32 argc, const char *argv[]) {
 
 s32 attr_public plugin_unload(s32 argc, const char *argv[]) {
  (void)argc; (void)argv;
- remove_gnm_hook();
  atomic_store(&g_running, false);
  scePthreadJoin(g_input_thread, NULL);
+ remove_gnm_hook();
  if (atomic_exchange(&g_recording, false)) pne_telemetry_stop();
  pne_github_disconnect();
  return 0;
