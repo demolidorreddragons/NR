@@ -47,3 +47,16 @@ This confirms the two missing compute-specific symbols are discoverable in the p
 6. Only after the above gates are supported by evidence, add a separately gated compute smoke path. Do not enable unvalidated GPU submission merely to obtain a PASS.
 
 PKG 015 is a more complete **compute-export preflight**, not a functioning neural-rendering runtime. PC/CI QA cannot substitute for a PS4 Pro hardware test.
+
+## Build, independent QA and PS4 staging evidence
+
+- Build workflow: `45074310271`, SUCCESS; source commit `2c9e3c12aed2791f2973496c31c8993259c64430`.
+- Build artifact: `ps4-neural-engine-build`, artifact ID `14774258357`, 31,951,024 bytes; ZIP SHA-256 `f149ba8f9f64385dbb28cd65456ab9894c7880bc11086d374cac603fb3f319b2`.
+- PKG: `PS4-Neural-Engine-015.pkg`, Full/Base (`gde`), TITLE_ID `PNEU00001`, APP_VER `01.10`, 6,619,136 bytes; SHA-256 `2fcaf679766fefbed4bc60cc31beb0227b8bfefd4eb8070160f65a402be747e9`.
+- Independent QA job: `independent-pkg-qa`, SUCCESS. QA artifact ID `14774516745`, 5,531 bytes; ZIP SHA-256 `107805ce1eae694b91468c363fab00706f4e518a52b9f6c4aef1dc8c355cea28`.
+- Independent inspector: PKG header, outer/inner PFS, digests, signatures and filesystem walk PASS. PARAM.SFO semantic fields PASS; CATEGORY=gde, APP_VER/VERSION=01.10, TITLE_ID and CONTENT_ID match. PRX SHA-256 `1e4531711a0768cfeb29f1d6f66b9541cf087b141eda7a05fed755d12507866c`. Six GFX8 assets 6/6 hashes PASS. QA status: `PASS_PC_ONLY_NOT_HARDWARE_TESTED`.
+- Host tests: workflow `45074310300`, SUCCESS.
+- PS4 staging: workflow `45074626193`, job `137368991264`, SUCCESS. PKG 014 was preserved at `/data/pkg/old/PS4-Neural-Engine-014.pkg`, 6,619,136 bytes, SHA-256 `96c15b46e7579c5f728a131279e986af04a9e4683c9903221e418ca52a3842db`. PKG 015 temporary upload readback and final readback both matched 6,619,136 bytes and SHA-256 `2fcaf679766fefbed4bc60cc31beb0227b8bfefd4eb8070160f65a402be747e9`.
+- Final PS4 path: `/data/pkg/PS4-Neural-Engine-015.pkg`. Exactly one Neural Rendering PKG remained in the root. Existing installed TITLE_ID `PNEU00001` was present. No installation, PRX activation, GNM call, plugins.ini change or GoldHEN restart was performed.
+
+The package is staged and hash-verified, but it remains a compute-export diagnostic preflight. It is not a functional neural-rendering runtime; ABI, dispatch, GPU memory, synchronization, capture adapter and hardware gates remain open.
