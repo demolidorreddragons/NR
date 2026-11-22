@@ -38,6 +38,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 jobs:
   build-prx-and-pkg:
@@ -220,6 +221,25 @@ jobs:
           python3 tools/audit_ps4_self_imports.py \
             --input dist/ps4/ps4_neural_engine.prx \
             --require-import libSceGnmDriver:libSceGnmDriver:xbxNatawohc
+      - name: Download legacy GNM-Link artifact for one-time OELF re-audit
+        if: contains(github.event.head_commit.message, 'AUDIT_LEGACY_GNM_LINK')
+        uses: actions/download-artifact@v4
+        with:
+          name: ps4-neural-engine-build
+          run-id: 44873622760
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/legacy-gnm-link
+      - name: Re-audit legacy GNM-Link eboot Sony imports
+        if: contains(github.event.head_commit.message, 'AUDIT_LEGACY_GNM_LINK')
+        run: |
+          legacy_pkg="$RUNNER_TEMP/legacy-gnm-link/gcn8-smoke/44873622760/gnm-link/PS4-Neural-Rendering-GCN8-gnm-link-44873622760.pkg"
+          test -s "$legacy_pkg"
+          "$PKGTOOL_CORE" pkg_extract --verbose "$legacy_pkg" "$RUNNER_TEMP/legacy-gnm-link/extracted"
+          legacy_eboot="$RUNNER_TEMP/legacy-gnm-link/extracted/uroot/eboot.bin"
+          test -s "$legacy_eboot"
+          python3 tools/audit_ps4_self_imports.py \
+            --input "$legacy_eboot" \
+            --require-import libSceGnmDriver:libSceGnmDriver:yvZ73uQUqrk
       - name: Build GoldHEN Plugin Source archive
         run: python3 tools/build_goldhen_plugin_archive.py
       - name: Build installable PKG
