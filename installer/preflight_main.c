@@ -16,7 +16,7 @@
 
 #define SOURCE_PRX "/app0/ps4_neural_engine.prx"
 #define RELEASE_MANIFEST "/app0/pne-release.ini"
-#define GNM_EXPORT_COUNT 5u
+#define GNM_EXPORT_COUNT 7u
 #define GCN8_ASSET_COUNT 6u
 
 typedef struct {
@@ -36,6 +36,8 @@ static const Gcn8Asset gcn8_assets[GCN8_ASSET_COUNT] = {
 static const char* const gnm_exports[GNM_EXPORT_COUNT] = {
     "sceGnmSubmitDone",
     "sceGnmDispatchInitDefaultHardwareState",
+    "sceGnmSetCsShader",
+    "sceGnmDispatchDirect",
     "sceGnmFlushGarlic",
     "sceGnmSubmitCommandBuffers",
     "sceGnmSubmitAndFlipCommandBuffers"
@@ -150,14 +152,14 @@ int main(void) {
     if (resolved != GNM_EXPORT_COUNT) {
         char message[256];
         (void)snprintf(message, sizeof(message),
-            "PNE preflight FAIL: GNM exports %u/5; missing %s; NR PRX NOT activated.",
+            "PNE preflight FAIL: GNM compute exports %u/7; missing %s; NR PRX NOT activated.",
             resolved, missing_export ? missing_export : "unknown");
         notify_preflight(message);
         (void)sceKernelUsleep(4000000);
         return 3;
     }
 
-    notify_preflight("PNE preflight PASS. GCN8 assets 6/6; GNM exports 5/5; no GNM calls; NR PRX NOT activated.");
+    notify_preflight("PNE preflight PASS. GCN8 assets 6/6; GNM compute exports 7/7; no GNM calls; NR PRX NOT activated.");
     (void)sceKernelUsleep(4000000);
     return 0;
 }
