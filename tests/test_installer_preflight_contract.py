@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 """Guard the release preflight against PRX activation and GNM execution."""
 from pathlib import Path
+import subprocess
+import sys
+import tempfile
 
 source = Path("installer/preflight_main.c").read_text(encoding="utf-8")
 build = Path("tools/build_pkg.sh").read_text(encoding="utf-8")
@@ -72,4 +75,15 @@ for forbidden in (
 
 assert "abi_status=unverified" in build
 assert "hardware_status=not_tested" in build
+with tempfile.TemporaryDirectory(prefix="nr-gcn8-assets-") as temp:
+    output = Path(temp) / "gcn8"
+    subprocess.run(
+        [sys.executable, "tools/prepare_gcn8_pkg_assets.py", str(output)],
+        check=True,
+    )
+    subprocess.run(
+        [sys.executable, "tools/verify_gcn8_assets.py", str(output)],
+        check=True,
+    )
+
 print("PKG 014 preflight contract: PRX integrity + six GFX8 asset SHA-256 checks + process-local GNM export resolution; no GNM calls or NR PRX activation PASS")
