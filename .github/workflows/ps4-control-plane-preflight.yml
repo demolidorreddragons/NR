@@ -17,7 +17,7 @@ jobs:
       contains(fromJSON('["main","feature/gcn8-numeric-kernels"]'), github.event.workflow_run.head_branch) &&
       github.event.workflow_run.head_repository.full_name == github.repository
     runs-on: [self-hosted, Windows, X64, ps4-lan]
-    timeout-minutes: 8
+    timeout-minutes: 15
     steps:
       - name: Checkout reviewed default-branch collector
         uses: actions/checkout@v4
@@ -25,8 +25,18 @@ jobs:
           ref: main
           persist-credentials: false
 
+      - name: Record reviewed collector source identity
+        shell: powershell
+        run: |
+          $ErrorActionPreference = "Stop"
+          $collectorCommit = (git -C $env:GITHUB_WORKSPACE rev-parse HEAD).Trim()
+          if ($LASTEXITCODE -ne 0 -or $collectorCommit -notmatch '^[a-fA-F0-9]{40}$') { throw "Could not identify reviewed collector commit." }
+          "COLLECTOR_COMMIT=$collectorCommit" | Out-File $env:GITHUB_ENV -Append -Encoding ascii
+          "COLLECTOR_REF=main" | Out-File $env:GITHUB_STEP_SUMMARY -Append -Encoding ascii
+          "COLLECTOR_COMMIT=$collectorCommit" | Out-File $env:GITHUB_STEP_SUMMARY -Append -Encoding ascii
+
       - name: Collect read-only PS4 control-plane inventory
-        shell: powershell -NoProfile -ExecutionPolicy Bypass -File {0}
+        shell: powershell
         env:
           PS4_IP: ${{ vars.PS4_IP }}
           BUILD_RUN_ID: ${{ github.event.workflow_run.id }}

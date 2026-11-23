@@ -24,11 +24,17 @@ class ControlPlanePreflightContractTests(unittest.TestCase):
     def test_remote_scope_is_allowlisted_and_non_mutating(self):
         for path in (
             "/data/GoldHEN/plugins.ini",
+            "/data/GoldHEN/ps4_neural_engine_install.log",
+            "/data/GoldHEN/plugins/ps4_neural_engine.prx.pne-release.ini",
             "/data/GoldHEN/plugins/ps4_neural_engine.prx",
             "/user/app/PNEU00004/app.json",
             "/user/app/PNEU00004/app.xml",
             "/user/app/PNEU00001/app.json",
             "/user/app/PNEU00001/app.xml",
+            "/user/app/PNEU00001/app.pkg",
+            "/user/app/PNEU00004/app.pkg",
+            "/data/pkg/PS4-Neural-Engine-015.pkg",
+            "/data/pkg/PS4-Neural-Engine-006-8d95e10d45e9.pkg",
         ):
             self.assertIn(path, SCRIPT)
         for flag in (
@@ -44,9 +50,16 @@ class ControlPlanePreflightContractTests(unittest.TestCase):
         self.assertIn("workflow_run:", WORKFLOW)
         self.assertIn('workflows: ["PS4 PRX and PKG build"]', WORKFLOW)
         self.assertIn("runs-on: [self-hosted, Windows, X64, ps4-lan]", WORKFLOW)
-        self.assertIn("shell: powershell -NoProfile -ExecutionPolicy Bypass -File {0}", WORKFLOW)
+        self.assertIn("shell: powershell", WORKFLOW)
+        self.assertIn("Record reviewed collector source identity", WORKFLOW)
+        self.assertIn("COLLECTOR_COMMIT=$collectorCommit", WORKFLOW)
+        self.assertIn("timeout-minutes: 15", WORKFLOW)
         self.assertIn("ref: main", WORKFLOW)
         self.assertIn("ps4-control-plane-preflight.ps1", WORKFLOW)
+        self.assertIn("[System.Net.IPAddress]::TryParse", SCRIPT)
+        self.assertIn("collector_commit=$env:COLLECTOR_COMMIT", SCRIPT)
+        self.assertIn('schema="nr.ps4.control-plane-preflight.v3"', SCRIPT)
+        self.assertIn("16777216", SCRIPT)
         self.assertNotIn("workflow_dispatch", WORKFLOW)
         self.assertNotIn("contents: write", WORKFLOW)
 

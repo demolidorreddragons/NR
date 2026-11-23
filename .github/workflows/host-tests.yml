@@ -11,6 +11,23 @@ jobs:
       - uses: actions/checkout@v4
       - name: Validate CDA PKG 015 log-signal extractor contract
         run: python3 tests/test_cda_pkg015_log_extractor_contract.py
+      - name: Validate PS4 control-plane collector safety contract
+        run: python3 tests/test_ps4_control_plane_collector_contract.py
+      - name: Parse PS4 control-plane collector with PowerShell AST parser
+        shell: pwsh
+        run: |
+          $tokens = $null
+          $errors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path "tools/ps4-control-plane-preflight.ps1"),
+            [ref]$tokens,
+            [ref]$errors
+          ) | Out-Null
+          if ($errors.Count -gt 0) {
+            $details = ($errors | ForEach-Object { $_.Message + " at line " + $_.Extent.StartLineNumber }) -join "`n"
+            throw "PowerShell syntax validation failed: $details"
+          }
+          Write-Host "PS4 control-plane collector PowerShell syntax: PASS"
       - name: Validate installer newline escapes
         run: |
           python3 - <<'PY'
