@@ -63,13 +63,43 @@ jobs:
             throw 'Native MXC sandbox is not ready; refusing to fall back to read-only or unrestricted execution.'
           }
 
+      - name: Fetch exact PR #63 review context
+        shell: powershell
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $headers = @{ Authorization = "Bearer $env:GH_TOKEN"; Accept = 'application/vnd.github+json'; 'X-GitHub-Api-Version' = '2022-11-28' }
+          $pr = Invoke-RestMethod -Method Get -Uri 'https://api.github.com/repos/demolidorreddragons/NR/pulls/63' -Headers $headers
+          $files = Invoke-RestMethod -Method Get -Uri 'https://api.github.com/repos/demolidorreddragons/NR/pulls/63/files?per_page=100' -Headers $headers
+          $lines = @(
+            "# PR #63 context",
+            "Title: $($pr.title)",
+            "State: $($pr.state)",
+            "Base branch: $($pr.base.ref)",
+            "Base SHA: $($pr.base.sha)",
+            "Head branch: $($pr.head.ref)",
+            "Head SHA: $($pr.head.sha)",
+            "Changed files:"
+          )
+          foreach ($file in $files) {
+            $lines += "- $($file.filename) [$($file.status), +$($file.additions)/-$($file.deletions)]"
+            if ($file.patch) { $lines += 'PATCH:' + [Environment]::NewLine + $file.patch }
+          }
+          $lines | Set-Content -LiteralPath "$env:RUNNER_TEMP\pr63-context.md" -Encoding UTF8
+          Write-Host "PR63_HEAD_SHA=$($pr.head.sha)"
+          Write-Host "PR63_CHANGED_FILES=$($files.Count)"
       - name: Run Codex engineering cycle with bounded repair
         shell: powershell
         working-directory: ${{ github.workspace }}
+        env:
+          NR_BASE_SHA: ${{ github.sha }}
         run: |
           $ErrorActionPreference = 'Stop'
           $codex = 'C:\ProgramData\NR\Codex\node_modules\.bin\codex.cmd'
           $task = Get-Content -Raw -LiteralPath '.github/codex/engineering-task.md'
+          $prContext = Get-Content -Raw -LiteralPath "$env:RUNNER_TEMP\pr63-context.md"
+          $baseSha = $env:NR_BASE_SHA
           $prompt = @"
           You are the autonomous engineering agent for this repository.
           Follow the task contract below exactly. You may inspect and edit files in this checkout and run local tests.
@@ -77,6 +107,9 @@ jobs:
           Use the workspace-write sandbox and never bypass the sandbox or approval controls.
           Do not commit. Produce the required engineering report and leave a reviewable diff.
           
+          Exact checkout commit SHA: $baseSha
+          GitHub PR #63 context:
+          $prContext
           TASK CONTRACT:
           $task
           "@
