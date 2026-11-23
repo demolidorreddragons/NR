@@ -184,6 +184,17 @@ jobs:
           test -s "dist/gcn8-smoke/${GITHUB_RUN_ID}/startup/SMOKE_PKG_MANIFEST.txt"
           test -s "dist/gcn8-smoke/${GITHUB_RUN_ID}/startup/smoke.elf"
           test -s "dist/gcn8-smoke/${GITHUB_RUN_ID}/startup/smoke.map"
+      - name: Build OpenOrbis GNM-Link-Only diagnostic PKG (import only; no GNM calls)
+        env:
+          GCN8_SMOKE_MODE: gnm-link
+          OPEN_GNM_INCLUDE: ${{ github.workspace }}/OpenGNM/include
+        run: |
+          bash -n tools/build_compute_smoke_pkg.sh
+          bash tools/build_compute_smoke_pkg.sh
+          test -s "dist/gcn8-smoke/${GITHUB_RUN_ID}/gnm-link/SMOKE_PKG_MANIFEST.txt"
+          test -s "dist/gcn8-smoke/${GITHUB_RUN_ID}/gnm-link/smoke.elf"
+          test -s "dist/gcn8-smoke/${GITHUB_RUN_ID}/gnm-link/smoke.oelf"
+          test -s "dist/gcn8-smoke/${GITHUB_RUN_ID}/gnm-link/smoke.map"
       - name: Build OpenOrbis GNM-Load-Only diagnostic PKG (no console execution)
         env:
           GCN8_SMOKE_MODE: gnm-load
@@ -438,6 +449,54 @@ jobs:
           "STARTUP_SFO=PASS; GNM_IMPORT=ABSENT; COMPUTE_SHADER=ABSENT" | Out-File qa-output/startup-qa-report.txt -Append
           "STARTUP_QA_STATUS=PASS_PC_ONLY_NOT_HARDWARE_TESTED" | Out-File qa-output/startup-qa-report.txt -Append
           Get-Content qa-output/startup-qa-report.txt | Out-File $env:GITHUB_STEP_SUMMARY -Append
+      - name: Independently validate GNM-Link-Only diagnostic PKG
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $tool = (Get-Content "$env:RUNNER_TEMP\pkg-independent-tool.txt" | Select-Object -First 1).Substring(5)
+          $artifact = Join-Path $env:GITHUB_WORKSPACE "build-artifact"
+          $gnmLinkPkg = Get-ChildItem $artifact -Recurse -File -Filter "PS4-Neural-Rendering-GCN8-gnm-link-*.pkg" | Select-Object -First 1
+          $manifest = Get-ChildItem $artifact -Recurse -File -Filter "SMOKE_PKG_MANIFEST.txt" | Where-Object { (Get-Content $_.FullName -Raw) -match "mode=gnm-link" } | Select-Object -First 1
+          $elf = Get-ChildItem $artifact -Recurse -File -Filter smoke.elf | Where-Object { $_.DirectoryName -like "*gnm-link*" } | Select-Object -First 1
+          $oelf = Get-ChildItem $artifact -Recurse -File -Filter smoke.oelf | Where-Object { $_.DirectoryName -like "*gnm-link*" } | Select-Object -First 1
+          $map = Get-ChildItem $artifact -Recurse -File -Filter smoke.map | Where-Object { $_.DirectoryName -like "*gnm-link*" } | Select-Object -First 1
+          foreach ($item in @($gnmLinkPkg,$manifest,$elf,$oelf,$map)) { if (-not $item) { throw "GNM-Link-only artifact file missing." } }
+          $manifestText = Get-Content $manifest.FullName -Raw
+          $pkgHash = (Get-FileHash $gnmLinkPkg.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+          $elfHash = (Get-FileHash $elf.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+          $oelfHash = (Get-FileHash $oelf.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+          $mapHash = (Get-FileHash $map.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+          foreach ($required in @("mode=gnm-link","title_id=PNEU00004","content_id=IV0000-PNEU00004_00-GCN8LINK00000000","gnm_import_probe=sceGnmSubmitDone_address_only_no_call","gnm_function_calls=none","elf_sha256=$elfHash","oelf_sha256=$oelfHash","map_sha256=$mapHash","hardware_status=not_run")) {
+            if ($manifestText -notmatch [regex]::Escape($required)) { throw "GNM-Link manifest mismatch: $required" }
+          }
+          $oelfText = [System.Text.Encoding]::ASCII.GetString([System.IO.File]::ReadAllBytes($oelf.FullName))
+          if (-not $oelfText.Contains("libSceGnmDriver.prx") -or -not $oelfText.Contains("yvZ73uQUqrk#C#C")) {
+            throw "GNM-Link OELF does not contain the expected libSceGnmDriver/sceGnmSubmitDone import."
+          }
+          dotnet "$tool" validate "$($gnmLinkPkg.FullName)" 2>&1 | Tee-Object qa-output/gnm-link-pkg-validation.txt
+          if ($LASTEXITCODE -ne 0) { throw "Independent GNM-Link PKG validation failed." }
+          $out = Join-Path $env:RUNNER_TEMP "gnm-link-independent-extracted"
+          dotnet "$tool" extract "$($gnmLinkPkg.FullName)" "$out" --verbose 2>&1 | Tee-Object qa-output/gnm-link-pkg-extract.txt
+          if ($LASTEXITCODE -ne 0) { throw "Independent GNM-Link PKG extraction failed." }
+          $sfo = Get-ChildItem $out -Recurse -File -Filter param.sfo | Select-Object -First 1
+          if (-not $sfo) { throw "GNM-Link embedded PARAM.SFO missing." }
+          $sfoText = (dotnet "$tool" sfo read "$($sfo.FullName)" 2>&1) -join [Environment]::NewLine
+          if ($LASTEXITCODE -ne 0) { throw "GNM-Link SFO read failed." }
+          foreach ($required in @("CATEGORY = gde","APP_VER = 01.00","VERSION = 01.00","TITLE_ID = PNEU00004","CONTENT_ID = IV0000-PNEU00004_00-GCN8LINK00000000")) {
+            if ($sfoText -notmatch [regex]::Escape($required)) { throw "GNM-Link SFO missing: $required" }
+          }
+          $eboot = Get-ChildItem $out -Recurse -File -Filter eboot.bin | Select-Object -First 1
+          $shader = Get-ChildItem $out -Recurse -File -Filter compute_smoke_add.sb | Select-Object -First 1
+          if (-not $eboot -or $eboot.Length -le 0) { throw "GNM-Link eboot missing." }
+          if ($shader) { throw "GNM-Link PKG unexpectedly contains compute shader." }
+          New-Item -ItemType Directory -Force -Path qa-output | Out-Null
+          "GNM_LINK_PKG_SHA256=$pkgHash" | Out-File qa-output/gnm-link-qa-report.txt
+          "GNM_LINK_ELF_SHA256=$elfHash" | Out-File qa-output/gnm-link-qa-report.txt -Append
+          "GNM_LINK_OELF_SHA256=$oelfHash" | Out-File qa-output/gnm-link-qa-report.txt -Append
+          "GNM_LINK_MAP_SHA256=$mapHash" | Out-File qa-output/gnm-link-qa-report.txt -Append
+          "GNM_LINK_SFO=PASS; STATIC_GNM_IMPORT=EXPECTED; GNM_CALLS=NONE; COMPUTE_SHADER=ABSENT" | Out-File qa-output/gnm-link-qa-report.txt -Append
+          "GNM_LINK_QA_STATUS=PASS_PC_ONLY_NOT_HARDWARE_TESTED" | Out-File qa-output/gnm-link-qa-report.txt -Append
+          Get-Content qa-output/gnm-link-qa-report.txt | Out-File $env:GITHUB_STEP_SUMMARY -Append
       - name: Independently validate GNM-Load-Only diagnostic PKG
         shell: pwsh
         run: |
