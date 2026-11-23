@@ -369,3 +369,17 @@ This proves the automatic build → read-only preflight → offline inspection �
 ## Windows runner service availability
 
 The existing runner registration is `demolidorreddragons-NR.PS4-WINDOWS-BRIDGE`. It has previously connected successfully when started manually with `C:\actions-runner\run.cmd`, while the Windows service `actions.runner.demolidorreddragons-NR.PS4-WINDOWS-BRIDGE` failed to start with reported error 1068. This is a host availability/persistence issue, separate from PS4 FTP and package workflows. The read-only workflow `.github/workflows/ps4-windows-runner-service-diagnostics.yml` captures service/CIM/SC configuration, relevant event logs, runner ACLs and filtered runner `_diag` excerpts. It performs no service, registry, runner, or PS4 mutation. Do not alter the service or registry until the evidence establishes a specific cause.
+
+## RPI receiver foreground prerequisite and read-only readiness gate — 2026-11-23
+
+The latest preflight (45177903142, artifact 14819718003) received an active TCP refusal for GET http://PS4:12800/api. This proves only that no listener was accepting connections at the collection time; it does not prove that the GoldHEN Package Installer lacks RPI support. The pinned RPI-NG client source, AldySan/Remote-Package-Installer-NG commit f99e62089afa61fb418446bdeb12340afd951a17, documents the receiver as the Package Installer inside GoldHEN and explicitly requires that screen to remain in the foreground, because the PS4 suspends it when another app is foregrounded. This corrects the earlier assumption that a separate RPI app must necessarily be installed.
+
+A separate manually gated workflow, .github/workflows/ps4-rpi-readiness-probe.yml, now performs only:
+- GET /api fingerprint;
+- GET /api/status and GET /api/v2/system when the fingerprint is present;
+- POST /api/is_exists for PNEU00001 as a read-only identity query, only after the RPI fingerprint succeeds.
+
+It never calls /api/install, task-control endpoints, BinLoader, or any FTP mutation. It redacts the PS4 IP from evidence. Run it only after the user has opened GoldHEN's Package Installer and left it in the foreground. The existing automatic preflight remains strictly GET-only. No installation request is sent by this readiness workflow.
+
+The latest inspected installed package remains PNEU00001 APP_VER 01.10, SHA-256 2fcaf679766fefbed4bc60cc31beb0227b8bfefd4eb8070160f65a402be747e9. The latest build artifact is PKG 006 APP_VER 01.02, older than the installed release; the staging guard correctly skipped it. Therefore there is currently no newer QA-approved PKG to install. Do not reinstall the existing 01.10 Full/Base PKG or stage the older 01.02 build.
+
