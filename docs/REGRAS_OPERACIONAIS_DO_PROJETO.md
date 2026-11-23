@@ -187,3 +187,8 @@ Não contornar o bloqueio fail-closed do adaptador de título do PRX. Não imple
 O usuário informou que a versão instalada é **GoldHEN v2.4b18.14**, no firmware **14.02**. A publicação do autor SiSTRo informa que a v2.4b18.14 adiciona suporte ao firmware 14.02: https://ko-fi.com/s/66eac96180. Portanto, a compatibilidade de release com FW 14.02 está documentada; a versão instalada ainda deve ser classificada como `USER_REPORTED` até confirmação read-only no console.
 
 Essa versão anuncia Remote Package Install, FTP 2121, BinLoader 9090, Klog 3232, plugins e instalação interna de PKG em `/data/pkg`. Isso não prova por si só um protocolo remoto de instalação por comando, ativação remota de PRX ou reinício remoto do GoldHEN. Cada interface precisa ser identificada na implementação/cliente correspondente à versão e validada sem payloads de teste. O BinLoader é experimental e não deve ser usado como sondagem.
+
+
+### 12.2 Correção de procedência GamerHack
+
+O usuário esclareceu que utiliza a distribuição/versão GamerHack v2.4b18.14. A página pública identifica GamerHack como host original e patnawa como hospedagem/espelho: https://patnawa.github.io/GoldhenPS4/g2all/. Isso comprova a atribuição do host, mas não identifica de forma independente quem compilou ou modificou o binário GoldHEN embutido. Até inspecionar o binário/hash e metadados, classificar a procedência do payload como `UNVERIFIED`. Não atribuir o binário instalado a SiSTR0 nem substituí-lo pelo asset upstream v2.4b18 só porque o número de versão é parecido.
