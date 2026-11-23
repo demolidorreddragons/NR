@@ -83,3 +83,15 @@ Preflight run 45169044022 (artifact 14815193437) successfully read active PRX pl
 PRX identities are inconsistent: PKG015 embedded PRX SHA-256 1e4531711a0768cfeb29f1d6f66b9541cf087b141eda7a05fed755d12507866c; PKG006 embedded PRX and .pne-backup SHA-256 7561da3d3b83766becddcb37c1257d83c61009b5e814825ee60694d19f9cf704; release-manifest/.pne-tmp/.pne-backup.001 SHA-256 54e8595144a3a7e1d36602a1100bae6189f0955175c355bd3ac67d9cb7f85277; active-path GET SHA-256 1481214d21aa5c826f9d51ae8cd55759e625c2b9ca7159dd9578ea632661d8e7. FTP LIST says 224,128 bytes while active GET is 317,216 bytes. Do not replace, restore, activate, or delete any PRX until the corrected offline comparison and loader lifecycle are qualified.
 
 The first offline inspector run exposed double-escaped PowerShell regexes in its PRX manifest/LIST/plugins.ini parser. Package validation and SFO/embedded-PRX hashes are valid; those comparison fields are not. PR41 fixes the regexes and adds regression tests.
+
+## Automated staged-PKG archive gate — 2026-11-23
+
+After a successful offline inspection, the PS4 archive workflow may move only NR-owned staged PKG files from `/data/pkg/` into the existing `/data/pkg/old/` directory. It must:
+- Require the installed PNEU00001 app.pkg, app.json source, and canonical staged PKG 015 to have the same verified SHA-256 and PASS_PC_ONLY package/SFO identity.
+- Require every staged NR package in the live root listing to appear in the exact offline inspection report and have PASS_PC_ONLY, TITLE_ID PNEU00001, CATEGORY gde, storage digital50, and APP_VER no newer than the installed app.
+- Preserve the canonical `/data/pkg/PS4-Neural-Engine-015.pkg` in the root. Archive only the other validated NR PKG files.
+- Use FTP LIST, GETSIZE, GET, and RENAME only. Never upload, delete, make/remove directories, install a PKG, modify `plugins.ini`, touch PRX files, activate a PRX, restart GoldHEN, or touch `PNEU00004`.
+- Verify each source SHA-256 before rename, verify the archive readback SHA-256/size after rename, preserve local before/after evidence, and verify the final root contains exactly the canonical NR PKG plus the same non-NR entries as before.
+- Fail closed on any unknown NR file, unstable GET, identity mismatch, missing archive directory, collision, or third-party root change. No third-party game PKG may ever be moved.
+
+This is reversible archival only; it is not installation or runtime validation. The workflow must not claim hardware or PRX execution success.

@@ -1,0 +1,55 @@
+name: PS4 Archive Superseded NR PKGs
+
+on:
+  workflow_run:
+    workflows: ["PS4 Installed Package Offline Inspection"]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: ps4-lan-control-plane
+  cancel-in-progress: false
+
+jobs:
+  archive-validated-superseded-pkgs:
+    if: >-
+      ${{ github.event.workflow_run.conclusion == 'success' &&
+          github.event.workflow_run.head_branch == 'main' &&
+          github.event.workflow_run.head_repository.full_name == github.repository }}
+    runs-on: [self-hosted, Windows, X64, ps4-lan]
+    timeout-minutes: 45
+    env:
+      PS4_IP: ${{ vars.PS4_IP }}
+      EVIDENCE_INPUT: ${{ github.workspace }}/evidence
+      EVIDENCE_DIR: ${{ github.workspace }}/archive-evidence
+      SOURCE_OFFLINE_RUN_ID: ${{ github.event.workflow_run.id }}
+    steps:
+      - name: Checkout exact archive script source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          path: NR
+          persist-credentials: false
+      - name: Download exact offline-inspection run artifacts
+        uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ github.event.workflow_run.id }}
+          path: evidence
+      - name: Run evidence-gated non-destructive NR PKG archive
+        shell: powershell -NoProfile -ExecutionPolicy Bypass -File {0}
+        run: |
+          & "$env:GITHUB_WORKSPACE\NR\tools\archive_superseded_nr_pkgs.ps1"
+      - name: Upload archive chain-of-custody evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ps4-superseded-pkg-archive-${{ github.run_id }}
+          path: archive-evidence/*
+          if-no-files-found: warn
+          retention-days: 90
