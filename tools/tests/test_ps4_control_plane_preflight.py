@@ -24,6 +24,8 @@ class ControlPlanePreflightContractTests(unittest.TestCase):
     def test_remote_scope_is_allowlisted_and_non_mutating(self):
         for path in (
             "/data/GoldHEN/plugins.ini",
+            "/data/GoldHEN/ps4_neural_engine_install.log",
+            "/data/GoldHEN/plugins/ps4_neural_engine.prx.pne-release.ini",
             "/data/GoldHEN/plugins/ps4_neural_engine.prx",
             "/user/app/PNEU00004/app.json",
             "/user/app/PNEU00004/app.xml",
