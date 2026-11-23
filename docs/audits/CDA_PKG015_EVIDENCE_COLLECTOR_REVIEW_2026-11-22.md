@@ -103,3 +103,16 @@ Correção no commit `716666a1f2742ad82f6c508b6f1e5d1777c10bb5`:
 - elimina a conversão `StreamReader`/UTF-8 e renomeia a extensão para `.raw.bin`.
 
 Validação limitada à revisão estática do código. Nenhum workflow de coleta foi executado e nenhum acesso ao PS4 ocorreu. O próximo CI host valida as verificações automatizadas existentes, mas não substitui teste real do runner Windows/PowerShell 5.1 nem da conexão FTP.
+
+
+## Quarta revisão — contrato automatizado do coletor
+
+Foi adicionado `tests/test_cda_pkg015_collector_contract.py` e integrado ao `host-tests.yml` para evitar regressões metodológicas no workflow. O teste exige disparo manual, runner autorizado, endpoint via variável, validação IPv4, conjunto exato de métodos FTP somente leitura (`DownloadFile`, `GetFileSize`, `ListDirectoryDetails`), preservação byte a byte, criação local exclusiva, hashes, snapshots duplos de `log.bin`, estado `OPAQUE_UNDECODED`, identidade SHA-256 do PKG 015 e proveniência Base64 do feedback.
+
+Commits:
+- `e62ef1c6aefbf45690a4893c481649fa00250c88` — teste inicial;
+- `2bca021fd403abac1d1c55d7ab705415fa6cfa65` — ajuste de marcadores;
+- `2ae42f9b19a5e5dcc4d8ab50704962bd4b1f1f22` — integração ao CI;
+- `fc3150e4914481af255c9fba2668026bb1e4b2b8` e `3dcdda3047daa2cc73f5e53f37d45e48ea63a1fe` — allowlist exata de métodos FTP e correção da expressão de teste.
+
+A execução CI do commit final ainda precisa ser conferida. O teste é estático: não executa PowerShell 5.1, FTP ou qualquer operação no console.
