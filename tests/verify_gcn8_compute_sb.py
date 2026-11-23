@@ -203,8 +203,8 @@ def main() -> int:
             f"{compiler_width} SGPR(s), GNM input-usage contract requires {gnm_width}"
         )
     expected_user_sgprs = (
-        layout["descriptor_table_slot"]["start_register"] + compiler_width + 1
-    )  # preceding system SGPRs + descriptor pointer + workgroup_id.x
+        layout["descriptor_table_slot"]["start_register"] + compiler_width
+    )  # user-data range; workgroup-ID SGPRs are separate system arguments
     if layout["compute_user_sgpr_count"] < expected_user_sgprs:
         raise SystemExit(
             "compute PGM_RSRC2 USER_SGPR count is too small: expected at least "
