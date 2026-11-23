@@ -63,7 +63,7 @@ jobs:
           EVIDENCE_DIR: ${{ github.workspace }}/evidence
           EXPECTED_PREFLIGHT_RUN_ID: ${{ github.event.workflow_run.id }}
         run: |
-& "$env:GITHUB_WORKSPACE\NR\tools\inspect_ps4_installed_packages.ps1"
+          & "$env:GITHUB_WORKSPACE\NR\tools\inspect_ps4_installed_packages.ps1"
 
       - name: Preserve offline package inspection evidence
         if: always()
