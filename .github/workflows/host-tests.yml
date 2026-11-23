@@ -27,6 +27,8 @@ jobs:
           assert 'read_block(verify_src' in installer and 'read_block(verify_dst' in installer, 'both streams must use full-block reads'
           print('Installer copy verification checks passed')
           PY
+      - name: Validate PS4 control-plane preflight safety contract
+        run: python3 -m unittest tools.tests.test_ps4_control_plane_preflight -v
       - name: Model manifest validator tests
         run: python3 -m unittest discover -s tools/tests -v
       - name: Configure
