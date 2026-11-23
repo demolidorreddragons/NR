@@ -86,7 +86,7 @@ function Save-RemoteFile([string]$remotePath) {
     } else {$evidence.Add([pscustomobject]@{operation="GET";path=$remotePath;result="unavailable";started_utc=$started;completed_utc=[DateTime]::UtcNow.ToString("o");remote_bytes_before=$remoteBefore;error=$detail})}
   }
 }
-$files=@("/data/GoldHEN/plugins.ini","/data/GoldHEN/plugins/ps4_neural_engine.prx","/user/app/PNEU00004/app.json","/user/app/PNEU00004/app.xml","/user/app/PNEU00001/app.json","/user/app/PNEU00001/app.xml","/data/Loader_Logs.txt")
+$files=@("/data/GoldHEN/plugins.ini","/data/GoldHEN/plugins/ps4_neural_engine.prx","/user/app/PNEU00004/app.json","/user/app/PNEU00004/app.xml","/user/app/PNEU00004/app.pkg","/user/app/PNEU00001/app.json","/user/app/PNEU00001/app.xml","/user/app/PNEU00001/app.pkg","/data/pkg/PS4-Neural-Engine-015.pkg","/data/pkg/PS4-Neural-Engine-006-8d95e10d45e9.pkg","/data/Loader_Logs.txt")
 foreach($remotePath in $files){Save-RemoteFile $remotePath}
 # Safe RPI fingerprint: HTTP GET only on TCP 12800. Never probe BinLoader 9090.
 $rpi=[ordered]@{host=$env:PS4_IP;port=12800;probe="GET /api; GET /api/status; optional GET /api/v2/system";mutating_requests_sent=$false;backend_fingerprint="not_confirmed";api_status=$null;api_identity=$null;observations=@()}
@@ -109,7 +109,7 @@ if(($api.status -in @(400,405)) -and ($api.body -match 'Unsupported method|"fail
   if($identity.status -eq 200 -and $identity.body -match '"name"\s*:'){$rpi.api_identity="v2_identity_response_detected"}
 }
 $report=[ordered]@{
-  schema="nr.ps4.control-plane-preflight.v2";timestamp_utc=[DateTime]::UtcNow.ToString("o")
+  schema="nr.ps4.control-plane-preflight.v3";timestamp_utc=[DateTime]::UtcNow.ToString("o")
   runner=$env:COMPUTERNAME;runner_identity="demolidorreddragons-NR.PS4-WINDOWS-BRIDGE"
   build_run_id=$env:BUILD_RUN_ID;build_commit=$env:BUILD_HEAD_SHA;build_branch=$env:BUILD_BRANCH;collector_ref="main";collector_commit=$env:COLLECTOR_COMMIT
   target=[ordered]@{ps4_ip_source="repository_actions_variable";firmware_reported="14.02";firmware_evidence="user_reported";goldhen_reported="2.4b18.14";goldhen_distribution="GamerHack host; patnawa mirror";payload_sha256_published_by_distribution="c5480587d99efc2e3cc132352d9b7cf052dd3068280f1686e7fbb37d57e9ba8b";installed_payload_hash="not_read_from_device"}
