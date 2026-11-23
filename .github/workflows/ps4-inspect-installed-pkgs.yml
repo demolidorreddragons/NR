@@ -1,0 +1,68 @@
+name: PS4 Installed Package Offline Inspection
+
+on:
+  workflow_run:
+    workflows: ["PS4 Control Plane Preflight"]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  inspect-installed-and-staged-pkgs:
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.head_repository.full_name == github.repository
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout pinned independent PKG inspector
+        uses: actions/checkout@v4
+        with:
+          repository: pearlxcore/OrbisPkgTool
+          ref: 3de6da849b64a8ad0d5ba00dd4e8919934b868b0
+          path: OrbisPkgTool-src
+          persist-credentials: false
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Download exact control-plane evidence artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ps4-control-plane-preflight-${{ github.event.workflow_run.id }}
+          path: evidence
+          repository: ${{ github.repository }}
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+
+      - name: Build pinned independent inspector
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          dotnet build OrbisPkgTool-src/OrbisPkgTool/OrbisPkgTool.csproj --configuration Release
+          if ($LASTEXITCODE -ne 0) { throw 'Independent PKG inspector build failed.' }
+          $tool = Join-Path $env:GITHUB_WORKSPACE 'OrbisPkgTool-src/OrbisPkgTool/bin/Release/net10.0-windows/OrbisPkgTool.dll'
+          if (-not (Test-Path -LiteralPath $tool -PathType Leaf)) { throw 'Pinned inspector DLL missing.' }
+          "PKGTOOL=$tool" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: Validate installed and staged PKG identities offline
+        shell: pwsh
+        env:
+          EVIDENCE_DIR: ${{ github.workspace }}/evidence
+          EXPECTED_PREFLIGHT_RUN_ID: ${{ github.event.workflow_run.id }}
+        run: |
+          & "$env:GITHUB_WORKSPACE/tools/inspect_ps4_installed_packages.ps1"
+
+      - name: Preserve offline package inspection evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ps4-installed-package-inspection-${{ github.event.workflow_run.id }}
+          path: installed-package-inspection/*
+          if-no-files-found: warn
+          retention-days: 30
