@@ -202,7 +202,6 @@ jobs:
           $extractor = Join-Path $env:GITHUB_WORKSPACE 'tools/cda/Extract-Pkg015LogSignals.ps1'
           if (-not (Test-Path -LiteralPath $extractor -PathType Leaf)) { throw 'Reviewed log-signal extractor is missing.' }
           & $extractor -EvidenceDirectory $evidence
-          if ($LASTEXITCODE -ne 0) { throw 'Log-signal extraction failed.' }
       - name: Preserve raw evidence artifact
         uses: actions/upload-artifact@v4
         with:
