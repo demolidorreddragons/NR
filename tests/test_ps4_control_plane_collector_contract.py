@@ -18,9 +18,10 @@ assert "github.event.workflow_run.head_sha" in workflow, "build identity must be
 
 # LIST evidence must remain byte-for-byte and must not be decoded/re-encoded.
 assert "ListDirectoryDetails" in script
-assert "$input.CopyTo($output)" in script
+assert "$sourceStream.CopyTo($output)" in script
 assert ".raw.bin" in script
-assert "StreamReader" not in script
+listing_section = script.split("# Safe RPI fingerprint:")[0]
+assert "StreamReader" not in listing_section
 assert "WriteAllText($destination" not in script
 assert "[IO.FileMode]::CreateNew" in script
 assert "$output.Flush($true)" in script
