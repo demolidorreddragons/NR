@@ -45,6 +45,20 @@ jobs:
             throw "Installed package inspector syntax validation failed: $details"
           }
           Write-Host "Installed package inspector PowerShell syntax: PASS"
+      - name: Run PS4 evidence parser fixture tests
+        shell: pwsh
+        run: ./tools/tests/test_ps4_evidence_parser.ps1
+      - name: Parse PS4 evidence parser module with PowerShell AST
+        shell: pwsh
+        run: |
+          $tokens = $null
+          $errors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path "tools/ps4-evidence-parser.psm1"),
+            [ref]$tokens,
+            [ref]$errors
+          ) | Out-Null
+          if ($errors.Count -gt 0) { throw "PS4 evidence parser module syntax validation failed." }
       - name: Validate installer newline escapes
         run: |
           python3 - <<'PY'
