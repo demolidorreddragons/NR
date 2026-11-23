@@ -338,3 +338,23 @@ manual e não foi iniciado. Não converter PASS_PC_ONLY em resultado de hardware
 Próximo gate: obter execução real do Link-Only com SIGNAL_DIAG/errno e
 GNM_IMPORT_ADDRESS; até lá, GNM-Init, VA/4 GiB, memória/cache e dispatch ficam
 bloqueados.
+
+## Telemetria do endereço bruto da importação — 2026-11-23
+
+PR #23: https://github.com/demolidorreddragons/NR/pull/23 — MERGED.
+Merge commit: 90dc9e619595ddc30bbebb8863504063592ae9d1.
+Host CI: https://github.com/demolidorreddragons/NR/actions/runs/45154845393 — SUCCESS.
+
+O probe GNM-Link-Only agora grava explicitamente o endereço obtido por
+reinterpret_cast<std::uintptr_t>(&sceGnmSubmitDone), no formato
+GNM_IMPORT_ADDRESS=0x..., e mantém o marcador GNM_IMPORT_RESOLVED ou
+GNM_IMPORT_ADDRESS_NULL. O teste host exige a presença dessa telemetria.
+A alteração não chama a função importada, não altera o fluxo de GNM e não
+faz dispatch. A execução concluída do host CI valida o código/testes host,
+não a resolução do loader no firmware do PS4.
+
+Ainda é necessário gerar um novo PKG a partir deste merge, executar o QA
+independente e obter log de hardware antes de concluir se o endereço runtime
+é nulo. O PKG do run 45151860412 é anterior a esta alteração e NÃO contém
+a nova linha GNM_IMPORT_ADDRESS. Não reutilizar seu hash como se fosse o
+novo pacote. Staging, instalação e execução no console continuam não realizados.
