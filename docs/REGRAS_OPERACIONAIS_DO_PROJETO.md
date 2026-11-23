@@ -169,3 +169,36 @@ Sem autorização explícita do usuário, é proibido:
 6. Capacidade demonstrada atualmente: runner LAN funcional, FTP upload, readback de tamanho/SHA-256 e promoção para `/data/pkg/`. Instalação remota, lançamento/encerramento do aplicativo, captura de tela e detecção automatizada de crash ainda exigem implementação e execução comprovadas antes de serem declaradas funcionais.
 7. Prioridade de engenharia: evoluir a bridge já existente para um ciclo automatizado build → QA → staging verificado → execução controlada autorizada → coleta read-only de evidências → diagnóstico/correção → reteste. Não criar uma segunda bridge nem duplicar configuração.
 8. Nenhuma automação amplia permissões: instalação, desinstalação, ativação de PRX, reinício do GoldHEN, edição de `plugins.ini` e operações destrutivas continuam exigindo autorização explícita e específica.
+
+
+## 12. Autorização explícita para automação do console — 2026-11-23
+
+O usuário autorizou expressamente, no escopo do Neural Rendering, a instalação automatizada de PKGs NR aprovados, implantação/ativação do PRX NR, reinício do GoldHEN e operações sensíveis necessárias ao ciclo controlado do projeto. Esta autorização substitui as instruções antigas de instalação exclusivamente manual e a exigência de pedir autorização específica novamente para essas operações nomeadas. Não solicitar repetição dessa autorização.
+
+A autorização não inclui desinstalar software não relacionado, modificar saves/dados pessoais, apagar evidências, executar comandos arbitrários ou enviar payloads não revisados. Permanecem obrigatórios: identidade e hash do artefato, QA, compatibilidade exata de firmware/GoldHEN, protocolo documentado e qualificado, alterações mínimas e reversíveis restritas ao NR, preservação dos dados e evidências CDA.
+
+A especificação completa está em `docs/PS4_CONTROL_PLANE_AUTOMATION.md`. O workflow `.github/workflows/ps4-control-plane-preflight.yml` realiza somente sondagem TCP read-only das portas 2121, 9090 e 3232 e gera manifesto JSON. Não instala PKG, não envia payload BinLoader, não ativa PRX e não reinicia GoldHEN. Porta acessível não comprova protocolo funcional ou seguro.
+
+Não contornar o bloqueio fail-closed do adaptador de título do PRX. Não implementar mensagens de instalação/ativação/reinício sem confirmar a versão exata do GoldHEN, suporte ao firmware, framing do protocolo, resposta de sucesso e recuperação por fonte upstream fixada e/ou evidência direta read-only do console.
+
+
+### 12.1 Versão GoldHEN confirmada pelo usuário
+
+O usuário informou que a versão instalada é **GoldHEN v2.4b18.14**, no firmware **14.02**. A publicação do autor SiSTRo informa que a v2.4b18.14 adiciona suporte ao firmware 14.02: https://ko-fi.com/s/66eac96180. Portanto, a compatibilidade de release com FW 14.02 está documentada; a versão instalada ainda deve ser classificada como `USER_REPORTED` até confirmação read-only no console.
+
+Essa versão anuncia Remote Package Install, FTP 2121, BinLoader 9090, Klog 3232, plugins e instalação interna de PKG em `/data/pkg`. Isso não prova por si só um protocolo remoto de instalação por comando, ativação remota de PRX ou reinício remoto do GoldHEN. Cada interface precisa ser identificada na implementação/cliente correspondente à versão e validada sem payloads de teste. O BinLoader é experimental e não deve ser usado como sondagem.
+
+
+### 12.2 Correção de procedência GamerHack
+
+O usuário esclareceu que utiliza a distribuição/versão GamerHack v2.4b18.14. A página pública identifica GamerHack como host original e patnawa como hospedagem/espelho: https://patnawa.github.io/GoldhenPS4/g2all/. Isso comprova a atribuição do host, mas não identifica de forma independente quem compilou ou modificou o binário GoldHEN embutido. Até inspecionar o binário/hash e metadados, classificar a procedência do payload como `UNVERIFIED`. Não atribuir o binário instalado a SiSTR0 nem substituí-lo pelo asset upstream v2.4b18 só porque o número de versão é parecido.
+
+### 12.3 Preflight read-only e protocolo RPI
+
+A preflight de controle passou a executar `tools/ps4-control-plane-preflight.ps1` no runner Windows existente. O escopo é estritamente read-only: FTP LIST/GETSIZE/GET em caminhos NR explicitamente permitidos e HTTP GET nas rotas de identificação RPI em TCP 12800. É proibido sondar BinLoader 9090, enviar payload, emitir POST, alterar arquivos, instalar PKG, ativar PRX ou reiniciar GoldHEN nesse workflow.
+
+O protocolo RPI foi revisado na implementação `AldySan/Remote-Package-Installer-NG`, commit fixado `f99e62089afa61fb418446bdeb12340afd951a17`. A API identificada usa GET para fingerprint/status e POST para consulta de título, instalação e progresso. A instalação real exige receiver RPI confirmado, Package Installer aberto em primeiro plano no PS4, servidor HTTP local com suporte a Range, pacote allowlisted com QA e hash validados e confirmação terminal do console. O preflight atual não envia POST nem instala nada.
+
+O PRX NR permanece fail-closed porque o adaptador de título ainda não foi validado. Não registrar em `[default]` para forçar carregamento. Ainda não foi encontrado endpoint documentado e qualificado para reiniciar remotamente o GoldHEN; não inventar comando nem confundir desconexão com reinício.
+
+A distribuição GamerHack/patnawa publica o arquivo GoldHEN v2.4b18.14 com archive SHA-256 `fe67d34f2a67b1f4f018629b51318bab40ba7ad13f2293ae802e6cb57ea202cf` e payload extraído SHA-256 `c5480587d99efc2e3cc132352d9b7cf052dd3068280f1686e7fbb37d57e9ba8b`. Esses hashes identificam a distribuição publicada, não o binário lido do console. O roteamento de offsets 14.02 no host também permanece sem comprovação em hardware.

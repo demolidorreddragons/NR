@@ -69,3 +69,22 @@ When the user reports the result after manually installing/running a staged PKG,
 - Root cause must be classified as observed/correlated/inferred/hypothesis/unknown; use CONFIRMED ROOT CAUSE only when the evidence and a reproducible mechanism support it.
 - Engineering, QA, and independent audit remain separate. Automated tests are not an independent human review.
 - The CDA role does not grant permission to install/uninstall PKGs, activate PRX, modify `plugins.ini`, restart GoldHEN, or perform destructive console actions.
+
+
+## Explicit NR console automation authorization — 2026-11-23
+
+The user explicitly authorized, within the Neural Rendering project scope, automated installation of approved NR PKGs, NR PRX deployment/activation, GoldHEN restart, and the sensitive console operations required by that controlled cycle. This supersedes the older manual-install handoff and per-operation authorization language for those named NR actions. Do not ask for the same authorization again.
+
+This authorization is not permission to uninstall unrelated software, modify saves/user data, delete evidence, execute arbitrary shell commands, or send unreviewed payloads. All operations remain gated by verified artifact identity, QA, firmware/GoldHEN compatibility, exact protocol qualification, reversible NR-only changes, and preserved CDA evidence.
+
+Follow `docs/PS4_CONTROL_PLANE_AUTOMATION.md` and `docs/PS4_WINDOWS_BRIDGE.md`. The `.github/workflows/ps4-control-plane-preflight.yml` workflow is read-only: FTP LIST/GETSIZE/GET on allowlisted NR paths and HTTP GET-only RPI fingerprinting on TCP 12800. It never probes BinLoader 9090 or Klog 3232, sends payloads, or mutates the console. It does not install a PKG, send a BinLoader payload, activate a PRX, or restart GoldHEN. A reachable port is not proof of a usable or safe protocol.
+
+Do not bypass the PRX title-adapter fail-closed gate. GoldHEN v2.4b18.14 / PS4 FW 14.02 compatibility is documented by the release author and reported by the user; do not keep treating this firmware pairing as unknown. The exact installed version remains USER_REPORTED until device evidence confirms it. Do not implement install/activation/restart messages until their protocol framing, success response, and recovery behavior are verified from pinned version-matched source/client and/or direct read-only device evidence.
+
+## Control-plane discovery correction — 2026-11-23
+
+The control-plane preflight is now a read-only inventory, not a generic port scan. It uses the existing Windows runner for FTP LIST/GETSIZE/GET against narrowly allowlisted NR paths and HTTP GET-only fingerprinting of the Remote Package Installer API on TCP 12800. It must never probe GoldHEN BinLoader TCP 9090, send a payload, issue POST requests, modify console files, install a PKG, activate a PRX, or restart GoldHEN. The runner script is `tools/ps4-control-plane-preflight.ps1`; inspect it before every change or execution. A successful preflight only proves the observed read-only paths and endpoint fingerprint.
+
+The RPI client protocol has been source-reviewed against `AldySan/Remote-Package-Installer-NG` commit `f99e62089afa61fb418446bdeb12340afd951a17`. The protocol uses HTTP JSON APIs on the RPI endpoint (normally TCP 12800), including `GET /api`, `GET /api/status`, `POST /api/is_exists`, `POST /api/install`, and progress polling. Only GET endpoints are used by preflight. Actual installation additionally requires a compatible RPI receiver / GoldHEN Package Installer active in the foreground, a bounded HTTP Range-capable file server on the Windows runner, artifact/metadata/QA allowlisting, and verified task completion. Do not run POST install requests until all these conditions and the exact package manifest are validated.
+
+The GamerHack web host is an exploit/loader distribution, not the GoldHEN source project. The patnawa mirror repository documents its bundled v2.4b18.14 archive SHA-256 `fe67d34f2a67b1f4f018629b51318bab40ba7ad13f2293ae802e6cb57ea202cf` and extracted payload SHA-256 `c5480587d99efc2e3cc132352d9b7cf052dd3068280f1686e7fbb37d57e9ba8b`. These identify the published distribution artifact, not the bytes installed in the user's console. The host repository also marks FW 14.02 offset data as not yet proven on hardware. Never infer successful jailbreak/GoldHEN loading on FW 14.02 from routing or host-page support alone.
