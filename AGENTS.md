@@ -100,4 +100,8 @@ This is reversible archival only; it is not installation or runtime validation. 
 
 `/data/GoldHEN/config.ini` is listed on the console (1,127 bytes) but has not been read. PR47 collects only a local temporary copy, SHA-256/size, and allowlisted boolean states for RPI/remote/package/FTP/Klog/BinLoader/plugin/install keys; all non-boolean values are redacted, raw config is not uploaded, and the temporary file is deleted. It also collects plugins.ini temp/backup variants. This is read-only; do not modify config or registration based on a guessed key.
 
-- For archive collision/existence checks, use the captured FTP LIST name sets; do not issue GETSIZE against a path expected not to exist. A 550 response is ambiguous between missing and inaccessible and must not be treated as proof that an archive destination is free. GETSIZE is reserved for paths already known to exist from LIST and for before/after verification of GET snapshots.
+- For archive collision checks, use the captured `/data/pkg/old/` FTP LIST names; never issue GETSIZE against a destination path expected not to exist. A 550 on a source path may indicate missing or inaccessible: cross-check the root LIST. If the source is still listed, treat 550 as access denied and abort; if it is absent, only accept a matching archive whose GET readback hash/size equals the offline report. After RENAME, verify the archive by GET/readback and verify source absence in the final root LIST; do not issue GETSIZE against the now-missing source path.
+
+## Archive rerun safety
+
+The archive workflow must allow a same-run rerun after a partial RENAME by comparing the root LIST with the exact offline report and verifying matching archive names from the old-directory LIST. It must reject unvalidated extra root NR paths, distinguish a listed-but-550 source as access denied, and confirm final source absence with a fresh root LIST. It may never use GETSIZE as a destination collision probe.

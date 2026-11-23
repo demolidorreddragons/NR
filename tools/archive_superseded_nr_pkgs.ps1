@@ -61,6 +61,7 @@ function Get-RemoteSize([string]$remotePath) {
     return [int64]$response.ContentLength
   } catch {
     $ftpResponse = $_.Exception.Response
+    if ($ftpResponse -and [int]$ftpResponse.StatusCode -eq 550) { return $null }
     $status = if ($ftpResponse) { [int]$ftpResponse.StatusCode } else { "unknown" }
     $detail = $_.Exception.GetBaseException().Message
     throw "FTP GETSIZE failed for '$remotePath' (status $status): $detail"
@@ -138,16 +139,17 @@ $rootListingText = Save-RemoteListing "/data/pkg/" $rootListingPath
 $oldListingText = Save-RemoteListing "/data/pkg/old/" $oldListingPath
 $rootEntries = @(ConvertFrom-FtpListing $rootListingText)
 $oldEntries = @(ConvertFrom-FtpListing $oldListingText)
+$reservedOldNames = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+foreach ($oldEntry in $oldEntries) { [void]$reservedOldNames.Add([string]$oldEntry.name) }
 $oldDirectory = @($rootEntries | Where-Object { $_.name -eq "old" })
 if ($oldDirectory.Count -ne 1 -or -not $oldDirectory[0].mode.StartsWith("d")) { throw "/data/pkg/old is not a verified directory; refusing archive." }
 $rootNr = @($rootEntries | Where-Object { $_.name -like "PS4-Neural-Engine-*.pkg" })
-$rootNames = @($rootNr | ForEach-Object { [string]$_.name })
-$oldNames = @($oldEntries | ForEach-Object { [string]$_.name })
 if (@($rootNr | Where-Object { -not $_.mode.StartsWith("-") }).Count -gt 0) { throw "An NR PKG path is not a regular file; refusing to move it." }
-
 $actualPaths = @($rootNr | ForEach-Object { "/data/pkg/$($_.name)" } | Sort-Object -Unique)
+if ($rootNr.Count -ne $actualPaths.Count) { throw "Duplicate NR package names in the live root listing." }
 $reportedPaths = @($staged | ForEach-Object { [string]$_.remote_path } | Sort-Object -Unique)
-if ($rootNr.Count -ne $reportedPaths.Count -or @(Compare-Object -ReferenceObject $reportedPaths -DifferenceObject $actualPaths).Count -gt 0) { throw "Current NR package root differs from the validated offline inspection inventory." }
+$unexpectedPaths = @($actualPaths | Where-Object { $_ -notin $reportedPaths })
+if ($unexpectedPaths.Count -gt 0) { throw "Current NR package root contains unvalidated NR PKG paths: $($unexpectedPaths -join ', ')" }
 
 $nonNrBefore = @($rootEntries | Where-Object { $_.name -notlike "PS4-Neural-Engine-*.pkg" } | ForEach-Object { $_.name } | Sort-Object)
 
@@ -191,13 +193,16 @@ try {
     $baseName = [IO.Path]::GetFileNameWithoutExtension($sourceName)
     $expectedHash = ([string]$pkg.sha256).ToLowerInvariant()
     $expectedBytes = [int64]$pkg.bytes
-    if (-not ($rootNames -contains $sourceName)) {
+    $sourceListed = @($rootNr | Where-Object { $_.name -eq $sourceName }).Count -eq 1
+    $sourceSize = Get-RemoteSize $sourcePath
+
+    if ($null -eq $sourceSize) {
+      if ($sourceListed) { throw "FTP 550 for a source package that is still listed in /data/pkg; treating it as access denied, not absent: $sourcePath" }
+      $matchingArchives = @($oldEntries | Where-Object { $_.name -like "$baseName-archived-$($env:SOURCE_OFFLINE_RUN_ID)-*.pkg" })
       $already = $false
-      for ($n = 0; $n -lt 100; $n++) {
-        $archiveName = "$baseName-archived-$($env:SOURCE_OFFLINE_RUN_ID)-$n.pkg"
-        $archivePath = "/data/pkg/old/$archiveName"
-        if (-not ($oldNames -contains $archiveName)) { continue }
-        $localExisting = Join-Path $env:EVIDENCE_DIR ("already-" + $archiveName)
+      foreach ($existing in $matchingArchives) {
+        $archivePath = "/data/pkg/old/$($existing.name)"
+        $localExisting = Join-Path $env:EVIDENCE_DIR ("already-" + $existing.name)
         $snapExisting = Save-RemoteFile $archivePath $localExisting
         if ($snapExisting.bytes -eq $expectedBytes -and $snapExisting.sha256 -eq $expectedHash) {
           $manifest.files.Add([pscustomobject]@{ source_path=$sourcePath; archive_path=$archivePath; status="ALREADY_ARCHIVED_AND_VERIFIED"; bytes=$snapExisting.bytes; sha256=$snapExisting.sha256; readback=$snapExisting }) | Out-Null
@@ -206,9 +211,10 @@ try {
           break
         }
       }
-      if (-not $already) { throw "Source package is absent and no matching verified archive exists: $sourcePath" }
+      if (-not $already) { throw "Source package is absent from root and no matching verified archive exists: $sourcePath" }
       continue
     }
+    if (-not $sourceListed) { throw "GETSIZE succeeded for a package absent from the captured /data/pkg listing: $sourcePath" }
 
     $sourceLocal = Join-Path $env:EVIDENCE_DIR ("source-" + $sourceName)
     $sourceSnapshot = Save-RemoteFile $sourcePath $sourceLocal
@@ -217,10 +223,13 @@ try {
     $destinationPath = $null
     for ($n = 0; $n -lt 100; $n++) {
       $archiveName = "$baseName-archived-$($env:SOURCE_OFFLINE_RUN_ID)-$n.pkg"
-      $candidatePath = "/data/pkg/old/$archiveName"
-      if (-not ($oldNames -contains $archiveName)) { $destinationPath = $candidatePath; break }
+      if (-not $reservedOldNames.Contains($archiveName)) {
+        $destinationPath = "/data/pkg/old/$archiveName"
+        [void]$reservedOldNames.Add($archiveName)
+        break
+      }
     }
-    if (-not $destinationPath) { throw "No collision-free archive name available for $sourcePath" }
+    if (-not $destinationPath) { throw "No collision-free archive name available from the captured /data/pkg/old listing for $sourcePath" }
 
     $entry = [pscustomobject]@{
       source_path=$sourcePath
@@ -243,8 +252,6 @@ try {
     $entry.status = "RENAMED_PENDING_READBACK"
     Save-Manifest
 
-    $rootNames = @($rootNames | Where-Object { $_ -ne $sourceName })
-    $oldNames += [IO.Path]::GetFileName($destinationPath)
     $archiveLocal = Join-Path $env:EVIDENCE_DIR ("archive-" + [IO.Path]::GetFileName($destinationPath))
     $archiveSnapshot = Save-RemoteFile $destinationPath $archiveLocal
     if ($archiveSnapshot.bytes -ne $expectedBytes -or $archiveSnapshot.sha256 -ne $expectedHash) { throw "Archived readback identity mismatch: $destinationPath" }
