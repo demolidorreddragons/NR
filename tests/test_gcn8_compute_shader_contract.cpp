@@ -96,6 +96,8 @@ int main() {
     CHECK(metadata.shader_hash_high == 0xE15419E8);
     CHECK(metadata.shader_crc32 == 0x7519EC2E);
     CHECK(metadata.shader_binary_info_version == 7);
+    CHECK(metadata.shader_binary_info_type == 4);
+    CHECK(metadata.shader_uses_srt == 0);
     CHECK(metadata.compute_pgm_rsrc2 == 0x88);
     CHECK(metadata.user_sgpr_count == 4);
     CHECK(metadata.compute_num_thread_x == 64);
@@ -141,6 +143,18 @@ int main() {
     bad = valid;
     write_u32(bad, kGnmComputeStageOffset, (1u << 24) | 27u);
     CHECK(parse_compute_shader_binary(bad.data(), bad.size(), &metadata) == ComputeShaderError::invalid_shader_binary_size);
+
+    bad = valid;
+    write_u32(bad, kGnmComputeStageOffset, (1u << 24) | (1u << 23) | 108u);
+    CHECK(parse_compute_shader_binary(bad.data(), bad.size(), &metadata) == ComputeShaderError::unsupported_shader_resource_table);
+
+    bad = valid;
+    bad[0xAC + 8] = static_cast<std::uint8_t>((bad[0xAC + 8] & 0xC3u) | (3u << 2));
+    CHECK(parse_compute_shader_binary(bad.data(), bad.size(), &metadata) == ComputeShaderError::unsupported_shader_binary_info_type);
+
+    bad = valid;
+    bad[0xAC + 14] = 1;
+    CHECK(parse_compute_shader_binary(bad.data(), bad.size(), &metadata) == ComputeShaderError::unsupported_shader_resource_table);
 
     bad = valid;
     bad.resize(0xAC + 27);

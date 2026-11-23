@@ -51,7 +51,10 @@ ComputeShaderError parse_compute_shader_binary(
 
     const std::uint32_t common_data = read_u32_le(data + kGnmComputeStageOffset);
     const std::uint8_t slot_count = static_cast<std::uint8_t>(common_data >> 24);
-    const std::uint32_t shader_binary_size = common_data & 0x00FFFFFFu;
+    const bool shader_uses_srt = ((common_data >> 23) & 1u) != 0;
+    if (shader_uses_srt)
+        return ComputeShaderError::unsupported_shader_resource_table;
+    const std::uint32_t shader_binary_size = common_data & 0x007FFFFFu;
     const std::size_t required_stage_bytes =
         kGnmComputeStageHeaderSize + static_cast<std::size_t>(slot_count) * 4u;
     if (required_stage_bytes > stage_header_size)
@@ -78,6 +81,11 @@ ComputeShaderError parse_compute_shader_binary(
         return ComputeShaderError::invalid_shader_binary_info_magic;
     if (info[7] != kGnmShaderBinaryInfoVersion)
         return ComputeShaderError::unsupported_shader_binary_info_version;
+    const std::uint8_t shader_binary_info_type = static_cast<std::uint8_t>((info[8] >> 2) & 0x0Fu);
+    if (shader_binary_info_type != kGnmComputeStage)
+        return ComputeShaderError::unsupported_shader_binary_info_type;
+    if ((info[14] & 0x01u) != 0)
+        return ComputeShaderError::unsupported_shader_resource_table;
 
     const std::uint32_t code_size = read_u24_le(info + 9);
     if (code_size == 0 ||
@@ -155,6 +163,8 @@ ComputeShaderError parse_compute_shader_binary(
     output->shader_hash_high = shader_hash_high;
     output->shader_crc32 = shader_crc32;
     output->shader_binary_info_version = info[7];
+    output->shader_binary_info_type = shader_binary_info_type;
+    output->shader_uses_srt = 0;
     output->shader_binary_info_flags = info[8];
     output->compute_pgm_rsrc2 = pgm_rsrc2;
     output->compute_num_thread_x = thread_x;
@@ -183,6 +193,8 @@ const char* compute_shader_error_string(ComputeShaderError error) noexcept {
     case ComputeShaderError::invalid_input_usage_table: return "input-usage table exceeds stage header";
     case ComputeShaderError::invalid_code_offset: return "compute code offset does not match stage header";
     case ComputeShaderError::invalid_shader_binary_size: return "shader binary size is smaller than OrbShdr metadata";
+    case ComputeShaderError::unsupported_shader_resource_table: return "shader resource table path is unsupported by this contract";
+    case ComputeShaderError::unsupported_shader_binary_info_type: return "OrbShdr metadata is not a compute shader";
     case ComputeShaderError::truncated_shader_binary_info: return "truncated OrbShdr metadata";
     case ComputeShaderError::invalid_shader_binary_info_magic: return "OrbShdr metadata magic is missing";
     case ComputeShaderError::unsupported_shader_binary_info_version: return "unsupported OrbShdr metadata version";

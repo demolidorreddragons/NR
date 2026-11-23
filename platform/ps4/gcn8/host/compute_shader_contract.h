@@ -31,6 +31,8 @@ enum class ComputeShaderError : std::uint8_t {
     invalid_input_usage_table,
     invalid_code_offset,
     invalid_shader_binary_size,
+    unsupported_shader_resource_table,
+    unsupported_shader_binary_info_type,
     truncated_shader_binary_info,
     invalid_shader_binary_info_magic,
     unsupported_shader_binary_info_version,
@@ -60,6 +62,8 @@ struct ComputeShaderMetadata {
     std::uint32_t compute_num_thread_y = 0;
     std::uint32_t compute_num_thread_z = 0;
     std::uint8_t shader_binary_info_version = 0;
+    std::uint8_t shader_binary_info_type = 0;
+    std::uint8_t shader_uses_srt = 0;
     std::uint8_t shader_binary_info_flags = 0;
     std::uint8_t user_sgpr_count = 0;
     std::uint8_t input_usage_slot_count = 0;
