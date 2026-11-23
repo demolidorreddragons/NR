@@ -99,3 +99,8 @@ The existing bridge proves FTP upload/readback/staging only. A new read-only con
 - This confirms release-level firmware compatibility, not an independent live read of the console version. Record the version as `USER_REPORTED` until read-only device evidence confirms it.
 - The release advertises FTP 2121, BinLoader 9090, Klog 3232, Remote Package Install, internal `/data/pkg` installation and plugins. BinLoader is experimental; do not send test payloads.
 - Remote PKG install protocol framing/response, remote PRX activation and GoldHEN restart are not specified by the release feature list. Do not infer those commands from feature presence; qualify them against the exact v2.4b18.14 source/client and verify each operation independently.
+
+
+## Provenance clarification — GamerHack distribution
+
+The user identifies their v2.4b18.14 setup as the **GamerHack** version. Public host metadata calls GamerHack the original host and patnawa the host operator/mirror: https://patnawa.github.io/GoldhenPS4/g2all/. That attribution applies to the host/distribution page; it does not establish the embedded payload's compiler or binary provenance. Record the payload origin/hash as `UNVERIFIED` until inspected. Do not call the installed binary an official SiSTR0 build or replace it with the upstream v2.4b18 asset based only on the shared version string.
