@@ -5,9 +5,6 @@ on:
     workflows: ["PS4 Base PKG 006 Independent QA"]
     types: [completed]
     branches: [main]
-  push:
-    branches: [main]
-    paths: [".github/workflows/ps4-stage-full-installer-006.yml"]
 
 permissions:
   actions: read
@@ -15,7 +12,7 @@ permissions:
 
 jobs:
   stage:
-    if: ${{ (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main' && github.event.workflow_run.head_repository.full_name == github.repository) || (github.event_name == 'push' && github.event.head_commit.message == 'Run approved full installer 006 stage') }}
+    if: ${{ github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main' && github.event.workflow_run.head_repository.full_name == github.repository }}
     runs-on: [self-hosted, Windows, X64, ps4-lan]
     timeout-minutes: 15
     steps:
@@ -25,15 +22,27 @@ jobs:
           name: PS4-Neural-Engine-006-independent-QA
           path: approved
           repository: demolidorreddragons/NR
-          run-id: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.id || '44663222188' }}
+          run-id: ${{ github.event.workflow_run.id }}
           github-token: ${{ github.token }}
+      - name: Resolve exact source build run from independent QA report
+        id: source
+        shell: powershell -NoProfile -ExecutionPolicy Bypass -File {0}
+        run: |
+          $ErrorActionPreference = "Stop"
+          $report = Join-Path $env:GITHUB_WORKSPACE "approved/qa-report.txt"
+          if (-not (Test-Path -LiteralPath $report)) { throw "QA report missing." }
+          $reportText = Get-Content -LiteralPath $report -Raw
+          $buildRunId = [regex]::Match($reportText, "(?m)^BUILD_RUN_ID=(\\d+)$").Groups[1].Value
+          if (-not $buildRunId) { throw "QA report is not bound to a triggering build run." }
+          "build_run_id=$buildRunId" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          Write-Host "QA_SOURCE_BUILD_RUN_ID=$buildRunId"
       - name: Download exact PKG 006 build artifact
         uses: actions/download-artifact@v4
         with:
           name: ps4-neural-engine-build
           path: build-artifact
           repository: demolidorreddragons/NR
-          run-id: 44662999645
+          run-id: ${{ steps.source.outputs.build_run_id }}
           github-token: ${{ github.token }}
       - name: Verify QA and stage exact package with FTP readback
         shell: powershell -ExecutionPolicy Bypass -File {0}
