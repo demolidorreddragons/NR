@@ -29,6 +29,10 @@ class ControlPlanePreflightContractTests(unittest.TestCase):
             "/user/app/PNEU00004/app.xml",
             "/user/app/PNEU00001/app.json",
             "/user/app/PNEU00001/app.xml",
+            "/user/app/PNEU00001/app.pkg",
+            "/user/app/PNEU00004/app.pkg",
+            "/data/pkg/PS4-Neural-Engine-015.pkg",
+            "/data/pkg/PS4-Neural-Engine-006-8d95e10d45e9.pkg",
         ):
             self.assertIn(path, SCRIPT)
         for flag in (
@@ -52,6 +56,8 @@ class ControlPlanePreflightContractTests(unittest.TestCase):
         self.assertIn("ps4-control-plane-preflight.ps1", WORKFLOW)
         self.assertIn("[System.Net.IPAddress]::TryParse", SCRIPT)
         self.assertIn("collector_commit=$env:COLLECTOR_COMMIT", SCRIPT)
+        self.assertIn('schema="nr.ps4.control-plane-preflight.v3"', SCRIPT)
+        self.assertIn("16777216", SCRIPT)
         self.assertNotIn("workflow_dispatch", WORKFLOW)
         self.assertNotIn("contents: write", WORKFLOW)
 
