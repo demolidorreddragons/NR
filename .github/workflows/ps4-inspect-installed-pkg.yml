@@ -1,34 +1,40 @@
 name: Inspect installed Neural Engine PKG offline
+
 on:
-  push:
+  workflow_run:
+    workflows: ["PS4 installed Neural Engine read-only audit"]
+    types: [completed]
     branches: [main]
-    paths:
-      - ".github/workflows/ps4-inspect-installed-pkg.yml"
+
 permissions:
   actions: read
   contents: read
+
 jobs:
   inspect:
+    if: ${{ github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main' && github.event.workflow_run.head_repository.full_name == github.repository }}
     runs-on: windows-latest
     steps:
-      - name: Checkout independent package inspector
+      - name: Checkout pinned independent package inspector
         uses: actions/checkout@v4
         with:
           repository: pearlxcore/OrbisPkgTool
           ref: 3de6da849b64a8ad0d5ba00dd4e8919934b868b0
           path: OrbisPkgTool-src
+          persist-credentials: false
 
       - name: Setup .NET 10
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 10.0.x
 
-      - name: Download read-only PS4 audit artifact
+      - name: Download exact read-only PS4 audit artifact
         uses: actions/download-artifact@v4
         with:
-          name: PS4-installed-Neural-Engine-metadata-audit
+          name: installed-app-files-readonly
           path: installed-audit
-          run-id: 44654196789
+          repository: demolidorreddragons/NR
+          run-id: ${{ github.event.workflow_run.id }}
           github-token: ${{ github.token }}
 
       - name: Build independent inspector
@@ -41,33 +47,54 @@ jobs:
           if (-not (Test-Path $tool)) { throw "Independent inspector DLL missing." }
           "TOOL=$tool" | Out-File "$env:RUNNER_TEMP\installed-pkg-tool.txt"
 
-      - name: Validate and extract installed package metadata
+      - name: Validate and extract installed and candidate packages
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
           $tool = (Get-Content "$env:RUNNER_TEMP\installed-pkg-tool.txt" | Select-Object -First 1).Substring(5)
-          $pkg = Join-Path $env:GITHUB_WORKSPACE "installed-audit/app.pkg"
-          if (-not (Test-Path $pkg)) { throw "Installed app.pkg missing from audit artifact." }
           New-Item -ItemType Directory -Force -Path audit-output | Out-Null
-          $size = (Get-Item $pkg).Length
-          $hash = (Get-FileHash -Algorithm SHA256 $pkg).Hash.ToLowerInvariant()
-          "INSTALLED_APP_PKG_BYTES=$size" | Out-File audit-output/installed-pkg-report.txt
-          "INSTALLED_APP_PKG_SHA256=$hash" | Out-File audit-output/installed-pkg-report.txt -Append
+          $report = Join-Path $env:GITHUB_WORKSPACE "installed-audit/installed-app-identity-report.txt"
+          if (Test-Path -LiteralPath $report) { Copy-Item -LiteralPath $report -Destination "audit-output/installed-app-identity-report.txt" }
 
-          dotnet "$tool" validate "$pkg" 2>&1 | Tee-Object audit-output/pkg-validation.txt
-          if ($LASTEXITCODE -ne 0) { throw "Installed app.pkg failed independent package validation." }
-          $out = Join-Path $env:RUNNER_TEMP "installed-neural-engine-extracted"
-          dotnet "$tool" extract "$pkg" "$out" --verbose 2>&1 | Tee-Object audit-output/pkg-extract.txt
-          if ($LASTEXITCODE -ne 0) { throw "Installed app.pkg extraction failed." }
-          $sfo = Get-ChildItem $out -Recurse -File -Filter param.sfo | Select-Object -First 1
-          if (-not $sfo) { throw "Installed package PARAM.SFO not found after extraction." }
-          dotnet "$tool" sfo read "$($sfo.FullName)" 2>&1 | Tee-Object audit-output/installed-param-sfo.txt
-          if ($LASTEXITCODE -ne 0) { throw "Installed PARAM.SFO parsing failed." }
-          "EXTRACTED_PARAM_SFO=$($sfo.FullName)" | Out-File audit-output/installed-pkg-report.txt -Append
-          "INSTALLED_PACKAGE_INSPECTION=PASS_PC_ONLY" | Out-File audit-output/installed-pkg-report.txt -Append
-          Get-Content audit-output/installed-pkg-report.txt | Out-File $env:GITHUB_STEP_SUMMARY -Append
+          foreach ($name in @("installed-app.pkg","user-data-source-pkg015.pkg","staged-pkg015.pkg")) {
+            $pkg = Join-Path $env:GITHUB_WORKSPACE ("installed-audit/" + $name)
+            if (-not (Test-Path -LiteralPath $pkg)) {
+              "PACKAGE_UNAVAILABLE=$name" | Out-File "audit-output/package-inspection-report.txt" -Append -Encoding utf8
+              continue
+            }
+            $size = (Get-Item -LiteralPath $pkg).Length
+            $hash = (Get-FileHash -LiteralPath $pkg -Algorithm SHA256).Hash.ToLowerInvariant()
+            "PACKAGE=$name BYTES=$size SHA256=$hash" | Out-File "audit-output/package-inspection-report.txt" -Append -Encoding utf8
 
-      - name: Upload installed package inspection evidence
+            $validation = dotnet "$tool" validate "$pkg" 2>&1
+            $validation | Out-File ("audit-output/" + $name + ".validation.txt") -Encoding utf8
+            if ($LASTEXITCODE -ne 0) {
+              "PACKAGE_VALIDATION=FAIL name=$name" | Out-File "audit-output/package-inspection-report.txt" -Append -Encoding utf8
+              if ($name -eq "installed-app.pkg") { throw "Installed app.pkg failed independent validation." }
+              continue
+            }
+            "PACKAGE_VALIDATION=PASS name=$name" | Out-File "audit-output/package-inspection-report.txt" -Append -Encoding utf8
+
+            $out = Join-Path $env:RUNNER_TEMP ("installed-pkg-extract-" + [IO.Path]::GetFileNameWithoutExtension($name))
+            dotnet "$tool" extract "$pkg" "$out" --verbose 2>&1 | Tee-Object ("audit-output/" + $name + ".extract.txt")
+            if ($LASTEXITCODE -ne 0) {
+              "PACKAGE_EXTRACTION=FAIL name=$name" | Out-File "audit-output/package-inspection-report.txt" -Append -Encoding utf8
+              if ($name -eq "installed-app.pkg") { throw "Installed app.pkg extraction failed." }
+              continue
+            }
+            $sfo = Get-ChildItem $out -Recurse -File -Filter param.sfo | Select-Object -First 1
+            if (-not $sfo) {
+              "PACKAGE_SFO=UNAVAILABLE name=$name" | Out-File "audit-output/package-inspection-report.txt" -Append -Encoding utf8
+              continue
+            }
+            dotnet "$tool" sfo read "$($sfo.FullName)" 2>&1 | Tee-Object ("audit-output/" + $name + ".sfo.txt")
+            if ($LASTEXITCODE -ne 0) { throw "SFO parsing failed for $name." }
+            "PACKAGE_SFO=PASS name=$name" | Out-File "audit-output/package-inspection-report.txt" -Append -Encoding utf8
+          }
+
+          Get-Content "audit-output/package-inspection-report.txt" | Out-File $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+
+      - name: Preserve independent package inspection evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
