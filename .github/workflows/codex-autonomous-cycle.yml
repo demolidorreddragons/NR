@@ -50,6 +50,19 @@ jobs:
             throw "Codex authentication check failed (exit=$loginCode)."
           }
 
+      - name: Verify native Windows MXC workspace-write sandbox
+        shell: powershell
+        working-directory: ${{ github.workspace }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $codex = 'C:\ProgramData\NR\Codex\node_modules\.bin\codex.cmd'
+          $probe = & $codex -c windows.sandbox=mxc sandbox --include-managed-config --permission-profile :workspace -- cmd.exe /d /c echo MXC_OK 2>&1 | ForEach-Object { "$_" }
+          $probeCode = $LASTEXITCODE
+          $probe | ForEach-Object { Write-Host $_ }
+          if ($probeCode -ne 0 -or (($probe -join "`n") -notmatch 'MXC_OK')) {
+            throw 'Native MXC sandbox is not ready; refusing to fall back to read-only or unrestricted execution.'
+          }
+
       - name: Run Codex engineering cycle with bounded repair
         shell: powershell
         working-directory: ${{ github.workspace }}
@@ -70,7 +83,7 @@ jobs:
           $previous = $ErrorActionPreference
           $ErrorActionPreference = 'Continue'
           # Codex exec consumes the full multiline task from stdin.
-          $output = $prompt | & $codex exec --sandbox workspace-write --skip-git-repo-check 2>&1 | ForEach-Object { "$_" }
+          $output = $prompt | & $codex -c windows.sandbox=mxc -c features.prefer_mxc=true exec --sandbox workspace-write --skip-git-repo-check 2>&1 | ForEach-Object { "$_" }
           $exitCode = $LASTEXITCODE
           $ErrorActionPreference = $previous
           $output | ForEach-Object { Write-Host $_ }
@@ -104,7 +117,13 @@ jobs:
           if (-not (Test-Path -LiteralPath $report -PathType Leaf)) {
             throw "Codex did not create the required report: $report"
           }
-          $diff = git status --short
+          if ($gitCommand) {
+            $diff = git status --short
+          } else {
+            $diff = Get-ChildItem -LiteralPath . -Recurse -File -Force |
+              Where-Object { $_.FullName -notmatch '\\(\.git|\.codex)\\' } |
+              Select-Object -ExpandProperty FullName
+          }
           Write-Host '===== WORKTREE ====='
           $diff | ForEach-Object { Write-Host $_ }
           if (-not $diff) { throw 'Codex produced neither a report nor code changes.' }
@@ -138,18 +157,4 @@ jobs:
           if (-not (Get-Command git.exe -ErrorAction SilentlyContinue)) { Write-Warning 'Git unavailable; skipping commit/push and retaining artifact evidence.'; exit 0 }
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git init
-          git remote add origin https://github.com/demolidorreddragons/NR.git
-          git fetch --depth=1 origin engineering/codex-autonomous-cycle-20261123
-          git checkout -B engineering/codex-autonomous-cycle-20261123 FETCH_HEAD
-          git add -A
-          if (-not (git diff --cached --quiet)) {
-            git commit -m "Codex autonomous engineering cycle"
-            if ($LASTEXITCODE -ne 0) { throw 'Git commit failed.' }
-            $pair = "x-access-token:$env:GH_TOKEN"
-            $encoded = [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes($pair))
-            git -c "http.extraheader=AUTHORIZATION: basic $encoded" push origin HEAD:engineering/codex-autonomous-cycle-20261123
-            if ($LASTEXITCODE -ne 0) { throw 'Push of Codex engineering result failed.' }
-          } else {
-            Write-Host 'No staged changes to commit.'
-          }
+          Write-Warning 'Codex output is retained as a review artifact. Repository write-back will be enabled only after the sandbox probe and artifact are validated.'
