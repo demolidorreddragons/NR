@@ -112,3 +112,23 @@ No version-matched, documented remote GoldHEN restart endpoint has been identifi
 ## GamerHack distribution identity and hashes
 
 The public host source is `GamerHack/GamerHack.github.io`; the preserved mirror is `patnawa/GoldhenPS4`. The mirror's README/CHANGELOG identifies GoldHEN v2.4b18.14 (298,776 bytes), archive SHA-256 `fe67d34f2a67b1f4f018629b51318bab40ba7ad13f2293ae802e6cb57ea202cf`, extracted payload SHA-256 `c5480587d99efc2e3cc132352d9b7cf052dd3068280f1686e7fbb37d57e9ba8b`. The latter is a published distribution hash, not a console readback hash. The same mirror explicitly says 14.02 offset routing is upstream data and remains unproven on physical hardware. Keep exploit-chain compatibility, GoldHEN payload identity, and live console execution as three separate evidence items.
+
+## Observed console snapshot — 2026-11-23 (read-only)
+
+Source: workflow run `45162859287`, artifact `ps4-control-plane-preflight-45162545015`, collector commit `b6864210eebe474b33482083215f9f22b518da1d`. The collector completed successfully using only FTP LIST/GETSIZE/GET and HTTP GET. No package install, remote write, PRX activation, BinLoader probe, or GoldHEN restart occurred.
+
+Observed facts:
+- FTP 2121 is reachable and read-only inventory succeeded.
+- RPI HTTP endpoint TCP 12800 actively refused the connection. No install API was available at snapshot time. The collector sent no POST requests.
+- Both `/user/app/PNEU00001/` and `/user/app/PNEU00004/` exist. Their `app.json` files reference `/user/data/pkg/PS4-Neural-Engine-015.pkg` and `/user/data/pkg/PS4-Neural-Rendering-GCN8-gnm-load-45040217180.pkg`, respectively. These references indicate existing installs; app.pkg/SFO was not independently parsed by this snapshot.
+- `/data/GoldHEN/plugins.ini` exists (55 bytes, SHA-256 `5b186ce425fcdc4cdc25312635114ca79dc24e73545c315ad645abca39abd5d0`) and contains a `[default]` registration for `/data/GoldHEN/plugins/ps4_neural_engine.prx`. Do not append a duplicate registration.
+- The NR PRX GET readback was 317,216 bytes, SHA-256 `1481214d21aa5c826f9d51ae8cd55759e625c2b9ca7159dd9578ea632661d8e7`. The same directory LIST reported 224,128 bytes for that path. This identity discrepancy, together with installer-log conflict messages, is a hard stop for replacing or activating that PRX until its filesystem identity is resolved. Preserve the original and backups.
+- `/data/pkg/` contains third-party game packages, old archives, multiple NR PKGs, and the current NR candidates. Preserve every non-NR package and do not clean the directory wholesale.
+- The independently QA-validated main-branch PKG 006 is a FULL BASE application (not a patch), Title ID `PNEU00001`, APP_VER `01.02`, 6,619,136 bytes, SHA-256 `a3c9eb2b185e69d819f15d755a7f032b84de00793808b1081399856eb1873244`, QA `PASS_PC_ONLY_NOT_HARDWARE_TESTED`. It is staged at `/data/pkg/PS4-Neural-Engine-006-a3c9eb2b185e.pkg` with FTP readback verification. Because PNEU00001 already exists, do not install this full-base package as an update or risk replacing existing app data.
+- The feature-branch PKG 015 artifact is a FULL BASE application, Title ID `PNEU00001`, APP_VER `01.10`, 6,619,136 bytes, SHA-256 `7609b5d2b53628bd0a22c85c31ac72df2ae36d9047c9a4908ad24ff2f8fc5548`, QA `PASS_PC_ONLY_NOT_HARDWARE_TESTED`. A filename with that hash prefix is present in `/data/pkg/`; this snapshot did not perform a remote readback hash for that file. The installed app metadata references an unversioned `PS4-Neural-Engine-015.pkg` path, so do not assume the installed app is this exact build.
+
+Automation gates resulting from this snapshot:
+1. PKG install is blocked: RPI 12800 is not listening, and PNEU00001 is already installed. A base package is not an update/patch.
+2. PRX activation is blocked: it is already registered in `plugins.ini`, but the on-device PRX identity is inconsistent and the current NR title adapter remains unvalidated/fail-closed.
+3. GoldHEN restart is blocked: no version-matched remote restart endpoint is qualified. Do not probe BinLoader 9090 or invent a command.
+4. The next safe engineering step is to resolve the PRX path/readback inconsistency and qualify a real receiver/control channel; no console mutation is authorized by this snapshot alone.
