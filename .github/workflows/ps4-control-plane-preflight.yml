@@ -33,32 +33,13 @@ jobs:
         run: |
           $ErrorActionPreference = "Stop"
           $collectorCommit = ([string]$env:COLLECTOR_COMMIT).Trim()
-          if ($collectorCommit -notmatch '^[a-fA-F0-9]{40}
-      - name: Collect read-only PS4 control-plane inventory
-        shell: powershell -NoProfile -ExecutionPolicy Bypass -File {0}
-        env:
-          PS4_IP: ${{ vars.PS4_IP }}
-          BUILD_RUN_ID: ${{ github.event.workflow_run.id }}
-          BUILD_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
-          BUILD_BRANCH: ${{ github.event.workflow_run.head_branch }}
-          GITHUB_RUN_ID: ${{ github.run_id }}
-        run: |
-          & "$env:GITHUB_WORKSPACE\tools\ps4-control-plane-preflight.ps1"
-
-      - name: Preserve read-only control-plane evidence
-        uses: actions/upload-artifact@v4
-        with:
-          name: ps4-control-plane-preflight-${{ github.event.workflow_run.id }}
-          path: ${{ runner.temp }}/nr-control-plane-preflight-${{ github.run_id }}/*
-          if-no-files-found: error
-          retention-days: 30
-) { throw "Could not identify reviewed collector commit from checkout output." }
+          if ($collectorCommit -notmatch '^[a-fA-F0-9]{40}\z') { throw "Could not identify reviewed collector commit from checkout output." }
           "COLLECTOR_COMMIT=$collectorCommit" | Out-File $env:GITHUB_ENV -Append -Encoding ascii
           "COLLECTOR_REF=main" | Out-File $env:GITHUB_STEP_SUMMARY -Append -Encoding ascii
           "COLLECTOR_COMMIT=$collectorCommit" | Out-File $env:GITHUB_STEP_SUMMARY -Append -Encoding ascii
 
       - name: Collect read-only PS4 control-plane inventory
-        shell: powershell
+        shell: powershell -NoProfile -ExecutionPolicy Bypass -File {0}
         env:
           PS4_IP: ${{ vars.PS4_IP }}
           BUILD_RUN_ID: ${{ github.event.workflow_run.id }}
