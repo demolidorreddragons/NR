@@ -4,6 +4,22 @@ from pathlib import Path
 import re
 
 script = Path("tools/ps4-control-plane-preflight.ps1").read_text(encoding="utf-8")
+workflow = Path(".github/workflows/ps4-control-plane-preflight.yml").read_text(encoding="utf-8")
+
+# The privileged workflow must use the existing Windows LAN runner and reviewed default-branch source.
+assert "runs-on: [self-hosted, Windows, X64, ps4-lan]" in workflow
+assert "ref: main" in workflow
+assert "workflow_run:" in workflow and 'workflows: ["PS4 PRX and PKG build"]' in workflow
+assert "timeout-minutes: 15" in workflow
+assert "COLLECTOR_COMMIT=$collectorCommit" in workflow
+assert "git -C $env:GITHUB_WORKSPACE rev-parse HEAD" in workflow
+assert "PS4_IP: \${{ vars.PS4_IP }}" in workflow
+
+# Network target is constrained to a literal IPv4 and all run/provenance identifiers are required.
+assert "[System.Net.IPAddress]::TryParse" in script
+assert "AddressFamily]::InterNetwork" in script
+assert "GITHUB_RUN_ID" in script and "COLLECTOR_COMMIT" in script
+assert 'collector_commit=$env:COLLECTOR_COMMIT' in script
 
 # Only the three explicitly read-only FTP verbs may be assigned to requests.
 ftp_methods = set(re.findall(r"\[System\.Net\.WebRequestMethods\+Ftp\]::(\w+)", script))
