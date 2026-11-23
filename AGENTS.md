@@ -69,3 +69,14 @@ When the user reports the result after manually installing/running a staged PKG,
 - Root cause must be classified as observed/correlated/inferred/hypothesis/unknown; use CONFIRMED ROOT CAUSE only when the evidence and a reproducible mechanism support it.
 - Engineering, QA, and independent audit remain separate. Automated tests are not an independent human review.
 - The CDA role does not grant permission to install/uninstall PKGs, activate PRX, modify `plugins.ini`, restart GoldHEN, or perform destructive console actions.
+
+
+## Explicit NR console automation authorization — 2026-11-23
+
+The user explicitly authorized, within the Neural Rendering project scope, automated installation of approved NR PKGs, NR PRX deployment/activation, GoldHEN restart, and the sensitive console operations required by that controlled cycle. This supersedes the older manual-install handoff and per-operation authorization language for those named NR actions. Do not ask for the same authorization again.
+
+This authorization is not permission to uninstall unrelated software, modify saves/user data, delete evidence, execute arbitrary shell commands, or send unreviewed payloads. All operations remain gated by verified artifact identity, QA, firmware/GoldHEN compatibility, exact protocol qualification, reversible NR-only changes, and preserved CDA evidence.
+
+Follow `docs/PS4_CONTROL_PLANE_AUTOMATION.md` and `docs/PS4_WINDOWS_BRIDGE.md`. The new `.github/workflows/ps4-control-plane-preflight.yml` is read-only: it probes TCP 2121/9090/3232 and emits a JSON artifact. It does not install a PKG, send a BinLoader payload, activate a PRX, or restart GoldHEN. A reachable port is not proof of a usable or safe protocol.
+
+Do not bypass the PRX title-adapter fail-closed gate. Do not implement install/activation/restart messages until the exact GoldHEN release, firmware support, protocol framing, success response, and recovery behavior are verified from pinned upstream source and/or direct read-only device evidence.
