@@ -46,6 +46,8 @@ assert "remote_bytes_before=$remoteBefore" in script
 assert "remote_bytes_after=$remoteAfter" in script
 assert "size_stable=$stable" in script
 for remote in (
+    "/data/GoldHEN/ps4_neural_engine_install.log",
+    "/data/GoldHEN/plugins/ps4_neural_engine.prx.pne-release.ini",
     "/user/app/PNEU00001/app.pkg",
     "/user/app/PNEU00004/app.pkg",
     "/data/pkg/PS4-Neural-Engine-015.pkg",
