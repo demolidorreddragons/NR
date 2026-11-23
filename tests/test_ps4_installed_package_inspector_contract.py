@@ -13,6 +13,21 @@ assert "name: ps4-control-plane-preflight-${{ github.event.workflow_run.id }}" i
 assert "3de6da849b64a8ad0d5ba00dd4e8919934b868b0" in workflow
 assert "actions: read" in workflow and "contents: read" in workflow
 assert "retention-days: 30" in workflow
+assert "Read collector commit from exact evidence manifest" in workflow
+assert "ref: ${{ steps.manifest.outputs.collector_commit }}" in workflow
+assert "path: NR-src" in workflow
+assert "NR-src/tools/inspect_ps4_installed_packages.ps1" in workflow
+assert "EXPECTED_COLLECTOR_COMMIT: ${{ steps.manifest.outputs.collector_commit }}" in workflow
+assert "EXPECTED_COLLECTOR_COMMIT" in script
+assert "Get-ListingEntry" in script and "Get-PluginListingSize" in script
+assert "release_manifest_matches_current_prx" in script
+assert "current_goldhen_prx_list_get_size_match" in script
+assert "plugins_ini_registers_nr_prx" in script
+assert "goldhen_prx_snapshots" in script
+assert "matches_release_manifest" in script and "matches_installed_app_prx" in script
+assert "/data/GoldHEN/plugins/ps4_neural_engine.prx.pne-tmp" in collector
+assert "/data/GoldHEN/plugins/ps4_neural_engine.prx.pne-backup" in collector
+assert "/data/GoldHEN/plugins/ps4_neural_engine.prx.pne-backup.001" in collector
 
 # This inspector must only consume the preserved artifact; no console/network client is allowed.
 for forbidden in ("FtpWebRequest", "HttpWebRequest", "curl.exe", "Invoke-WebRequest", "UploadFile", "DeleteFile", "RenameTo", "POST"):
