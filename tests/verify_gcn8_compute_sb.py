@@ -182,7 +182,9 @@ def main() -> int:
             "descriptor pointer ABI width mismatch: compiler allocates "
             f"{compiler_width} SGPR(s), GNM input-usage contract requires {gnm_width}"
         )
-    expected_user_sgprs = compiler_width + 1  # descriptor pointer + workgroup_id.x
+    expected_user_sgprs = (
+        layout["descriptor_table_slot"]["start_register"] + compiler_width + 1
+    )  # preceding system SGPRs + descriptor pointer + workgroup_id.x
     if layout["compute_user_sgpr_count"] != expected_user_sgprs:
         raise SystemExit(
             "compute PGM_RSRC2 USER_SGPR count mismatch: expected "
