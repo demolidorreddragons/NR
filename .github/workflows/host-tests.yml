@@ -76,6 +76,23 @@ jobs:
           PY
       - name: Model manifest validator tests
         run: python3 -m unittest discover -s tools/tests -v
+      - name: Validate Windows runner service diagnostics safety contract
+        run: python3 tests/test_windows_runner_service_diagnostics_contract.py
+      - name: Parse Windows runner service diagnostics PowerShell AST
+        shell: pwsh
+        run: |
+          $tokens = $null
+          $errors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path "tools/collect_windows_runner_service_diagnostics.ps1"),
+            [ref]$tokens,
+            [ref]$errors
+          ) | Out-Null
+          if ($errors.Count -gt 0) {
+            $details = ($errors | ForEach-Object { $_.Message + " at line " + $_.Extent.StartLineNumber }) -join "`n"
+            throw "Windows runner diagnostics PowerShell syntax validation failed: $details"
+          }
+          Write-Host "Windows runner diagnostics PowerShell syntax: PASS"
       - name: Configure
         run: cmake -S . -B build
       - name: Build
