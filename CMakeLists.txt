@@ -25,3 +25,10 @@ add_executable(test_gcn8_resource_table
 )
 target_include_directories(test_gcn8_resource_table PRIVATE platform/ps4/gcn8/host)
 add_test(NAME gcn8_resource_table_contract COMMAND test_gcn8_resource_table)
+
+add_executable(test_gcn8_known_answer
+    tests/test_gcn8_known_answer.cpp
+    platform/ps4/gcn8/host/known_answer_contract.cpp
+)
+target_include_directories(test_gcn8_known_answer PRIVATE platform/ps4/gcn8/host)
+add_test(NAME gcn8_known_answer_contract COMMAND test_gcn8_known_answer)
