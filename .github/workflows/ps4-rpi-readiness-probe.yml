@@ -2,12 +2,17 @@ name: PS4 RPI read-only readiness probe
 
 on:
   workflow_dispatch:
+  workflow_run:
+    workflows: ["PS4 Control Plane Preflight"]
+    types: [completed]
+    branches: [main]
 
 permissions:
   contents: read
 
 jobs:
   rpi-readiness:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: [self-hosted, Windows, X64, ps4-lan]
     timeout-minutes: 10
     steps:
@@ -15,7 +20,7 @@ jobs:
         shell: powershell -NoProfile -ExecutionPolicy Bypass -File {0}
         env:
           GITHUB_TOKEN: ${{ github.token }}
-          GITHUB_SHA: ${{ github.sha }}
+          GITHUB_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
           GITHUB_REPOSITORY: ${{ github.repository }}
           RUNNER_TEMP: ${{ runner.temp }}
         run: |
