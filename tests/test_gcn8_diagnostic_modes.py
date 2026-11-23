@@ -42,3 +42,12 @@ assert 'sceGnmSubmitCommandBuffers' in main
 assert 'RESULT_PASS_GNM_REQUIRED_EXPORT_AUDIT' in main
 assert 'RESULT_FAIL_GNM_REQUIRED_EXPORT_AUDIT' in main
 assert 'RESULT_FAIL_GNM_MODULE_LOAD' in main
+
+workflow = Path(".github/workflows/ps4-prx.yml").read_text()
+assert 'GCN8_SMOKE_MODE: gnm-link' in workflow
+assert 'Build OpenOrbis GNM-Link-Only diagnostic PKG' in workflow
+assert 'Independently validate GNM-Link-Only diagnostic PKG' in workflow
+assert 'yvZ73uQUqrk#C#C' in workflow
+assert 'GNM_LINK_QA_STATUS=PASS_PC_ONLY_NOT_HARDWARE_TESTED' in workflow
+assert 'gnm_function_calls=none' in workflow
+print("GNM-Link-Only build/independent QA workflow invariants: PASS")

@@ -77,10 +77,14 @@ int main(void) {
                          "STAGE=SIGNAL_DIAG op=sigaltstack signal=0 rc=0 errno=0");
     read_file_line_exact(crash_path,
                          "STAGE=SIGNAL_DIAG op=sigemptyset signal=0 rc=0 errno=0");
-    char signal_line[96];
-    snprintf(signal_line, sizeof(signal_line),
-             "SIGNAL_DIAG op=sigaction signal=%d rc=0 errno=0", SIGSEGV);
-    read_file_contains(crash_path, signal_line);
+    const int installed_signals[] = {SIGSEGV, SIGBUS, SIGILL, SIGABRT, SIGFPE};
+    for (size_t i = 0; i < sizeof(installed_signals) / sizeof(installed_signals[0]); ++i) {
+        char signal_line[128];
+        snprintf(signal_line, sizeof(signal_line),
+                 "STAGE=SIGNAL_DIAG op=sigaction signal=%d rc=0 errno=0",
+                 installed_signals[i]);
+        read_file_line_exact(crash_path, signal_line);
+    }
     read_file_contains(crash_path, "SIGNAL_INSTALL_COMPLETE");
     read_file_contains(crash_path, "CRASH sig=0x");
     read_file_contains(crash_path, "CRASH_CTX[0]");
