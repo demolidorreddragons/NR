@@ -18,6 +18,13 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 20
     steps:
+      - name: Checkout exact NR offline-inspector source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          path: NR
+          persist-credentials: false
+
       - name: Checkout pinned independent PKG inspector
         uses: actions/checkout@v4
         with:
@@ -56,7 +63,7 @@ jobs:
           EVIDENCE_DIR: ${{ github.workspace }}/evidence
           EXPECTED_PREFLIGHT_RUN_ID: ${{ github.event.workflow_run.id }}
         run: |
-          & "$env:GITHUB_WORKSPACE/tools/inspect_ps4_installed_packages.ps1"
+& "$env:GITHUB_WORKSPACE\NR\tools\inspect_ps4_installed_packages.ps1"
 
       - name: Preserve offline package inspection evidence
         if: always()
