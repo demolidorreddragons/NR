@@ -59,3 +59,17 @@ The GamerHack host is the exploit/loader distribution; the patnawa mirror docume
 Preflight run `45162859287` completed successfully. FTP 2121 works; RPI HTTP 12800 actively refused connection. `PNEU00001` and `PNEU00004` app directories already exist. `plugins.ini` already registers the NR PRX under `[default]`. The PRX FTP GET readback is 317,216 bytes / SHA-256 `1481214d21aa5c826f9d51ae8cd55759e625c2b9ca7159dd9578ea632661d8e7`, while FTP LIST reported 224,128 bytes; installer logs also contain a symlink/identity conflict. Do not replace, activate, or rewrite that PRX until the mismatch is resolved.
 
 The staged PKG 006 is a full base app for already-installed Title ID PNEU00001, APP_VER 01.02. Do not install it over an existing app. The feature PKG 015 is also a full base app (APP_VER 01.10); do not treat it as a patch or reinstall over existing data. Third-party PKGs in `/data/pkg` must be preserved. No RPI service was listening at 12800, and no restart API is qualified. This snapshot was read-only; it did not install, activate, or restart anything.
+
+## Installed PNEU00001 package identity — 2026-11-23
+
+Read-only audit run 45165759218 and independent OrbisPkgTool inspection artifact 14812944834 prove that installed /user/app/PNEU00001/app.pkg is 6,619,136 bytes, SHA-256 2fcaf679766fefbed4bc60cc31beb0227b8bfefd4eb8070160f65a402be747e9. The app.json-referenced /user/data/pkg/PS4-Neural-Engine-015.pkg is byte-identical. Its SFO is TITLE_ID PNEU00001, APP_VER/VERSION 01.10, CATEGORY gde, CONTENT_ID IV0000-PNEU00001_00-PS4NEURALENG0000; independent package validation passed.
+
+The staged PKG015 candidate hash 7609b5d2b53628bd0a22c85c31ac72df2ae36d9047c9a4908ad24ff2f8fc5548 has the same TITLE_ID and APP_VER 01.10 but a different package hash. It is a different FULL BASE build, not a patch. Do not install it over the existing app. A genuine versioned patch and a qualified install channel are required for an update.
+
+## BGFT/AppInstUtil candidate — not runtime-qualified
+
+A local BGFT installation path is source-documented in ItemzFlow, but the OpenOrbis 0.5.4 BGFT header disagrees with flatz/ItemzFlow over 32-bit versus 64-bit package-size/progress fields. Do not call BGFT from NR until the exact ABI, module exports, task lifecycle, and FW 14.02 runtime behavior are independently qualified. The console PRX readback contains no BGFT install-agent strings; the current PRX is not an install agent. Any future BGFT worker must be NR-only, manifest/hash/metadata gated, idempotent, separate from GNM, and provide terminal task plus installed Title ID/version evidence.
+
+## Preflight runner hardening
+
+Preflight run 45165799711 failed before collector execution because the Windows runner had no git executable and the identity step used the default PowerShell shell. Use actions/checkout output steps.checkout.outputs.commit instead of git, and apply powershell -NoProfile -ExecutionPolicy Bypass -File {0} to every privileged PowerShell step. QA004/005 workflows must skip successfully when their package is absent from the triggering build artifact.
