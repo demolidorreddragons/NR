@@ -76,7 +76,7 @@ Upstream explicitly warns that BinLoader is experimental and payloads may crash 
 
 ### Required control-plane stages
 
-1. **Discovery (read-only):** probe 2121/9090/3232 from the existing Windows runner; record timestamp, target, TCP result, runner identity, triggering build run/commit. Read available GoldHEN version/configuration evidence without changing it.
+1. **Discovery (read-only):** FTP LIST/GETSIZE/GET on allowlisted NR paths and HTTP GET-only RPI fingerprinting on TCP 12800. Never probe 9090 or 3232; record timestamp, runner identity, build run/commit, and raw evidence. Read available GoldHEN version/configuration evidence without changing it.
 2. **Protocol qualification:** pin the exact GoldHEN release/source commit and firmware compatibility; document the wire protocol and response framing for remote PKG install, BinLoader payload delivery, plugin activation, and restart. A TCP connect alone never qualifies a protocol.
 3. **Signed/hashed operation manifest:** accept only artifacts from the triggering successful build, matching repository, branch allowlist, commit, package metadata, QA result, SHA-256, and explicit NR target allowlist. Reject arbitrary paths, URLs, payloads, or commands.
 4. **PKG installation adapter:** use a documented GoldHEN remote-package-install mechanism or a reviewed NR-owned helper; verify install result and installed Title ID/version. Do not uninstall existing content automatically; detect conflicts and stop safely.
@@ -113,3 +113,7 @@ The preflight now runs `tools/ps4-control-plane-preflight.ps1` on this existing 
 - HTTP `GET`-only RPI API fingerprinting on TCP 12800.
 
 It does not probe BinLoader 9090, send payload bytes, issue HTTP POST, write/delete/rename remote files, install packages, activate plugins, or restart GoldHEN. The workflow checks out the exact successful build commit and stores the inventory as a 30-day artifact. Its report is a snapshot, not proof of application execution or hardware functionality.
+
+## Live preflight result — 2026-11-23
+
+Read-only preflight runs 45162859287 and 45164276080 succeeded. FTP 2121 is reachable; RPI TCP 12800 refused the connection. PNEU00001/PNEU00004 already exist, plugins.ini already registers the NR PRX, and the PRX LIST/GET size mismatch blocks replacement. No install, PRX activation, or GoldHEN restart occurred.
