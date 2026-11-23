@@ -24,7 +24,7 @@ $patterns = @(
 )
 $findings = [Collections.Generic.List[object]]::new()
 $scanned = [Collections.Generic.List[object]]::new()
-function Add-MatchesFromText([string]$Text, [string]$Source, [string]$EncodingName, [long]$BaseOffset) {
+function Add-MatchesFromText([string]$Text, [string]$Source, [System.Text.Encoding]$TextEncoding, [long]$BaseOffset) {
     $lines = $Text -split '\r?\n'
     $cursor = 0
     $lineNumber = 0
@@ -34,10 +34,10 @@ function Add-MatchesFromText([string]$Text, [string]$Source, [string]$EncodingNa
             if ([regex]::IsMatch($line, $pattern.Regex)) {
                 $excerpt = $line
                 if ($excerpt.Length -gt 700) { $excerpt = $excerpt.Substring(0,700) }
-                $findings.Add([pscustomobject]@{ source_remote=$Source; encoding=$EncodingName; signal=$pattern.Name; offset_bytes=$BaseOffset+$cursor; line_number=$lineNumber; excerpt=$excerpt })
+                $findings.Add([pscustomobject]@{ source_remote=$Source; encoding=$TextEncoding.WebName; signal=$pattern.Name; offset_bytes=$BaseOffset+$cursor; line_number=$lineNumber; excerpt=$excerpt })
             }
         }
-        $cursor += [Text.Encoding]::UTF8.GetByteCount($line) + 1
+        $cursor += $TextEncoding.GetByteCount($line) + $TextEncoding.GetByteCount([string][char]10)
     }
 }
 foreach ($localName in ($targets.Keys | Sort-Object)) {
@@ -53,7 +53,7 @@ foreach ($localName in ($targets.Keys | Sort-Object)) {
         elseif ($bytes.Length -ge 2 -and $bytes[0] -eq 0xFF -and $bytes[1] -eq 0xFE) { $encoding = [Text.Encoding]::Unicode; $offset = 2 }
         elseif ($bytes.Length -ge 2 -and $bytes[0] -eq 0xFE -and $bytes[1] -eq 0xFF) { $encoding = [Text.Encoding]::BigEndianUnicode; $offset = 2 }
         $text = $encoding.GetString($bytes, $offset, $bytes.Length - $offset)
-        Add-MatchesFromText $text $remote $encoding.WebName $offset
+        Add-MatchesFromText $text $remote $encoding $offset
     } else {
         # Preserve log.bin byte-for-byte. This is exploratory string extraction, not a proprietary-format decoder.
         foreach ($mode in @('ASCII','UTF16LE')) {
