@@ -1,7 +1,3 @@
-        self.assertIn("shell: powershell -NoProfile -ExecutionPolicy Bypass -File {0}", WORKFLOW)
-        self.assertIn("id: checkout-collector", WORKFLOW)
-        self.assertIn("steps.checkout-collector.outputs.commit", WORKFLOW)
-        self.assertIn("ps4-control-plane-preflight-${{ github.run_id }}", WORKFLOW)
 from pathlib import Path
 import re
 import unittest
@@ -61,6 +57,12 @@ class ControlPlanePreflightContractTests(unittest.TestCase):
         self.assertIn("workflow_run:", WORKFLOW)
         self.assertIn('workflows: ["PS4 PRX and PKG build"]', WORKFLOW)
         self.assertIn("runs-on: [self-hosted, Windows, X64, ps4-lan]", WORKFLOW)
+        self.assertIn("shell: powershell -NoProfile -ExecutionPolicy Bypass -File {0}", WORKFLOW)
+        self.assertIn("id: checkout-collector", WORKFLOW)
+        self.assertIn("steps.checkout-collector.outputs.commit", WORKFLOW)
+        self.assertIn("ps4-control-plane-preflight-${{ github.run_id }}", WORKFLOW)
+        self.assertIn("collector_commit=$env:COLLECTOR_COMMIT", SCRIPT)
+        self.assertIn("collector_ref=$env:COLLECTOR_REF", SCRIPT)
         self.assertIn("timeout-minutes: 15", WORKFLOW)
         self.assertIn("ref: main", WORKFLOW)
         self.assertIn("ps4-control-plane-preflight.ps1", WORKFLOW)
