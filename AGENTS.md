@@ -95,3 +95,7 @@ After a successful offline inspection, the PS4 archive workflow may move only NR
 - Fail closed on any unknown NR file, unstable GET, identity mismatch, missing archive directory, collision, or third-party root change. No third-party game PKG may ever be moved.
 
 This is reversible archival only; it is not installation or runtime validation. The workflow must not claim hardware or PRX execution success.
+
+## Safe GoldHEN config discovery follow-up
+
+`/data/GoldHEN/config.ini` is listed on the console (1,127 bytes) but has not been read. PR47 collects only a local temporary copy, SHA-256/size, and allowlisted boolean states for RPI/remote/package/FTP/Klog/BinLoader/plugin/install keys; all non-boolean values are redacted, raw config is not uploaded, and the temporary file is deleted. It also collects plugins.ini temp/backup variants. This is read-only; do not modify config or registration based on a guessed key.

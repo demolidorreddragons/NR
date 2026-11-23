@@ -23,6 +23,11 @@ assert "Get-ListingEntry" in script and "Get-PluginListingSize" in script
 assert "release_manifest_matches_current_prx" in script
 assert "current_goldhen_prx_list_get_size_match" in script
 assert "plugins_ini_registers_nr_prx" in script
+assert "plugins_ini_snapshots" in script
+assert "plugins_ini_variants_identical" in script
+assert "goldhen_config_snapshot" in script
+assert "/data/GoldHEN/plugins.ini.pne-tmp" in script
+assert "/data/GoldHEN/plugins.ini.pne-backup" in script
 assert "goldhen_prx_snapshots" in script
 assert "matches_release_manifest" in script and "matches_installed_app_prx" in script
 assert r'$_ -match ("\s" + $escaped + "\z")' in script

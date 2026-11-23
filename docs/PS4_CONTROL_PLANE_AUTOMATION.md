@@ -302,7 +302,7 @@ Current disposition: preserve the installed app, `plugins.ini`, active PRX, mani
 - Active GoldHEN PRX GET remains 317,216 bytes / SHA-256 `1481214d21aa5c826f9d51ae8cd55759e625c2b9ca7159dd9578ea632661d8e7`, while raw FTP LIST reports 224,128 bytes. Release manifest expected SHA-256 is `54e8595144a3a7e1d36602a1100bae6189f0955175c355bd3ac67d9cb7f85277`.
 - `.pne-tmp` and `.pne-backup.001` are byte-identical at 224,128 bytes / SHA-256 `54e8595144a3a7e1d36602a1100bae6189f0955175c355bd3ac67d9cb7f85277`, matching the release manifest. `.pne-backup` is 206,528 bytes / SHA-256 `7561da3d3b83766becddcb37c1257d83c61009b5e814825ee60694d19f9cf704`, matching the packaged PRX in the older PKG006 builds.
 - Thus there are at least three distinct PRX identities: PKG015 embedded PRX `1e453...`, PKG006 embedded PRX / `.pne-backup` `7561...`, and release-manifest / `.pne-tmp` / `.pne-backup.001` `54e859...`; the active-path FTP GET returns a fourth hash `148121...`. Do not restore or overwrite based only on filenames.
-- The first successful offline inspector run had a parser bug in the PRX metadata comparisons (double-escaped PowerShell regexes), so its PKG validation/SFO/embedded-PRX hashes are valid but its LIST-size, release-manifest and plugins.ini comparison fields are not yet trusted. PR41 corrects those regexes and adds regression assertions.
+- The first successful offline inspector run had a parser bug in the PRX metadata comparisons (double-escaped PowerShell regexes), so its PKG validation/SFO/embedded-PRX hashes are valid but its LIST-size, release-manifest and plugins.ini comparison fields are not yet trusted. PR42 corrected those regexes and added regression assertions; corrected offline inspection run 45170231258 now reports the PRX manifest/LIST/plugin registration comparisons.
 - RPI TCP 12800 still actively refuses the GET-only probe. No mutating request, install, PRX activation, GoldHEN restart, or runtime test occurred.
 
 ## Reversible NR package-root normalization workflow — 2026-11-23
@@ -318,3 +318,9 @@ The new `PS4 Archive Superseded NR PKGs` workflow is triggered only after the of
 6. Verifies the root retains exactly `PS4-Neural-Engine-015.pkg` and that all non-NR root names (including third-party game PKGs) are unchanged.
 
 The workflow never deletes or uploads files, never creates/removes directories, and never touches installed apps, PNEU00004, plugins.ini, PRX files, GoldHEN state, or RPI. It is reversible archival only, not installation. If any identity or inventory gate fails, it stops and uploads partial chain-of-custody evidence. The workflow has not yet executed; it will run only after the next successful offline-inspection event.
+
+## GoldHEN config discovery follow-up — 2026-11-23
+
+The `/data/GoldHEN/config.ini` file is present (the directory listing reports 1,127 bytes), but its contents have not been read. PR47 adds a safe in-memory fingerprint: size/SHA-256 plus only allowlisted relevant boolean states for RPI/remote/package/FTP/Klog/BinLoader/plugin/install keys. Non-boolean values are redacted, the raw file is never uploaded, and the temporary runner-local copy is deleted. It also captures `plugins.ini.pne-tmp` and `plugins.ini.pne-backup` so the active registration can be compared with the installer's backups.
+
+The `/user/app/` listing contains no identifiable Remote Package Installer title, and TCP 12800 refused the read-only GET probe. No setting is changed by this follow-up.
