@@ -20,7 +20,7 @@ The recorded console firmware is 14.02. The release page's listed firmware matri
 |---|---|---|
 | Existing Windows LAN runner | Previously verified | Reuse; never reinstall/reconfigure |
 | FTP transfer/readback/staging | Historical successful run 45151203751 | Continue per-artifact SHA-256 verification |
-| 2121/9090/3232 discovery | Added read-only preflight workflow | Successful run with JSON report |
+| FTP/RPI discovery | Read-only FTP inventory and HTTP GET-only fingerprint on 12800 | Successful runner artifact and device snapshot |
 | Remote PKG install | Not yet implemented/verified | Exact GoldHEN protocol and installed Title ID/version readback |
 | PRX deployment | FTP file transfer only | Hash verification and reversible NR-only registration |
 | PRX activation | Not yet implemented/verified | Firmware-qualified mechanism and runtime evidence |
