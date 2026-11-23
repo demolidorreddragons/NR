@@ -97,6 +97,7 @@ jobs:
             "$UTIL/shader_stats.xml" > "$UTIL/shader_stats.h"
           python3 "$UTIL/format_srgb.py" > "$UTIL/format_srgb.c"
 
+          ROOT="$RUNNER_TEMP/nr-gcn8-deps"
           VULKAN_UTIL="$COMPILER/src/vulkan/util"
           python3 "$VULKAN_UTIL/vk_struct_type_cast_gen.py" \
             --xml "$ROOT/Vulkan-Headers/registry/vk.xml" \
