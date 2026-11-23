@@ -24,8 +24,8 @@ jobs:
     timeout-minutes: 45
     env:
       PS4_IP: ${{ vars.PS4_IP }}
-      EVIDENCE_INPUT: ${{ github.workspace }}/evidence
-      EVIDENCE_DIR: ${{ github.workspace }}/archive-evidence
+      EVIDENCE_INPUT: ${{ github.workspace }}/evidence-${{ github.run_id }}-${{ github.run_attempt }}
+      EVIDENCE_DIR: ${{ github.workspace }}/archive-evidence-${{ github.run_id }}-${{ github.run_attempt }}
       SOURCE_OFFLINE_RUN_ID: ${{ github.event.workflow_run.id }}
     steps:
       - name: Checkout exact archive script source
@@ -40,7 +40,7 @@ jobs:
           github-token: ${{ github.token }}
           repository: ${{ github.repository }}
           run-id: ${{ github.event.workflow_run.id }}
-          path: evidence
+          path: evidence-${{ github.run_id }}-${{ github.run_attempt }}
       - name: Run evidence-gated non-destructive NR PKG archive
         shell: powershell -NoProfile -ExecutionPolicy Bypass -File {0}
         run: |
@@ -49,7 +49,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: ps4-superseded-pkg-archive-${{ github.run_id }}
-          path: archive-evidence/*
+          name: ps4-superseded-pkg-archive-${{ github.run_id }}-${{ github.run_attempt }}
+          path: archive-evidence-${{ github.run_id }}-${{ github.run_attempt }}/*
           if-no-files-found: warn
           retention-days: 90
