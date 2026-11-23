@@ -1,0 +1,55 @@
+diff --git a/src/amd/vulkan/radv_shader_args.c b/src/amd/vulkan/radv_shader_args.c
+--- a/src/amd/vulkan/radv_shader_args.c
++++ b/src/amd/vulkan/radv_shader_args.c
+@@ -82,13 +82,13 @@ static void
+ add_descriptor_set(struct radv_shader_args_state *state, uint32_t set)
+ {
+-   RADV_ADD_ARRAY_ARG(state, AC_ARG_SGPR, 1, AC_ARG_CONST_ADDR, descriptors, set);
++   RADV_ADD_ARRAY_ARG(state, AC_ARG_SGPR, 2, AC_ARG_CONST_ADDR, descriptors, set);
+ 
+    struct radv_userdata_info *ud_info = &state->args->user_sgprs_locs.descriptor_sets[set];
+    ud_info->sgpr_idx = state->args->num_user_sgprs;
+-   ud_info->num_sgprs = 1;
++   ud_info->num_sgprs = 2;
+ 
+    state->args->user_sgprs_locs.descriptor_sets_enabled |= 1u << set;
+-   state->args->num_user_sgprs++;
++   state->args->num_user_sgprs += 2;
+ }
+@@ -98,13 +98,13 @@ static void
+ add_descriptor_heap(struct radv_shader_args_state *state, uint32_t heap)
+ {
+-   RADV_ADD_ARRAY_ARG(state, AC_ARG_SGPR, 1, AC_ARG_CONST_ADDR, descriptors, heap);
++   RADV_ADD_ARRAY_ARG(state, AC_ARG_SGPR, 2, AC_ARG_CONST_ADDR, descriptors, heap);
+ 
+    struct radv_userdata_info *ud_info = &state->args->user_sgprs_locs.descriptor_heaps[heap];
+    ud_info->sgpr_idx = state->args->num_user_sgprs;
+-   ud_info->num_sgprs = 1;
++   ud_info->num_sgprs = 2;
+ 
+    state->args->user_sgprs_locs.descriptor_heaps_enabled |= 1u << heap;
+-   state->args->num_user_sgprs++;
++   state->args->num_user_sgprs += 2;
+ }
+@@ -123,7 +123,7 @@ declare_global_input_sgprs(struct radv_shader_args_state *state, const enum amd
+             }
+          } else {
+-            RADV_ADD_UD_ARRAY_ARG(state, 1, AC_ARG_CONST_ADDR, descriptors, 0, AC_UD_INDIRECT_DESCRIPTORS);
++            RADV_ADD_UD_ARRAY_ARG(state, 2, AC_ARG_CONST_ADDR, descriptors, 0, AC_UD_INDIRECT_DESCRIPTORS);
+          }
+       }
+diff --git a/src/amd/vulkan/nir/radv_nir_lower_descriptors.c b/src/amd/vulkan/nir/radv_nir_lower_descriptors.c
+--- a/src/amd/vulkan/nir/radv_nir_lower_descriptors.c
++++ b/src/amd/vulkan/nir/radv_nir_lower_descriptors.c
+@@ -63,6 +63,11 @@ static nir_def *
+ convert_pointer_to_64_bit(nir_builder *b, lower_descriptors_state *state, nir_def *ptr)
+ {
++   /*
++    * GNM pointer input-usage slots reserve two SGPRs. The PS4 standalone
++    * compiler supplies the low address in the first SGPR and reserves the
++    * second SGPR for the ABI's high dword, which is fixed by address32_hi.
++    */
++   if (ptr->num_components == 2)
++      ptr = nir_channel(b, ptr, 0);
+    return nir_pack_64_2x32_split(b, ptr, nir_imm_int(b, state->address32_hi));
+ }
