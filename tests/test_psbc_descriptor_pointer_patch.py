@@ -16,7 +16,7 @@ class DescriptorPointerPatchTests(unittest.TestCase):
         self.assertGreaterEqual(patch.count("state->args->ac.num_sgprs_used++;"), 2)
         self.assertGreaterEqual(patch.count("num_user_sgprs += 2;"), 2)
 
-    def test_does_not_widen_aco_pointer_value(self):
+    def test_pointer_payload_remains_scalar(self):
         patch = PATCH.read_text()
         self.assertNotIn("AC_ARG_SGPR, 2, AC_ARG_CONST_ADDR", patch)
         self.assertNotIn("nir_channel", patch)
