@@ -132,3 +132,7 @@ Automation gates resulting from this snapshot:
 2. PRX activation is blocked: it is already registered in `plugins.ini`, but the on-device PRX identity is inconsistent and the current NR title adapter remains unvalidated/fail-closed.
 3. GoldHEN restart is blocked: no version-matched remote restart endpoint is qualified. Do not probe BinLoader 9090 or invent a command.
 4. The next safe engineering step is to resolve the PRX path/readback inconsistency and qualify a real receiver/control channel; no console mutation is authorized by this snapshot alone.
+
+### Staging precedence correction
+
+The live `/data/pkg/` listing already contains `PS4-Neural-Engine-015-7609b5d2b536.pkg` (6,619,136 bytes) as well as legacy PKG006 files. Therefore the legacy PKG006 stage workflow must not archive or displace the newer PKG015. It now exits without remote changes whenever a higher numbered NR release is already present. The staged PKG015 filename is observed on-device, but its remote SHA-256 has not been read back by this snapshot.
