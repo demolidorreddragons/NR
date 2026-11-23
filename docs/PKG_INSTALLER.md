@@ -14,3 +14,18 @@ This package currently installs the diagnostics/capture scaffold only. It does n
 
 
 For troubleshooting, the installer log records the failing operation and the platform `errno` value (for example, source lookup/open, temporary destination creation, write, verification, or final rename). Capture the log after the latest launch attempt; older log contents do not describe a newer attempt.
+
+## Current console identity correction — 2026-11-23
+
+The opening paragraph above is historical and no longer describes the installed console state. A read-only FTP audit and pinned OrbisPkgTool inspection now prove:
+- Installed PNEU00001 app.pkg is 6,619,136 bytes, SHA-256 2fcaf679766fefbed4bc60cc31beb0227b8bfefd4eb8070160f65a402be747e9.
+- The app.json-referenced /user/data/pkg/PS4-Neural-Engine-015.pkg is byte-identical to the installed app.pkg.
+- Independent SFO: TITLE_ID PNEU00001, APP_VER/VERSION 01.10, CATEGORY gde, CONTENT_ID IV0000-PNEU00001_00-PS4NEURALENG0000; package validation PASS.
+- The staged candidate /data/pkg/PS4-Neural-Engine-015-7609b5d2b536.pkg is a different FULL BASE package with the same APP_VER 01.10, SHA-256 7609b5d2b53628bd0a22c85c31ac72df2ae36d9047c9a4908ad24ff2f8fc5548. It is not a patch or version upgrade.
+- PKG006 is FULL BASE APP_VER 01.02 and is older than the installed 01.10 app. Do not install PKG006 or the same-version PKG015 candidate over the existing app; either operation risks replacing existing app data.
+
+The packaged PRX hash 1e4531711a0768cfeb29f1d6f66b9541cf087b141eda7a05fed755d12507866c differs from the current GoldHEN plugin PRX readback hash 1481214d21aa5c826f9d51ae8cd55759e625c2b9ca7159dd9578ea632661d8e7. The PRX FTP LIST/GET size mismatch and installer errno=78 identity conflict remain unresolved. Do not replace or activate the plugin until the file identity and loader lifecycle are qualified.
+
+RPI TCP 12800 refused the read-only probe. BGFT/AppInstUtil remains unqualified because pinned source headers disagree on 32-bit versus 64-bit size/progress fields. No remote GoldHEN restart API is qualified. The instruction above to restart GoldHEN or reboot is not a remote protocol or proof of automation; do not invent a command.
+
+Until a genuine associated patch with a higher APP_VER is built and independently validated, the only correct state is to preserve the installed 01.10 app and not install another full-base package.
