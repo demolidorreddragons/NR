@@ -26,6 +26,8 @@ jobs:
           BUILD_RUN_ID: ${{ github.event.workflow_run.id }}
           BUILD_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
           BUILD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          REPORTED_GOLDHEN_VERSION: "2.4b18.14"
+          REPORTED_PS4_FIRMWARE: "14.02"
         run: |
           $ErrorActionPreference = "Stop"
           if (-not $env:PS4_IP) { throw "PS4_IP Actions variable is missing." }
@@ -64,6 +66,10 @@ jobs:
             build_run_id = $env:BUILD_RUN_ID
             build_commit = $env:BUILD_HEAD_SHA
             build_branch = $env:BUILD_BRANCH
+            reported_goldhen_version = $env:REPORTED_GOLDHEN_VERSION
+            reported_ps4_firmware = $env:REPORTED_PS4_FIRMWARE
+            version_evidence = "user_reported_not_device_verified"
+            firmware_compatibility = "release_documented_for_14.02"
             probes = $results
             scope = "read_only_tcp_connectivity_only"
             protocol_validated = $false
