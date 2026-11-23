@@ -277,3 +277,20 @@ References:
 - https://github.com/LightningMods/Itemzflow/blob/4013e1ef188672db63346fef4221b1d8f4f13f02/itemzflow/source/installpkg.cpp
 - https://github.com/flatz/ps4_stub_lib_maker_v2/blob/a8d044c12ea2dc3fa190ce1769eeb48b30d28ed4/include/bgft.h
 - https://github.com/OpenOrbis/OpenOrbis-PS4-Toolchain/blob/0a1aaf9dd4a92695538bdeb09fb056d06dd11725/include/orbis/_types/bgft.h
+
+
+### Independent OpenOrbis libc corroboration — external source, not a project collaborator
+
+A public, archived OpenOrbis compatibility project independently documents the same errno 78 defect:
+- Repository: `orbis-ports/orbis-compat`, archived 2026-09-21; inspected commit `6922a7b6f4291a28edd239f1a4db50ed7aa00359`.
+- Its `include/orbis_stat.h` documents that OpenOrbis `libc.a`'s `fstatat` member is a stub that sets errno 78 (ENOSYS) and returns -1, and musl's `lstat` is implemented on top of that stub.
+- Its `src/orbis_stat.cpp` works around this by interposing `lstat()` as `stat()`, with an explicit assumption that no symlinks exist on the filesystems the title reads.
+
+This is strong independent corroboration for the leading errno 78 hypothesis, and it matches the installer source's own comment about `lstat` returning ENOSYS on Orbis. It is not firmware-14.02 proof by itself, and it does not establish whether the fallback `readlink` also returns ENOSYS in our exact runtime.
+
+**Do not copy the external `lstat=stat` workaround into the installer.** It follows symlinks and removes the exact no-follow property the installer is trying to preserve. Our current policy must remain fail-closed until a real FW 14.02 no-follow primitive is verified (for example, a proven libkernel import with the correct ABI and behavior). The external repository is a technical reference only; its author is not a contributor to this NR repository.
+
+Reference files:
+- https://github.com/orbis-ports/orbis-compat/blob/6922a7b6f4291a28edd239f1a4db50ed7aa00359/include/orbis_stat.h
+- https://github.com/orbis-ports/orbis-compat/blob/6922a7b6f4291a28edd239f1a4db50ed7aa00359/src/orbis_stat.cpp
+- https://github.com/orbis-ports/orbis-compat/blob/6922a7b6f4291a28edd239f1a4db50ed7aa00359/README.md
