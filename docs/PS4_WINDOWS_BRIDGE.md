@@ -76,3 +76,42 @@ The following project prerequisites have been provided and must be treated as es
 - **Console:** the PS4 Pro is available as the target for controlled project tests.
 
 These statements record the user's supplied access/setup baseline. They do not, by themselves, assert that Codex credentials are available to the GitHub Actions service identity, that every workflow is currently healthy, or that a GPU compute test has passed. Before each operation, inspect the relevant workflow and verify its actual result. Preserve all existing PS4 safety gates and do not request repeated setup when the established access path can perform the task.
+
+
+## Codex as the project engineering executor — required operating model (2026-11-23)
+
+### Intended purpose
+
+Codex is part of the Neural Rendering engineering pipeline, not an optional local demo or a tool whose output must be manually relayed by the user. Its assigned work is to operate on the checked-out NR repository, inspect the applicable instructions, implement isolated engineering changes, build, run tests, inspect failures, iterate, and produce reviewable commits and evidence. The project owner should not have to copy source files, run repeated diagnostic commands, or relay routine Codex output between steps.
+
+The expected execution path is a **remote, non-interactive, repository-scoped job** with explicit credentials and bounded permissions. The interactive Windows login is not the production execution environment. The Windows PS4-LAN runner remains reserved for reviewed workflows that actually require access to the console network; ordinary Codex engineering should not inherit PS4 deployment privileges.
+
+### Confirmed facts and failure
+
+- Codex CLI 0.171.0 exists at `C:\ProgramData\NR\Codex\node_modules\.bin\codex.cmd` on `DESKTOP-TG85GF4`.
+- Device-code authentication succeeded in the user's interactive Windows session.
+- The GitHub Actions runner service runs as `LocalSystem`. The service job was tested and reported both `OPENAI_API_KEY_PRESENT=False` and `CODEX_API_KEY_PRESENT=False`, with Codex `Not logged in`.
+- Therefore the interactive login is **not** available to the runner service. This is an observed integration failure, not a reason to ask the user to repeat Codex installation or device authentication.
+- The repository checkout observed in the runner workspace was `C:\actions-runner\_work\NR\NR`, but that transient Actions checkout had no `.git` directory and `git` was not on PATH in the inspected environment. Codex must not assume that checkout is a persistent developer clone.
+- The previous sandbox probe only proved that a simple MXC-isolated command could execute. It did not prove authenticated Codex task execution or engineering capability.
+
+### Required target configuration
+
+1. Run Codex as a **non-interactive GitHub Actions job** with a dedicated, least-privilege OpenAI API credential supplied through a protected GitHub Actions secret (for example, `OPENAI_API_KEY`). Never use or copy the interactive user's `auth.json`, device token, browser session, or any other personal credential into the service account.
+2. Prefer an isolated hosted engineering runner for source analysis, code changes, builds, and host tests. Do not execute unreviewed compiler/dependency source on the privileged PS4-LAN runner. A separate reviewed Windows-LAN workflow may consume immutable, QA-approved artifacts when a hardware test is explicitly permitted.
+3. Pin the Codex CLI version and install path in the job. Fail closed if the CLI version, authentication, repository root, or expected branch/commit is wrong. Do not fall back to an interactive login or silently use another account.
+4. Check out the exact target branch and commit with Git metadata available. Set the working directory to the repository root; do not run from `C:\Windows\System32`. Verify `git rev-parse --show-toplevel`, branch, and HEAD before invoking Codex.
+5. Invoke Codex non-interactively with an explicit repository task prompt and a bounded sandbox. Start with read-only audit. Enable workspace writes only for a reviewed engineering task. Never grant arbitrary host/system access, PS4 network/deployment access, or permission to install packages, activate PRX, modify `plugins.ini`, or restart GoldHEN.
+6. The prompt must require Codex to read `AGENTS.md` fully, then the relevant project docs and workflow, preserve the existing gates, and make no unsupported ABI/GPU claims. It must not bypass tests or lower a gate to manufacture a pass.
+7. Preserve complete stdout/stderr, exit code, changed-file list, diff, commit SHA, test summaries, and generated artifacts as a run-scoped Actions artifact. Fail the job on authentication failure, uncommitted unexpected changes, test failure, or missing evidence. Never print credentials or secret-bearing environment values.
+8. Engineering and QA remain separate: Codex may implement and run the prescribed tests; a distinct QA pass must inspect the diff and evidence. Hardware Gate C still requires actual PS4 Pro FW 14.02 dispatch, completion/fence, coherent readback, and full known-answer comparison. Gate D and PKG release remain blocked until their documented criteria pass.
+
+### Configuration status and explicit blocker
+
+**Status: NOT YET CONFIGURED / NOT YET EXECUTED AS A REMOTE CODEX AGENT.** The CLI installation and interactive authentication are not sufficient. The available GitHub integration can read and write repository files and inspect workflow runs, but it does not expose an Actions workflow-dispatch operation or GitHub Actions secret-management operation. No protected API credential is currently evidenced as configured for a remote job. Consequently this session cannot truthfully create the secret, dispatch a remote Codex job, or claim that Codex has been configured and run.
+
+Do not work around this by embedding an API key in workflow YAML, committing a token, copying the interactive `auth.json`, running as the user's interactive desktop, or granting the privileged PS4-LAN runner unrestricted Codex access. The remaining setup dependency is a protected Actions secret plus an approved workflow execution path. Once available, prove it with a read-only Codex repository audit first; only then enable scoped workspace-write engineering runs.
+
+### Acceptance criteria
+
+Codex integration is considered operational only when a remote Actions run demonstrates all of the following: (a) the expected runner class and repository commit, (b) authenticated non-interactive Codex execution, (c) full `AGENTS.md` compliance, (d) a read-only repository audit artifact, (e) a recorded exit code and logs, and (f) no PS4 mutation. Engineering-write mode is a separate acceptance step requiring a reviewed diff and passing relevant tests. A successful CLI version check, interactive login, sandbox echo, shader artifact build, or host-only test does not satisfy this integration gate.
