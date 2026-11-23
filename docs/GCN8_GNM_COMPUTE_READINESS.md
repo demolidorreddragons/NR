@@ -324,6 +324,14 @@ The SPIR-V input SHA-256 remains
 `964af9e2b13bdce7883cb2b53437e4b75547ddfa12580177e4d0da0d7509a626`.
 Host-tests run `45226359325` also succeeded on the same commit.
 
+A host-only C++ metadata parser now validates the same container fields
+and the `OrbShdr` trailer: 80-byte code length, 28-byte binary-info record,
+chunk-usage offset 21 dwords, input-slot count, nonzero shader hash, and
+stored CRC field. Its regression test parses both synthetic malformed
+containers and the exact 228-byte artifact fixture
+`tests/fixtures/gcn8-compute-smoke.sb`. The parser is not linked into the
+live PRX and does not submit GPU work.
+
 This resolves the compiler/GNM pointer-width disagreement for the direct
 set-0 smoke-shader path at source and binary-metadata level. It does not prove
 that retail firmware writes the pointer as expected, and it does not validate
@@ -333,30 +341,42 @@ the indirect-all-descriptor-sets path.
 
 The compiled shader records local thread dimensions `[64, 1, 1]`; the
 256-element known-answer workload therefore requires a dispatch grid of
-`[4, 1, 1]`. The candidate dispatch helpers are not interchangeable:
+`[4, 1, 1]`. The pinned sources contain three distinct paths:
 
-- The pinned opengnm generic `sceGnmDispatchDirect` implementation writes
-  `COMPUTE_NUM_THREAD_X/Y/Z` from the same arguments it then writes into the
-  `DISPATCH_DIRECT` dimensions. Its `sceGnmDrawCmdDispatchDirect` helper
-  follows the same pattern. For this shader, passing 4 would overwrite the
-  compiled local size 64; passing 64 would request 64 workgroups instead of 4.
-  Do not use these generic helpers for this known-answer shader.
-- The pinned shadPS4 HLE model at commit
-  `c4f8699581ef1f795a74669cc12fadf440cbe4a1` models
-  `sceGnmSetCsShader` as setting the compute-stage registers and
-  `sceGnmDispatchDirect` as emitting the dispatch packet only (9 dwords).
-  This is emulator behavior, not proof of the retail FW 14.02 ABI.
-- The pinned opengnm generic implementation requires a 12-dword buffer and
-  emits both thread-register writes and dispatch dimensions. This conflicts
-  with the shadPS4 HLE model and has not been validated against FW 14.02.
+- The generic backend's `sceGnmDispatchDirect` writes
+  `COMPUTE_NUM_THREAD_X/Y/Z` and then a `DISPATCH_DIRECT` packet from the
+  same three arguments. Its size check and emitted sequence are a generic
+  backend implementation, not proof of the retail function's FW 14.02
+  behavior. Do not use this path for the smoke shader.
+- The local PM4 builder `sceGnmDrawCmdDispatchDirect` in
+  `src/drawcommandbuffer.c` is different: it emits a 9-dword
+  `DISPATCH_DIRECT` packet and does not overwrite the compiled
+  `COMPUTE_NUM_THREAD` registers. This agrees with the pinned shadPS4 HLE
+  model, which emits the dispatch packet only. It is the current packet-level
+  candidate for a `[4, 1, 1]` grid, but has not been submitted on hardware.
+- The local `sceGnmDrawCmdSetCsShader` builder writes the compute-stage
+  registers, including the compiled local dimensions; the local
+  `sceGnmDrawCmdSetPointerUserData` builder writes the two-dword descriptor
+  pointer at the parsed start register. The OpenGNM `hardware_smoke.c`
+  demonstrates DCB allocation/submission and EOP signaling for a graphics
+  smoke test only; it is not compute-dispatch proof.
 
-**Engineering decision:** do not invoke either candidate dispatch path and do
-not emit a guessed PM4 packet. The exact retail `sceGnmSetCsShader` /
-`sceGnmDispatchDirect` ABI, command-buffer submission lifecycle, queue
-ownership, resource residency, completion/fence semantics, and cache-coherent
-readback still require independent qualification. No compute command has been
-submitted to the console. Gate B remains blocked; Gate C hardware known-answer
-execution and Gate D neural reconstruction remain incomplete.
+The generic `sceGnmDispatchDirect` implementation requires a 12-dword
+capacity and emits thread-register writes plus dispatch dimensions. The
+shadPS4 HLE model at commit
+`c4f8699581ef1f795a74669cc12fadf440cbe4a1` models the firmware function as
+a 9-dword dispatch packet. This emulator/source disagreement still prevents
+using the firmware function without exact FW 14.02 evidence. The local
+`sceGnmDrawCmdDispatchDirect` helper is not that firmware function.
+
+**Engineering decision:** retain the local 9-dword PM4 helper as a reviewed
+candidate, but do not submit it yet. Compute default-state initialization,
+shader-code GPU placement/address patching, descriptor/output allocations and
+residency, the `sceGnmSubmitCommandBuffers`/`sceGnmSubmitDone` lifecycle,
+completion signaling, and CPU-visible cache-coherent readback still require
+qualification on FW 14.02. No compute command has been submitted to the
+console. Gate B remains blocked; Gate C hardware known-answer execution and
+Gate D neural reconstruction remain incomplete.
 
 Reviewed source locations:
 - opengnm-psbc commit `28697f007862427ebec54388ec972ce6e3545912`:

@@ -1,5 +1,7 @@
 #include "compute_shader_contract.h"
 
+#include <cstring>
+
 namespace pne::gcn8 {
 namespace {
 
@@ -8,6 +10,12 @@ std::uint32_t read_u32_le(const std::uint8_t* data) noexcept {
            (static_cast<std::uint32_t>(data[1]) << 8) |
            (static_cast<std::uint32_t>(data[2]) << 16) |
            (static_cast<std::uint32_t>(data[3]) << 24);
+}
+
+std::uint32_t read_u24_le(const std::uint8_t* data) noexcept {
+    return static_cast<std::uint32_t>(data[0]) |
+           (static_cast<std::uint32_t>(data[1]) << 8) |
+           (static_cast<std::uint32_t>(data[2]) << 16);
 }
 
 } // namespace
@@ -38,22 +46,62 @@ ComputeShaderError parse_compute_shader_binary(
         static_cast<std::uint32_t>(data[kGnmShaderFileHeaderOffset + 9]) * 4u;
     if (stage_header_size < kGnmComputeStageHeaderSize)
         return ComputeShaderError::invalid_stage_header_size;
-
     if (size < kGnmComputeStageOffset + stage_header_size)
         return ComputeShaderError::truncated_stage_header;
 
     const std::uint32_t common_data = read_u32_le(data + kGnmComputeStageOffset);
     const std::uint8_t slot_count = static_cast<std::uint8_t>(common_data >> 24);
+    const std::uint32_t shader_binary_size = common_data & 0x00FFFFFFu;
     const std::size_t required_stage_bytes =
         kGnmComputeStageHeaderSize + static_cast<std::size_t>(slot_count) * 4u;
     if (required_stage_bytes > stage_header_size)
         return ComputeShaderError::invalid_input_usage_table;
+    if (shader_binary_size < kGnmShaderBinaryInfoSize)
+        return ComputeShaderError::invalid_shader_binary_size;
 
     const std::uint32_t code_offset =
         read_u32_le(data + kGnmComputeStageOffset + 8);
     if (code_offset != stage_header_size ||
         kGnmComputeStageOffset + code_offset >= size)
         return ComputeShaderError::invalid_code_offset;
+
+    const std::size_t code_start = kGnmComputeStageOffset + code_offset;
+    const std::size_t info_offset =
+        code_start + shader_binary_size - kGnmShaderBinaryInfoSize;
+    if (info_offset > size ||
+        size - info_offset < kGnmShaderBinaryInfoSize)
+        return ComputeShaderError::truncated_shader_binary_info;
+
+    const std::uint8_t* info = data + info_offset;
+    static constexpr char kOrbShdrMagic[] = "OrbShdr";
+    if (std::memcmp(info, kOrbShdrMagic, sizeof(kOrbShdrMagic) - 1) != 0)
+        return ComputeShaderError::invalid_shader_binary_info_magic;
+    if (info[7] != kGnmShaderBinaryInfoVersion)
+        return ComputeShaderError::unsupported_shader_binary_info_version;
+
+    const std::uint32_t code_size = read_u24_le(info + 9);
+    if (code_size == 0 ||
+        code_size + kGnmShaderBinaryInfoSize != shader_binary_size ||
+        code_start + code_size != info_offset)
+        return ComputeShaderError::shader_binary_info_size_mismatch;
+
+    const std::uint8_t chunk_usage_offset = info[12];
+    const std::uint8_t info_slot_count = info[13];
+    if (info_slot_count != slot_count)
+        return ComputeShaderError::shader_binary_info_slot_count_mismatch;
+
+    const std::size_t slots_offset =
+        kGnmComputeStageOffset + kGnmComputeStageHeaderSize;
+    if (info_offset < slots_offset ||
+        (info_offset - slots_offset) % 4u != 0 ||
+        chunk_usage_offset != (info_offset - slots_offset) / 4u)
+        return ComputeShaderError::invalid_chunk_usage_offset;
+
+    const std::uint32_t shader_hash_low = read_u32_le(info + 16);
+    const std::uint32_t shader_hash_high = read_u32_le(info + 20);
+    if (shader_hash_low == 0 && shader_hash_high == 0)
+        return ComputeShaderError::invalid_shader_hash;
+    const std::uint32_t shader_crc32 = read_u32_le(info + 24);
 
     const std::uint32_t pgm_rsrc2 =
         read_u32_le(data + kGnmComputeStageOffset + 20);
@@ -74,8 +122,6 @@ ComputeShaderError parse_compute_shader_binary(
     std::uint8_t descriptor_start_register = 0;
     std::uint8_t descriptor_usage_type = 0;
     std::uint8_t descriptor_flags = 0;
-    const std::size_t slots_offset =
-        kGnmComputeStageOffset + kGnmComputeStageHeaderSize;
 
     for (std::uint8_t i = 0; i < slot_count; ++i) {
         const std::size_t offset = slots_offset + static_cast<std::size_t>(i) * 4u;
@@ -101,6 +147,15 @@ ComputeShaderError parse_compute_shader_binary(
 
     output->stage_header_size_bytes = stage_header_size;
     output->code_offset_bytes = code_offset;
+    output->shader_binary_size_bytes = shader_binary_size;
+    output->shader_code_size_bytes = code_size;
+    output->shader_binary_info_offset_bytes = static_cast<std::uint32_t>(info_offset);
+    output->chunk_usage_base_offset_dwords = chunk_usage_offset;
+    output->shader_hash_low = shader_hash_low;
+    output->shader_hash_high = shader_hash_high;
+    output->shader_crc32 = shader_crc32;
+    output->shader_binary_info_version = info[7];
+    output->shader_binary_info_flags = info[8];
     output->compute_pgm_rsrc2 = pgm_rsrc2;
     output->compute_num_thread_x = thread_x;
     output->compute_num_thread_y = thread_y;
@@ -127,6 +182,14 @@ const char* compute_shader_error_string(ComputeShaderError error) noexcept {
     case ComputeShaderError::truncated_stage_header: return "truncated compute-stage header";
     case ComputeShaderError::invalid_input_usage_table: return "input-usage table exceeds stage header";
     case ComputeShaderError::invalid_code_offset: return "compute code offset does not match stage header";
+    case ComputeShaderError::invalid_shader_binary_size: return "shader binary size is smaller than OrbShdr metadata";
+    case ComputeShaderError::truncated_shader_binary_info: return "truncated OrbShdr metadata";
+    case ComputeShaderError::invalid_shader_binary_info_magic: return "OrbShdr metadata magic is missing";
+    case ComputeShaderError::unsupported_shader_binary_info_version: return "unsupported OrbShdr metadata version";
+    case ComputeShaderError::shader_binary_info_size_mismatch: return "OrbShdr code length disagrees with GNM shader size";
+    case ComputeShaderError::shader_binary_info_slot_count_mismatch: return "OrbShdr slot count disagrees with GNM stage header";
+    case ComputeShaderError::invalid_chunk_usage_offset: return "OrbShdr chunk usage offset does not point to input-usage table";
+    case ComputeShaderError::invalid_shader_hash: return "OrbShdr shader hash is zero";
     case ComputeShaderError::missing_descriptor_table_slot: return "set-0 indirect resource-table slot is missing";
     case ComputeShaderError::duplicate_descriptor_table_slot: return "multiple indirect resource-table slots are unsupported";
     case ComputeShaderError::unsupported_descriptor_api_slot: return "only descriptor API slot 0 is supported";

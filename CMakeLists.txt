@@ -39,3 +39,4 @@ add_executable(test_gcn8_compute_shader_contract
 )
 target_include_directories(test_gcn8_compute_shader_contract PRIVATE platform/ps4/gcn8/host)
 add_test(NAME gcn8_compute_shader_contract COMMAND test_gcn8_compute_shader_contract)
+set_tests_properties(gcn8_compute_shader_contract PROPERTIES WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})

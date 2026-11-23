@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from contextlib import redirect_stdout
 import pathlib
 import re
 import sys
@@ -191,8 +192,10 @@ def main() -> int:
         raise SystemExit(
             f"GPU target mismatch: expected PS4 Pro NEO/GFX8 0x02, got 0x{target:02x}"
         )
-    if not verify_shader(str(shader_path), GNM_SHADER_COMPUTE):
-        raise SystemExit("upstream shader structure/CRC verification failed")
+    # Keep upstream progress diagnostics on stderr so stdout is valid JSON.
+    with redirect_stdout(sys.stderr):
+        if not verify_shader(str(shader_path), GNM_SHADER_COMPUTE):
+            raise SystemExit("upstream shader structure/CRC verification failed")
 
     try:
         layout = parse_compute_shader_layout(data)
