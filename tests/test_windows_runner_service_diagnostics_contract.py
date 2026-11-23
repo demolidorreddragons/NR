@@ -18,13 +18,14 @@ assert "runner_reconfigured=$false" in script
 for forbidden in ("Start-Service", "Stop-Service", "Restart-Service", "Set-Service", "sc.exe config", "sc.exe failure", "Set-ItemProperty", "Remove-Item", "reg.exe add", "reg.exe delete"):
     assert forbidden.lower() not in script.lower(), forbidden
 assert "runs-on: [self-hosted, Windows, X64, ps4-lan]" in workflow
-assert "GITHUB_TOKEN: \${{ github.token }}" in workflow
-assert "GITHUB_SHA: \${{ github.sha }}" in workflow
+assert "GITHUB_TOKEN:" in workflow and "github.token" in workflow
+assert "GITHUB_SHA:" in workflow and "github.sha" in workflow
 assert "contents/tools/collect_windows_runner_service_diagnostics.ps1?ref=" in workflow
 assert "SHA1]::Create()" in workflow and "Git blob SHA-1 mismatch" in workflow
 assert "workflow_dispatch:" in workflow and "push:" in workflow
-assert "runner-service-diagnostics-\${{ github.run_id }}" in workflow
+assert "runner-service-diagnostics-" in workflow and "github.run_id" in workflow
 assert "retention-days: 7" in workflow
 assert "RUNNER_SERVICE_DIAGNOSTICS_READ_ONLY_COMPLETE" in script
 assert "actions/checkout@" not in workflow
+assert r"\${{" not in workflow, "GitHub expressions must not have literal backslash prefixes"
 print("Windows runner service diagnostics read-only contract: PASS")
