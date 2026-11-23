@@ -31,3 +31,8 @@ assert "redacted-ip" in script
 assert "existsValid" in script
 assert "RPI_READINESS_COMPLETE" in script
 print("PS4 RPI read-only readiness safety contract: PASS")
+
+assert "github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'" in workflow
+assert "types: [completed]" in workflow
+assert "branches: [main]" in workflow
+assert "/api/install" not in script
