@@ -69,7 +69,7 @@ jobs:
           "@
           $previous = $ErrorActionPreference
           $ErrorActionPreference = 'Continue'
-          $output = & $codex exec --full-auto --skip-git-repo-check $prompt 2>&1 | ForEach-Object { "$_" }
+          $output = & $codex exec --sandbox workspace-write --ask-for-approval never --skip-git-repo-check $prompt 2>&1 | ForEach-Object { "$_" }
           $exitCode = $LASTEXITCODE
           $ErrorActionPreference = $previous
           $output | ForEach-Object { Write-Host $_ }
