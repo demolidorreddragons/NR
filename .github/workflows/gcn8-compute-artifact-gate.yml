@@ -68,6 +68,16 @@ jobs:
           test "$(git -C opengnm rev-parse HEAD)" = "4b295ca54c82c83acf308d1c646a2dfa9ae57350"
           test "$(git -C SPIRV-Headers rev-parse HEAD)" = "fb1379425b16e58dcbdda7be0f8604a7f5cdce78"
 
+      - name: Generate Mesa utility format header omitted from upstream Makefile
+        shell: bash
+        run: |
+          set -euo pipefail
+          COMPILER="$RUNNER_TEMP/nr-gcn8-deps/opengnm-psbc"
+          python3 "$COMPILER/src/util/format/u_format_table.py" --header \
+            "$COMPILER/src/util/format/u_format.yaml" \
+            > "$COMPILER/src/util/format/u_format_gen.h"
+          test -s "$COMPILER/src/util/format/u_format_gen.h"
+
       - name: Configure and build pinned compiler on hosted runner
         shell: bash
         run: |

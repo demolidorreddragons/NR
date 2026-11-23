@@ -36,7 +36,9 @@ The compiler candidate is research-only. The inspected checkout has a reproducib
 - `opengnm` headers: `4b295ca54c82c83acf308d1c646a2dfa9ae57350`
 - `SPIRV-Headers`: `fb1379425b16e58dcbdda7be0f8604a7f5cdce78`
 
-The workflow supplies an explicit host `config.mak`, compiles a deterministic compute shader with `-n`, and checks both compute stage and NEO/GFX8 target byte in addition to the upstream container/CRC verifier. It retains logs, SPIR-V, shader binary, report, and SHA-256. It runs only on `ubuntu-24.04`; no third-party source is executed on the privileged PS4-LAN runner.
+The workflow supplies an explicit host `config.mak`, generates Mesa's `u_format_gen.h` (omitted from the candidate Makefile's generated-source list), compiles a deterministic compute shader with `-n`, and checks both compute stage and NEO/GFX8 target byte in addition to the upstream container/CRC verifier. It retains logs, SPIR-V, shader binary, report, and SHA-256. It runs only on `ubuntu-24.04`; no third-party source is executed on the privileged PS4-LAN runner.
+
+The first automated run, `45200242052`, correctly failed before compilation because the upstream Makefile did not generate `src/util/format/u_format_gen.h`, required by `u_formats.h`. The failure and exact compiler error were inspected from the job log; the workflow now explicitly runs the pinned Mesa format generator before `make`. The corrected workflow is being rerun by the branch push; Gate A remains unpassed until that run's output is inspected.
 
 **Scope limitation:** Gate A proves only that the pinned compiler emits a structurally valid GFX8/NEO compute shader container. It does not prove the binary executes, that firmware 14.02 accepts it, or that a GPU dispatch/readback works. No shader binary is staged to the console by this workflow.
 
@@ -46,11 +48,13 @@ The workflow supplies an explicit host `config.mak`, compiles a deterministic co
 
 - [x] Pin compiler source and dependency revisions.
 - [x] Add isolated hosted build and GFX8/NEO target verification workflow.
-- [ ] Run the workflow and inspect the build log, output binary, report, and digest.
+- [ ] Corrected workflow run after fixing the omitted Mesa header generation; inspect build log, output binary, report, and digest.
 - [ ] Reproduce independently before trusting the generated shader.
 - Reject output that targets GFX7/base PS4 or GFX10+/PS5.
 
 ### Gate B — command submission design
+
+Additional pinned-source finding: in `PS4-OpenGNM/opengnm` commit `4b295ca54c82c83acf308d1c646a2dfa9ae57350`, the generic backend contains PM4 packet construction for `sceGnmSetCsShader` and `sceGnmDispatchDirect`, but its `sceGnmSubmitCommandBuffers` implementation is explicitly a no-op and its compute-queue mapping returns `GNM_ERROR_UNSUPPORTED`. The Orbis backend declares/forwards to real `libSceGnmDriver` firmware entry points. Thus generic backend tests cannot establish GPU execution; the firmware-backed path, buffer residency, exact 14.02 ABI, and completion/readback path still need independent proof. See `src/driver_generic.c`, `src/driver_orbis.c`, and `docs/backends.md` at that pinned commit.
 
 Before adding code to the PRX, prove from pinned headers/source and ABI evidence:
 
