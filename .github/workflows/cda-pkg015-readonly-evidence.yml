@@ -1,0 +1,199 @@
+name: CDA PKG 015 read-only evidence collection
+
+on:
+  workflow_dispatch:
+    inputs:
+      observed_result:
+        description: "Resultado literal informado pelo usuário"
+        required: true
+        type: string
+      feedback_reference:
+        description: "Referência/data do feedback do usuário"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  collect-readonly:
+    runs-on: [self-hosted, Windows, X64, ps4-lan]
+    timeout-minutes: 12
+    steps:
+      - name: Acquire immutable evidence snapshots (FTP LIST/GETSIZE/GET only)
+        shell: powershell
+        env:
+          PS4_IP: ${{ vars.PS4_IP }}
+          OBSERVED_RESULT: ${{ inputs.observed_result }}
+          FEEDBACK_REFERENCE: ${{ inputs.feedback_reference }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ([string]::IsNullOrWhiteSpace($env:PS4_IP)) { throw 'PS4_IP missing; refusing network access.' }
+          $parsedIp = $null
+          if (-not [System.Net.IPAddress]::TryParse($env:PS4_IP, [ref]$parsedIp) -or
+              $parsedIp.AddressFamily -ne [System.Net.Sockets.AddressFamily]::InterNetwork) {
+            throw 'PS4_IP must be a valid IPv4 literal; refusing network access.'
+          }
+          if ([string]::IsNullOrWhiteSpace($env:OBSERVED_RESULT)) { throw 'OBSERVED_RESULT must not be empty.' }
+          if ($env:OBSERVED_RESULT.Length -gt 4096) { throw 'OBSERVED_RESULT exceeds the 4096-character evidence limit.' }
+          if ([string]::IsNullOrWhiteSpace($env:FEEDBACK_REFERENCE)) { throw 'FEEDBACK_REFERENCE must not be empty.' }
+          if ($env:FEEDBACK_REFERENCE.Length -gt 4096) { throw 'FEEDBACK_REFERENCE exceeds the 4096-character evidence limit.' }
+          $runRoot = Join-Path $env:RUNNER_TEMP ("cda-pkg015-" + $env:GITHUB_RUN_ID)
+          if (Test-Path -LiteralPath $runRoot) { throw "Evidence directory exists; refusing overwrite: $runRoot" }
+          New-Item -ItemType Directory -Path $runRoot | Out-Null
+          $base = "ftp://$($env:PS4_IP):2121"
+          $credential = [System.Net.NetworkCredential]::new('anonymous','anonymous@example.com')
+          $manifest = [System.Collections.Generic.List[string]]::new()
+          $manifest.Add("SCHEMA=CDA-EVIDENCE-1")
+          $manifest.Add("COLLECTION_START_UTC=$([DateTime]::UtcNow.ToString('o'))")
+          $manifest.Add("WORKFLOW_RUN_ID=$env:GITHUB_RUN_ID")
+          $manifest.Add("WORKFLOW_COMMIT=$env:GITHUB_SHA")
+          $manifest.Add("EXPECTED_TITLE_ID=PNEU00001")
+          $manifest.Add("EXPECTED_APP_VERSION=01.10")
+          $manifest.Add("EXPECTED_PKG=PS4-Neural-Engine-015.pkg")
+          $manifest.Add("EXPECTED_PKG_SHA256=2fcaf679766fefbed4bc60cc31beb0227b8bfefd4eb8070160f65a402be747e9")
+          $manifest.Add("BUILD_RUN_ID=45074310271")
+          $manifest.Add("BUILD_COMMIT=2c9e3c12aed2791f2973496c31c8993259c64430")
+          $manifest.Add("PRX_SHA256=1e4531711a0768cfeb29f1d6f66b9541cf087b141eda7a05fed755d12507866c")
+          # Preserve user-supplied text verbatim outside the line-oriented manifest.
+          # Base64 fields prevent CR/LF input from forging additional manifest records.
+          $feedbackReferenceBytes = [Text.Encoding]::UTF8.GetBytes($env:FEEDBACK_REFERENCE)
+          $observedResultBytes = [Text.Encoding]::UTF8.GetBytes($env:OBSERVED_RESULT)
+          [IO.File]::WriteAllBytes((Join-Path $runRoot 'feedback-reference.utf8.txt'),$feedbackReferenceBytes)
+          [IO.File]::WriteAllBytes((Join-Path $runRoot 'observed-result.utf8.txt'),$observedResultBytes)
+          function Get-BytesSha256([byte[]]$bytes) {
+            $sha = [Security.Cryptography.SHA256]::Create()
+            try { return ([BitConverter]::ToString($sha.ComputeHash($bytes))).Replace('-','').ToLowerInvariant() }
+            finally { $sha.Dispose() }
+          }
+          $manifest.Add("USER_FEEDBACK_REFERENCE_UTF8_BASE64=$([Convert]::ToBase64String($feedbackReferenceBytes))")
+          $manifest.Add("USER_FEEDBACK_REFERENCE_SHA256=$(Get-BytesSha256 $feedbackReferenceBytes)")
+          $manifest.Add("USER_OBSERVED_RESULT_UTF8_BASE64=$([Convert]::ToBase64String($observedResultBytes))")
+          $manifest.Add("USER_OBSERVED_RESULT_SHA256=$(Get-BytesSha256 $observedResultBytes)")
+          $manifest.Add("REMOTE_MUTATION=PROHIBITED_AND_NOT_PERFORMED")
+          $manifest.Add("REMOTE_METHODS=LIST,GETSIZE,GET")
+          function New-FtpRequest([string]$remote, [string]$method) {
+            $request = [System.Net.FtpWebRequest]::Create($base + $remote)
+            $request.Method = $method
+            $request.Credentials = $credential
+            $request.UsePassive = $true
+            $request.UseBinary = $true
+            $request.KeepAlive = $false
+            $request.Timeout = 30000
+            $request.ReadWriteTimeout = 60000
+            return $request
+          }
+          function Get-RemoteSize([string]$remote) {
+            $response = (New-FtpRequest $remote ([System.Net.WebRequestMethods+Ftp]::GetFileSize)).GetResponse()
+            try { return [int64]$response.ContentLength } finally { $response.Dispose() }
+          }
+          function Get-RemoteFile([string]$remote, [string]$dest) {
+            $response = (New-FtpRequest $remote ([System.Net.WebRequestMethods+Ftp]::DownloadFile)).GetResponse()
+            try {
+              $inputStream = $response.GetResponseStream()
+              $outputStream = [System.IO.File]::Open($dest,[System.IO.FileMode]::CreateNew,[System.IO.FileAccess]::Write,[System.IO.FileShare]::None)
+              try { $inputStream.CopyTo($outputStream); $outputStream.Flush($true) }
+              finally { $outputStream.Dispose(); $inputStream.Dispose() }
+            } finally { $response.Dispose() }
+          }
+          function Get-LocalKey([string]$remote) {
+            $sha = [System.Security.Cryptography.SHA256]::Create()
+            try {
+              $bytes = [Text.Encoding]::UTF8.GetBytes($remote)
+              return ([BitConverter]::ToString($sha.ComputeHash($bytes))).Replace('-','').ToLowerInvariant()
+            } finally { $sha.Dispose() }
+          }
+          function Save-Listing([string]$remoteDir) {
+            $key = Get-LocalKey $remoteDir
+            $dest = Join-Path $runRoot ("listing-" + $key + ".raw.bin")
+            $beforeUtc = [DateTime]::UtcNow.ToString('o')
+            try {
+              $response = (New-FtpRequest $remoteDir ([System.Net.WebRequestMethods+Ftp]::ListDirectoryDetails)).GetResponse()
+              try {
+                $inputStream = $response.GetResponseStream()
+                $outputStream = [IO.File]::Open($dest,[IO.FileMode]::CreateNew,[IO.FileAccess]::Write,[IO.FileShare]::None)
+                try { $inputStream.CopyTo($outputStream); $outputStream.Flush($true) }
+                finally { $outputStream.Dispose(); $inputStream.Dispose() }
+              } finally { $response.Dispose() }
+              $afterUtc = [DateTime]::UtcNow.ToString('o')
+              $item = Get-Item -LiteralPath $dest
+              $hash = (Get-FileHash -LiteralPath $dest -Algorithm SHA256).Hash.ToLowerInvariant()
+              $manifest.Add("LIST_OK remote=$remoteDir before_utc=$beforeUtc after_utc=$afterUtc bytes=$($item.Length) sha256=$hash local=$([IO.Path]::GetFileName($dest))")
+            } catch {
+              $manifest.Add("LIST_ERROR remote=$remoteDir error=$($_.Exception.Message)")
+              if (Test-Path -LiteralPath $dest) {
+                $partial = $dest + ".partial"
+                Move-Item -LiteralPath $dest -Destination $partial
+                $p = Get-Item -LiteralPath $partial
+                $ph = (Get-FileHash -LiteralPath $partial -Algorithm SHA256).Hash.ToLowerInvariant()
+                $manifest.Add("LIST_PARTIAL_PRESERVED remote=$remoteDir bytes=$($p.Length) sha256=$ph local=$([IO.Path]::GetFileName($partial))")
+              }
+            }
+          }
+          function Save-Snapshot([string]$remote, [string]$label) {
+            $key = Get-LocalKey $remote
+            $dest = Join-Path $runRoot ("file-" + $key + "-" + $label + ".bin")
+            $beforeUtc = [DateTime]::UtcNow.ToString('o')
+            try {
+              $sizeBefore = Get-RemoteSize $remote
+              if ($sizeBefore -gt 134217728) {
+                $manifest.Add("FILE_SKIPPED_TOO_LARGE remote=$remote size_before=$sizeBefore")
+                return
+              }
+              Get-RemoteFile $remote $dest
+              $afterUtc = [DateTime]::UtcNow.ToString('o')
+              $sizeAfter = Get-RemoteSize $remote
+              $item = Get-Item -LiteralPath $dest
+              $hash = (Get-FileHash -LiteralPath $dest -Algorithm SHA256).Hash.ToLowerInvariant()
+              $stableSize = ($sizeBefore -eq $sizeAfter -and $sizeAfter -eq $item.Length)
+              $manifest.Add("FILE_SNAPSHOT remote=$remote label=$label before_utc=$beforeUtc after_utc=$afterUtc remote_size_before=$sizeBefore remote_size_after=$sizeAfter local_size=$($item.Length) sha256=$hash size_stable=$stableSize local=$([IO.Path]::GetFileName($dest))")
+            } catch {
+              $manifest.Add("FILE_UNAVAILABLE remote=$remote label=$label error=$($_.Exception.Message)")
+              if (Test-Path -LiteralPath $dest) {
+                $partial = $dest + ".partial"
+                Move-Item -LiteralPath $dest -Destination $partial
+                $p = Get-Item -LiteralPath $partial
+                $ph = (Get-FileHash -LiteralPath $partial -Algorithm SHA256).Hash.ToLowerInvariant()
+                $manifest.Add("PARTIAL_PRESERVED remote=$remote label=$label bytes=$($p.Length) sha256=$ph local=$([IO.Path]::GetFileName($partial))")
+              }
+            }
+          }
+          $directories = @(
+            '/data/pkg/','/user/app/PNEU00001/','/user/appmeta/PNEU00001/',
+            '/user/data/','/data/sce_logs/','/data/sce_coredumps/','/data/'
+          )
+          foreach ($directory in $directories) { Save-Listing $directory }
+          $files = @(
+            '/user/app/PNEU00001/app.pkg',
+            '/user/app/PNEU00001/app.json',
+            '/user/app/PNEU00001/app.xml',
+            '/data/pkg/PS4-Neural-Engine-015.pkg',
+            '/user/data/pne.log',
+            '/data/pne.log',
+            '/data/Loader_Logs.txt',
+            '/data/memory.log'
+          )
+          foreach ($file in $files) { Save-Snapshot $file 'single' }
+          # Two independent raw snapshots: preserve both; differing hashes may mean normal mutation.
+          Save-Snapshot '/data/sce_logs/log.bin' 'snapshot-a'
+          Save-Snapshot '/data/sce_logs/log.bin' 'snapshot-b'
+          $manifest.Add('LOG_BIN_DECODING=OPAQUE_UNDECODED')
+          $manifest.Add('STRING_EXTRACTION=NOT_PERFORMED')
+          $manifest.Add('INSTALLATION_PERFORMED=FALSE')
+          $manifest.Add('PRX_ACTIVATED=FALSE')
+          $manifest.Add('PLUGINS_INI_TOUCHED=FALSE')
+          $manifest.Add("COLLECTION_END_UTC=$([DateTime]::UtcNow.ToString('o'))")
+          [IO.File]::WriteAllLines((Join-Path $runRoot 'evidence-manifest.txt'),$manifest,[Text.UTF8Encoding]::new($false))
+          $manifest | ForEach-Object { Write-Host $_ }
+          Get-ChildItem -LiteralPath $runRoot -File | ForEach-Object {
+            $h=(Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+            Write-Host ("LOCAL_EVIDENCE file={0} bytes={1} sha256={2}" -f $_.Name,$_.Length,$h)
+          }
+          Write-Host 'CDA_PKG015_READ_ONLY_COLLECTION_COMPLETE'
+      - name: Preserve raw evidence artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: cda-pkg015-evidence-${{ github.run_id }}
+          path: ${{ runner.temp }}/cda-pkg015-${{ github.run_id }}/
+          if-no-files-found: error
+          retention-days: 30
