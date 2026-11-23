@@ -20,6 +20,10 @@ jobs:
     runs-on: [self-hosted, Windows, X64, ps4-lan]
     timeout-minutes: 12
     steps:
+      - name: Checkout reviewed log-signal extractor
+        uses: actions/checkout@v4
+        with:
+          ref: main
       - name: Acquire immutable evidence snapshots (FTP LIST/GETSIZE/GET only)
         shell: powershell
         env:
@@ -190,6 +194,14 @@ jobs:
             Write-Host ("LOCAL_EVIDENCE file={0} bytes={1} sha256={2}" -f $_.Name,$_.Length,$h)
           }
           Write-Host 'CDA_PKG015_READ_ONLY_COLLECTION_COMPLETE'
+      - name: Search preserved logs for PKG015 preflight and crash/error signals
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $evidence = Join-Path $env:RUNNER_TEMP ("cda-pkg015-" + $env:GITHUB_RUN_ID)
+          $extractor = Join-Path $env:GITHUB_WORKSPACE 'tools/cda/Extract-Pkg015LogSignals.ps1'
+          if (-not (Test-Path -LiteralPath $extractor -PathType Leaf)) { throw 'Reviewed log-signal extractor is missing.' }
+          & $extractor -EvidenceDirectory $evidence
       - name: Preserve raw evidence artifact
         uses: actions/upload-artifact@v4
         with:
