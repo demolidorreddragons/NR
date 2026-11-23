@@ -27,17 +27,27 @@ The following references establish useful interfaces and candidate tooling, but 
 4. The opengnm API reference documents compute shader binding and dispatch interfaces (`sceGnmSetCsShader`, `sceGnmDispatchDirect`): https://ps4-opengnm.github.io/opengnm/reference/driver/
 5. The opengnm documentation distinguishes a firmware-backed Orbis backend from a generic software backend. A generic/host test cannot substitute for a retail-console GPU test: https://ps4-opengnm.github.io/opengnm/backends/
 
-The compiler candidate is research-only. The inspected checkout has a reproducibility gap: the top-level Makefile includes an untracked `config.mak` by default, and its code-generation rules reference a sibling `../SPIRV-Headers` tree; the PS4 cross-build configuration additionally expects sibling opengnm and Vulkan-Headers trees. The README's bare `make` command therefore does not, by itself, define a reproducible clean-checkout build. These dependencies/configuration must be pinned and the build recipe independently reproduced before trusting a generated shader. Its source, dependencies, generated binaries, and toolchain have not been imported into NR, executed on the privileged Windows bridge, or deployed to the PS4.
+The compiler candidate is research-only. The inspected checkout has a reproducibility gap: the top-level Makefile includes an untracked `config.mak` by default, and its code-generation rules reference a sibling `../SPIRV-Headers` tree; the PS4 cross-build configuration additionally expects sibling opengnm and Vulkan-Headers trees. The README's bare `make` command therefore does not, by itself, define a reproducible clean-checkout build.
+
+### Gate A automation added
+
+`.github/workflows/gcn8-compute-artifact-gate.yml` now defines an isolated hosted-runner build for the pinned compiler candidate. It checks out:
+- `opengnm-psbc`: `28697f007862427ebec54388ec972ce6e3545912`
+- `opengnm` headers: `4b295ca54c82c83acf308d1c646a2dfa9ae57350`
+- `SPIRV-Headers`: `fb1379425b16e58dcbdda7be0f8604a7f5cdce78`
+
+The workflow supplies an explicit host `config.mak`, compiles a deterministic compute shader with `-n`, and checks both compute stage and NEO/GFX8 target byte in addition to the upstream container/CRC verifier. It retains logs, SPIR-V, shader binary, report, and SHA-256. It runs only on `ubuntu-24.04`; no third-party source is executed on the privileged PS4-LAN runner.
+
+**Scope limitation:** Gate A proves only that the pinned compiler emits a structurally valid GFX8/NEO compute shader container. It does not prove the binary executes, that firmware 14.02 accepts it, or that a GPU dispatch/readback works. No shader binary is staged to the console by this workflow.
 
 ## Required engineering sequence
 
 ### Gate A — reproducible compute shader artifact
 
-- Pin and inspect the exact compiler source revision and its transitive dependencies.
-- Build it on an isolated hosted runner, never on the privileged PS4 LAN runner.
-- Compile a minimal deterministic compute shader for GFX8/NEO using the explicit NEO target.
-- Independently parse the produced shader binary: header, target mode, stage type, register metadata, code range, alignment, and integrity fields.
-- Preserve compiler logs, source hash, binary hash, and a machine-readable report.
+- [x] Pin compiler source and dependency revisions.
+- [x] Add isolated hosted build and GFX8/NEO target verification workflow.
+- [ ] Run the workflow and inspect the build log, output binary, report, and digest.
+- [ ] Reproduce independently before trusting the generated shader.
 - Reject output that targets GFX7/base PS4 or GFX10+/PS5.
 
 ### Gate B — command submission design
@@ -55,7 +65,7 @@ Do not invent a standalone queue or call undocumented firmware exports based onl
 
 ### Gate C — isolated known-answer hardware proof
 
-The first console test must be a reversible, opt-in diagnostic workload, not a neural renderer and not a game framebuffer hook. It must dispatch a deterministic kernel (for example, a bounded integer transform), wait for GPU completion using a proven synchronization path, read back through a proven transfer/coherency path, and compare every output element with a CPU reference.
+The first console test must be a reversible, opt-in diagnostic workload, not a neural renderer and not a game framebuffer hook. It must dispatch a deterministic kernel, wait for GPU completion using a proven synchronization path, read back through a proven transfer/coherency path, and compare every output element with a CPU reference.
 
 Required evidence: console model/firmware, plugin load/unload result, dispatch return/status, GPU completion/fence evidence, input/output dimensions, CPU-reference comparison, output hash, kernel duration, and crash/error logs. A successful PRX load or a host-side simulation is not a compute pass.
 
@@ -73,7 +83,7 @@ Only after Gate C passes:
 
 This audit does **not** claim:
 
-- that a compute shader has been compiled for GFX8/NEO;
+- that a compute shader has been executed on GFX8/NEO;
 - that `sceGnmDispatchDirect` works through the current PRX on retail firmware 14.02;
 - that a GPU command buffer, compute queue, shader binding, fence, or readback path has been qualified;
 - that neural inference, temporal reconstruction, or a working Neural Rendering app exists;
@@ -81,4 +91,4 @@ This audit does **not** claim:
 
 ## Console state preservation
 
-This source audit makes no PS4 network request and changes no console state. It does not modify PRX files, `plugins.ini`, GoldHEN configuration, installed applications, saves, or staged packages.
+No PS4 network request or console mutation is performed by Gate A. It does not modify PRX files, `plugins.ini`, GoldHEN configuration, installed applications, saves, or staged packages. The PRX identity conflict recorded in `AGENTS.md` remains a hard block on PRX replacement or activation until independently resolved.

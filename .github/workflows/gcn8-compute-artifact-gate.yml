@@ -1,0 +1,137 @@
+name: GCN8 compute shader artifact gate
+
+on:
+  push:
+    branches:
+      - engineering/gcn8-compute-readiness-audit
+    paths:
+      - ".github/workflows/gcn8-compute-artifact-gate.yml"
+      - "tests/gcn8_compute_smoke.comp"
+      - "tools/verify_gcn8_compute_sb.py"
+      - "docs/GCN8_GNM_COMPUTE_READINESS.md"
+  pull_request:
+    paths:
+      - ".github/workflows/gcn8-compute-artifact-gate.yml"
+      - "tests/gcn8_compute_smoke.comp"
+      - "tools/verify_gcn8_compute_sb.py"
+      - "docs/GCN8_GNM_COMPUTE_READINESS.md"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gcn8-compute-artifact-gate-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  compile-and-verify:
+    # Deliberately hosted and isolated: never run third-party compiler source on
+    # the privileged Windows PS4-LAN runner.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Checkout NR sources
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Install host-only build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential git python3 python3-mako glslang-tools
+
+      - name: Fetch exact reviewed compiler and pinned headers
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/nr-gcn8-deps"
+          cd "$RUNNER_TEMP/nr-gcn8-deps"
+
+          git init opengnm-psbc
+          git -C opengnm-psbc remote add origin https://github.com/PS4-OpenGNM/opengnm-psbc.git
+          git -C opengnm-psbc fetch --depth=1 origin 28697f007862427ebec54388ec972ce6e3545912
+          git -C opengnm-psbc checkout --detach FETCH_HEAD
+
+          git init opengnm
+          git -C opengnm remote add origin https://github.com/PS4-OpenGNM/opengnm.git
+          git -C opengnm fetch --depth=1 origin 4b295ca54c82c83acf308d1c646a2dfa9ae57350
+          git -C opengnm checkout --detach FETCH_HEAD
+
+          git init SPIRV-Headers
+          git -C SPIRV-Headers remote add origin https://github.com/KhronosGroup/SPIRV-Headers.git
+          git -C SPIRV-Headers fetch --depth=1 origin fb1379425b16e58dcbdda7be0f8604a7f5cdce78
+          git -C SPIRV-Headers checkout --detach FETCH_HEAD
+
+          test "$(git -C opengnm-psbc rev-parse HEAD)" = "28697f007862427ebec54388ec972ce6e3545912"
+          test "$(git -C opengnm rev-parse HEAD)" = "4b295ca54c82c83acf308d1c646a2dfa9ae57350"
+          test "$(git -C SPIRV-Headers rev-parse HEAD)" = "fb1379425b16e58dcbdda7be0f8604a7f5cdce78"
+
+      - name: Configure and build pinned compiler on hosted runner
+        shell: bash
+        run: |
+          set -euo pipefail
+          ROOT="$RUNNER_TEMP/nr-gcn8-deps"
+          COMPILER="$ROOT/opengnm-psbc"
+          INC="-Iinclude -Ilibpsbc -I../opengnm/include -I../SPIRV-Headers/include -Isrc -Isrc/amd -Isrc/amd/common -Isrc/amd/common/nir -Isrc/amd/compiler -Isrc/amd/vulkan -Isrc/amd/vulkan/nir -Isrc/vulkan/runtime -Isrc/vulkan/runtime/bvh -Isrc/vulkan/util -Isrc/compiler -Isrc/compiler/nir -Isrc/compiler/spirv -Isrc/gallium/include -Isrc/mesa -Isrc/mesa/main -Isrc/util -Icmd/psbc -Iinclude/mesa"
+          cat > "$COMPILER/config.mak" <<EOF
+          CC=gcc
+          CXX=g++
+          LD=g++
+          AR=ar
+          PYTHON=python3
+          CFLAGS=-std=gnu11 -O2 -g $INC -D_XOPEN_SOURCE=500 -DUTIL_ARCH_LITTLE_ENDIAN=1 -DUTIL_ARCH_BIG_ENDIAN=0 -DHAVE_STRUCT_TIMESPEC=1 -DHAVE_PTHREAD=1 -DHAVE_SYSCONF=1 -Dalloca=__builtin_alloca -include strings.h -Wno-unused-function -Wno-unused-variable
+          CXXFLAGS=-std=c++17 -O2 -g $INC -D_XOPEN_SOURCE=500 -DUTIL_ARCH_LITTLE_ENDIAN=1 -DUTIL_ARCH_BIG_ENDIAN=0 -DHAVE_STRUCT_TIMESPEC=1 -DHAVE_PTHREAD=1 -DHAVE_SYSCONF=1 -Dalloca=__builtin_alloca -include strings.h -Wno-unused-function -Wno-unused-variable
+          LDFLAGS=-lm -pthread -ldl
+          EOF
+          {
+            echo "=== compiler revision ==="
+            git -C "$COMPILER" rev-parse HEAD
+            echo "=== opengnm revision ==="
+            git -C "$ROOT/opengnm" rev-parse HEAD
+            echo "=== SPIRV-Headers revision ==="
+            git -C "$ROOT/SPIRV-Headers" rev-parse HEAD
+            echo "=== build ==="
+            make -C "$COMPILER" -j2
+          } 2>&1 | tee "$RUNNER_TEMP/gcn8-compiler-build.log"
+          test -x "$COMPILER/opengnm-psbc"
+
+      - name: Compile deterministic compute shader for PS4 Pro NEO
+        shell: bash
+        run: |
+          set -euo pipefail
+          ROOT="$RUNNER_TEMP/nr-gcn8-deps"
+          mkdir -p "$RUNNER_TEMP/gcn8-output"
+          glslangValidator -V --target-env vulkan1.0 -S comp \
+            tests/gcn8_compute_smoke.comp \
+            -o "$RUNNER_TEMP/gcn8-output/gcn8-compute.spv"
+          "$ROOT/opengnm-psbc/opengnm-psbc" \
+            -s compute -n -vv \
+            -f "$RUNNER_TEMP/gcn8-output/gcn8-compute.spv" \
+            -o "$RUNNER_TEMP/gcn8-output/gcn8-compute.sb" \
+            2>&1 | tee "$RUNNER_TEMP/gcn8-shader-compile.log"
+
+      - name: Independently verify GNM compute stage and NEO target
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/verify_gcn8_compute_sb.py \
+            "$RUNNER_TEMP/nr-gcn8-deps/opengnm-psbc" \
+            "$RUNNER_TEMP/gcn8-output/gcn8-compute.sb" \
+            | tee "$RUNNER_TEMP/gcn8-artifact-report.json"
+          sha256sum "$RUNNER_TEMP/gcn8-output/"* | tee "$RUNNER_TEMP/gcn8-sha256.txt"
+
+      - name: Preserve compiler logs and generated artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gcn8-compute-artifact-gate-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/gcn8-compiler-build.log
+            ${{ runner.temp }}/gcn8-shader-compile.log
+            ${{ runner.temp }}/gcn8-artifact-report.json
+            ${{ runner.temp }}/gcn8-sha256.txt
+            ${{ runner.temp }}/gcn8-output/
+          if-no-files-found: warn
+          retention-days: 30
