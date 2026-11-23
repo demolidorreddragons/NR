@@ -173,11 +173,12 @@ def main() -> int:
     except (OSError, ValueError) as exc:
         raise SystemExit(f"compute descriptor ABI inspection failed: {exc}") from exc
 
-    width_status = (
-        "CONSISTENT_SOURCE_WIDTH"
-        if compiler_width == gnm_width
-        else "BLOCKED_SOURCE_WIDTH_DISAGREEMENT"
-    )
+    if compiler_width != gnm_width:
+        raise SystemExit(
+            "descriptor pointer ABI width mismatch: compiler allocates "
+            f"{compiler_width} SGPR(s), GNM input-usage contract requires {gnm_width}"
+        )
+    width_status = "CONSISTENT_SOURCE_WIDTH"
     report = {
         "status": "PASS_ARTIFACT_ONLY_NOT_HARDWARE",
         "compiler": "PS4-OpenGNM/opengnm-psbc",
