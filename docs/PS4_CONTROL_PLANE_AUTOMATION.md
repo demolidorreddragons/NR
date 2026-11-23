@@ -324,3 +324,11 @@ The workflow never deletes or uploads files, never creates/removes directories, 
 The `/data/GoldHEN/config.ini` file is present (the directory listing reports 1,127 bytes), but its contents have not been read. PR47 adds a safe in-memory fingerprint: size/SHA-256 plus only allowlisted relevant boolean states for RPI/remote/package/FTP/Klog/BinLoader/plugin/install keys. Non-boolean values are redacted, the raw file is never uploaded, and the temporary runner-local copy is deleted. It also captures `plugins.ini.pne-tmp` and `plugins.ini.pne-backup` so the active registration can be compared with the installer's backups.
 
 The `/user/app/` listing contains no identifiable Remote Package Installer title, and TCP 12800 refused the read-only GET probe. No setting is changed by this follow-up.
+
+### Archive workflow first attempts and collision-probe correction — 2026-11-23
+
+The first automatic archive run `45171209915` failed before any FTP mutation because active-mode FTP LIST timed out. No package was renamed. The follow-up switched to the passive FTP mode already proven by the read-only collector and increased the request timeout.
+
+The next run `45171798451` completed the raw root/old directory listings and live GET snapshots of installed app.pkg, app.json source and canonical staged PKG 015, and downloaded the first alternate PKG 015 candidate. It then failed before the first rename because the PS4 FTP server returns `550 File unavailable` for a deliberately nonexistent archive destination. The script had incorrectly used GETSIZE as a destination-collision probe and treated the expected 550 as fatal. Artifact `14816757713` preserves the pre-move snapshots and initial listings; no archive destination was created and no source PKG was moved.
+
+The corrected script uses the already captured `/data/pkg/old/` LIST names for collision detection and idempotent archive lookup. GETSIZE is now used only for existing files during verified GET snapshots; a 550 on an expected existing file remains a hard failure with the remote path in the error. The workflow continues to use passive FTP, unique run/attempt evidence directories, and readback SHA-256 verification. The next archive run must still pass the full inventory, live identity and final-root checks before reporting completion.

@@ -61,8 +61,9 @@ function Get-RemoteSize([string]$remotePath) {
     return [int64]$response.ContentLength
   } catch {
     $ftpResponse = $_.Exception.Response
-    if ($ftpResponse -and $ftpResponse.StatusCode -eq [System.Net.FtpStatusCode]::FileUnavailable) { return $null }
-    throw
+    $status = if ($ftpResponse) { [int]$ftpResponse.StatusCode } else { "unknown" }
+    $detail = $_.Exception.GetBaseException().Message
+    throw "FTP GETSIZE failed for '$remotePath' (status $status): $detail"
   } finally {
     if ($response) { $response.Dispose() }
   }
@@ -140,6 +141,8 @@ $oldEntries = @(ConvertFrom-FtpListing $oldListingText)
 $oldDirectory = @($rootEntries | Where-Object { $_.name -eq "old" })
 if ($oldDirectory.Count -ne 1 -or -not $oldDirectory[0].mode.StartsWith("d")) { throw "/data/pkg/old is not a verified directory; refusing archive." }
 $rootNr = @($rootEntries | Where-Object { $_.name -like "PS4-Neural-Engine-*.pkg" })
+$rootNames = @($rootNr | ForEach-Object { [string]$_.name })
+$oldNames = @($oldEntries | ForEach-Object { [string]$_.name })
 if (@($rootNr | Where-Object { -not $_.mode.StartsWith("-") }).Count -gt 0) { throw "An NR PKG path is not a regular file; refusing to move it." }
 
 $actualPaths = @($rootNr | ForEach-Object { "/data/pkg/$($_.name)" } | Sort-Object -Unique)
@@ -188,15 +191,12 @@ try {
     $baseName = [IO.Path]::GetFileNameWithoutExtension($sourceName)
     $expectedHash = ([string]$pkg.sha256).ToLowerInvariant()
     $expectedBytes = [int64]$pkg.bytes
-    $sourceSize = Get-RemoteSize $sourcePath
-
-    if ($null -eq $sourceSize) {
+    if (-not ($rootNames -contains $sourceName)) {
       $already = $false
       for ($n = 0; $n -lt 100; $n++) {
         $archiveName = "$baseName-archived-$($env:SOURCE_OFFLINE_RUN_ID)-$n.pkg"
         $archivePath = "/data/pkg/old/$archiveName"
-        $archiveSize = Get-RemoteSize $archivePath
-        if ($null -eq $archiveSize) { continue }
+        if (-not ($oldNames -contains $archiveName)) { continue }
         $localExisting = Join-Path $env:EVIDENCE_DIR ("already-" + $archiveName)
         $snapExisting = Save-RemoteFile $archivePath $localExisting
         if ($snapExisting.bytes -eq $expectedBytes -and $snapExisting.sha256 -eq $expectedHash) {
@@ -218,7 +218,7 @@ try {
     for ($n = 0; $n -lt 100; $n++) {
       $archiveName = "$baseName-archived-$($env:SOURCE_OFFLINE_RUN_ID)-$n.pkg"
       $candidatePath = "/data/pkg/old/$archiveName"
-      if ($null -eq (Get-RemoteSize $candidatePath)) { $destinationPath = $candidatePath; break }
+      if (-not ($oldNames -contains $archiveName)) { $destinationPath = $candidatePath; break }
     }
     if (-not $destinationPath) { throw "No collision-free archive name available for $sourcePath" }
 
@@ -243,7 +243,8 @@ try {
     $entry.status = "RENAMED_PENDING_READBACK"
     Save-Manifest
 
-    if ($null -ne (Get-RemoteSize $sourcePath)) { throw "Source path still exists after FTP rename: $sourcePath" }
+    $rootNames = @($rootNames | Where-Object { $_ -ne $sourceName })
+    $oldNames += [IO.Path]::GetFileName($destinationPath)
     $archiveLocal = Join-Path $env:EVIDENCE_DIR ("archive-" + [IO.Path]::GetFileName($destinationPath))
     $archiveSnapshot = Save-RemoteFile $destinationPath $archiveLocal
     if ($archiveSnapshot.bytes -ne $expectedBytes -or $archiveSnapshot.sha256 -ne $expectedHash) { throw "Archived readback identity mismatch: $destinationPath" }

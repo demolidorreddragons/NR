@@ -99,3 +99,5 @@ This is reversible archival only; it is not installation or runtime validation. 
 ## Safe GoldHEN config discovery follow-up
 
 `/data/GoldHEN/config.ini` is listed on the console (1,127 bytes) but has not been read. PR47 collects only a local temporary copy, SHA-256/size, and allowlisted boolean states for RPI/remote/package/FTP/Klog/BinLoader/plugin/install keys; all non-boolean values are redacted, raw config is not uploaded, and the temporary file is deleted. It also collects plugins.ini temp/backup variants. This is read-only; do not modify config or registration based on a guessed key.
+
+- For archive collision/existence checks, use the captured FTP LIST name sets; do not issue GETSIZE against a path expected not to exist. A 550 response is ambiguous between missing and inaccessible and must not be treated as proof that an archive destination is free. GETSIZE is reserved for paths already known to exist from LIST and for before/after verification of GET snapshots.
