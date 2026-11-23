@@ -2,6 +2,7 @@
 
 #include <array>
 #include <cstdio>
+#include <cstdint>
 
 #define CHECK(condition) do { \
     if (!(condition)) { \
@@ -9,8 +10,6 @@
         return 1; \
     } \
 } while (0)
-#include <cstdint>
-
 using namespace pne::gcn8;
 
 int main() {
