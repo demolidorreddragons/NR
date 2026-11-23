@@ -22,6 +22,8 @@ assert "actions/download-artifact@v4" in workflow
 assert r"run-id: ${{ github.event.workflow_run.id }}" in workflow
 assert "ExecutionPolicy Bypass" in workflow
 assert "if: always()" in workflow
+assert "archive-evidence-" + r"${{ github.run_id }}-${{ github.run_attempt }}" in workflow
+assert "evidence-" + r"${{ github.run_id }}-${{ github.run_attempt }}" in workflow
 
 assert 'nr.ps4.installed-package-inspection.v1' in script
 assert 'PASS_PC_ONLY' in script
