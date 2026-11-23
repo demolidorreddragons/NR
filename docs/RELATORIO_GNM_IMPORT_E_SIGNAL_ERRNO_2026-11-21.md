@@ -220,3 +220,63 @@ STAGE=PNE_GCN8_SMOKE_EXIT=0
 5. Só depois da auditoria de exports, preparar compute smoke com chamadas dinâmicas. O bloqueio GPU VA/V# e InputUsage continua independente e não pode ser ignorado.
 6. O novo pacote de auditoria ainda não foi staged nem executado. Qualquer novo staging/execução de pacote diagnóstico no console exige autorização específica.
 
+
+## Reconciliação adicional com implementação OpenGNM — 2026-11-23
+
+A revisão do código-fonte OpenGNM fixado pelo projeto (PS4-OpenGNM/opengnm, commit
+4b295ca54c82c83acf308d1c646a2dfa9ae57350) acrescenta uma comparação relevante:
+
+- config.orbis.mak compila o backend Orbis e liga -lkernel -lSceGnmDriver -lSceVideoOut.
+- src/driver_orbis.c implementa resolvegnmdriversym(): enumera módulos com
+  sceKernelGetModuleList, consulta nomes com sceKernelGetModuleInfo, procura
+  GnmDriver e resolve o endereço por sceKernelDlsym. Se o módulo não estiver
+  disponível ou não exportar o nome, percorre os demais módulos tentando DLSYM.
+- Referências fixadas:
+  - https://github.com/PS4-OpenGNM/opengnm/blob/4b295ca54c82c83acf308d1c646a2dfa9ae57350/src/driver_orbis.c
+  - https://github.com/PS4-OpenGNM/opengnm/blob/4b295ca54c82c83acf308d1c646a2dfa9ae57350/config.orbis.mak
+
+### Conclusão revisada do import
+
+O conjunto de evidências estáticas permanece consistente:
+
+1. O stub libSceGnmDriver.so do sysroot OpenOrbis 0.5.4 exporta
+   sceGnmSubmitDone como símbolo global FUNC.
+2. O OELF anterior contém a dependência libSceGnmDriver.prx, módulo
+   libSceGnmDriver e NID yvZ73uQUqrk#C#C, correspondente a
+   CAF67BDEE414AAB9.
+3. A implementação OpenGNM de referência não depende apenas de tomar o endereço
+   de uma função importada: ela também possui uma resolução dinâmica explícita
+   via DLSYM após enumerar módulos.
+
+Isso NÃO fecha a causa do endereço nulo no PS4 FW 14.02. O stub do sysroot
+prova a presença do símbolo no provedor de link, não que o firmware do console
+tenha export compatível nem que o loader tenha resolvido a relocação estática no
+momento em que NR entrou em main. A estratégia OpenGNM torna plausível uma
+dependência de estado/carregamento do módulo, mas ainda é hipótese, não causa
+confirmada. Não substituir o probe Link-Only por DLSYM e declarar a causa
+resolvida sem comparar os resultados dos dois caminhos no mesmo firmware.
+
+### Instrumentação dos sinais e repetição isolada
+
+O código atual de stage_log.c já captura imediatamente o errno de
+sigaltstack, sigemptyset e de cada sigaction (SIGSEGV, SIGBUS, SIGILL,
+SIGABRT, SIGFPE). O teste host foi reforçado para exigir uma linha SIGNAL_DIAG
+de sucesso/errno para cada um dos cinco handlers, em vez de verificar apenas SIGSEGV.
+
+O workflow .github/workflows/ps4-prx.yml está sendo atualizado para produzir
+novamente um PKG GNM-Link-Only com o código de telemetria atual e submetê-lo a
+QA independente. O QA verifica a importação esperada no OELF, o NID,
+gnm_function_calls=none, ausência do shader e integridade do PKG. Um PASS
+dessa etapa continuará sendo somente QA de PC/toolchain, não execução no PS4.
+
+### Ordem de liberação preservada
+
+1. Fechar a comparação estática sysroot/NID/OELF/OpenGNM — consistência estática
+   confirmada; resolução runtime ainda aberta.
+2. Validar a telemetria de errno por operação — implementação presente;
+   cobertura host ampliada para os cinco sinais.
+3. Rebuild + QA independente do GNM-Link-Only — em CI nesta revisão; sem
+   execução de console presumida.
+4. Só depois avaliar GNM-Init e medições de VA/4 GiB, sob o plano reversível
+   aprovado separadamente. Não introduzir chamada de init sem ABI/NID/export
+   confirmado. Dispatch permanece bloqueado por padrão.
