@@ -45,6 +45,10 @@ def parse_compute_shader_layout(data: bytes) -> dict:
     code_offset = int.from_bytes(data[stage_offset + 8:stage_offset + 12], "little")
     compute_pgm_rsrc2 = int.from_bytes(data[stage_offset + 20:stage_offset + 24], "little")
     compute_user_sgpr_count = (compute_pgm_rsrc2 >> 1) & 0x1F
+    compute_num_thread = [
+        int.from_bytes(data[stage_offset + offset:stage_offset + offset + 4], "little")
+        for offset in (24, 28, 32)
+    ]
     if code_offset != stage_header_size:
         raise ValueError(
             f"compute code offset {code_offset} does not match stage header size "
@@ -82,6 +86,7 @@ def parse_compute_shader_layout(data: bytes) -> dict:
         "compute_code_offset_bytes": code_offset,
         "compute_pgm_rsrc2": compute_pgm_rsrc2,
         "compute_user_sgpr_count": compute_user_sgpr_count,
+        "compute_num_thread": compute_num_thread,
         "input_usage_slot_count": slot_count,
         "input_usage_slots": slots,
         "descriptor_table_slot": table_slots[0],
@@ -190,6 +195,11 @@ def main() -> int:
             "compute PGM_RSRC2 USER_SGPR count is too small: expected at least "
             f"{expected_user_sgprs}, got {layout['compute_user_sgpr_count']}"
         )
+    if layout["compute_num_thread"] != [64, 1, 1]:
+        raise SystemExit(
+            "compute thread-group size mismatch: expected [64, 1, 1], got "
+            f"{layout['compute_num_thread']}"
+        )
     width_status = "CONSISTENT_SOURCE_WIDTH_AND_REGISTER_COUNT"
     report = {
         "status": "PASS_ARTIFACT_ONLY_NOT_HARDWARE",
@@ -206,6 +216,7 @@ def main() -> int:
         "compute_stage_header_size_bytes": layout["stage_header_size_bytes"],
         "compute_pgm_rsrc2": f"0x{layout['compute_pgm_rsrc2']:08x}",
         "compute_user_sgpr_count": layout["compute_user_sgpr_count"],
+        "compute_num_thread": layout["compute_num_thread"],
         "compiler_descriptor_arg_sgprs": compiler_width,
         "gnm_indirect_resource_pointer_sgprs": gnm_width,
         "descriptor_pointer_abi_status": width_status,
