@@ -4,64 +4,99 @@ on:
     branches: [main]
     paths:
       - ".github/workflows/ps4-installed-app-readonly-audit.yml"
+
 permissions:
   contents: read
+
 jobs:
   inspect:
     runs-on: [self-hosted, Windows, X64, ps4-lan]
+    timeout-minutes: 10
     steps:
-      - name: Read installed app metadata and executable identity over FTP
+      - name: Read installed app and package identity over FTP without mutation
         shell: powershell -NoProfile -ExecutionPolicy Bypass -File {0}
         env:
           PS4_IP: ${{ vars.PS4_IP }}
         run: |
           $ErrorActionPreference = "Stop"
           if (-not $env:PS4_IP) { throw "PS4_IP variable missing." }
-          $base = "ftp://$($env:PS4_IP):2121/user/app/PNEU00001/"
+          $base = "ftp://$($env:PS4_IP):2121"
           $creds = "anonymous:anonymous@example.com"
-          $capture = Join-Path $env:RUNNER_TEMP "pne-installed-app-capture"
-          New-Item -ItemType Directory -Force -Path $capture | Out-Null
-          Write-Host "=== INSTALLED TITLE DIRECTORY ==="
-          $listing = & curl.exe --fail --silent --show-error --ftp-pasv --user $creds $base 2>&1
+          $capture = Join-Path $env:RUNNER_TEMP "pne-installed-app-capture-$env:GITHUB_RUN_ID"
+          New-Item -ItemType Directory -Path $capture -ErrorAction Stop | Out-Null
+
+          function Get-RemoteFile([string]$remotePath, [string]$localName, [bool]$required = $false) {
+            $local = Join-Path $capture $localName
+            $url = $base + $remotePath
+            $out = & curl.exe --fail --silent --show-error --ftp-pasv --ftp-method nocwd --user $creds --output $local $url 2>&1
+            $code = $LASTEXITCODE
+            if ($code -ne 0 -or -not (Test-Path -LiteralPath $local)) {
+              if (Test-Path -LiteralPath $local) { Remove-Item -LiteralPath $local -Force }
+              Write-Host "REMOTE_FILE_UNAVAILABLE path=$remotePath exit=$code"
+              $out | ForEach-Object { Write-Host $_ }
+              if ($required) { throw "Required read-only file unavailable: $remotePath" }
+              return $null
+            }
+            $item = Get-Item -LiteralPath $local
+            $hash = (Get-FileHash -LiteralPath $local -Algorithm SHA256).Hash.ToLowerInvariant()
+            Write-Host "REMOTE_FILE_READBACK path=$remotePath bytes=$($item.Length) sha256=$hash"
+            return $local
+          }
+
+          Write-Host "=== INSTALLED PNEU00001 DIRECTORY ==="
+          $listing = & curl.exe --fail --silent --show-error --ftp-pasv --ftp-method nocwd --user $creds ($base + "/user/app/PNEU00001/") 2>&1
           if ($LASTEXITCODE -ne 0) { throw "Cannot list installed PNEU00001 directory." }
           $listing | ForEach-Object { Write-Host $_ }
-          # Retrieve the exact installed base PKG using explicit FTP CWD steps.
-          $installedPkg = Join-Path $capture "installed-app.pkg"
-          $pkgLog = & curl.exe --fail --silent --show-error --ftp-pasv --user $creds --quote "CWD user" --quote "CWD app" --quote "CWD PNEU00001" --ftp-method nocwd --output $installedPkg "ftp://$($env:PS4_IP):2121/app.pkg" 2>&1
-          if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $installedPkg)) {
-            $pkgLog | ForEach-Object { Write-Host $_ }
-            throw "Could not retrieve the exact installed app.pkg from /user/app/PNEU00001/."
+
+          $installedPkg = Get-RemoteFile "/user/app/PNEU00001/app.pkg" "installed-app.pkg" $true
+          $appJsonPath = Get-RemoteFile "/user/app/PNEU00001/app.json" "installed-app.json" $true
+          $appXmlPath = Get-RemoteFile "/user/app/PNEU00001/app.xml" "installed-app.xml"
+          $sfoPath = Get-RemoteFile "/user/app/PNEU00001/sce_sys/param.sfo" "installed-param.sfo" $true
+          $ebootPath = Get-RemoteFile "/user/app/PNEU00001/eboot.bin" "installed-eboot.bin"
+          $prxPath = Get-RemoteFile "/user/app/PNEU00001/ps4_neural_engine.prx" "installed-app-prx.bin"
+
+          $sourcePkg = Get-RemoteFile "/user/data/pkg/PS4-Neural-Engine-015.pkg" "user-data-source-pkg015.pkg"
+          $stagedPkg = Get-RemoteFile "/data/pkg/PS4-Neural-Engine-015-7609b5d2b536.pkg" "staged-pkg015.pkg"
+
+          $installedHash = (Get-FileHash -LiteralPath $installedPkg -Algorithm SHA256).Hash.ToLowerInvariant()
+          $installedBytes = (Get-Item -LiteralPath $installedPkg).Length
+          $appJson = Get-Content -LiteralPath $appJsonPath -Raw | ConvertFrom-Json
+          $packageDigest = [string]$appJson.packageDigest
+          $piecesUrl = [string]$appJson.pieces[0].url
+          $digestMatch = $packageDigest -and ($packageDigest.ToLowerInvariant() -eq $installedHash)
+          $report = Join-Path $capture "installed-app-identity-report.txt"
+          @(
+            "TITLE_ID=PNEU00001"
+            "INSTALLED_APP_PKG_BYTES=$installedBytes"
+            "INSTALLED_APP_PKG_SHA256=$installedHash"
+            "APP_JSON_PACKAGE_DIGEST=$packageDigest"
+            "APP_JSON_PACKAGE_DIGEST_EQUALS_APP_PKG_SHA256=$digestMatch"
+            "APP_JSON_SOURCE_PKG_PATH=$piecesUrl"
+          ) | Out-File -LiteralPath $report -Encoding utf8
+
+          if ($sourcePkg) {
+            $sourceHash = (Get-FileHash -LiteralPath $sourcePkg -Algorithm SHA256).Hash.ToLowerInvariant()
+            $sourceBytes = (Get-Item -LiteralPath $sourcePkg).Length
+            "USER_DATA_SOURCE_PKG015_BYTES=$sourceBytes" | Out-File -LiteralPath $report -Append -Encoding utf8
+            "USER_DATA_SOURCE_PKG015_SHA256=$sourceHash" | Out-File -LiteralPath $report -Append -Encoding utf8
+            "INSTALLED_MATCHES_USER_DATA_SOURCE=$($sourceHash -eq $installedHash)" | Out-File -LiteralPath $report -Append -Encoding utf8
           }
-          $pkgItem = Get-Item -LiteralPath $installedPkg
-          $pkgHash = (Get-FileHash -LiteralPath $installedPkg -Algorithm SHA256).Hash.ToLowerInvariant()
-          Write-Host "INSTALLED_APP_PKG_BYTES=$($pkgItem.Length) SHA256=$pkgHash"
-          foreach ($name in @("sce_sys/param.sfo","eboot.bin","ps4_neural_engine.prx")) {
-            $local = Join-Path $env:RUNNER_TEMP ($name.Replace("/","_"))
-            $url = $base + $name
-            $out = & curl.exe --fail --silent --show-error --ftp-pasv --user $creds --output $local $url 2>&1
-            if ($LASTEXITCODE -eq 0 -and (Test-Path -LiteralPath $local)) {
-              $item = Get-Item -LiteralPath $local
-              $hash = (Get-FileHash -LiteralPath $local -Algorithm SHA256).Hash.ToLowerInvariant()
-              Write-Host "INSTALLED_FILE=$name BYTES=$($item.Length) SHA256=$hash"
-              $destination = Join-Path $capture ($name.Replace("/","_"))
-              Copy-Item -LiteralPath $local -Destination $destination -Force
-              if ($name -eq "sce_sys/param.sfo") {
-                $bytes = [IO.File]::ReadAllBytes($local)
-                Write-Host "PARAM_SFO_HEX=$([BitConverter]::ToString($bytes))"
-              }
-            } else {
-              Write-Host "INSTALLED_FILE_UNAVAILABLE=$name"
-              $out | ForEach-Object { Write-Host $_ }
-            }
+          if ($stagedPkg) {
+            $stagedHash = (Get-FileHash -LiteralPath $stagedPkg -Algorithm SHA256).Hash.ToLowerInvariant()
+            $stagedBytes = (Get-Item -LiteralPath $stagedPkg).Length
+            "STAGED_PKG015_BYTES=$stagedBytes" | Out-File -LiteralPath $report -Append -Encoding utf8
+            "STAGED_PKG015_SHA256=$stagedHash" | Out-File -LiteralPath $report -Append -Encoding utf8
+            "INSTALLED_MATCHES_STAGED_PKG015=$($stagedHash -eq $installedHash)" | Out-File -LiteralPath $report -Append -Encoding utf8
           }
+          Get-Content -LiteralPath $report | ForEach-Object { Write-Host $_ }
           Write-Host "READ_ONLY=true"
-          Write-Host "NO_FILES_WRITTEN_OR_DELETED=true"
+          Write-Host "NO_FILES_WRITTEN_OR_DELETED_ON_PS4=true"
 
       - name: Preserve read-only installed-app evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: installed-app-files-readonly
-          path: ${{ runner.temp }}/pne-installed-app-capture/*
+          path: ${{ runner.temp }}/pne-installed-app-capture-${{ github.run_id }}/*
           if-no-files-found: warn
-          retention-days: 3
+          retention-days: 30
