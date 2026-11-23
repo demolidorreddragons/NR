@@ -9,6 +9,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Validate CDA PKG 015 log-signal extractor contract
+        run: python3 tests/test_cda_pkg015_log_extractor_contract.py
       - name: Validate installer newline escapes
         run: |
           python3 - <<'PY'
