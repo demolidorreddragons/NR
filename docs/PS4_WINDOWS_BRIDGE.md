@@ -1,7 +1,6 @@
 # PS4 Windows LAN bridge — mandatory deployment route
 
 ## Purpose
-
 The repository has a self-hosted GitHub Actions runner on the user's Windows PC with access to the PS4 Pro LAN. This runner is the approved route for all live PS4 network operations from this project. Use it instead of attempting to reach the console from the hosted ChatGPT execution environment.
 
 ## Runner and connection
@@ -39,13 +38,11 @@ A deployment workflow must:
 
 If no workflow currently implements all these steps, create or repair one before claiming the bridge can transfer packages. Do not ask the user to repeat LAN setup or collect the same diagnostics when the self-hosted runner is available.
 
-
 ## Read-only control-plane inventory
 
 The preflight workflow runs `tools/ps4-control-plane-preflight.ps1` on the existing Windows LAN runner after an eligible successful build. It uses FTP LIST/GETSIZE/GET for narrowly allowlisted NR metadata and plugin paths, and HTTP GET-only fingerprinting on the RPI endpoint at TCP 12800. It never probes BinLoader 9090, sends payloads, issues POST, modifies remote files, installs packages, activates PRX, or restarts GoldHEN. It stores a timestamped JSON and raw evidence artifact for 30 days.
 
 The workflow definition is on the default branch so GitHub's `workflow_run` trigger can observe eligible build runs. It checks out the reviewed default-branch collector, not code from the triggering build, and records the build's source SHA as metadata. The preflight result is only a read-only snapshot.
-
 
 ## Windows runner service troubleshooting
 
@@ -69,3 +66,13 @@ Observed output: `MXC_OK`, exit code `0`. A subsequent Codex read-only execution
 
 **Operational boundary:** Codex CLI is installed and locally authenticated, and a basic sandboxed command execution has been demonstrated. Repository task execution, the runner service's access to the interactive login, and GitHub Actions integration remain unverified. Do not claim the Codex agent is operational in Actions until a separate non-mutating job proves authentication and execution under the actual runner service identity. Do not run Codex from `C:\\Windows\\System32`; set its working directory to the checked-out NR repository and use read-only sandboxing for the first repository inspection. Keep all initial inspection scoped to the repository. Any future write-capable Codex run must be explicitly scoped to NR project files, reviewed, and validated; no arbitrary system, PS4 deployment, installation, PRX activation, or restart operations are authorized by the CLI installation itself.
 
+## Current project access baseline — user-confirmed, 2026-11-23
+
+The following project prerequisites have been provided and must be treated as established. Do not ask the user to configure or provide them again unless new evidence shows a specific failure:
+
+- **Windows runner:** the self-hosted Windows runner is connected to GitHub Actions.
+- **Codex CLI:** Codex CLI is installed and authenticated in the user's Windows session.
+- **Repository:** the Neural Rendering repository is accessible through the configured GitHub connection.
+- **Console:** the PS4 Pro is available as the target for controlled project tests.
+
+These statements record the user's supplied access/setup baseline. They do not, by themselves, assert that Codex credentials are available to the GitHub Actions service identity, that every workflow is currently healthy, or that a GPU compute test has passed. Before each operation, inspect the relevant workflow and verify its actual result. Preserve all existing PS4 safety gates and do not request repeated setup when the established access path can perform the task.
