@@ -145,16 +145,91 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
-      - name: Commit and push reviewed-scope engineering result
+      - name: Commit Codex changes through GitHub Git Database API
         if: success()
         shell: powershell
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           $ErrorActionPreference = 'Stop'
-          $gitCandidates = @('C:\Program Files\Git\cmd\git.exe','C:\Program Files\Git\bin\git.exe','C:\ProgramData\chocolatey\bin\git.exe')
-          foreach ($candidate in $gitCandidates) { if (Test-Path -LiteralPath $candidate) { $env:PATH = (Split-Path $candidate) + ';' + $env:PATH; break } }
-          if (-not (Get-Command git.exe -ErrorAction SilentlyContinue)) { Write-Warning 'Git unavailable; skipping commit/push and retaining artifact evidence.'; exit 0 }
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          Write-Warning 'Codex output is retained as a review artifact. Repository write-back will be enabled only after the sandbox probe and artifact are validated.'
+          $repo = 'demolidorreddragons/NR'
+          $branch = 'engineering/codex-autonomous-cycle-20261123'
+          $api = 'https://api.github.com/repos/' + $repo
+          $headers = @{
+            Authorization = "Bearer $env:GH_TOKEN"
+            Accept = 'application/vnd.github+json'
+            'X-GitHub-Api-Version' = '2022-11-28'
+          }
+
+          # The runner's checkout action uses the GitHub archive API because
+          # this machine has no Git binary. Build a normal Git commit using
+          # GitHub's Git Database API, comparing every local file to the exact
+          # branch tree. Codex never receives the write token.
+          $branchInfo = Invoke-RestMethod -Method Get -Uri "$api/branches/$branch" -Headers $headers
+          $baseSha = $branchInfo.commit.sha
+          $baseCommit = Invoke-RestMethod -Method Get -Uri "$api/git/commits/$baseSha" -Headers $headers
+          $baseTreeSha = $baseCommit.tree.sha
+          $baseTree = Invoke-RestMethod -Method Get -Uri "$api/git/trees/$baseTreeSha?recursive=1" -Headers $headers
+          if ($baseTree.truncated) { throw 'Base Git tree was truncated; refusing incomplete comparison.' }
+
+          $baseEntries = @{}
+          foreach ($entry in $baseTree.tree) {
+            if ($entry.type -eq 'blob') { $baseEntries[$entry.path] = $entry }
+          }
+          $localFiles = Get-ChildItem -LiteralPath . -Recurse -File -Force |
+            Where-Object {
+              $_.FullName -notmatch '[\\/](\.git|\.codex|__pycache__|\.pytest_cache|build|out)[\\/]' -and
+              $_.Extension -ne '.pyc'
+            }
+          $localPaths = @{}
+          $treeChanges = New-Object System.Collections.ArrayList
+
+          foreach ($file in $localFiles) {
+            $relative = $file.FullName.Substring((Resolve-Path .).Path.Length + 1).Replace('\','/')
+            $localPaths[$relative] = $true
+            $bytes = [System.IO.File]::ReadAllBytes($file.FullName)
+            if ($bytes.Length -gt 10000000) { throw "Changed-file safety limit exceeded: $relative" }
+            $header = [System.Text.Encoding]::ASCII.GetBytes("blob $($bytes.Length)`0")
+            $payload = New-Object byte[] ($header.Length + $bytes.Length)
+            [Array]::Copy($header, 0, $payload, 0, $header.Length)
+            [Array]::Copy($bytes, 0, $payload, $header.Length, $bytes.Length)
+            $sha1 = [System.Security.Cryptography.SHA1]::Create()
+            try { $localBlobSha = ([BitConverter]::ToString($sha1.ComputeHash($payload))).Replace('-','').ToLowerInvariant() }
+            finally { $sha1.Dispose() }
+
+            $existing = $baseEntries[$relative]
+            if ($existing -and $existing.sha -eq $localBlobSha) { continue }
+
+            $blobBody = @{
+              content = [Convert]::ToBase64String($bytes)
+              encoding = 'base64'
+            } | ConvertTo-Json -Compress
+            $blob = Invoke-RestMethod -Method Post -Uri "$api/git/blobs" -Headers $headers -ContentType 'application/json' -Body $blobBody
+            $mode = if ($existing) { $existing.mode } else { '100644' }
+            [void]$treeChanges.Add(@{ path = $relative; mode = $mode; type = 'blob'; sha = $blob.sha })
+          }
+
+          foreach ($path in $baseEntries.Keys) {
+            if (-not $localPaths.ContainsKey($path)) {
+              [void]$treeChanges.Add(@{ path = $path; mode = $baseEntries[$path].mode; type = 'blob'; sha = $null })
+            }
+          }
+
+          if ($treeChanges.Count -eq 0) {
+            Write-Host 'CODEX_NO_CHANGES'
+            exit 0
+          }
+
+          Write-Host "CODEX_CHANGED_PATHS=$($treeChanges.Count)"
+          $treeBody = @{ base_tree = $baseTreeSha; tree = @($treeChanges) } | ConvertTo-Json -Depth 8 -Compress
+          $newTree = Invoke-RestMethod -Method Post -Uri "$api/git/trees" -Headers $headers -ContentType 'application/json' -Body $treeBody
+          $commitBody = @{
+            message = 'Codex autonomous engineering cycle'
+            tree = $newTree.sha
+            parents = @($baseSha)
+          } | ConvertTo-Json -Depth 5 -Compress
+          $newCommit = Invoke-RestMethod -Method Post -Uri "$api/git/commits" -Headers $headers -ContentType 'application/json' -Body $commitBody
+          $refBody = @{ sha = $newCommit.sha; force = $false } | ConvertTo-Json -Compress
+          $updatedRef = Invoke-RestMethod -Method Patch -Uri "$api/git/refs/heads/$branch" -Headers $headers -ContentType 'application/json' -Body $refBody
+          Write-Host "CODEX_COMMIT=$($newCommit.sha)"
+          Write-Host "CODEX_BRANCH=$($updatedRef.ref)"
