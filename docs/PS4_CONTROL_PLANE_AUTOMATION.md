@@ -349,3 +349,18 @@ After archive run `45172997929`, subsequent preflight inventories no longer cont
 
 For same-run partial recovery, a source absent from the root may be accepted only when a same-basename archive exists under `/data/pkg/old/` and its GET readback matches the offline report's exact size and SHA-256. The search spans run IDs, so a fresh inspection can still recognize a previously verified archive. A missing source without a matching verified archive remains a hard failure.
 
+### End-to-end archive automation and idempotency proof — 2026-11-23
+
+The merged automation was exercised end to end after the no-op fix, without installing or activating anything:
+
+- Host CI: run `45175419732` — SUCCESS.
+- Build: run `45175419701`, commit `1c314ada74cb6ce94ae4e5c9fd963d0aa3691b5c` — SUCCESS.
+- Read-only PS4 control-plane preflight: run `45175564496` — SUCCESS.
+- Independent offline installed/staged PKG inspection: run `45175650256` — SUCCESS; artifact `14818785903`.
+- Legacy PKG 006 stage guard: run `45175676727` — SUCCESS with `STAGING_SKIPPED_NEWER_RELEASE_PRESENT=true`; canonical PKG 015 remained in the root and no PKG 006 upload/rename was performed.
+- Evidence-gated archive rerun: run `45175810684` — `ARCHIVE_COMPLETE_READBACK_VERIFIED`; artifact `14819940505`, 25,266,216 bytes, ZIP SHA-256 `2800f53a584c478bb2bf48df8dd4f5e1b78df8ebe88008405a80f7dfcf8b81b4`.
+
+The archive manifest binds build/preflight/offline/archive run IDs and records an empty `files` array (zero RENAME operations), final NR root exactly `PS4-Neural-Engine-015.pkg`, `third_party_root_names_unchanged=true`, and all mutation flags false: `installation_performed`, `prx_modified`, `plugins_ini_modified`, `goldhen_restarted`. The canonical package was re-read at 6,619,136 bytes with SHA-256 `2fcaf679766fefbed4bc60cc31beb0227b8bfefd4eb8070160f65a402be747e9`.
+
+This proves the automatic build → read-only preflight → offline inspection → archive no-op chain and its post-normalization idempotency. It does **not** complete remote installation, PRX deployment/activation, GoldHEN restart, application launch, or GPU/runtime validation; those remain separately gated by unresolved firmware/API/PRX identity evidence.
+
