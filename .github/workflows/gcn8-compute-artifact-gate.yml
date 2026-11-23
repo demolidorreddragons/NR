@@ -163,8 +163,8 @@ jobs:
           LD=g++
           AR=ar
           PYTHON=python3
-          CFLAGS=-std=gnu11 -O2 -g $INC -D_XOPEN_SOURCE=500 -DUTIL_ARCH_LITTLE_ENDIAN=1 -DUTIL_ARCH_BIG_ENDIAN=0 -DHAVE_STRUCT_TIMESPEC=1 -DHAVE_PTHREAD=1 -DHAVE_SYSCONF=1 -Dalloca=__builtin_alloca -include strings.h -Wno-unused-function -Wno-unused-variable
-          CXXFLAGS=-std=c++17 -O2 -g $INC -D_XOPEN_SOURCE=500 -DUTIL_ARCH_LITTLE_ENDIAN=1 -DUTIL_ARCH_BIG_ENDIAN=0 -DHAVE_STRUCT_TIMESPEC=1 -DHAVE_PTHREAD=1 -DHAVE_SYSCONF=1 -Dalloca=__builtin_alloca -include strings.h -Wno-unused-function -Wno-unused-variable
+          CFLAGS=-std=gnu11 -O2 -g $INC -D_XOPEN_SOURCE=700 -DUTIL_ARCH_LITTLE_ENDIAN=1 -DUTIL_ARCH_BIG_ENDIAN=0 -DHAVE_STRUCT_TIMESPEC=1 -DHAVE_PTHREAD=1 -DHAVE_SYSCONF=1 -Dalloca=__builtin_alloca -include strings.h -Wno-unused-function -Wno-unused-variable
+          CXXFLAGS=-std=c++17 -O2 -g $INC -D_XOPEN_SOURCE=700 -DUTIL_ARCH_LITTLE_ENDIAN=1 -DUTIL_ARCH_BIG_ENDIAN=0 -DHAVE_STRUCT_TIMESPEC=1 -DHAVE_PTHREAD=1 -DHAVE_SYSCONF=1 -Dalloca=__builtin_alloca -include strings.h -Wno-unused-function -Wno-unused-variable
           LDFLAGS=-lm -pthread -ldl
           EOF
           {
