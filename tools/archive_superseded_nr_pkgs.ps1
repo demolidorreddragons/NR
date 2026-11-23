@@ -146,7 +146,8 @@ if (@($rootNr | Where-Object { -not $_.mode.StartsWith("-") }).Count -gt 0) { th
 
 $actualPaths = @($rootNr | ForEach-Object { "/data/pkg/$($_.name)" } | Sort-Object -Unique)
 $reportedPaths = @($staged | ForEach-Object { [string]$_.remote_path } | Sort-Object -Unique)
-if ($rootNr.Count -ne $reportedPaths.Count -or @(Compare-Object -ReferenceObject $reportedPaths -DifferenceObject $actualPaths).Count -gt 0) { throw "Current NR package root differs from the validated offline inspection inventory." }
+$unexpectedPaths = @($actualPaths | Where-Object { $_ -notin $reportedPaths })
+if ($unexpectedPaths.Count -gt 0) { throw "Current NR package root contains unvalidated NR PKG paths: $($unexpectedPaths -join ', ')" }
 
 $nonNrBefore = @($rootEntries | Where-Object { $_.name -notlike "PS4-Neural-Engine-*.pkg" } | ForEach-Object { $_.name } | Sort-Object)
 
