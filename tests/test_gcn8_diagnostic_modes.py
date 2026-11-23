@@ -16,6 +16,8 @@ assert 'compute_smoke.cpp' not in branch
 assert 'gnm-link' in build and 'GNM_LINK_ONLY_PKG_PAYLOAD=PASS' in build
 assert 'gnm-load' in build and 'GNM_LOAD_ONLY_PKG_PAYLOAD=PASS' in build
 assert 'reinterpret_cast<std::uintptr_t>(&sceGnmSubmitDone)' in main
+assert 'GNM_IMPORT_ADDRESS=0x%llx' in main
+assert 'stage_log(import_line)' in main
 assert 'GNM_IMPORT_RESOLVED' in main
 assert 'GNM_LINK_ONLY_MAIN_REACHED_NO_GNM_CALLS' in main
 assert 'RESULT_PASS_GNM_LINK_ONLY' in main

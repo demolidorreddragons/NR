@@ -181,6 +181,11 @@ int main(int argc, char** argv) {
     /* Taking the address forces a real import relocation without calling GNM. */
     const std::uintptr_t gnm_import_address =
         reinterpret_cast<std::uintptr_t>(&sceGnmSubmitDone);
+    char import_line[96]{};
+    std::snprintf(import_line, sizeof(import_line),
+                  "GNM_IMPORT_ADDRESS=0x%llx",
+                  static_cast<unsigned long long>(gnm_import_address));
+    stage_log(import_line);
     stage_log(gnm_import_address != 0 ? "GNM_IMPORT_RESOLVED" :
                                        "GNM_IMPORT_ADDRESS_NULL");
     const int result = gnm_import_address != 0 ? 0 : 1;
