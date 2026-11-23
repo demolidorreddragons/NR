@@ -133,7 +133,7 @@ if ($pluginListingEntry -and $pluginListingEntry.local_file) {
 }
 function Get-PluginListingSize([string]$fileName) {
   $escaped = [regex]::Escape($fileName)
-  $line = $pluginListingLines | Where-Object { $_ -match ("\\s" + $escaped + "\\z") } | Select-Object -First 1
+  $line = $pluginListingLines | Where-Object { $_ -match ("\s" + $escaped + "\z") } | Select-Object -First 1
   if (-not $line) { return $null }
   $match = [regex]::Match($line, '^\\S+\\s+\\d+\\s+\\S+\\s+\\S+\\s+(\\d+)\\s+')
   if ($match.Success) { return [int64]$match.Groups[1].Value }
