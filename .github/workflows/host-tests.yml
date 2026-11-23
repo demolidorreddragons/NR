@@ -13,6 +13,8 @@ jobs:
         run: python3 tests/test_cda_pkg015_log_extractor_contract.py
       - name: Validate GNM compute shader metadata parser
         run: python3 tests/test_gcn8_compute_sb_parser.py
+      - name: Validate PSBC descriptor pointer ABI patch
+        run: python3 tests/test_psbc_descriptor_pointer_patch.py
       - name: Validate PS4 superseded package archive safety contract
         run: python3 tests/test_ps4_pkg_archive_contract.py
       - name: Parse PS4 archive script with PowerShell AST
