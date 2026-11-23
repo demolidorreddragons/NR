@@ -5,6 +5,10 @@ script = Path("tools/ps4-rpi-readiness-probe.ps1").read_text(encoding="utf-8")
 workflow = Path(".github/workflows/ps4-rpi-readiness-probe.yml").read_text(encoding="utf-8")
 assert "runs-on: [self-hosted, Windows, X64, ps4-lan]" in workflow
 assert "workflow_dispatch:" in workflow
+assert "workflow_run:" in workflow
+assert 'workflows: ["PS4 Control Plane Preflight"]' in workflow
+assert "github.event.workflow_run.head_sha || github.sha" in workflow
+assert "github.event.workflow_run.conclusion" in workflow
 assert "github.token" in workflow and "github.sha" in workflow
 assert "vars.PS4_IP" in workflow
 assert r"\${{" not in workflow
