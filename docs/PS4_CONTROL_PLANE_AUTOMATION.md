@@ -151,3 +151,7 @@ References:
 - [ItemzFlow BGFT installer implementation](https://github.com/LightningMods/Itemzflow/blob/4013e1ef188672db63346fef4221b1d8f4f13f02/itemzflow/source/installpkg.cpp)
 - [flatz BGFT ABI definitions](https://github.com/flatz/ps4_stub_lib_maker_v2/blob/a8d044c12ea2dc3fa190ce1769eeb48b30d28ed4/include/bgft.h)
 - [OpenOrbis BGFT type declarations](https://github.com/OpenOrbis/OpenOrbis-PS4-Toolchain/blob/0a1aaf9dd4a92695538bdeb09fb056d06dd11725/include/orbis/_types/bgft.h)
+
+### Subsequent legacy bridge staging observation — 2026-11-23
+
+After the first snapshot, the legacy PS4 Windows Bridge Test workflow staged another PKG006 from main build run 45164006053: 6,619,136 bytes, SHA-256 8d95e10d45e97ced884b0ab5b787cbc095047db8b7d24ec314a3052ecac92460, filename prefix PS4-Neural-Engine-006-8d95e10d45e9.pkg. It is still a FULL BASE PNEU00001 APP_VER 01.02 and must not be installed over the existing app. The newer PKG015 remained in /data/pkg. The QA-bound PKG006 stage workflow run 45164398673 correctly exited without changes because a higher numbered NR release was present. PR #30 retires the legacy bridge workflow that caused this stale 006 restaging; until that PR is merged, do not interpret another 006 staging event as an approved current release.
