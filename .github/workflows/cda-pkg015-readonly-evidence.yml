@@ -27,7 +27,7 @@ jobs:
         with:
           ref: main
       - name: Acquire immutable evidence snapshots (FTP LIST/GETSIZE/GET only)
-        shell: powershell
+        shell: powershell -ExecutionPolicy Bypass -Command "& '{0}'"
         env:
           PS4_IP: ${{ vars.PS4_IP }}
           OBSERVED_RESULT: ${{ inputs.observed_result }}
@@ -197,7 +197,7 @@ jobs:
           }
           Write-Host 'CDA_PKG015_READ_ONLY_COLLECTION_COMPLETE'
       - name: Search preserved logs for PKG015 preflight and crash/error signals
-        shell: powershell
+        shell: powershell -ExecutionPolicy Bypass -Command "& '{0}'"
         run: |
           $ErrorActionPreference = 'Stop'
           $evidence = Join-Path $env:RUNNER_TEMP ("cda-pkg015-" + $env:GITHUB_RUN_ID)
