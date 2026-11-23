@@ -19,10 +19,10 @@ jobs:
     runs-on: [self-hosted, Windows, X64, ps4-lan]
     timeout-minutes: 8
     steps:
-      - name: Checkout exact successful build commit
+      - name: Checkout reviewed default-branch collector
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.workflow_run.head_sha }}
+          ref: main
           persist-credentials: false
 
       - name: Collect read-only PS4 control-plane inventory
