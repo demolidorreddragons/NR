@@ -172,12 +172,19 @@ jobs:
           # maintaining a partial hand-copied list of generators here.
           make -C "$COMPILER" generated
 
+          # Upstream Makefile defines the aco_opcodes.h rule but accidentally
+          # omits that header from GENERATED. Emit it explicitly before any
+          # ACO translation unit is compiled.
+          python3 "$COMPILER/src/amd/compiler/aco_opcodes_h.py" \
+            > "$COMPILER/src/amd/compiler/aco_opcodes.h"
+
           # Fail early if code generation did not emit the exact translation
           # units that defined symbols missing from the previous link attempt.
           test -s "$COMPILER/src/compiler/nir/nir_intrinsics.c"
           test -s "$COMPILER/src/compiler/nir/nir_opcodes.c"
           test -s "$COMPILER/src/compiler/spirv/spirv_info.c"
           test -s "$COMPILER/src/amd/compiler/aco_opcodes.cpp"
+          test -s "$COMPILER/src/amd/compiler/aco_opcodes.h"
           grep -q 'nir_intrinsic_infos' "$COMPILER/src/compiler/nir/nir_intrinsics.c"
           grep -q 'nir_op_infos' "$COMPILER/src/compiler/nir/nir_opcodes.c"
           grep -q 'spirv_decoration_to_string' "$COMPILER/src/compiler/spirv/spirv_info.c"
