@@ -130,3 +130,8 @@ The build → read-only PS4 preflight → offline PKG inspection → archive wor
 ## Windows PS4 bridge runner service diagnosis
 
 The Windows runner service `actions.runner.demolidorreddragons-NR.PS4-WINDOWS-BRIDGE` has previously failed to start (reported error 1068), while manually launching the registered runner with `run.cmd` successfully connects and listens for jobs. Preserve the registration, credentials, service, and working manual runner. Do not reinstall/remove the runner, change registry/service settings, or alter its logon identity without a cause established from read-only evidence and a separately reviewed repair plan. The `Windows PS4 bridge runner service diagnostics` workflow and `tools/collect_windows_runner_service_diagnostics.ps1` are read-only: they inspect service/CIM/SC state, selected registry values, ACLs, relevant Windows events and filtered runner diagnostic excerpts; they do not start/stop services or modify configuration.
+
+
+## RPI readiness probe scope
+
+The optional PS4 RPI read-only readiness probe is a manually gated workflow that requires the GoldHEN Package Installer screen to be open in the foreground. It may issue GET fingerprint/status/identity requests and POST /api/is_exists for the NR Title ID only. It must never call install, uninstall, task-control, BinLoader, or FTP mutation endpoints. The automatic control-plane preflight remains GET-only. A connection refusal while the Package Installer is not foreground is not proof that the console lacks the receiver.
