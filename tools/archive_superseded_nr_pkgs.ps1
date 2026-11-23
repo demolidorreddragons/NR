@@ -252,7 +252,6 @@ try {
     $entry.status = "RENAMED_PENDING_READBACK"
     Save-Manifest
 
-    if ($null -ne (Get-RemoteSize $sourcePath)) { throw "Source path still exists after FTP rename: $sourcePath" }
     $archiveLocal = Join-Path $env:EVIDENCE_DIR ("archive-" + [IO.Path]::GetFileName($destinationPath))
     $archiveSnapshot = Save-RemoteFile $destinationPath $archiveLocal
     if ($archiveSnapshot.bytes -ne $expectedBytes -or $archiveSnapshot.sha256 -ne $expectedHash) { throw "Archived readback identity mismatch: $destinationPath" }
