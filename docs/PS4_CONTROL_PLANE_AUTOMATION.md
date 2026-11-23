@@ -190,3 +190,16 @@ The reviewed collector now also snapshots, with GETSIZE/GET/GETSIZE and local SH
 - the exact legacy-staged PKG 006 file and the later unqualified PKG 015 file.
 
 Each file remains subject to the 16 MiB upper bound. The new reads are read-only and are intended to establish E0/E2 identity on the next eligible preflight. They do not install, modify, or launch anything.
+
+### Historical installer log signals — observed, not causal proof
+
+The legacy bridge's read-only pre-stage diagnostic in run '45164889360' also retrieved '/data/GoldHEN/ps4_neural_engine_install.log' and printed its existing contents. It contains historical entries including:
+- 'ERROR: cannot create temporary PRX in /data/GoldHEN/plugins (errno=17)';
+- 'ABORTED: CONFLICT; managed path is inaccessible or not a regular file; all data preserved.';
+- 'ERROR: cannot inspect plugins.ini (errno=78)';
+- 'LEGACY_MIGRATION: unverified old PRX preserved as backup; managed manifest installed.';
+- 'ABORTED: CONFLICT; cannot safely open installed PRX without following symlinks (errno=78); all data preserved.'
+
+These are **OBSERVED strings in a historical application log**. They are not tied to a single current process/session, do not establish which exact installer build emitted each line, and do not prove that the currently observed PRX path is a symlink. The existing FTP directory listing reports the current PRX as a regular-file entry, but FTP LIST metadata is not a definitive lstat/readlink result. Keep the cause as UNKNOWN / INSUFFICIENT EVIDENCE until the log is preserved with the new collector and the exact filesystem object type/path is established through a safe, documented interface.
+
+Collector v3 additionally downloads the NR installer log and the adjacent 'ps4_neural_engine.prx.pne-release.ini' manifest so the next evidence artifact can bind these historical messages to current PRX bytes and registration state.
