@@ -32,3 +32,10 @@ add_executable(test_gcn8_known_answer
 )
 target_include_directories(test_gcn8_known_answer PRIVATE platform/ps4/gcn8/host)
 add_test(NAME gcn8_known_answer_contract COMMAND test_gcn8_known_answer)
+
+add_executable(test_gcn8_compute_shader_contract
+    tests/test_gcn8_compute_shader_contract.cpp
+    platform/ps4/gcn8/host/compute_shader_contract.cpp
+)
+target_include_directories(test_gcn8_compute_shader_contract PRIVATE platform/ps4/gcn8/host)
+add_test(NAME gcn8_compute_shader_contract COMMAND test_gcn8_compute_shader_contract)

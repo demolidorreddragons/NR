@@ -123,6 +123,6 @@ jobs:
       - name: Configure GCN8 release-mode checks
         run: cmake -S . -B build-release -DCMAKE_BUILD_TYPE=Release
       - name: Build GCN8 release-mode checks
-        run: cmake --build build-release --target test_gcn8_resource_table test_gcn8_known_answer --parallel 2
+        run: cmake --build build-release --target test_gcn8_resource_table test_gcn8_known_answer test_gcn8_compute_shader_contract --parallel 2
       - name: Test GCN8 release-mode checks
         run: ctest --test-dir build-release -R '^gcn8_' --output-on-failure
