@@ -4,6 +4,7 @@ from pathlib import Path
 import re
 
 script = Path("tools/ps4-control-plane-preflight.ps1").read_text(encoding="utf-8")
+workflow = Path(".github/workflows/ps4-control-plane-preflight.yml").read_text(encoding="utf-8")
 
 # Only the three explicitly read-only FTP verbs may be assigned to requests.
 ftp_methods = set(re.findall(r"\[System\.Net\.WebRequestMethods\+Ftp\]::(\w+)", script))
@@ -34,5 +35,7 @@ assert '$request.Method="GET"' in script
 assert "POST" not in script.upper()
 assert "UploadFile" not in script and "DeleteFile" not in script and "Rename" not in script
 assert "CONTROL_PLANE_READ_ONLY_COMPLETE" in script
+assert "shell: powershell -NoProfile -ExecutionPolicy Bypass -File {0}" in workflow
+assert "ref: main" in workflow
 assert not Path(".github/workflows/ps4-bridge-test.yml").exists(), "legacy auto-staging workflow must stay retired"
 print("PS4 control-plane collector safety and evidence-integrity contract passed")
