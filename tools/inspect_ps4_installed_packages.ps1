@@ -105,8 +105,8 @@ $currentPrxEntry = Get-EvidenceEntry "/data/GoldHEN/plugins/ps4_neural_engine.pr
 if ($currentPrxEntry -and $currentPrxEntry.result -eq "ok") {
   $currentPrx = Join-Path $env:EVIDENCE_DIR $currentPrxEntry.local_file
   $currentPrxHash = (Get-FileHash -LiteralPath $currentPrx -Algorithm SHA256).Hash.ToLowerInvariant()
-  $comparisons.current_goldhen_prx_sha256 = $currentPrxHash
-  $comparisons.installed_app_prx_matches_goldhen_prx = ($installed.packaged_prx_sha256 -and $installed.packaged_prx_sha256 -eq $currentPrxHash)
+  $comparisons["current_goldhen_prx_sha256"] = $currentPrxHash
+  $comparisons["installed_app_prx_matches_goldhen_prx"] = ($installed.packaged_prx_sha256 -and $installed.packaged_prx_sha256 -eq $currentPrxHash)
 }
 $appJsonEntry = Get-EvidenceEntry "/user/app/PNEU00001/app.json"
 if ($appJsonEntry -and $appJsonEntry.result -eq "ok") {
