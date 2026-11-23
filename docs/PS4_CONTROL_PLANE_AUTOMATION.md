@@ -390,3 +390,24 @@ Read-only diagnostics run 45180173337 completed successfully; artifact 148210621
 
 The RPI read-only readiness probe now runs automatically after each successful PS4 Control Plane Preflight on main, and remains manually dispatchable. It uses the exact preflight commit SHA to fetch its script, then only checks the RPI API fingerprint/status/identity and performs the read-only PNEU00001 existence query. If GoldHEN Package Installer is not foreground, it records NOT_CONFIRMED and sends no install request. This avoids requiring a separate manual workflow dispatch while preserving the console foreground prerequisite.
 
+## Automation closure checkpoint — 2026-11-23
+
+The control-plane automation is implemented and its current end-to-end package-management chain has been revalidated on the Windows PS4 bridge. This closes the *safe automation scope* (build/QA orchestration, read-only PS4 preflight, offline inspection, version-gated staging, and idempotent archive). It does not authorize or imply installation, PRX activation, GoldHEN restart, or GPU validation.
+
+Verified runs on the current main line:
+- Host CI after the RPI trigger change: run 45180767824 — SUCCESS.
+- Windows runner diagnostics: run 45180173337 — SUCCESS; artifact 14821062199. Service is RUNNING, Automatic (Delayed), LocalSystem, no configured dependencies, with RunnerService/Listener/Worker processes. No service/registry change was made.
+- PS4 control-plane preflight: run 45180392129 — SUCCESS.
+- Offline installed-package inspection: run 45180524059 — SUCCESS; artifact 14821735730. Installed app.pkg and app.json source are identical: PNEU00001 APP_VER 01.10, 6,619,136 bytes, SHA-256 2fcaf679766fefbed4bc60cc31beb0227b8bfefd4eb8070160f65a402be747e9. The canonical staged PKG 015 matches the installed app.
+- Legacy PKG 006 staging guard: run 45180549049 — SUCCESS with STAGING_SKIPPED_NEWER_RELEASE_PRESENT=true because PS4-Neural-Engine-015.pkg is already in the root. No PKG 006 upload or rename occurred; PKG 006 is APP_VER 01.02 and must not replace 01.10.
+- Archive idempotency rerun: run 45180693819 — SUCCESS, artifact 14821018005, status ARCHIVE_COMPLETE_READBACK_VERIFIED. The manifest has an empty files array (zero RENAME operations), verifies canonical PKG 015 readback at 6,619,136 bytes and the SHA-256 above, confirms the root contains only the canonical NR PKG, and confirms third-party package names unchanged. All installation/PRX/config/GoldHEN mutation flags are false.
+- PR #61 merged as 98da61c67e723b1d5418f1319d05c3f71937681b. The read-only RPI readiness workflow is now automatically triggered after a successful PS4 Control Plane Preflight on main, and remains manually dispatchable. It pins the probe script to the exact upstream preflight commit and only makes API identity/status queries; no install/task-control/BinLoader/FTP mutation request exists in the workflow.
+
+The RPI workflow has not yet produced a run after its merge: the most recent successful preflight completed before the trigger was merged. Its next successful main preflight will exercise the trigger. The GoldHEN Package Installer must be open in the foreground for the receiver to answer. Until an RPI artifact reports the backend and PNEU00001 identity, RPI readiness remains NOT_CONFIRMED; this does not block the already-verified FTP/offline/archive chain.
+
+### Runtime integrity hold — do not bypass
+
+The same offline inspection reports the live GoldHEN plugin at /data/GoldHEN/plugins/ps4_neural_engine.prx as 317,216 bytes, SHA-256 1481214d21aa5c826f9d51ae8cd55759e625c2b9ca7159dd9578ea632661d8e7. FTP listing reports 224,128 bytes, so LIST/GET size disagree. Its hash matches neither the release manifest nor the installed app's packaged PRX. By contrast, the .pne-tmp and .pne-backup.001 files are stable 224,128-byte files with release-manifest hash 54e8595144a3a7e1d36602a1100bae6189f0955175c355bd3ac67d9cb7f85277. The active plugins.ini registers the NR PRX and PluginLoader_Enabled is enabled. Therefore the live plugin identity is untrusted and runtime activation is a hard hold: do not replace it, activate it, edit plugins.ini, or restart GoldHEN. Preserve evidence and await the user's explicit feedback/authorization before any separately gated runtime diagnosis.
+
+The installed PKG 015 is PC-validated only. Its GNM compute ABI/hardware status remains unverified/not tested; the PKG preflight does not dispatch GPU work. This checkpoint closes package-control automation, not the Neural Rendering runtime.
+
