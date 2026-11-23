@@ -9,12 +9,14 @@ on:
       - ".github/workflows/gcn8-compute-artifact-gate.yml"
       - "tests/gcn8_compute_smoke.comp"
       - "tests/verify_gcn8_compute_sb.py"
+      - "tests/test_gcn8_compute_sb_parser.py"
       - "docs/GCN8_GNM_COMPUTE_READINESS.md"
   pull_request:
     paths:
       - ".github/workflows/gcn8-compute-artifact-gate.yml"
       - "tests/gcn8_compute_smoke.comp"
       - "tests/verify_gcn8_compute_sb.py"
+      - "tests/test_gcn8_compute_sb_parser.py"
       - "docs/GCN8_GNM_COMPUTE_READINESS.md"
   workflow_dispatch:
 
@@ -226,6 +228,7 @@ jobs:
           set -euo pipefail
           python3 tests/verify_gcn8_compute_sb.py \
             "$RUNNER_TEMP/nr-gcn8-deps/opengnm-psbc" \
+            "$RUNNER_TEMP/nr-gcn8-deps/opengnm" \
             "$RUNNER_TEMP/gcn8-output/gcn8-compute.sb" \
             | tee "$RUNNER_TEMP/gcn8-artifact-report.json"
           sha256sum "$RUNNER_TEMP/gcn8-output/"* | tee "$RUNNER_TEMP/gcn8-sha256.txt"
