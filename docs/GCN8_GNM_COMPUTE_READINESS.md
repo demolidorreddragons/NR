@@ -212,3 +212,23 @@ References checked:
 ### CI confirmation for current audit head
 
 For branch head `a9c270afe171e14ac21ff12dff9d5a12e8a2a87e`, the latest Gate A pull-request run `45214108704` and push run `45214094984` both completed successfully; the matching host test run `45214108677` also completed successfully. These runs validate the hosted compiler/artifact gate and host tests only. They do not change the hardware status above.
+
+
+### Gate B follow-up: Vulkan PS4 candidate synchronization defects (2026-11-23)
+
+A focused line-level review of PS4-OpenGNM/vulkan-ps4 at pinned commit `f4d940b723771b3fe637e8ac0704bb5d6ab19622` found additional correctness defects that prevent using this implementation as the Gate B/C harness without upstream fixes and hardware qualification:
+
+- `src/vk_ps4_memory.c`: `vk_ps4_InvalidateMappedMemoryRanges` discards all arguments and returns success without performing cache invalidation or a transfer. The implementation's comment equates GPU visibility with CPU cache coherency; those are distinct properties. It cannot establish correct GPU-to-CPU readback.
+- `src/vk_ps4_queue.c`: after `sceGnmSubmitCommandBuffers` reports failure, the code marks the fence signaled and advances its signal value before returning `VK_ERROR_DEVICE_LOST`. A caller that inspects the fence can therefore observe completion even though the submitted work failed. The semaphore failure path similarly falls back to CPU-signaling the label.
+- `src/vk_ps4_queue.c`: `vk_ps4_QueueWaitIdle` polls an EOP label in an unbounded `while (*idle_label != 1)` loop when submission returns success. There is no timeout, cancellation, or recovery path in this loop; a missing/invalid EOP write can hang the process indefinitely.
+- `src/vk_ps4_sync.c`: fence waiting polls a GPU-written label, but the candidate does not provide a qualified retail-FW cache visibility contract for CPU reads of that label. A volatile load alone is not a cache invalidation primitive.
+- `src/vk_ps4_command.c` and `src/vk_ps4_pipeline.c`: the compute path binds `cs_regs` and calls `sceGnmDrawCmdDispatchDirect`, but the inspected path still depends on the unqualified shader address, descriptor/user-data, command-buffer, and residency assumptions already listed above.
+
+These are source-level findings in the pinned candidate, not observations from the user's console. They are not repaired by host tests or the generic backend. Do not vendor this revision into NR, use it as the known-answer harness, or call its queue/sync code from the live PRX. Gate B remains blocked pending corrected fail-closed submit/fence semantics, bounded waits with recovery, and a proven cache-coherent readback path, followed by exact PS4 Pro FW 14.02 hardware validation.
+
+Source files and reviewed regions:
+- `src/vk_ps4_memory.c`: `vk_ps4_InvalidateMappedMemoryRanges`
+- `src/vk_ps4_queue.c`: failed-submit fence fallback and `vk_ps4_QueueWaitIdle`
+- `src/vk_ps4_sync.c`: fence label polling
+- `src/vk_ps4_command.c`: compute pipeline bind and `vk_ps4_CmdDispatch`
+- `src/vk_ps4_pipeline.c`: CS binary metadata/address setup
