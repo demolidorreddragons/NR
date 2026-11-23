@@ -63,7 +63,7 @@ class ControlPlanePreflightContractTests(unittest.TestCase):
         self.assertIn("ps4-control-plane-preflight-${{ github.run_id }}", WORKFLOW)
         self.assertIn("collector_commit=$env:COLLECTOR_COMMIT", SCRIPT)
         self.assertIn("collector_ref=$env:COLLECTOR_REF", SCRIPT)
-        self.assertIn("timeout-minutes: 15", WORKFLOW)
+        self.assertIn("timeout-minutes: 30", WORKFLOW)
         self.assertIn("ref: main", WORKFLOW)
         self.assertIn("ps4-control-plane-preflight.ps1", WORKFLOW)
         self.assertIn("[System.Net.IPAddress]::TryParse", SCRIPT)
