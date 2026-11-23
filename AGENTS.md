@@ -63,3 +63,7 @@ The staged PKG 006 is a full base app for already-installed Title ID PNEU00001, 
 ## BGFT/AppInstUtil candidate — not runtime-qualified
 
 A local BGFT installation path is source-documented in ItemzFlow, but the OpenOrbis 0.5.4 BGFT header disagrees with flatz/ItemzFlow over 32-bit versus 64-bit package-size/progress fields. Do not call BGFT from NR until the exact ABI, module exports, task lifecycle, and FW 14.02 runtime behavior are independently qualified. The console PRX readback contains no BGFT install-agent strings; the current PRX is not an install agent. Any future BGFT worker must be NR-only, manifest/hash/metadata gated, idempotent, separate from GNM, and provide terminal task plus installed Title ID/version evidence.
+
+## Legacy staging workflow observation — 2026-11-23
+
+The legacy PS4 Windows Bridge Test staged another PKG006 (6,619,136 bytes, SHA-256 8d95e10d45e97ced884b0ab5b787cbc095047db8b7d24ec314a3052ecac92460) while the newer PKG015 was already present. PKG006 is FULL BASE PNEU00001 APP_VER 01.02 and must not be installed over the existing app. The newer-release gate in the QA-bound PKG006 stage workflow skipped without changing remote files. PR #30 retires the legacy bridge staging workflow; until merged, do not treat its PKG006 staging as current-release promotion.
