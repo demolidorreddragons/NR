@@ -47,9 +47,9 @@ function New-FtpRequest([string]$remotePath, [string]$method) {
   $request.Method = $method
   $request.Credentials = New-Object System.Net.NetworkCredential("anonymous", "anonymous@example.com")
   $request.UseBinary = $true
-  $request.UsePassive = $false
+  $request.UsePassive = $true
   $request.KeepAlive = $false
-  $request.Timeout = 30000
+  $request.Timeout = 60000
   $request.ReadWriteTimeout = 60000
   return $request
 }
