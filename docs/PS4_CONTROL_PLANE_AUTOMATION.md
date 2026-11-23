@@ -321,3 +321,35 @@ Directory listings also show preserved installer artifacts that the first succes
 The first two offline-inspection runs (`45167943764` and `45168267072`) built the pinned OrbisPkgTool and downloaded the exact preflight artifact, but failed before package inspection because the workflow had not checked out the NR repository containing its PowerShell script. No console request was made by either inspector run.
 
 The follow-up workflow now checks out the exact default-branch SHA into a separate `NR` path and executes that script. The same PR also extends the next preflight to capture the PRX temp/backup files and adds an offline PRX/manifest comparison. The inspector remains artifact-only and has no network client.
+
+## Installer errno 78 source correlation — 2026-11-23
+
+The exact installer source shipped in the canonical PKG 015 build is available at source commit `2c9e3c12aed2791f2973496c31c8993259c64430`; `installer/main.c` has Git blob SHA `b2c3cca197b040c446d6d47a7f1f4ef6e783ffae`.
+
+At that commit:
+- `inspect_managed_path()` calls `lstat()`. Its explicit FW/Orbis fallback handles `ENOSYS` (commented as errno 78) by probing `readlink()`; it only falls back to `stat()` if `readlink()` returns `EINVAL` (not a symlink).
+- If `readlink()` is also unsupported and returns `ENOSYS`, the function returns `-1` with errno 78. The caller then logs `ABORTED: CONFLICT; cannot safely open installed PRX without following symlinks (errno=78); all data preserved.`
+- The same helper is used by `configure_loader()` for `/data/GoldHEN/plugins.ini`; failure logs `ERROR: cannot safely open plugins.ini for inspection (errno=78); preserving it.`
+- In `main()`, the installed PRX/manifest/transaction-marker checks happen before `copy_prx()`, `configure_loader()`, or the commit/rename transaction. The observed ABORTED branch returns immediately and explicitly preserves all data. Therefore that run did not copy or activate the packaged PRX and did not update plugins.ini.
+- The separate historical `cannot create temporary PRX ... errno=17` entry is an older append-only log signal; it is not the same execution path as the later early-abort errno 78. Do not merge these events into one causal sequence without timestamps/build identity.
+
+**Classification:** the source and log are strongly correlated with an Orbis filesystem-inspection primitive returning ENOSYS (78). This is a leading hypothesis, not a confirmed syscall-level root cause: the current log records only the final errno, not whether `lstat`, `readlink`, `stat`, `open`, or `fstat` returned it. FTP LIST metadata showing a regular file does not establish the result of those syscalls or prove the path is not a symlink.
+
+Do not “fix” this by replacing the check with `stat()` alone or removing no-follow/identity checks: that would follow symlinks and reopen a TOCTOU path. A replacement must be an independently verified FW 14.02 primitive with equivalent no-follow semantics and descriptor identity checks. No `fstatat`, `openat`, BGFT, or undocumented syscall is assumed available. No new PKG or console test is authorized by this source correlation alone.
+
+
+### Independent OpenOrbis libc corroboration — external source, not a project collaborator
+
+A public, archived OpenOrbis compatibility project independently documents the same errno 78 defect:
+- Repository: `orbis-ports/orbis-compat`, archived 2026-09-21; inspected commit `6922a7b6f4291a28edd239f1a4db50ed7aa00359`.
+- Its `include/orbis_stat.h` documents that OpenOrbis `libc.a`'s `fstatat` member is a stub that sets errno 78 (ENOSYS) and returns -1, and musl's `lstat` is implemented on top of that stub.
+- Its `src/orbis_stat.cpp` works around this by interposing `lstat()` as `stat()`, with an explicit assumption that no symlinks exist on the filesystems the title reads.
+
+This is strong independent corroboration for the leading errno 78 hypothesis, and it matches the installer source's own comment about `lstat` returning ENOSYS on Orbis. It is not firmware-14.02 proof by itself, and it does not establish whether the fallback `readlink` also returns ENOSYS in our exact runtime.
+
+**Do not copy the external `lstat=stat` workaround into the installer.** It follows symlinks and removes the exact no-follow property the installer is trying to preserve. Our current policy must remain fail-closed until a real FW 14.02 no-follow primitive is verified (for example, a proven libkernel import with the correct ABI and behavior). The external repository is a technical reference only; its author is not a contributor to this NR repository.
+
+Reference files:
+- https://github.com/orbis-ports/orbis-compat/blob/6922a7b6f4291a28edd239f1a4db50ed7aa00359/include/orbis_stat.h
+- https://github.com/orbis-ports/orbis-compat/blob/6922a7b6f4291a28edd239f1a4db50ed7aa00359/src/orbis_stat.cpp
+- https://github.com/orbis-ports/orbis-compat/blob/6922a7b6f4291a28edd239f1a4db50ed7aa00359/README.md
