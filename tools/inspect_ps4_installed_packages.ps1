@@ -5,6 +5,9 @@ if (-not $env:RUNNER_TEMP) { throw "RUNNER_TEMP is missing." }
 $controlPath = Join-Path $env:EVIDENCE_DIR "control-plane-preflight.json"
 if (-not (Test-Path -LiteralPath $controlPath -PathType Leaf)) { throw "Control-plane evidence manifest is missing." }
 $control = Get-Content -LiteralPath $controlPath -Raw | ConvertFrom-Json
+if ($control.schema -ne "nr.ps4.control-plane-preflight.v3") { throw "Unexpected control-plane evidence schema." }
+if (-not $env:EXPECTED_PREFLIGHT_RUN_ID -or [string]$control.preflight_run_id -ne $env:EXPECTED_PREFLIGHT_RUN_ID) { throw "Evidence artifact does not belong to the triggering preflight run." }
+if ([string]$control.collector_commit -notmatch "^[a-fA-F0-9]{40}$") { throw "Collector source commit is missing from evidence manifest." }
 $entries = @($control.ftp_evidence)
 $output = Join-Path $env:GITHUB_WORKSPACE "installed-package-inspection"
 New-Item -ItemType Directory -Path $output -ErrorAction Stop | Out-Null
