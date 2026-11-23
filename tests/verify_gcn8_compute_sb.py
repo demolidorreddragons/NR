@@ -1,29 +1,148 @@
 #!/usr/bin/env python3
-"""Independent GFX8/NEO compute shader-container gate for opengnm-psbc output.
+"""Independent GFX8/NEO compute shader-container and descriptor-ABI gate.
 
-This checks the candidate compiler's own structural/CRC verifier and adds the
-missing target-mode assertion. It is an offline artifact check, not a GPU test.
+This checks the candidate compiler's structural/CRC verifier, the embedded
+GNM input-usage table, and the pinned compiler/GNM pointer-width declarations.
+It is an offline artifact/source check, not a GPU test.
 """
 from __future__ import annotations
 
 import hashlib
 import json
 import pathlib
+import re
 import sys
 
 MAGIC = 0x72646853
 GNM_HEADER_OFFSET = 0x24
 GNM_SHADER_COMPUTE = 0x04
 GNM_TARGET_NEO = 0x02
+GNM_COMPUTE_SHADER_HEADER_SIZE = 0x24
+GNM_INPUT_USAGE_SLOT_SIZE = 0x04
+GNM_PTR_INDIRECT_RESOURCE_TABLE = 0x1C
+
+
+def parse_compute_shader_layout(data: bytes) -> dict:
+    stage_offset = GNM_HEADER_OFFSET + 0x10
+    if len(data) < stage_offset + GNM_COMPUTE_SHADER_HEADER_SIZE:
+        raise ValueError("truncated GnmCsShader header")
+
+    stage_header_words = data[GNM_HEADER_OFFSET + 9]
+    stage_header_size = stage_header_words * 4
+    if stage_header_size < GNM_COMPUTE_SHADER_HEADER_SIZE:
+        raise ValueError("compute stage header is smaller than GnmCsShader")
+    if stage_offset + stage_header_size > len(data):
+        raise ValueError("compute stage header extends beyond shader binary")
+
+    common_word = int.from_bytes(data[stage_offset:stage_offset + 4], "little")
+    slot_count = (common_word >> 24) & 0xFF
+    required_stage_size = (
+        GNM_COMPUTE_SHADER_HEADER_SIZE + slot_count * GNM_INPUT_USAGE_SLOT_SIZE
+    )
+    if stage_header_size < required_stage_size:
+        raise ValueError("input-usage table exceeds declared compute stage header")
+
+    code_offset = int.from_bytes(data[stage_offset + 8:stage_offset + 12], "little")
+    if code_offset != stage_header_size:
+        raise ValueError(
+            f"compute code offset {code_offset} does not match stage header size "
+            f"{stage_header_size}"
+        )
+
+    slots = []
+    slot_base = stage_offset + GNM_COMPUTE_SHADER_HEADER_SIZE
+    for index in range(slot_count):
+        offset = slot_base + index * GNM_INPUT_USAGE_SLOT_SIZE
+        raw = data[offset:offset + GNM_INPUT_USAGE_SLOT_SIZE]
+        if len(raw) != GNM_INPUT_USAGE_SLOT_SIZE:
+            raise ValueError("truncated GnmInputUsageSlot")
+        slots.append({
+            "usage_type": raw[0],
+            "api_slot": raw[1],
+            "start_register": raw[2],
+            "flags": raw[3],
+        })
+
+    table_slots = [
+        slot for slot in slots
+        if slot["usage_type"] == GNM_PTR_INDIRECT_RESOURCE_TABLE
+    ]
+    if len(table_slots) != 1:
+        raise ValueError(
+            "expected exactly one PTR_INDIRECTRESOURCETABLE input-usage slot, "
+            f"found {len(table_slots)}"
+        )
+    if table_slots[0]["api_slot"] != 0:
+        raise ValueError("smoke shader descriptor table must use API slot 0")
+
+    return {
+        "stage_header_size_bytes": stage_header_size,
+        "compute_code_offset_bytes": code_offset,
+        "input_usage_slot_count": slot_count,
+        "input_usage_slots": slots,
+        "descriptor_table_slot": table_slots[0],
+    }
+
+
+def compiler_descriptor_arg_width(compiler_root: pathlib.Path) -> int:
+    source = (compiler_root / "src/amd/vulkan/radv_shader_args.c").read_text()
+    match = re.search(
+        r"static void\s+add_descriptor_set\s*\([^)]*\)\s*\{(.*?)\n\}",
+        source,
+        re.S,
+    )
+    if not match:
+        raise ValueError("could not locate pinned compiler add_descriptor_set")
+    body = match.group(1)
+    arg = re.search(
+        r"RADV_ADD_ARRAY_ARG\(state,\s*AC_ARG_SGPR,\s*(\d+),\s*"
+        r"AC_ARG_CONST_ADDR,\s*descriptors,\s*set\)",
+        body,
+    )
+    metadata = re.search(r"ud_info->num_sgprs\s*=\s*(\d+)\s*;", body)
+    if not arg or not metadata:
+        raise ValueError("could not read compiler descriptor SGPR allocation")
+    arg_width = int(arg.group(1))
+    metadata_width = int(metadata.group(1))
+    if arg_width != metadata_width:
+        raise ValueError(
+            f"compiler descriptor argument width {arg_width} disagrees with "
+            f"user-data metadata width {metadata_width}"
+        )
+    return arg_width
+
+
+def gnm_pointer_usage_width(opengnm_root: pathlib.Path) -> int:
+    source = (opengnm_root / "include/gnm_shaderbinary.h").read_text()
+    marker = "static inline int32_t sceGnmShaderInputUsageTypeSize"
+    start = source.find(marker)
+    if start < 0:
+        raise ValueError("could not locate pinned GNM input-usage width helper")
+    end = source.find("default:", start)
+    if end < 0:
+        raise ValueError("GNM input-usage width helper has no default branch")
+    block = source[start:end]
+    pointer_case = "case GNM_SHINPUTUSAGE_PTR_INDIRECTRESOURCETABLE:"
+    case_start = block.find(pointer_case)
+    if case_start < 0:
+        raise ValueError("GNM helper does not define indirect resource table width")
+    result = re.search(r"return\s+(\d+)\s*;", block[case_start:])
+    if not result:
+        raise ValueError("could not parse GNM indirect resource table width")
+    return int(result.group(1))
 
 
 def main() -> int:
-    if len(sys.argv) != 3:
-        print("usage: verify_gcn8_compute_sb.py <compiler-root> <shader.sb>", file=sys.stderr)
+    if len(sys.argv) != 4:
+        print(
+            "usage: verify_gcn8_compute_sb.py <compiler-root> <opengnm-root> <shader.sb>",
+            file=sys.stderr,
+        )
         return 2
 
     compiler_root = pathlib.Path(sys.argv[1]).resolve()
-    shader_path = pathlib.Path(sys.argv[2]).resolve()
+    opengnm_root = pathlib.Path(sys.argv[2]).resolve()
+    shader_path = pathlib.Path(sys.argv[3]).resolve()
     sys.path.insert(0, str(compiler_root / "tests"))
 
     from verify_sb import verify_shader  # pinned upstream verifier
@@ -47,6 +166,18 @@ def main() -> int:
     if not verify_shader(str(shader_path), GNM_SHADER_COMPUTE):
         raise SystemExit("upstream shader structure/CRC verification failed")
 
+    try:
+        layout = parse_compute_shader_layout(data)
+        compiler_width = compiler_descriptor_arg_width(compiler_root)
+        gnm_width = gnm_pointer_usage_width(opengnm_root)
+    except (OSError, ValueError) as exc:
+        raise SystemExit(f"compute descriptor ABI inspection failed: {exc}") from exc
+
+    width_status = (
+        "CONSISTENT_SOURCE_WIDTH"
+        if compiler_width == gnm_width
+        else "BLOCKED_SOURCE_WIDTH_DISAGREEMENT"
+    )
     report = {
         "status": "PASS_ARTIFACT_ONLY_NOT_HARDWARE",
         "compiler": "PS4-OpenGNM/opengnm-psbc",
@@ -57,6 +188,12 @@ def main() -> int:
         "gnm_target_byte": target,
         "bytes": len(data),
         "sha256": hashlib.sha256(data).hexdigest(),
+        "descriptor_table_slot": layout["descriptor_table_slot"],
+        "input_usage_slot_count": layout["input_usage_slot_count"],
+        "compute_stage_header_size_bytes": layout["stage_header_size_bytes"],
+        "compiler_descriptor_arg_sgprs": compiler_width,
+        "gnm_indirect_resource_pointer_sgprs": gnm_width,
+        "descriptor_pointer_abi_status": width_status,
         "hardware_dispatch_tested": False,
         "firmware_14_02_tested": False,
     }
