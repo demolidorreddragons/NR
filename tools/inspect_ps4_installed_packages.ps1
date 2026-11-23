@@ -173,14 +173,32 @@ if ($releaseManifestEntry -and $releaseManifestEntry.result -eq "ok" -and $relea
   }
   $comparisons["release_manifest_prx_sha256"] = $releasePrxHash
 }
-$pluginsIniEntry = Get-EvidenceEntry "/data/GoldHEN/plugins.ini"
-$pluginsIniRegistersPrx = $false
-if ($pluginsIniEntry -and $pluginsIniEntry.result -eq "ok" -and $pluginsIniEntry.local_file) {
-  $pluginsIniPath = Join-Path $env:EVIDENCE_DIR $pluginsIniEntry.local_file
+$pluginsIniPaths = @(
+  "/data/GoldHEN/plugins.ini",
+  "/data/GoldHEN/plugins.ini.pne-tmp",
+  "/data/GoldHEN/plugins.ini.pne-backup"
+)
+$pluginsIniSnapshots = [System.Collections.Generic.List[object]]::new()
+foreach ($path in $pluginsIniPaths) {
+  $entry = Get-EvidenceEntry $path
+  if (-not $entry -or $entry.result -ne "ok" -or -not $entry.local_file) {
+    $pluginsIniSnapshots.Add([pscustomobject]@{remote_path=$path;status=$(if($entry){$entry.result}else{"not_collected"})})
+    continue
+  }
+  $pluginsIniPath = Join-Path $env:EVIDENCE_DIR $entry.local_file
+  $pluginsIniBytes = (Get-Item -LiteralPath $pluginsIniPath).Length
+  $pluginsIniHash = (Get-FileHash -LiteralPath $pluginsIniPath -Algorithm SHA256).Hash.ToLowerInvariant()
+  if ($pluginsIniBytes -ne [int64]$entry.local_bytes -or $pluginsIniHash -ne [string]$entry.sha256) { throw "plugins.ini evidence differs from collector manifest: $path" }
   $pluginsIniText = Get-Content -LiteralPath $pluginsIniPath -Raw
-  $pluginsIniRegistersPrx = [regex]::IsMatch($pluginsIniText, '(?im)^\s*/data/GoldHEN/plugins/ps4_neural_engine\.prx\s*\z')
+  $registers = [regex]::IsMatch($pluginsIniText, '(?im)^\s*/data/GoldHEN/plugins/ps4_neural_engine\.prx\s*\z')
+  $pluginsIniSnapshots.Add([pscustomobject]@{remote_path=$path;status="ok";bytes=$pluginsIniBytes;sha256=$pluginsIniHash;registers_nr_prx=[bool]$registers})
 }
-$comparisons["plugins_ini_registers_nr_prx"] = $pluginsIniRegistersPrx
+$comparisons["plugins_ini_snapshots"] = @($pluginsIniSnapshots)
+$activePluginsIni = $pluginsIniSnapshots | Where-Object { $_.remote_path -eq "/data/GoldHEN/plugins.ini" } | Select-Object -First 1
+$comparisons["plugins_ini_registers_nr_prx"] = [bool]($activePluginsIni -and $activePluginsIni.registers_nr_prx)
+$validPluginsIniHashes = @($pluginsIniSnapshots | Where-Object { $_.status -eq "ok" } | ForEach-Object { $_.sha256 } | Select-Object -Unique)
+$comparisons["plugins_ini_variants_identical"] = [bool]($validPluginsIniHashes.Count -eq 1 -and @($pluginsIniSnapshots | Where-Object { $_.status -eq "ok" }).Count -eq 3)
+$comparisons["goldhen_config_snapshot"] = $control.goldhen_config_snapshot
 $currentPrxHash = $null
 $currentPrxTrusted = $false
 $currentPrxSnapshot = $prxSnapshots | Where-Object { $_.remote_path -eq "/data/GoldHEN/plugins/ps4_neural_engine.prx" } | Select-Object -First 1
