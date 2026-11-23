@@ -93,10 +93,10 @@ def parse_compute_shader_layout(data: bytes) -> dict:
     }
 
 
-def compiler_descriptor_arg_width(compiler_root: pathlib.Path) -> int:
+def compiler_descriptor_pointer_layout(compiler_root: pathlib.Path) -> dict:
     source = (compiler_root / "src/amd/vulkan/radv_shader_args.c").read_text()
     match = re.search(
-        r"static void\s+add_descriptor_set\s*\([^)]*\)\s*\{(.*?)\n\}",
+        r"static void\\s+add_descriptor_set\\s*\\([^)]*\\)\\s*\\{(.*?)\\n\\}",
         source,
         re.S,
     )
@@ -104,22 +104,36 @@ def compiler_descriptor_arg_width(compiler_root: pathlib.Path) -> int:
         raise ValueError("could not locate pinned compiler add_descriptor_set")
     body = match.group(1)
     arg = re.search(
-        r"RADV_ADD_ARRAY_ARG\(state,\s*AC_ARG_SGPR,\s*(\d+),\s*"
-        r"AC_ARG_CONST_ADDR,\s*descriptors,\s*set\)",
+        r"RADV_ADD_ARRAY_ARG\\(state,\\s*AC_ARG_SGPR,\\s*(\\d+),\\s*"
+        r"AC_ARG_CONST_ADDR,\\s*descriptors,\\s*set\\)",
         body,
     )
-    metadata = re.search(r"ud_info->num_sgprs\s*=\s*(\d+)\s*;", body)
-    if not arg or not metadata:
+    metadata = re.search(r"ud_info->num_sgprs\\s*=\\s*(\\d+)\\s*;", body)
+    user_increment = re.search(
+        r"state->args->num_user_sgprs\\s*\\+=\\s*(\\d+)\\s*;", body
+    )
+    reserve_high = "state->args->ac.num_sgprs_used++;" in body
+    if not arg or not metadata or not user_increment:
         raise ValueError("could not read compiler descriptor SGPR allocation")
-    arg_width = int(arg.group(1))
-    metadata_width = int(metadata.group(1))
-    if arg_width != metadata_width:
+    payload_sgprs = int(arg.group(1))
+    usage_sgprs = int(metadata.group(1))
+    declared_user_sgprs = int(user_increment.group(1))
+    reserved_high_sgprs = usage_sgprs - payload_sgprs
+    if (
+        payload_sgprs != 1
+        or reserved_high_sgprs != 1
+        or not reserve_high
+        or declared_user_sgprs != usage_sgprs
+    ):
         raise ValueError(
-            f"compiler descriptor argument width {arg_width} disagrees with "
-            f"user-data metadata width {metadata_width}"
+            "compiler must keep a scalar low-address ACO argument while reserving "
+            "the second GNM pointer SGPR in both ACO and user-data layouts"
         )
-    return arg_width
-
+    return {
+        "payload_sgprs": payload_sgprs,
+        "reserved_high_sgprs": reserved_high_sgprs,
+        "usage_sgprs": usage_sgprs,
+    }
 
 def gnm_pointer_usage_width(opengnm_root: pathlib.Path) -> int:
     source = (opengnm_root / "include/gnm_shaderbinary.h").read_text()
@@ -177,7 +191,8 @@ def main() -> int:
 
     try:
         layout = parse_compute_shader_layout(data)
-        compiler_width = compiler_descriptor_arg_width(compiler_root)
+        compiler_pointer = compiler_descriptor_pointer_layout(compiler_root)
+        compiler_width = compiler_pointer["usage_sgprs"]
         gnm_width = gnm_pointer_usage_width(opengnm_root)
     except (OSError, ValueError) as exc:
         raise SystemExit(f"compute descriptor ABI inspection failed: {exc}") from exc
@@ -218,6 +233,8 @@ def main() -> int:
         "compute_user_sgpr_count": layout["compute_user_sgpr_count"],
         "compute_num_thread": layout["compute_num_thread"],
         "compiler_descriptor_arg_sgprs": compiler_width,
+        "compiler_descriptor_payload_sgprs": compiler_pointer["payload_sgprs"],
+        "compiler_reserved_high_sgprs": compiler_pointer["reserved_high_sgprs"],
         "gnm_indirect_resource_pointer_sgprs": gnm_width,
         "descriptor_pointer_abi_status": width_status,
         "hardware_dispatch_tested": False,
