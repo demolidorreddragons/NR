@@ -14,7 +14,7 @@ permissions:
 jobs:
   diagnose-runner-service:
     runs-on: [self-hosted, Windows, X64, ps4-lan]
-    timeout-minutes: 10
+    timeout-minutes: 3
     steps:
       - name: Fetch exact reviewed diagnostics script through GitHub API
         shell: powershell -NoProfile -ExecutionPolicy Bypass -File {0}
