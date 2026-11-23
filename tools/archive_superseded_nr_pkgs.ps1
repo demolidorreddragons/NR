@@ -25,20 +25,22 @@ if ($installed.Count -ne 1 -or $source.Count -ne 1) { throw "Installed/source pa
 if ($installed[0].status -ne "PASS_PC_ONLY" -or $source[0].status -ne "PASS_PC_ONLY") { throw "Installed/source package QA status is not PASS_PC_ONLY." }
 if ($installed[0].title_id -ne "PNEU00001" -or $installed[0].category -ne "gde" -or $installed[0].storage_type -ne "digital50") { throw "Installed NR application identity is not the expected Full/Base gde package." }
 if ($installed[0].sha256 -ne $source[0].sha256 -or $installed[0].sha256 -ne $report.comparisons.installed_app_sha256) { throw "Installed/source SHA-256 chain does not agree." }
-if ($staged.Count -lt 1) { throw "No staged NR packages were validated." }
+if ($staged.Count -lt 1) { throw "Offline report contains no staged NR package entries." }
+$validatedStaged = @($staged | Where-Object { $_.status -eq "PASS_PC_ONLY" })
 
-$canonical = @($staged | Where-Object { $_.role -eq "staged_canonical_015" })
+$canonical = @($validatedStaged | Where-Object { $_.role -eq "staged_canonical_015" })
 if ($canonical.Count -ne 1) { throw "Expected exactly one canonical staged PKG 015." }
 if ($canonical[0].remote_path -ne "/data/pkg/PS4-Neural-Engine-015.pkg") { throw "Canonical staged PKG path changed." }
-if ($canonical[0].status -ne "PASS_PC_ONLY" -or $canonical[0].sha256 -ne $installed[0].sha256) { throw "Canonical staged PKG 015 is not byte-identical to installed app.pkg." }
+if ($canonical[0].sha256 -ne $installed[0].sha256) { throw "Canonical staged PKG 015 is not byte-identical to installed app.pkg." }
 $installedVersion = [version]$installed[0].app_ver
 
 foreach ($pkg in $staged) {
-  if ($pkg.status -ne "PASS_PC_ONLY") { throw "Refusing to archive unvalidated package: $($pkg.remote_path)" }
+  if ($pkg.remote_path -notmatch '^/data/pkg/PS4-Neural-Engine-[A-Za-z0-9._-]+\.pkg$') { throw "Unexpected staged package path: $($pkg.remote_path)" }
+  if ($pkg.status -eq "not_collected") { continue }
+  if ($pkg.status -ne "PASS_PC_ONLY") { throw "Refusing staged package with unaccepted QA status: $($pkg.remote_path) ($($pkg.status))" }
   if ($pkg.title_id -ne "PNEU00001" -or $pkg.category -ne "gde" -or $pkg.storage_type -ne "digital50") { throw "Refusing non-NR or non-Full/Base package: $($pkg.remote_path)" }
   if ([version]$pkg.app_ver -gt $installedVersion) { throw "A staged package is newer than the installed app; refusing archive cleanup." }
   if ($pkg.sha256 -notmatch '^[a-fA-F0-9]{64}$' -or [int64]$pkg.bytes -le 0) { throw "Package identity is incomplete: $($pkg.remote_path)" }
-  if ($pkg.remote_path -notmatch '^/data/pkg/PS4-Neural-Engine-[A-Za-z0-9._-]+\.pkg$') { throw "Unexpected staged package path: $($pkg.remote_path)" }
 }
 
 function New-FtpRequest([string]$remotePath, [string]$method) {
@@ -150,6 +152,9 @@ if ($rootNr.Count -ne $actualPaths.Count) { throw "Duplicate NR package names in
 $reportedPaths = @($staged | ForEach-Object { [string]$_.remote_path } | Sort-Object -Unique)
 $unexpectedPaths = @($actualPaths | Where-Object { $_ -notin $reportedPaths })
 if ($unexpectedPaths.Count -gt 0) { throw "Current NR package root contains unvalidated NR PKG paths: $($unexpectedPaths -join ', ')" }
+$validatedPaths = @($validatedStaged | ForEach-Object { [string]$_.remote_path })
+$unvalidatedRootPaths = @($actualPaths | Where-Object { $_ -notin $validatedPaths })
+if ($unvalidatedRootPaths.Count -gt 0) { throw "NR packages present in the root lack PASS_PC_ONLY evidence: $($unvalidatedRootPaths -join ', ')" }
 
 $nonNrBefore = @($rootEntries | Where-Object { $_.name -notlike "PS4-Neural-Engine-*.pkg" } | ForEach-Object { $_.name } | Sort-Object)
 
@@ -187,7 +192,7 @@ function Save-Manifest {
 Save-Manifest
 
 try {
-  foreach ($pkg in ($staged | Where-Object { $_.role -ne "staged_canonical_015" })) {
+  foreach ($pkg in ($validatedStaged | Where-Object { $_.role -ne "staged_canonical_015" })) {
     $sourcePath = [string]$pkg.remote_path
     $sourceName = [IO.Path]::GetFileName($sourcePath)
     $baseName = [IO.Path]::GetFileNameWithoutExtension($sourceName)
@@ -198,7 +203,7 @@ try {
 
     if ($null -eq $sourceSize) {
       if ($sourceListed) { throw "FTP 550 for a source package that is still listed in /data/pkg; treating it as access denied, not absent: $sourcePath" }
-      $matchingArchives = @($oldEntries | Where-Object { $_.name -like "$baseName-archived-$($env:SOURCE_OFFLINE_RUN_ID)-*.pkg" })
+      $matchingArchives = @($oldEntries | Where-Object { $_.name -like "$baseName-archived-*.pkg" })
       $already = $false
       foreach ($existing in $matchingArchives) {
         $archivePath = "/data/pkg/old/$($existing.name)"

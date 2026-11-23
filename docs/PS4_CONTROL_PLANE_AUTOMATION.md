@@ -307,7 +307,7 @@ Current disposition: preserve the installed app, `plugins.ini`, active PRX, mani
 
 ## Reversible NR package-root normalization workflow — 2026-11-23
 
-The project requires one canonical Full/Base NR PKG in `/data/pkg/`, with older/superseded NR packages preserved under `/data/pkg/old/`. The current read-only inventory contains eight NR packages in the root: canonical PKG 015 (identical to the installed app), two alternate PKG 015 builds, and five older PKG 006 builds. Two unrelated third-party game PKGs are also present and are out of scope.
+The project requires one canonical Full/Base NR PKG in `/data/pkg/`, with older/superseded NR packages preserved under `/data/pkg/old/`. The pre-archive read-only inventory contained eight NR packages in the root: canonical PKG 015 (identical to the installed app), two alternate PKG 015 builds, and five older PKG 006 builds. Two unrelated third-party game PKGs were also present and remained out of scope.
 
 The new `PS4 Archive Superseded NR PKGs` workflow is triggered only after the offline installed-package inspection succeeds. It:
 1. Requires installed app.pkg, app.json source and canonical staged PKG 015 to remain byte-identical and PASS_PC_ONLY.
@@ -317,11 +317,15 @@ The new `PS4 Archive Superseded NR PKGs` workflow is triggered only after the of
 5. Reads each archive destination back and verifies exact size/SHA-256.
 6. Verifies the root retains exactly `PS4-Neural-Engine-015.pkg` and that all non-NR root names (including third-party game PKGs) are unchanged.
 
-The workflow never deletes or uploads files, never creates/removes directories, and never touches installed apps, PNEU00004, plugins.ini, PRX files, GoldHEN state, or RPI. It is reversible archival only, not installation. If any identity or inventory gate fails, it stops and uploads partial chain-of-custody evidence. The workflow has not yet executed; it will run only after the next successful offline-inspection event.
+The workflow never deletes or uploads files, never creates/removes directories, and never touches installed apps, PNEU00004, plugins.ini, PRX files, GoldHEN state, or RPI. It is reversible archival only, not installation.
+
+**Completed:** archive run `45172997929` succeeded with `ARCHIVE_COMPLETE_READBACK_VERIFIED`. It consumed offline inspection run `45172819393`, preflight run `45172681859`, build run `45172444644`, build commit `c7f6f550ec2a685c3062fd979abbc443fbe04be9`. Artifact `14817842746` (110,304,230 bytes; SHA-256 `98cbf6efe152117185b7062e1c89100dd9c8d6c677b75bc4b11ff85098fcf647`) contains the manifest, raw before/after listings, source snapshots and archive readbacks.
+
+Seven superseded NR packages were moved into `/data/pkg/old/` using FTP RENAME only. Every source snapshot and archive readback matched its offline SHA-256 and 6,619,136-byte size. The final root contains exactly `PS4-Neural-Engine-015.pkg` (6,619,136 bytes; SHA-256 `2fcaf679766fefbed4bc60cc31beb0227b8bfefd4eb8070160f65a402be747e9`), still byte-identical to installed app.pkg and app.json source. The two third-party game package names were unchanged. Manifest flags confirm `installation_performed=false`, `prx_modified=false`, `plugins_ini_modified=false`, `goldhen_restarted=false`.
 
 ## GoldHEN config discovery follow-up — 2026-11-23
 
-The `/data/GoldHEN/config.ini` file is present (the directory listing reports 1,127 bytes), but its contents have not been read. PR47 adds a safe in-memory fingerprint: size/SHA-256 plus only allowlisted relevant boolean states for RPI/remote/package/FTP/Klog/BinLoader/plugin/install keys. Non-boolean values are redacted, the raw file is never uploaded, and the temporary runner-local copy is deleted. It also captures `plugins.ini.pne-tmp` and `plugins.ini.pne-backup` so the active registration can be compared with the installer's backups.
+The `/data/GoldHEN/config.ini` file is present (the directory listing reports 1,127 bytes). PR47 adds a safe in-memory fingerprint: size/SHA-256 plus only allowlisted relevant boolean states for RPI/remote/package/FTP/Klog/BinLoader/plugin/install keys. Non-boolean values are redacted, the raw file is never uploaded, and the temporary runner-local copy is deleted. It also captures `plugins.ini.pne-tmp` and `plugins.ini.pne-backup` so the active registration can be compared with the installer's backups.
 
 The `/user/app/` listing contains no identifiable Remote Package Installer title, and TCP 12800 refused the read-only GET probe. No setting is changed by this follow-up.
 
@@ -337,3 +341,11 @@ The corrected script uses the captured `/data/pkg/old/` LIST names for destinati
 ### Idempotent archive recovery hardening
 
 The archive plan now supports safe reruns of the same offline-inspection event after a partial sequence of successful renames. It tolerates missing reported source paths only when a corresponding run-scoped archive name is present in `/data/pkg/old/` and the archive readback matches the exact offline SHA-256 and byte count. Any source still present in the root LIST but returning FTP 550 is classified as access denied, not missing. Extra NR packages in the root that are absent from the validated report cause an immediate abort. Post-rename source absence is confirmed by the final root LIST, not by GETSIZE on a path expected to be absent.
+
+
+### Post-normalization no-op and cross-run recovery
+
+After archive run `45172997929`, subsequent preflight inventories no longer contain the seven moved files under `/data/pkg/`. The offline inspector still emits target records for known historical paths, marking absent files `not_collected`. The archive workflow now skips only such `not_collected` entries that are absent from the live root LIST; if any unvalidated path is still present in the root, it aborts. With only canonical PKG 015 remaining, the workflow performs identity/final-root checks and completes as a no-op.
+
+For same-run partial recovery, a source absent from the root may be accepted only when a same-basename archive exists under `/data/pkg/old/` and its GET readback matches the offline report's exact size and SHA-256. The search spans run IDs, so a fresh inspection can still recognize a previously verified archive. A missing source without a matching verified archive remains a hard failure.
+

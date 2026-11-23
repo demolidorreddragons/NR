@@ -21,6 +21,9 @@ assert "sourceListed" in script and "matchingArchives" in script
 assert "treating it as access denied" in script
 assert "$unexpectedPaths = @($actualPaths | Where-Object { $_ -notin $reportedPaths })" in script
 assert "rootNr.Count -ne $reportedPaths.Count" not in script
+assert "$validatedStaged" in script and '"not_collected"' in script
+assert "$unvalidatedRootPaths" in script
+assert '$matchingArchives = @($oldEntries | Where-Object { $_.name -like "$baseName-archived-*.pkg" })' in script
 assert "$request.UsePassive = $false" not in script
 assert "$request.Timeout = 60000" in script
 
