@@ -27,10 +27,10 @@ function Save-Listing([string]$remotePath) {
   try {
     $response=(New-FtpRequest $remotePath ([System.Net.WebRequestMethods+Ftp]::ListDirectoryDetails)).GetResponse()
     try {
-      $input=$response.GetResponseStream()
+      $sourceStream=$response.GetResponseStream()
       $output=[IO.File]::Open($destination,[IO.FileMode]::CreateNew,[IO.FileAccess]::Write,[IO.FileShare]::None)
-      try { $input.CopyTo($output); $output.Flush($true) }
-      finally { $output.Dispose(); $input.Dispose() }
+      try { $sourceStream.CopyTo($output); $output.Flush($true) }
+      finally { $output.Dispose(); $sourceStream.Dispose() }
     } finally { $response.Dispose() }
     $item=Get-Item -LiteralPath $destination
     $hash=(Get-FileHash -LiteralPath $destination -Algorithm SHA256).Hash.ToLowerInvariant()
@@ -59,10 +59,10 @@ function Save-RemoteFile([string]$remotePath) {
     if($remoteBefore -gt 16777216){$evidence.Add([pscustomobject]@{operation="GET";path=$remotePath;result="skipped_size_limit";remote_bytes_before=$remoteBefore;started_utc=$started});return}
     $response=(New-FtpRequest $remotePath ([System.Net.WebRequestMethods+Ftp]::DownloadFile)).GetResponse()
     try {
-      $input=$response.GetResponseStream()
+      $sourceStream=$response.GetResponseStream()
       $output=[IO.File]::Open($destination,[IO.FileMode]::CreateNew,[IO.FileAccess]::Write,[IO.FileShare]::None)
-      try {$input.CopyTo($output);$output.Flush($true)}
-      finally {$output.Dispose();$input.Dispose()}
+      try {$sourceStream.CopyTo($output);$output.Flush($true)}
+      finally {$output.Dispose();$sourceStream.Dispose()}
     } finally {$response.Dispose()}
     $remoteAfter=$null
     $sizeResponse=(New-FtpRequest $remotePath ([System.Net.WebRequestMethods+Ftp]::GetFileSize)).GetResponse()
