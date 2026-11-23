@@ -85,6 +85,16 @@ for number in ("004", "005"):
     assert "if (-not (Test-Path -LiteralPath $pkg))" in qa
     assert "exit 0" in qa
 
+assert "/data/GoldHEN/plugins.ini.pne-tmp" in script
+assert "/data/GoldHEN/plugins.ini.pne-backup" in script
+assert "Get-SafeGoldHENConfigSnapshot" in script
+assert 'operation="SAFE_CONFIG_GET"' in script
+assert "raw_config_preserved=$false" in script
+assert "goldhen_config_snapshot=$goldhenConfigSnapshot" in script
+assert 'Get-SafeGoldHENConfigSnapshot "/data/GoldHEN/config.ini"' in script
+files_section = script.split("$files=@(", 1)[1].split("foreach($remotePath in $files)", 1)[0]
+assert "/data/GoldHEN/config.ini" not in files_section, "raw GoldHEN config must not be uploaded"
+assert "Remove-Item -LiteralPath $destination -Force" in script
 print("PS4 control-plane collector safety and evidence-integrity contract passed")
 
 assert "git rev-parse" not in workflow
