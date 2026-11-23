@@ -25,6 +25,11 @@ assert "current_goldhen_prx_list_get_size_match" in script
 assert "plugins_ini_registers_nr_prx" in script
 assert "goldhen_prx_snapshots" in script
 assert "matches_release_manifest" in script and "matches_installed_app_prx" in script
+assert r'$_ -match ("\s" + $escaped + "\z")' in script
+assert r"^\S+\s+\d+\s+\S+\s+\S+\s+(\d+)\s+" in script
+assert r"(?m)^prx_sha256=([a-fA-F0-9]{64})" in script
+assert r"([^\r\n]+)" in script
+assert r"(?im)^\s*/data/GoldHEN/plugins/ps4_neural_engine\.prx\s*\z" in script
 assert "/data/GoldHEN/plugins/ps4_neural_engine.prx.pne-tmp" in collector
 assert "/data/GoldHEN/plugins/ps4_neural_engine.prx.pne-backup" in collector
 assert "/data/GoldHEN/plugins/ps4_neural_engine.prx.pne-backup.001" in collector
