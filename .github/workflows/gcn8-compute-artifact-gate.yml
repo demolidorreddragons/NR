@@ -246,6 +246,18 @@ jobs:
           cat "$RUNNER_TEMP/gcn8-artifact-report.json"
           exit "$verify_status"
 
+      - name: Hash generated shader artifacts
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -f "$RUNNER_TEMP/gcn8-output/gcn8-compute.sb" && -f "$RUNNER_TEMP/gcn8-output/gcn8-compute.spv" ]]; then
+            (cd "$RUNNER_TEMP/gcn8-output" && sha256sum gcn8-compute.sb gcn8-compute.spv) > "$RUNNER_TEMP/gcn8-sha256.txt"
+            cat "$RUNNER_TEMP/gcn8-sha256.txt"
+          else
+            echo "Compute outputs unavailable; no SHA-256 manifest generated."
+          fi
+
       - name: Preserve compiler logs and generated artifacts
         if: always()
         uses: actions/upload-artifact@v4
