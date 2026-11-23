@@ -21,8 +21,10 @@ int main() {
     assert(layout.bindings[1].byte_offset == 64);
     assert(layout.bindings[2].byte_offset == 128);
     assert(layout.bindings[3].byte_offset == 192);
-    for (const auto& binding : layout.bindings)
+    for (std::size_t i = 0; i < layout.binding_count; ++i) {
+        const auto& binding = layout.bindings[i];
         assert(binding.descriptor_bytes == 16 && binding.array_count == 1);
+    }
 
     assert(descriptor_size_bytes(DescriptorKind::sampled_image) == 32);
     assert(descriptor_size_bytes(DescriptorKind::storage_image) == 32);
