@@ -180,3 +180,10 @@ A autorização não inclui desinstalar software não relacionado, modificar sav
 A especificação completa está em `docs/PS4_CONTROL_PLANE_AUTOMATION.md`. O workflow `.github/workflows/ps4-control-plane-preflight.yml` realiza somente sondagem TCP read-only das portas 2121, 9090 e 3232 e gera manifesto JSON. Não instala PKG, não envia payload BinLoader, não ativa PRX e não reinicia GoldHEN. Porta acessível não comprova protocolo funcional ou seguro.
 
 Não contornar o bloqueio fail-closed do adaptador de título do PRX. Não implementar mensagens de instalação/ativação/reinício sem confirmar a versão exata do GoldHEN, suporte ao firmware, framing do protocolo, resposta de sucesso e recuperação por fonte upstream fixada e/ou evidência direta read-only do console.
+
+
+### 12.1 Versão GoldHEN confirmada pelo usuário
+
+O usuário informou que a versão instalada é **GoldHEN v2.4b18.14**, no firmware **14.02**. A publicação do autor SiSTRo informa que a v2.4b18.14 adiciona suporte ao firmware 14.02: https://ko-fi.com/s/66eac96180. Portanto, a compatibilidade de release com FW 14.02 está documentada; a versão instalada ainda deve ser classificada como `USER_REPORTED` até confirmação read-only no console.
+
+Essa versão anuncia Remote Package Install, FTP 2121, BinLoader 9090, Klog 3232, plugins e instalação interna de PKG em `/data/pkg`. Isso não prova por si só um protocolo remoto de instalação por comando, ativação remota de PRX ou reinício remoto do GoldHEN. Cada interface precisa ser identificada na implementação/cliente correspondente à versão e validada sem payloads de teste. O BinLoader é experimental e não deve ser usado como sondagem.
