@@ -84,3 +84,31 @@ Operational classification:
 - Firmware 14.02 support: advertised by the GamerHack host page; independently verify live operation and the embedded payload before enabling privileged automation.
 
 For automation, pin the exact host repository/commit and the actual GoldHEN payload bytes/hash. Do not fetch a replacement payload from an unrelated upstream release or assume same-version strings imply identical binaries.
+
+## Source-qualified remote package installer path — 2026-11-23
+
+A source-reviewed candidate exists for remote PKG transfer: the RPI HTTP JSON dialect implemented by `AldySan/Remote-Package-Installer-NG`, pinned for this review to commit `f99e62089afa61fb418446bdeb12340afd951a17` (GPL-3.0 project; protocol reimplemented from the flatz installer). Relevant source files: `crates/rpi-ng-core/src/rpi/client.rs`, `types.rs`, and `docs/ARCHITECTURE.md`.
+
+Observed protocol contract in that pinned client:
+- read-only identification: `GET /api` (legacy RPI fingerprint), `GET /api/status`, optional `GET /api/v2/system`;
+- read-only install-state query: `POST /api/is_exists` with a Title ID;
+- install submission: `POST /api/install` with `{"type":"direct","packages":["http://<runner-address>:<port>/<allowlisted-pkg>"]}`;
+- task progress: `POST /api/get_task_progress` with `{"task_id":N}`; a task ID greater than zero tracks an install, and `-1` means already installed;
+- NextGen v2 uses `POST /api/v2/install` and `GET /api/v2/jobs`.
+
+Important qualification boundaries:
+- The source client describes the RPI receiver dialect, not proof that this console currently exposes it. The actual receiver identity must be confirmed by the new read-only preflight at TCP 12800.
+- The RPI-NG user guide requires GoldHEN Package Installer to be open in the foreground while transferring. The existing GitHub runner cannot currently open the PS4 system UI or guarantee foreground state.
+- A real install adapter must provide an allowlist-only HTTP file server with Range support, verify package metadata and SHA-256, call the exact detected API, poll until console-side terminal evidence, and correlate installed Title ID/version. A successful HTTP submission is not install completion.
+- No install POST is implemented in the current preflight. It sends only GET requests and records read-only FTP evidence.
+- Do not fall back to BinLoader 9090. That is GoldHEN's experimental payload service and must not be probed or treated as an HTTP RPI endpoint.
+
+## PRX activation and GoldHEN restart — remaining protocol gates
+
+GoldHEN's plugin documentation establishes the plugin directory `/data/GoldHEN/plugins/` and registration file `/data/GoldHEN/plugins.ini`, with per-title sections recommended. This documents registration format, not a remote activation/reload API. The current NR PRX still has `has_validated_title_adapter() == false` and exits before installing hooks or threads. It must remain fail-closed; adding it to `[default]` would not make Neural Rendering functional and is not an approved activation step.
+
+No version-matched, documented remote GoldHEN restart endpoint has been identified. A dropped FTP/RPI connection is not evidence of restart. Do not invent a restart command or send a BinLoader payload. Restart automation remains blocked until a documented, firmware-qualified mechanism and post-restart recovery check are identified.
+
+## GamerHack distribution identity and hashes
+
+The public host source is `GamerHack/GamerHack.github.io`; the preserved mirror is `patnawa/GoldhenPS4`. The mirror's README/CHANGELOG identifies GoldHEN v2.4b18.14 (298,776 bytes), archive SHA-256 `fe67d34f2a67b1f4f018629b51318bab40ba7ad13f2293ae802e6cb57ea202cf`, extracted payload SHA-256 `c5480587d99efc2e3cc132352d9b7cf052dd3068280f1686e7fbb37d57e9ba8b`. The latter is a published distribution hash, not a console readback hash. The same mirror explicitly says 14.02 offset routing is upstream data and remains unproven on physical hardware. Keep exploit-chain compatibility, GoldHEN payload identity, and live console execution as three separate evidence items.
