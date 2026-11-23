@@ -17,76 +17,30 @@ jobs:
       contains(fromJSON('["main","feature/gcn8-numeric-kernels"]'), github.event.workflow_run.head_branch) &&
       github.event.workflow_run.head_repository.full_name == github.repository
     runs-on: [self-hosted, Windows, X64, ps4-lan]
-    timeout-minutes: 5
+    timeout-minutes: 8
     steps:
-      - name: Probe GoldHEN control-plane ports (read-only)
+      - name: Checkout exact successful build commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          persist-credentials: false
+
+      - name: Collect read-only PS4 control-plane inventory
         shell: powershell
         env:
           PS4_IP: ${{ vars.PS4_IP }}
           BUILD_RUN_ID: ${{ github.event.workflow_run.id }}
           BUILD_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
           BUILD_BRANCH: ${{ github.event.workflow_run.head_branch }}
-          REPORTED_GOLDHEN_VERSION: "2.4b18.14"
-          REPORTED_PS4_FIRMWARE: "14.02"
+          GITHUB_RUN_ID: ${{ github.run_id }}
+          GITHUB_STEP_SUMMARY: ${{ github.step_summary }}
         run: |
-          $ErrorActionPreference = "Stop"
-          if (-not $env:PS4_IP) { throw "PS4_IP Actions variable is missing." }
-          $ports = @(2121, 9090, 3232)
-          $results = @()
-          foreach ($port in $ports) {
-            $ok = $false
-            $detail = ""
-            try {
-              $client = New-Object System.Net.Sockets.TcpClient
-              $pending = $client.BeginConnect($env:PS4_IP, $port, $null, $null)
-              if (-not $pending.AsyncWaitHandle.WaitOne(2500, $false)) {
-                $detail = "timeout"
-                $client.Close()
-              } else {
-                $client.EndConnect($pending)
-                $ok = $client.Connected
-                $detail = if ($ok) { "tcp_connect_succeeded" } else { "connection_failed" }
-                $client.Close()
-              }
-            } catch {
-              $detail = $_.Exception.GetBaseException().Message
-              if ($client) { $client.Close() }
-            }
-            $results += [pscustomobject]@{
-              host = $env:PS4_IP
-              port = $port
-              tcp_reachable = $ok
-              observation = $detail
-            }
-          }
-          $report = [ordered]@{
-            schema = "nr.ps4.control-plane-preflight.v1"
-            timestamp_utc = [DateTime]::UtcNow.ToString("o")
-            runner = $env:COMPUTERNAME
-            build_run_id = $env:BUILD_RUN_ID
-            build_commit = $env:BUILD_HEAD_SHA
-            build_branch = $env:BUILD_BRANCH
-            reported_goldhen_version = $env:REPORTED_GOLDHEN_VERSION
-            reported_ps4_firmware = $env:REPORTED_PS4_FIRMWARE
-            version_evidence = "user_reported_not_device_verified"
-            firmware_compatibility = "release_documented_for_14.02"
-            probes = $results
-            scope = "read_only_tcp_connectivity_only"
-            protocol_validated = $false
-            remote_install_validated = $false
-            binloader_execution_validated = $false
-            plugin_activation_validated = $false
-            goldhen_restart_validated = $false
-          }
-          $json = $report | ConvertTo-Json -Depth 6
-          $json | Set-Content -LiteralPath "$env:RUNNER_TEMP\nr-control-plane-preflight.json" -Encoding UTF8
-          $json | Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY
-          Write-Host $json
-          Write-Host "PREFLIGHT_READ_ONLY_COMPLETE"
-      - name: Preserve preflight report
+          & "$env:GITHUB_WORKSPACE\tools\ps4-control-plane-preflight.ps1"
+
+      - name: Preserve read-only control-plane evidence
         uses: actions/upload-artifact@v4
         with:
           name: ps4-control-plane-preflight-${{ github.event.workflow_run.id }}
-          path: ${{ runner.temp }}/nr-control-plane-preflight.json
+          path: ${{ runner.temp }}/nr-control-plane-preflight-${{ github.run_id }}/*
           if-no-files-found: error
           retention-days: 30
