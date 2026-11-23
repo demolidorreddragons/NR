@@ -137,16 +137,22 @@ $rootListingText = Save-RemoteListing "/data/pkg/" $rootListingPath
 $oldListingText = Save-RemoteListing "/data/pkg/old/" $oldListingPath
 $rootEntries = @(ConvertFrom-FtpListing $rootListingText)
 $oldEntries = @(ConvertFrom-FtpListing $oldListingText)
+$oldDirectory = @($rootEntries | Where-Object { $_.name -eq "old" })
+if ($oldDirectory.Count -ne 1 -or -not $oldDirectory[0].mode.StartsWith("d")) { throw "/data/pkg/old is not a verified directory; refusing archive." }
 $rootNr = @($rootEntries | Where-Object { $_.name -like "PS4-Neural-Engine-*.pkg" })
 if (@($rootNr | Where-Object { -not $_.mode.StartsWith("-") }).Count -gt 0) { throw "An NR PKG path is not a regular file; refusing to move it." }
 
 $actualPaths = @($rootNr | ForEach-Object { "/data/pkg/$($_.name)" } | Sort-Object -Unique)
 $reportedPaths = @($staged | ForEach-Object { [string]$_.remote_path } | Sort-Object -Unique)
-$pathDiff = @(Compare-Object -ReferenceObject $reportedPaths -DifferenceObject $actualPaths)
-if ($pathDiff.Count -gt 0) { throw "Current NR package root differs from the validated offline inspection inventory." }
+if ($rootNr.Count -ne $reportedPaths.Count -or @(Compare-Object -ReferenceObject $reportedPaths -DifferenceObject $actualPaths).Count -gt 0) { throw "Current NR package root differs from the validated offline inspection inventory." }
 
 $nonNrBefore = @($rootEntries | Where-Object { $_.name -notlike "PS4-Neural-Engine-*.pkg" } | ForEach-Object { $_.name } | Sort-Object)
-$oldNames = @($oldEntries | ForEach-Object { $_.name })
+
+$liveInstalled = Save-RemoteFile "/user/app/PNEU00001/app.pkg" (Join-Path $env:EVIDENCE_DIR "live-installed-app.pkg")
+$liveSource = Save-RemoteFile "/user/data/pkg/PS4-Neural-Engine-015.pkg" (Join-Path $env:EVIDENCE_DIR "live-app-json-source.pkg")
+$liveCanonical = Save-RemoteFile "/data/pkg/PS4-Neural-Engine-015.pkg" (Join-Path $env:EVIDENCE_DIR "live-canonical-staged.pkg")
+if ($liveInstalled.sha256 -ne $installed[0].sha256 -or $liveSource.sha256 -ne $source[0].sha256 -or $liveCanonical.sha256 -ne $canonical[0].sha256) { throw "Live installed/source/canonical package identity changed since offline inspection." }
+
 $manifest = [ordered]@{
   schema = "nr.ps4.archive-superseded-packages.v1"
   started_utc = [DateTime]::UtcNow.ToString("o")
@@ -160,93 +166,115 @@ $manifest = [ordered]@{
   canonical_pkg_path = [string]$canonical[0].remote_path
   canonical_pkg_sha256 = [string]$canonical[0].sha256
   archive_directory = "/data/pkg/old/"
-  files = @()
+  files = [System.Collections.Generic.List[object]]::new()
   final_root_nr_packages = @()
   third_party_root_names_unchanged = $false
   installation_performed = $false
   prx_modified = $false
   plugins_ini_modified = $false
   goldhen_restarted = $false
+  status = "ARCHIVE_IN_PROGRESS"
 }
+$manifestPath = Join-Path $env:EVIDENCE_DIR "archive-manifest.json"
+function Save-Manifest {
+  $manifest | ConvertTo-Json -Depth 14 | Set-Content -LiteralPath $manifestPath -Encoding utf8
+}
+Save-Manifest
 
-$index = 0
-foreach ($pkg in ($staged | Where-Object { $_.role -ne "staged_canonical_015" })) {
-  $sourcePath = [string]$pkg.remote_path
-  $sourceName = [IO.Path]::GetFileName($sourcePath)
-  $baseName = [IO.Path]::GetFileNameWithoutExtension($sourceName)
-  $expectedHash = ([string]$pkg.sha256).ToLowerInvariant()
-  $expectedBytes = [int64]$pkg.bytes
-  $sourceSize = Get-RemoteSize $sourcePath
+try {
+  foreach ($pkg in ($staged | Where-Object { $_.role -ne "staged_canonical_015" })) {
+    $sourcePath = [string]$pkg.remote_path
+    $sourceName = [IO.Path]::GetFileName($sourcePath)
+    $baseName = [IO.Path]::GetFileNameWithoutExtension($sourceName)
+    $expectedHash = ([string]$pkg.sha256).ToLowerInvariant()
+    $expectedBytes = [int64]$pkg.bytes
+    $sourceSize = Get-RemoteSize $sourcePath
 
-  if ($null -eq $sourceSize) {
-    $already = $false
+    if ($null -eq $sourceSize) {
+      $already = $false
+      for ($n = 0; $n -lt 100; $n++) {
+        $archiveName = "$baseName-archived-$($env:SOURCE_OFFLINE_RUN_ID)-$n.pkg"
+        $archivePath = "/data/pkg/old/$archiveName"
+        $archiveSize = Get-RemoteSize $archivePath
+        if ($null -eq $archiveSize) { continue }
+        $localExisting = Join-Path $env:EVIDENCE_DIR ("already-" + $archiveName)
+        $snapExisting = Save-RemoteFile $archivePath $localExisting
+        if ($snapExisting.bytes -eq $expectedBytes -and $snapExisting.sha256 -eq $expectedHash) {
+          $manifest.files.Add([pscustomobject]@{ source_path=$sourcePath; archive_path=$archivePath; status="ALREADY_ARCHIVED_AND_VERIFIED"; bytes=$snapExisting.bytes; sha256=$snapExisting.sha256; readback=$snapExisting }) | Out-Null
+          Save-Manifest
+          $already = $true
+          break
+        }
+      }
+      if (-not $already) { throw "Source package is absent and no matching verified archive exists: $sourcePath" }
+      continue
+    }
+
+    $sourceLocal = Join-Path $env:EVIDENCE_DIR ("source-" + $sourceName)
+    $sourceSnapshot = Save-RemoteFile $sourcePath $sourceLocal
+    if ($sourceSnapshot.bytes -ne $expectedBytes -or $sourceSnapshot.sha256 -ne $expectedHash) { throw "Live source package differs from the offline inspection: $sourcePath" }
+
+    $destinationPath = $null
     for ($n = 0; $n -lt 100; $n++) {
       $archiveName = "$baseName-archived-$($env:SOURCE_OFFLINE_RUN_ID)-$n.pkg"
-      $archivePath = "/data/pkg/old/$archiveName"
-      $archiveSize = Get-RemoteSize $archivePath
-      if ($null -eq $archiveSize) { continue }
-      $localExisting = Join-Path $env:EVIDENCE_DIR ("already-" + $archiveName)
-      $snapExisting = Save-RemoteFile $archivePath $localExisting
-      if ($snapExisting.bytes -eq $expectedBytes -and $snapExisting.sha256 -eq $expectedHash) {
-        $manifest.files += [pscustomobject]@{ source_path=$sourcePath; archive_path=$archivePath; status="ALREADY_ARCHIVED_AND_VERIFIED"; bytes=$snapExisting.bytes; sha256=$snapExisting.sha256; readback=$snapExisting }
-        $already = $true
-        break
-      }
+      $candidatePath = "/data/pkg/old/$archiveName"
+      if ($null -eq (Get-RemoteSize $candidatePath)) { $destinationPath = $candidatePath; break }
     }
-    if (-not $already) { throw "Source package is absent and no matching verified archive exists: $sourcePath" }
-    continue
+    if (-not $destinationPath) { throw "No collision-free archive name available for $sourcePath" }
+
+    $entry = [pscustomobject]@{
+      source_path=$sourcePath
+      archive_path=$destinationPath
+      status="SOURCE_VERIFIED_PENDING_RENAME"
+      bytes=$expectedBytes
+      sha256=$expectedHash
+      source_snapshot=$sourceSnapshot
+      rename_started_utc=$null
+      rename_completed_utc=$null
+      rename_status=$null
+      archive_readback=$null
+    }
+    $manifest.files.Add($entry) | Out-Null
+    Save-Manifest
+
+    $entry.rename_started_utc = [DateTime]::UtcNow.ToString("o")
+    $entry.rename_status = Invoke-FtpRename $sourcePath $destinationPath
+    $entry.rename_completed_utc = [DateTime]::UtcNow.ToString("o")
+    $entry.status = "RENAMED_PENDING_READBACK"
+    Save-Manifest
+
+    if ($null -ne (Get-RemoteSize $sourcePath)) { throw "Source path still exists after FTP rename: $sourcePath" }
+    $archiveLocal = Join-Path $env:EVIDENCE_DIR ("archive-" + [IO.Path]::GetFileName($destinationPath))
+    $archiveSnapshot = Save-RemoteFile $destinationPath $archiveLocal
+    if ($archiveSnapshot.bytes -ne $expectedBytes -or $archiveSnapshot.sha256 -ne $expectedHash) { throw "Archived readback identity mismatch: $destinationPath" }
+    $entry.archive_readback = $archiveSnapshot
+    $entry.status = "ARCHIVED_AND_READBACK_VERIFIED"
+    Save-Manifest
   }
 
-  $sourceLocal = Join-Path $env:EVIDENCE_DIR ("source-" + $sourceName)
-  $sourceSnapshot = Save-RemoteFile $sourcePath $sourceLocal
-  if ($sourceSnapshot.bytes -ne $expectedBytes -or $sourceSnapshot.sha256 -ne $expectedHash) { throw "Live source package differs from the offline inspection: $sourcePath" }
+  $canonicalLocal = Join-Path $env:EVIDENCE_DIR "canonical-final.pkg"
+  $canonicalSnapshot = Save-RemoteFile "/data/pkg/PS4-Neural-Engine-015.pkg" $canonicalLocal
+  if ($canonicalSnapshot.sha256 -ne $installed[0].sha256 -or $canonicalSnapshot.sha256 -ne $canonical[0].sha256) { throw "Canonical PKG 015 changed during archive cleanup." }
 
-  $destinationPath = $null
-  for ($n = 0; $n -lt 100; $n++) {
-    $archiveName = "$baseName-archived-$($env:SOURCE_OFFLINE_RUN_ID)-$n.pkg"
-    $candidatePath = "/data/pkg/old/$archiveName"
-    if ($null -eq (Get-RemoteSize $candidatePath)) { $destinationPath = $candidatePath; break }
-  }
-  if (-not $destinationPath) { throw "No collision-free archive name available for $sourcePath" }
+  $rootFinalPath = Join-Path $env:EVIDENCE_DIR "pkg-root-after.raw.bin"
+  $rootFinalText = Save-RemoteListing "/data/pkg/" $rootFinalPath
+  $rootFinalEntries = @(ConvertFrom-FtpListing $rootFinalText)
+  $rootFinalNr = @($rootFinalEntries | Where-Object { $_.name -like "PS4-Neural-Engine-*.pkg" })
+  $nonNrAfter = @($rootFinalEntries | Where-Object { $_.name -notlike "PS4-Neural-Engine-*.pkg" } | ForEach-Object { $_.name } | Sort-Object)
+  if ($rootFinalNr.Count -ne 1 -or $rootFinalNr[0].name -ne "PS4-Neural-Engine-015.pkg") { throw "Final root must contain exactly the canonical NR PKG 015 and no other NR PKG." }
+  if (@(Compare-Object -ReferenceObject $nonNrBefore -DifferenceObject $nonNrAfter).Count -gt 0) { throw "A non-NR package or directory entry changed during archive cleanup." }
 
-  $renameStarted = [DateTime]::UtcNow.ToString("o")
-  $renameStatus = Invoke-FtpRename $sourcePath $destinationPath
-  $renameCompleted = [DateTime]::UtcNow.ToString("o")
-  if ($null -ne (Get-RemoteSize $sourcePath)) { throw "Source path still exists after FTP rename: $sourcePath" }
-  $archiveLocal = Join-Path $env:EVIDENCE_DIR ("archive-" + [IO.Path]::GetFileName($destinationPath))
-  $archiveSnapshot = Save-RemoteFile $destinationPath $archiveLocal
-  if ($archiveSnapshot.bytes -ne $expectedBytes -or $archiveSnapshot.sha256 -ne $expectedHash) { throw "Archived readback identity mismatch: $destinationPath" }
-
-  $manifest.files += [pscustomobject]@{
-    source_path=$sourcePath
-    archive_path=$destinationPath
-    status="ARCHIVED_AND_READBACK_VERIFIED"
-    bytes=$expectedBytes
-    sha256=$expectedHash
-    rename_status=$renameStatus
-    rename_started_utc=$renameStarted
-    rename_completed_utc=$renameCompleted
-    source_snapshot=$sourceSnapshot
-    archive_readback=$archiveSnapshot
-  }
-  $index++
+  $manifest.final_root_nr_packages = @($rootFinalNr | ForEach-Object { $_.name })
+  $manifest.third_party_root_names_unchanged = $true
+  $manifest.canonical_final_readback = $canonicalSnapshot
+  $manifest.completed_utc = [DateTime]::UtcNow.ToString("o")
+  $manifest.status = "ARCHIVE_COMPLETE_READBACK_VERIFIED"
+  Save-Manifest
+  Write-Host "ARCHIVE_COMPLETE_READBACK_VERIFIED"
+} catch {
+  $manifest.completed_utc = [DateTime]::UtcNow.ToString("o")
+  $manifest.status = "ARCHIVE_FAILED_OR_PARTIAL"
+  $manifest.error = $_.Exception.GetBaseException().Message
+  Save-Manifest
+  throw
 }
-
-$canonicalLocal = Join-Path $env:EVIDENCE_DIR "canonical-final.pkg"
-$canonicalSnapshot = Save-RemoteFile "/data/pkg/PS4-Neural-Engine-015.pkg" $canonicalLocal
-if ($canonicalSnapshot.sha256 -ne $installed[0].sha256 -or $canonicalSnapshot.sha256 -ne $canonical[0].sha256) { throw "Canonical PKG 015 changed during archive cleanup." }
-
-$rootFinalPath = Join-Path $env:EVIDENCE_DIR "pkg-root-after.raw.bin"
-$rootFinalText = Save-RemoteListing "/data/pkg/" $rootFinalPath
-$rootFinalEntries = @(ConvertFrom-FtpListing $rootFinalText)
-$rootFinalNr = @($rootFinalEntries | Where-Object { $_.name -like "PS4-Neural-Engine-*.pkg" })
-$nonNrAfter = @($rootFinalEntries | Where-Object { $_.name -notlike "PS4-Neural-Engine-*.pkg" } | ForEach-Object { $_.name } | Sort-Object)
-if ($rootFinalNr.Count -ne 1 -or $rootFinalNr[0].name -ne "PS4-Neural-Engine-015.pkg") { throw "Final root must contain exactly the canonical NR PKG 015 and no other NR PKG." }
-if (Compare-Object -ReferenceObject $nonNrBefore -DifferenceObject $nonNrAfter) { throw "A non-NR package or directory entry changed during archive cleanup." }
-$manifest.final_root_nr_packages = @($rootFinalNr | ForEach-Object { $_.name })
-$manifest.third_party_root_names_unchanged = $true
-$manifest.canonical_final_readback = $canonicalSnapshot
-$manifest.completed_utc = [DateTime]::UtcNow.ToString("o")
-$manifest.status = "ARCHIVE_COMPLETE_READBACK_VERIFIED"
-$manifest | ConvertTo-Json -Depth 14 | Set-Content -LiteralPath (Join-Path $env:EVIDENCE_DIR "archive-manifest.json") -Encoding utf8
-Write-Host "ARCHIVE_COMPLETE_READBACK_VERIFIED"
