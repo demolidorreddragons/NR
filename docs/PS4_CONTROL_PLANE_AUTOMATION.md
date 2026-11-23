@@ -151,13 +151,13 @@ The legacy workflow was retired from the working branch and merged into `main` b
 - **Build and host/PC QA:** automated.
 - **Independent PKG QA:** automated when its version-specific workflow is correctly bound to the build.
 - **FTP staging/readback:** historically demonstrated, but the legacy auto-stage path is retired in the working branch; the approved version-pinned staging workflow is separate.
-- **Read-only PS4 inventory:** completed once; the newer raw-byte/manifest collector still needs execution on Windows PowerShell 5.1.
+- **Read-only PS4 inventory:** raw-byte/manifest collector v3 completed successfully on the Windows bridge in preflight run `45167844316`; the downstream offline inspector then failed because its workflow did not check out the NR inspector script.
 - **Remote installation:** blocked because the RPI endpoint refused TCP 12800 and the exact alternative receiver protocol/foreground precondition is not established.
 - **PRX replacement/activation:** blocked by the installed PRX identity mismatch and the current title-adapter fail-closed gate. The existing `[default]` registration must not be treated as permission to replace or activate a different build.
 - **GoldHEN restart:** blocked; no version-matched documented restart mechanism and recovery handshake are qualified.
 - **App launch/runtime observation:** not implemented/verified.
 
-The automation is therefore **not complete end-to-end**. It is not safe to mark installation, PRX activation, restart, or runtime test as automated until their protocol and rollback gates are actually satisfied. The immediate safe action is to merge the legacy-workflow retirement, qualify the new read-only collector on the Windows runner, and then source-qualify an available install adapter without sending a mutating request until the receiver is positively identified.
+The automation is therefore **not complete end-to-end**. The legacy staging workflow has been retired in merged PR #30, and the read-only collector has now completed successfully. The offline inspector workflow still needs its source-checkout fix from the evidence manifest. Installation, PRX activation, restart, and runtime test remain blocked by the unavailable RPI receiver, unqualified BGFT ABI, and unresolved PRX identity conflict.
 
 ## Live console evidence — 2026-11-23
 
@@ -277,3 +277,18 @@ References:
 - https://github.com/LightningMods/Itemzflow/blob/4013e1ef188672db63346fef4221b1d8f4f13f02/itemzflow/source/installpkg.cpp
 - https://github.com/flatz/ps4_stub_lib_maker_v2/blob/a8d044c12ea2dc3fa190ce1769eeb48b30d28ed4/include/bgft.h
 - https://github.com/OpenOrbis/OpenOrbis-PS4-Toolchain/blob/0a1aaf9dd4a92695538bdeb09fb056d06dd11725/include/orbis/_types/bgft.h
+
+## Latest successful control-plane snapshot — 2026-11-23
+
+- Preflight run `45167844316`, build run `45167536520`, build commit `f220efed706dc5750aee646aa8aa754389ef56a4`, collector commit `9feef27b83b4fa22255a9a578f496e78b9a6469d`.
+- Evidence artifact `ps4-control-plane-preflight-45167844316`, artifact ID `14815586255`, archive SHA-256 `11e0a62efd7519fc361916f46b0febac7ec0ccc30ec5377fd39dd5e9c8a9c68f`. FTP LIST/GETSIZE/GET completed successfully; no remote files were modified.
+- RPI TCP 12800 actively refused the GET-only `/api` request. No RPI backend was identified; no POST was sent. BinLoader 9090 was not probed.
+- `/data/GoldHEN/plugins.ini` is 55 bytes, SHA-256 `5b186ce425fcdc4cdc25312635114ca79dc24e73545c315ad645abca39abd5d0`, and contains `[default]` registration for `/data/GoldHEN/plugins/ps4_neural_engine.prx`. This proves registration text only, not successful load or execution.
+- Current PRX FTP GET: 317,216 bytes, SHA-256 `1481214d21aa5c826f9d51ae8cd55759e625c2b9ca7159dd9578ea632661d8e7`. The raw FTP LIST line reports 224,128 bytes for the same path. GETSIZE before/after is stable at 317,216, but LIST and GET disagree; do not treat the PRX as identity-verified.
+- Adjacent release manifest `ps4_neural_engine.prx.pne-release.ini` is 289 bytes, SHA-256 `cadaf8665dc5bfe4f28999cee4a5bbc5153aa15220efe58de50ddb75f95ca0a3`. It declares release 010, app version 01.06, expected PRX SHA-256 `54e8595144a3a7e1d36602a1100bae6189f0955175c355bd3ac67d9cb7f85277`, `abi_status=unverified`, and `hardware_status=not_tested`. The expected hash does not match the current GET hash.
+- The plugin directory listing also shows `ps4_neural_engine.prx.pne-tmp` (224,128 bytes), `ps4_neural_engine.prx.pne-backup` (206,528 bytes), and `ps4_neural_engine.prx.pne-backup.001` (224,128 bytes). These backup/temp files have not yet been downloaded; PR40 adds read-only snapshots and hash comparison. Do not restore or overwrite any of them before identity analysis.
+- Installer log SHA-256 `9c37f7b5e45ed70e6b58b17150c7b213ef3a228543006792afe29b8115448e4d` contains historical `errno=17` and `errno=78` conflict entries plus older `ALREADY_CURRENT` messages. Those older messages are contradicted by the current manifest/hash mismatch and must not be treated as current success evidence.
+- Installed PNEU00001 app.pkg and app.json source package remain byte-identical at SHA-256 `2fcaf679766fefbed4bc60cc31beb0227b8bfefd4eb8070160f65a402be747e9`, APP_VER 01.10, CATEGORY `gde`. Staged PKG015 candidates `7609b5...` and `089684...` are distinct FULL BASE packages at the same APP_VER 01.10; neither is a patch or safe upgrade.
+- Offline inspection run `45167943764` failed before executing the script because the workflow checked out OrbisPkgTool but not the NR repository. No package inspection result was produced by that run. PR40 binds the NR script checkout to `collector_commit` from the exact preflight artifact and expands PRX integrity analysis.
+
+Current disposition: preserve the installed app, `plugins.ini`, active PRX, manifest, and all backup/temp files. Do not install a same-version FULL BASE PKG, replace/activate PRX, restart GoldHEN, or claim runtime validation.
