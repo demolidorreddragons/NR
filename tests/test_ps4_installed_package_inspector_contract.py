@@ -31,6 +31,10 @@ assert "dotnet $env:PKGTOOL sfo read" in script
 assert "installed_matches_app_json_source" in script
 assert "staged_packages" in script
 assert "installed_app_prx_matches_goldhen_prx" in script
+assert "manifest_expected_prx_sha256" in script
+assert "plugins_ini_files" in script
+assert "ps4_neural_engine.prx.pne-tmp" in script
+assert "ps4_neural_engine.prx.pne-backup.001" in script
 assert "size_or_mutability_mismatch" in script
 assert "$storageMatch" in script and "storage_type=$storageType" in script
 assert "$expectedTitle" in script
