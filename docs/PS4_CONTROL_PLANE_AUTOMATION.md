@@ -277,3 +277,20 @@ References:
 - https://github.com/LightningMods/Itemzflow/blob/4013e1ef188672db63346fef4221b1d8f4f13f02/itemzflow/source/installpkg.cpp
 - https://github.com/flatz/ps4_stub_lib_maker_v2/blob/a8d044c12ea2dc3fa190ce1769eeb48b30d28ed4/include/bgft.h
 - https://github.com/OpenOrbis/OpenOrbis-PS4-Toolchain/blob/0a1aaf9dd4a92695538bdeb09fb056d06dd11725/include/orbis/_types/bgft.h
+
+
+## Installer errno 78 source correlation — 2026-11-23
+
+The exact installer source shipped in the canonical PKG 015 build is available at source commit `2c9e3c12aed2791f2973496c31c8993259c64430`; `installer/main.c` has Git blob SHA `b2c3cca197b040c446d6d47a7f1f4ef6e783ffae`.
+
+At that commit:
+- `inspect_managed_path()` calls `lstat()`. Its explicit FW/Orbis fallback handles `ENOSYS` (commented as errno 78) by probing `readlink()`; it only falls back to `stat()` if `readlink()` returns `EINVAL` (not a symlink).
+- If `readlink()` is also unsupported and returns `ENOSYS`, the function returns `-1` with errno 78. The caller then logs `ABORTED: CONFLICT; cannot safely open installed PRX without following symlinks (errno=78); all data preserved.`
+- The same helper is used by `configure_loader()` for `/data/GoldHEN/plugins.ini`; failure logs `ERROR: cannot safely open plugins.ini for inspection (errno=78); preserving it.`
+- In `main()`, the installed PRX/manifest/transaction-marker checks happen before `copy_prx()`, `configure_loader()`, or the commit/rename transaction. The observed ABORTED branch returns immediately and explicitly preserves all data. Therefore that run did not copy or activate the packaged PRX and did not update plugins.ini.
+- The separate historical `cannot create temporary PRX ... errno=17` entry is an older append-only log signal; it is not the same execution path as the later early-abort errno 78. Do not merge these events into one causal sequence without timestamps/build identity.
+
+**Classification:** the source and log are strongly correlated with an Orbis filesystem-inspection primitive returning ENOSYS (78). This is a leading hypothesis, not a confirmed syscall-level root cause: the current log records only the final errno, not whether `lstat`, `readlink`, `stat`, `open`, or `fstat` returned it. FTP LIST metadata showing a regular file does not establish the result of those syscalls or prove the path is not a symlink.
+
+Do not “fix” this by replacing the check with `stat()` alone or removing no-follow/identity checks: that would follow symlinks and reopen a TOCTOU path. A replacement must be an independently verified FW 14.02 primitive with equivalent no-follow semantics and descriptor identity checks. No `fstatat`, `openat`, BGFT, or undocumented syscall is assumed available. No new PKG or console test is authorized by this source correlation alone.
+
