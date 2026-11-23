@@ -43,10 +43,18 @@ jobs:
           & $codex --version
           if ($LASTEXITCODE -ne 0) { throw "Codex version check failed." }
 
-          $login = (& $codex login status 2>&1 | Out-String)
+          # Windows PowerShell 5.1 promotes native stderr to ErrorRecord.
+          # Codex prints its successful login message on stderr, so capture it
+          # with Continue and evaluate the native exit code explicitly.
+          $previousPreference = $ErrorActionPreference
+          $ErrorActionPreference = 'Continue'
+          $loginOutput = & $codex login status 2>&1 | ForEach-Object { "$_" }
+          $loginExitCode = $LASTEXITCODE
+          $ErrorActionPreference = $previousPreference
+          $login = $loginOutput -join "`n"
           Write-Host $login
-          if ($LASTEXITCODE -ne 0 -or $login -notmatch 'Logged in using ChatGPT') {
-            throw "Codex is not authenticated in this runner process."
+          if ($loginExitCode -ne 0 -or $login -notmatch 'Logged in using ChatGPT') {
+            throw "Codex is not authenticated in this runner process (exit=$loginExitCode)."
           }
 
       - name: Run read-only repository audit with Codex
@@ -55,5 +63,12 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           $codex = 'C:\ProgramData\NR\Codex\node_modules\.bin\codex.cmd'
-          & $codex exec --skip-git-repo-check --sandbox read-only "Leia integralmente AGENTS.md e docs/GCN8_GNM_COMPUTE_READINESS.md. Faça uma auditoria somente de leitura do estado atual do Gate A, Gate B, Gate C e Gate D no repositório. Não altere arquivos, não crie commits, não acesse a rede do PS4 e não execute deploy. Informe evidências concretas por caminho de arquivo, o que está comprovado, o que continua bloqueado e os próximos passos técnicos mínimos."
-          if ($LASTEXITCODE -ne 0) { throw "Codex read-only audit failed with exit code $LASTEXITCODE." }
+          $prompt = "Leia integralmente AGENTS.md e docs/GCN8_GNM_COMPUTE_READINESS.md. Faça uma auditoria somente de leitura do estado atual do Gate A, Gate B, Gate C e Gate D no repositório. Não altere arquivos, não crie commits, não acesse a rede do PS4 e não execute deploy. Informe evidências concretas por caminho de arquivo, o que está comprovado, o que continua bloqueado e os próximos passos técnicos mínimos."
+          $previousPreference = $ErrorActionPreference
+          $ErrorActionPreference = 'Continue'
+          $auditOutput = & $codex exec --skip-git-repo-check --sandbox read-only $prompt 2>&1 | ForEach-Object { "$_" }
+          $auditExitCode = $LASTEXITCODE
+          $ErrorActionPreference = $previousPreference
+          $auditOutput | ForEach-Object { Write-Host $_ }
+          if ($auditExitCode -ne 0) { throw "Codex read-only audit failed with exit code $auditExitCode." }
+          if (-not ($auditOutput -join "`n")) { throw "Codex read-only audit returned no output." }
