@@ -159,3 +159,13 @@ After the first snapshot, the legacy PS4 Windows Bridge Test workflow staged ano
 ### Installed PNEU00001 app.pkg partial readback — 2026-11-23
 
 One-off read-only audit run 45165595784 successfully downloaded /user/app/PNEU00001/app.pkg (6,619,136 bytes, SHA-256 2fcaf679766fefbed4bc60cc31beb0227b8bfefd4eb8070160f65a402be747e9) and app.json. This exactly matches the historical PKG015 hash recorded in project evidence. The app.json points to /user/data/pkg/PS4-Neural-Engine-015.pkg; its packageDigest is 7A65DF53... and is not equal to the app.pkg SHA-256, so do not interpret that field as a file SHA. The first audit attempt then failed because it incorrectly expected an unpacked sce_sys/param.sfo path inside /user/app/PNEU00001; the partial artifact was preserved. The corrected audit extracts PARAM.SFO from the downloaded app.pkg offline with pinned OrbisPkgTool. APP_VER remains pending that extraction.
+
+### Installed PKG015 identity confirmed — 2026-11-23
+
+Read-only audit run 45165759218 plus pinned OrbisPkgTool inspection artifact 14812944834 conclusively identified the installed PNEU00001 app:
+- Installed /user/app/PNEU00001/app.pkg: 6,619,136 bytes, SHA-256 2fcaf679766fefbed4bc60cc31beb0227b8bfefd4eb8070160f65a402be747e9.
+- The app.json-referenced /user/data/pkg/PS4-Neural-Engine-015.pkg has the exact same size and SHA-256 as installed app.pkg.
+- Independent SFO validation: TITLE_ID PNEU00001, APP_VER/VERSION 01.10, CATEGORY gde, CONTENT_ID IV0000-PNEU00001_00-PS4NEURALENG0000. Installed package validation PASS.
+- The staged /data/pkg/PS4-Neural-Engine-015-7609b5d2b536.pkg was read back at 6,619,136 bytes, SHA-256 7609b5d2b53628bd0a22c85c31ac72df2ae36d9047c9a4908ad24ff2f8fc5548. Its SFO is also APP_VER 01.10 / CATEGORY gde / TITLE_ID PNEU00001, but its package SHA differs from the installed app.
+- Therefore the staged candidate is a different FULL BASE build at the same app version, not an update or patch. Do not install it over the existing app. A real update requires an explicitly versioned, associated patch package and a qualified install channel.
+- app.json packageDigest 7A65DF53... is not equal to the app.pkg SHA-256; treat it as a distinct internal digest, not a file hash.
