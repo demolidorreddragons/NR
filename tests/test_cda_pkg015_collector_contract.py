@@ -8,7 +8,7 @@ assert "runs-on: [self-hosted, Windows, X64, ps4-lan]" in workflow, "collector m
 assert "PS4_IP: ${{ vars.PS4_IP }}" in workflow, "PS4 endpoint must come from Actions variable"
 assert "IPAddress]::TryParse" in workflow and "AddressFamily]::InterNetwork" in workflow, "collector must validate IPv4 before network access"
 assert "DownloadFile" in workflow and "ListDirectoryDetails" in workflow and "GetFileSize" in workflow, "only expected FTP read operations should be used"
-ftp_methods = set(re.findall(r"WebRequestMethods\\+Ftp\\]::(\\w+)", workflow))
+ftp_methods = set(re.findall(r"WebRequestMethods\+Ftp\]::(\w+)", workflow))
 assert ftp_methods == {"DownloadFile", "GetFileSize", "ListDirectoryDetails"}, f"unexpected FTP method set: {ftp_methods}"
 for forbidden in ("UploadFile", "DeleteFile", "RenameFile", "MakeDirectory", "Install-Package", "GoldHEN restart"):
     assert forbidden not in workflow, f"forbidden remote mutation/action reference: {forbidden}"
