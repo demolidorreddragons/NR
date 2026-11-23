@@ -21,7 +21,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Install pinned official Codex CLI package for runner service
-        shell: powershell
+        shell: powershell -NoProfile -ExecutionPolicy Bypass -File {0}
         run: |
           $ErrorActionPreference = "Stop"
           $node = Get-Command node.exe -ErrorAction SilentlyContinue
