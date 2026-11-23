@@ -69,21 +69,35 @@ jobs:
           test "$(git -C opengnm rev-parse HEAD)" = "4b295ca54c82c83acf308d1c646a2dfa9ae57350"
           test "$(git -C SPIRV-Headers rev-parse HEAD)" = "fb1379425b16e58dcbdda7be0f8604a7f5cdce78"
 
-      - name: Generate Mesa utility format header omitted from upstream Makefile
+      - name: Generate omitted Mesa and GLSL generated headers/sources
         shell: bash
         run: |
           set -euo pipefail
           COMPILER="$RUNNER_TEMP/nr-gcn8-deps/opengnm-psbc"
-          python3 "$COMPILER/src/util/format/u_format_table.py" \
-            "$COMPILER/src/util/format/u_format.yaml" --enums \
-            > "$COMPILER/src/util/format/u_format_gen.h"
-          python3 "$COMPILER/src/compiler/builtin_types_h.py" \
-            "$COMPILER/src/compiler/builtin_types.h"
-          python3 "$COMPILER/src/compiler/builtin_types_c.py" \
-            "$COMPILER/src/compiler/builtin_types.c"
-          test -s "$COMPILER/src/util/format/u_format_gen.h"
-          test -s "$COMPILER/src/compiler/builtin_types.h"
-          test -s "$COMPILER/src/compiler/builtin_types.c"
+          FORMAT="$COMPILER/src/util/format"
+          python3 "$FORMAT/u_format_table.py" "$FORMAT/u_format.yaml" --enums \
+            > "$FORMAT/u_format_gen.h"
+          python3 "$FORMAT/u_format_table.py" "$FORMAT/u_format.yaml" --header \
+            > "$FORMAT/u_format_pack.h"
+          python3 "$FORMAT/u_format_table.py" "$FORMAT/u_format.yaml" \
+            > "$FORMAT/u_format_table.c"
+
+          COMPILER_SRC="$COMPILER/src/compiler"
+          python3 "$COMPILER_SRC/builtin_types_h.py" "$COMPILER_SRC/builtin_types.h"
+          python3 "$COMPILER_SRC/builtin_types_c.py" "$COMPILER_SRC/builtin_types.c"
+
+          UTIL="$COMPILER/src/util"
+          python3 "$UTIL/process_shader_stats.py" "$UTIL/shader_stats.rnc" \
+            "$UTIL/shader_stats.xml" > "$UTIL/shader_stats.h"
+          python3 "$UTIL/format_srgb.py" > "$UTIL/format_srgb.c"
+
+          test -s "$FORMAT/u_format_gen.h"
+          test -s "$FORMAT/u_format_pack.h"
+          test -s "$FORMAT/u_format_table.c"
+          test -s "$COMPILER_SRC/builtin_types.h"
+          test -s "$COMPILER_SRC/builtin_types.c"
+          test -s "$UTIL/shader_stats.h"
+          test -s "$UTIL/format_srgb.c"
 
       - name: Configure and build pinned compiler on hosted runner
         shell: bash
