@@ -28,10 +28,11 @@ int main() {
     assert(descriptor_size_bytes(DescriptorKind::storage_image) == 32);
     assert(descriptor_size_bytes(DescriptorKind::sampler) == 16);
     assert(descriptor_size_bytes(DescriptorKind::combined_image_sampler) == 48);
+    assert(descriptor_size_bytes(static_cast<DescriptorKind>(0xff)) == 0);
 
-    const BindingRequirement last_array[] = {{0, 0, 5, DescriptorKind::buffer}};
+    const BindingRequirement last_array[] = {{0, 0, 4, DescriptorKind::buffer}};
     assert(build_resource_table_layout(last_array, 1, &layout) == ResourceTableError::none);
-    assert(layout.byte_size == 80);
+    assert(layout.byte_size == 64);
 
     const BindingRequirement overlap[] = {
         {0, 0, 5, DescriptorKind::buffer},
@@ -44,12 +45,35 @@ int main() {
     assert(build_resource_table_layout(wrong_set, 1, &layout) == ResourceTableError::unsupported_descriptor_set);
     const BindingRequirement unsorted[] = {{0, 2, 1, DescriptorKind::buffer}, {0, 1, 1, DescriptorKind::buffer}};
     assert(build_resource_table_layout(unsorted, 2, &layout) == ResourceTableError::bindings_not_strictly_sorted);
+    const BindingRequirement duplicate[] = {{0, 1, 1, DescriptorKind::buffer}, {0, 1, 1, DescriptorKind::buffer}};
+    assert(build_resource_table_layout(duplicate, 2, &layout) == ResourceTableError::bindings_not_strictly_sorted);
     const BindingRequirement zero_array[] = {{0, 0, 0, DescriptorKind::buffer}};
     assert(build_resource_table_layout(zero_array, 1, &layout) == ResourceTableError::zero_array_count);
+    const BindingRequirement invalid_kind[] = {{0, 0, 1, static_cast<DescriptorKind>(0xff)}};
+    assert(build_resource_table_layout(invalid_kind, 1, &layout) == ResourceTableError::invalid_descriptor_kind);
+
     assert(build_resource_table_layout(nullptr, 1, &layout) == ResourceTableError::null_requirements);
+    assert(build_resource_table_layout(nullptr, 0, &layout) == ResourceTableError::none);
+    assert(layout.binding_count == 0 && layout.byte_size == 0);
     assert(build_resource_table_layout(gemm, 4, nullptr) == ResourceTableError::null_output);
 
+    BindingRequirement too_many[kMaxResourceBindings + 1]{};
+    assert(build_resource_table_layout(too_many, kMaxResourceBindings + 1, &layout) == ResourceTableError::too_many_bindings);
+
+    const BindingRequirement offset_overflow[] = {{
+        0, std::numeric_limits<std::uint32_t>::max() / kDescriptorBindingStride + 1,
+        1, DescriptorKind::buffer
+    }};
+    assert(build_resource_table_layout(offset_overflow, 1, &layout) == ResourceTableError::offset_overflow);
+
+    const BindingRequirement table_overflow[] = {{
+        0, 1, std::numeric_limits<std::uint32_t>::max() / 16,
+        DescriptorKind::buffer
+    }};
+    assert(build_resource_table_layout(table_overflow, 1, &layout) == ResourceTableError::table_size_overflow);
+
     assert(validate_indirect_resource_table_address(0x1000) == ResourceTableError::none);
+    assert(validate_indirect_resource_table_address(0xFFFFFFFCULL) == ResourceTableError::none);
     assert(validate_indirect_resource_table_address(0x1002) == ResourceTableError::invalid_table_address);
     assert(validate_indirect_resource_table_address(0x100000000ULL) == ResourceTableError::invalid_table_address);
     assert(validate_indirect_resource_table_address(0) == ResourceTableError::invalid_table_address);
