@@ -277,3 +277,47 @@ References:
 - https://github.com/LightningMods/Itemzflow/blob/4013e1ef188672db63346fef4221b1d8f4f13f02/itemzflow/source/installpkg.cpp
 - https://github.com/flatz/ps4_stub_lib_maker_v2/blob/a8d044c12ea2dc3fa190ce1769eeb48b30d28ed4/include/bgft.h
 - https://github.com/OpenOrbis/OpenOrbis-PS4-Toolchain/blob/0a1aaf9dd4a92695538bdeb09fb056d06dd11725/include/orbis/_types/bgft.h
+
+
+## First successful post-fix PS4 preflight — 2026-11-23
+
+The collector now ran successfully on the Windows PS4 bridge:
+- Preflight run `45167844316`, build run `45167536520`, build commit `f220efed706dc5750aee646aa8aa754389ef56a4`.
+- Collector source commit `9feef27b83b4fa22255a9a578f496e78b9a6469d`, schema `nr.ps4.control-plane-preflight.v3`.
+- Evidence artifact `14815586255`, size 67,859,644 bytes, ZIP SHA-256 `11e0a62efd7519fc361916f46b0febac7ec0ccc30ec5377fd39dd5e9c8a9c68f`.
+- All 9 FTP LIST and 20 FTP GET operations completed; every GET recorded equal remote GETSIZE-before, remote GETSIZE-after and local byte counts, plus SHA-256. No FTP write method was called.
+- The RPI read-only `GET /api` to `192.168.0.17:12800` was actively refused. No POST, BinLoader 9090 probe, install, or activation occurred.
+
+### Confirmed installed package identity and staged candidates
+
+- Installed `/user/app/PNEU00001/app.pkg`, source `/user/data/pkg/PS4-Neural-Engine-015.pkg`, and staged canonical `/data/pkg/PS4-Neural-Engine-015.pkg` are all 6,619,136 bytes with SHA-256 `2fcaf679766fefbed4bc60cc31beb0227b8bfefd4eb8070160f65a402be747e9`.
+- The installed app is already the canonical QA'd PKG 015. Do not reinstall it.
+- Distinct staged candidates are present:
+  - PKG 015 `7609b5d2b53628bd0a22c85c31ac72df2ae36d9047c9a4908ad24ff2f8fc5548`
+  - PKG 015 `089684400316f26d4a7d8d04cb51f768ea14e4ea6351fdaab7007e5e073dc391`
+  - PKG 006 `dfda3a974df85a78b536afc8a58edc9996c68cd72fd92e78f091ecf5e96cfd0f`
+  - PKG 006 `eb68c632848b6072213459d25b74da239d1535eaaf7b1af2314c732a8002bbff`
+  - PKG 006 `a3c9eb2b185e69d819f15d755a7f032b84de00793808b1081399856eb1873244`
+  - PKG 006 `0f0e7060fc3dcba4906f1c646880a09041bcc2335da0899c059867d060b0bba3`
+  - PKG 006 `8d95e10d45e97ced884b0ab5b787cbc095047db8b7d24ec314a3052ecac92460`
+- The `/data/pkg/` root also contains two unrelated third-party game PKGs. They are explicitly out of scope and must never be moved by NR cleanup automation. The root currently contains eight NR PKGs; `/data/pkg/old/` contains historical NR packages and `old_versions` is empty. No cleanup has been performed.
+- `/user/app/PNEU00004/app.pkg` is a separate GNM-load diagnostic app; its app.json references `/user/data/pkg/PS4-Neural-Rendering-GCN8-gnm-load-45040217180.pkg`. Preserve it.
+
+### GoldHEN registration and PRX identity mismatch
+
+The same preflight read back:
+- `plugins.ini` (55 bytes, SHA-256 `5b186ce425fcdc4cdc25312635114ca79dc24e73545c315ad645abca39abd5d0`) contains `/data/GoldHEN/plugins/ps4_neural_engine.prx`.
+- The active PRX GETSIZE-before, GETSIZE-after and local size are all 317,216 bytes; SHA-256 is `1481214d21aa5c826f9d51ae8cd55759e625c2b9ca7159dd9578ea632661d8e7`.
+- FTP LIST reports 224,128 bytes for that same path, while GETSIZE and the full GET agree at 317,216. This is a LIST-vs-SIZE metadata discrepancy, not a failed transfer. It is consistent with the independently documented OpenOrbis `struct stat` size-layout defect (LIST can report allocated blocks rather than file length); do not use LIST's size as the byte-identity authority.
+- The adjacent release manifest (289 bytes, SHA-256 `cadaf8665dc5bfe4f28999cee4a5bbc5153aa15220efe58de50ddb75f95ca0a3`) declares release 010, app version 01.06, and expected PRX SHA-256 `54e8595144a3a7e1d36602a1100bae6189f0955175c355bd3ac67d9cb7f85277`.
+- The canonical installed PKG 015 QA report identifies packaged PRX SHA-256 `1e4531711a0768cfeb29f1d6f66b9541cf087b141eda7a05fed755d12507866c`.
+
+These three PRX identities differ: packaged PKG 015 `1e453...`, manifest-expected release 010 `54e859...`, and current GoldHEN file `148121...`. The current plugin is not the PRX declared by its adjacent manifest, and it is not the PRX inside the installed PKG 015. This is an observed hash mismatch; cause remains unknown until the preserved temp/backup files are compared. Do not overwrite or activate any PRX.
+
+Directory listings also show preserved installer artifacts that the first successful preflight did not download: `plugins.ini.pne-tmp`, `plugins.ini.pne-backup`, `ps4_neural_engine.prx.pne-tmp`, `ps4_neural_engine.prx.pne-backup`, `ps4_neural_engine.prx.pne-backup.001`, and old `_002` through `_005` PRXs. The follow-up collector now downloads and hashes these exact files; the offline inspector will compare them against the manifest and installed PKG without changing the console.
+
+### Offline inspector workflow correction
+
+The first two offline-inspection runs (`45167943764` and `45168267072`) built the pinned OrbisPkgTool and downloaded the exact preflight artifact, but failed before package inspection because the workflow had not checked out the NR repository containing its PowerShell script. No console request was made by either inspector run.
+
+The follow-up workflow now checks out the exact default-branch SHA into a separate `NR` path and executes that script. The same PR also extends the next preflight to capture the PRX temp/backup files and adds an offline PRX/manifest comparison. The inspector remains artifact-only and has no network client.
