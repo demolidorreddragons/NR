@@ -163,8 +163,10 @@ jobs:
           LD=g++
           AR=ar
           PYTHON=python3
-          CFLAGS=-std=gnu11 -O2 -g $INC -D_XOPEN_SOURCE=700 -DUTIL_ARCH_LITTLE_ENDIAN=1 -DUTIL_ARCH_BIG_ENDIAN=0 -DHAVE_STRUCT_TIMESPEC=1 -DHAVE_PTHREAD=1 -DHAVE_SYSCONF=1 -Dalloca=__builtin_alloca -include strings.h -Wno-unused-function -Wno-unused-variable
-          CXXFLAGS=-std=c++17 -O2 -g $INC -D_XOPEN_SOURCE=700 -DUTIL_ARCH_LITTLE_ENDIAN=1 -DUTIL_ARCH_BIG_ENDIAN=0 -DHAVE_STRUCT_TIMESPEC=1 -DHAVE_PTHREAD=1 -DHAVE_SYSCONF=1 -Dalloca=__builtin_alloca -include strings.h -Wno-unused-function -Wno-unused-variable
+          # The pinned standalone Makefile omits BLAKE3 x86 assembly objects. Match upstream Meson fallback: portable implementation only.
+          BLAKE3_NO_SIMD='-DBLAKE3_NO_SSE2 -DBLAKE3_NO_SSE41 -DBLAKE3_NO_AVX2 -DBLAKE3_NO_AVX512'
+          CFLAGS=-std=gnu11 -O2 -g $INC $BLAKE3_NO_SIMD -D_XOPEN_SOURCE=700 -DUTIL_ARCH_LITTLE_ENDIAN=1 -DUTIL_ARCH_BIG_ENDIAN=0 -DHAVE_STRUCT_TIMESPEC=1 -DHAVE_PTHREAD=1 -DHAVE_SYSCONF=1 -Dalloca=__builtin_alloca -include strings.h -Wno-unused-function -Wno-unused-variable
+          CXXFLAGS=-std=c++17 -O2 -g $INC $BLAKE3_NO_SIMD -D_XOPEN_SOURCE=700 -DUTIL_ARCH_LITTLE_ENDIAN=1 -DUTIL_ARCH_BIG_ENDIAN=0 -DHAVE_STRUCT_TIMESPEC=1 -DHAVE_PTHREAD=1 -DHAVE_SYSCONF=1 -Dalloca=__builtin_alloca -include strings.h -Wno-unused-function -Wno-unused-variable
           LDFLAGS=-lm -pthread -ldl
           EOF
           # The pinned upstream Makefile owns the complete Mesa NIR/SPIR-V/ACO
