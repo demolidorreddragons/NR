@@ -11,12 +11,14 @@ assert workflow.index("Search preserved logs for PKG015") < workflow.index("Pres
 assert "workflow_dispatch:" in workflow
 assert "runs-on: [self-hosted, Windows, X64, ps4-lan]" in workflow
 assert "DownloadFile" in workflow and "GetFileSize" in workflow and "ListDirectoryDetails" in workflow
+assert "DISCOVERED_GCN8_SMOKE_LOG_COUNT" in workflow
+assert "pne_gcn8_compute_smoke_" in workflow, "workflow must discover and snapshot GCN8 smoke logs from /data listing"
 for forbidden in ("UploadFile", "DeleteFile", "RenameFile", "MakeDirectory", "Install-Package"):
     assert forbidden not in workflow, f"workflow contains forbidden remote action: {forbidden}"
 
 for signal in ("preflight", "gcn8_assets", "gnm_exports", "gnm_calls", "prx_activation", "crash_or_error"):
     assert f"Name='{signal}'" in extractor, f"missing log signal category: {signal}"
-for needle in ("pne\\.log", "Loader_Logs\\.txt", "memory\\.log", "sce_logs/log\\.bin"):
+for needle in ("pne\\.log", "Loader_Logs\\.txt", "memory\\.log", "pne_gcn8_compute_smoke_[^/]+\\.log", "sce_logs/log\\.bin"):
     assert needle in extractor, f"missing log source: {needle}"
 assert "FILE_SNAPSHOT remote=" in extractor, "source mapping must come from the evidence manifest"
 assert "ReadAllBytes" in extractor, "extractor must read local preserved snapshots"
