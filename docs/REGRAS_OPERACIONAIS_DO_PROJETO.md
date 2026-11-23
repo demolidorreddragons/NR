@@ -192,3 +192,13 @@ Essa versão anuncia Remote Package Install, FTP 2121, BinLoader 9090, Klog 3232
 ### 12.2 Correção de procedência GamerHack
 
 O usuário esclareceu que utiliza a distribuição/versão GamerHack v2.4b18.14. A página pública identifica GamerHack como host original e patnawa como hospedagem/espelho: https://patnawa.github.io/GoldhenPS4/g2all/. Isso comprova a atribuição do host, mas não identifica de forma independente quem compilou ou modificou o binário GoldHEN embutido. Até inspecionar o binário/hash e metadados, classificar a procedência do payload como `UNVERIFIED`. Não atribuir o binário instalado a SiSTR0 nem substituí-lo pelo asset upstream v2.4b18 só porque o número de versão é parecido.
+
+### 12.3 Preflight read-only e protocolo RPI
+
+A preflight de controle passou a executar `tools/ps4-control-plane-preflight.ps1` no runner Windows existente. O escopo é estritamente read-only: FTP LIST/GETSIZE/GET em caminhos NR explicitamente permitidos e HTTP GET nas rotas de identificação RPI em TCP 12800. É proibido sondar BinLoader 9090, enviar payload, emitir POST, alterar arquivos, instalar PKG, ativar PRX ou reiniciar GoldHEN nesse workflow.
+
+O protocolo RPI foi revisado na implementação `AldySan/Remote-Package-Installer-NG`, commit fixado `f99e62089afa61fb418446bdeb12340afd951a17`. A API identificada usa GET para fingerprint/status e POST para consulta de título, instalação e progresso. A instalação real exige receiver RPI confirmado, Package Installer aberto em primeiro plano no PS4, servidor HTTP local com suporte a Range, pacote allowlisted com QA e hash validados e confirmação terminal do console. O preflight atual não envia POST nem instala nada.
+
+O PRX NR permanece fail-closed porque o adaptador de título ainda não foi validado. Não registrar em `[default]` para forçar carregamento. Ainda não foi encontrado endpoint documentado e qualificado para reiniciar remotamente o GoldHEN; não inventar comando nem confundir desconexão com reinício.
+
+A distribuição GamerHack/patnawa publica o arquivo GoldHEN v2.4b18.14 com archive SHA-256 `fe67d34f2a67b1f4f018629b51318bab40ba7ad13f2293ae802e6cb57ea202cf` e payload extraído SHA-256 `c5480587d99efc2e3cc132352d9b7cf052dd3068280f1686e7fbb37d57e9ba8b`. Esses hashes identificam a distribuição publicada, não o binário lido do console. O roteamento de offsets 14.02 no host também permanece sem comprovação em hardware.
