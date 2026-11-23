@@ -1,0 +1,59 @@
+name: NR Codex Engineering Runner Smoke
+
+on:
+  push:
+    branches:
+      - engineering/codex-runner-smoke-20261123
+    paths:
+      - .github/workflows/codex-runner-smoke.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nr-codex-runner-smoke
+  cancel-in-progress: false
+
+jobs:
+  codex-readonly-smoke:
+    name: Verify user-scoped Codex authentication
+    runs-on: [self-hosted, Windows, X64, codex, engineering]
+    timeout-minutes: 15
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Verify runner identity and Codex login
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $identity = (whoami).Trim()
+          Write-Host "RUNNER_IDENTITY=$identity"
+          if ($identity -ne 'desktop-tg85gf4\deniz') {
+            throw "Unexpected runner identity; expected the authenticated interactive Windows account."
+          }
+
+          $codex = 'C:\ProgramData\NR\Codex\node_modules\.bin\codex.cmd'
+          if (-not (Test-Path -LiteralPath $codex)) {
+            throw "Codex CLI not found at the expected installation path."
+          }
+
+          & $codex --version
+          if ($LASTEXITCODE -ne 0) { throw "Codex version check failed." }
+
+          $login = (& $codex login status 2>&1 | Out-String)
+          Write-Host $login
+          if ($LASTEXITCODE -ne 0 -or $login -notmatch 'Logged in using ChatGPT') {
+            throw "Codex is not authenticated in this runner process."
+          }
+
+      - name: Run read-only repository audit with Codex
+        shell: powershell
+        working-directory: ${{ github.workspace }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $codex = 'C:\ProgramData\NR\Codex\node_modules\.bin\codex.cmd'
+          & $codex exec --skip-git-repo-check --sandbox read-only "Leia integralmente AGENTS.md e docs/GCN8_GNM_COMPUTE_READINESS.md. Faça uma auditoria somente de leitura do estado atual do Gate A, Gate B, Gate C e Gate D no repositório. Não altere arquivos, não crie commits, não acesse a rede do PS4 e não execute deploy. Informe evidências concretas por caminho de arquivo, o que está comprovado, o que continua bloqueado e os próximos passos técnicos mínimos."
+          if ($LASTEXITCODE -ne 0) { throw "Codex read-only audit failed with exit code $LASTEXITCODE." }
