@@ -12,7 +12,10 @@ assert "ref: main" in workflow
 assert "workflow_run:" in workflow and 'workflows: ["PS4 PRX and PKG build"]' in workflow
 assert "timeout-minutes: 15" in workflow
 assert "COLLECTOR_COMMIT=$collectorCommit" in workflow
-assert "git -C $env:GITHUB_WORKSPACE rev-parse HEAD" in workflow
+assert "COLLECTOR_COMMIT: ${{ steps.checkout.outputs.commit }}" in workflow
+assert "git -C $env:GITHUB_WORKSPACE rev-parse HEAD" not in workflow
+assert "shell: powershell -NoProfile -ExecutionPolicy Bypass -File {0}" in workflow
+assert "shell: powershell\n" not in workflow
 assert r"PS4_IP: ${{ vars.PS4_IP }}" in workflow
 
 # Network target is constrained to a literal IPv4 and all run/provenance identifiers are required.
