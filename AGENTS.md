@@ -67,3 +67,9 @@ A local BGFT installation path is source-documented in ItemzFlow, but the OpenOr
 ## Legacy staging workflow observation — 2026-11-23
 
 The legacy PS4 Windows Bridge Test staged another PKG006 (6,619,136 bytes, SHA-256 8d95e10d45e97ced884b0ab5b787cbc095047db8b7d24ec314a3052ecac92460) while the newer PKG015 was already present. PKG006 is FULL BASE PNEU00001 APP_VER 01.02 and must not be installed over the existing app. The newer-release gate in the QA-bound PKG006 stage workflow skipped without changing remote files. PR #30 retires the legacy bridge staging workflow; until merged, do not treat its PKG006 staging as current-release promotion.
+
+## Installed PNEU00001 package identity — 2026-11-23
+
+Read-only audit run 45165759218 and independent OrbisPkgTool inspection artifact 14812944834 prove that installed /user/app/PNEU00001/app.pkg is 6,619,136 bytes, SHA-256 2fcaf679766fefbed4bc60cc31beb0227b8bfefd4eb8070160f65a402be747e9. The app.json-referenced /user/data/pkg/PS4-Neural-Engine-015.pkg is byte-identical. Its SFO is TITLE_ID PNEU00001, APP_VER/VERSION 01.10, CATEGORY gde, CONTENT_ID IV0000-PNEU00001_00-PS4NEURALENG0000; independent package validation passed.
+
+The staged PKG015 candidate hash 7609b5d2b53628bd0a22c85c31ac72df2ae36d9047c9a4908ad24ff2f8fc5548 has the same TITLE_ID and APP_VER 01.10 but a different package hash. It is a different FULL BASE build, not a patch. Do not install it over the existing app. A genuine versioned patch and a qualified install channel are required for an update.
