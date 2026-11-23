@@ -29,3 +29,7 @@ Advance the Neural Rendering implementation from the exact checked-out repositor
 - Do not commit.
 - Report concrete file paths and test evidence in the report.
 - If blocked, document why with source evidence rather than fabricate a fix.
+
+
+## Immediate implementation priority — upload confirmation integrity
+The latest source inspection found a concrete TOCTOU weakness in `platform/ps4/goldhen/plugin/github_client.cpp`: the two-press upload confirmation is bound only to `count` and aggregate `bytes` (`g_pending_count`, `g_pending_bytes`). A different set of files with the same count and total size can therefore inherit the prior confirmation. Investigate this exact path and its existing tests/build constraints. If the source confirms the issue, implement a minimal fail-closed confirmation snapshot bound to the exact eligible file set (stable relative names and file identity/content digest or an equally strong deterministic fingerprint), revalidate that snapshot immediately before upload, invalidate it on disconnect/authorization changes, and add host-testable regression coverage without exposing credentials or touching the PS4. Do not add dependencies or guess unavailable PS4 APIs. If the existing architecture prevents a safe testable fix, document the precise reason and implement the smallest safe alternative. Then run the relevant tests and the PRX compile workflow only if its existing workflow is isolated and does not access the console. Do not claim hardware functionality.
