@@ -203,3 +203,32 @@ The legacy bridge's read-only pre-stage diagnostic in run '45164889360' also ret
 These are **OBSERVED strings in a historical application log**. They are not tied to a single current process/session, do not establish which exact installer build emitted each line, and do not prove that the currently observed PRX path is a symlink. The existing FTP directory listing reports the current PRX as a regular-file entry, but FTP LIST metadata is not a definitive lstat/readlink result. Keep the cause as UNKNOWN / INSUFFICIENT EVIDENCE until the log is preserved with the new collector and the exact filesystem object type/path is established through a safe, documented interface.
 
 Collector v3 additionally downloads the NR installer log and the adjacent 'ps4_neural_engine.prx.pne-release.ini' manifest so the next evidence artifact can bind these historical messages to current PRX bytes and registration state.
+
+## Installed PNEU00001 package identity confirmed — 2026-11-23
+
+Read-only audit run 45165759218 and independent OrbisPkgTool inspection artifact 14812944834 conclusively identified the installed app:
+- Installed /user/app/PNEU00001/app.pkg: 6,619,136 bytes, SHA-256 2fcaf679766fefbed4bc60cc31beb0227b8bfefd4eb8070160f65a402be747e9.
+- The app.json-referenced /user/data/pkg/PS4-Neural-Engine-015.pkg is byte-identical to installed app.pkg.
+- Independent SFO validation: TITLE_ID PNEU00001, APP_VER/VERSION 01.10, CATEGORY gde, CONTENT_ID IV0000-PNEU00001_00-PS4NEURALENG0000. Installed package validation PASS.
+- The staged /data/pkg/PS4-Neural-Engine-015-7609b5d2b536.pkg was read back at 6,619,136 bytes, SHA-256 7609b5d2b53628bd0a22c85c31ac72df2ae36d9047c9a4908ad24ff2f8fc5548. Its SFO is also APP_VER 01.10 / CATEGORY gde / TITLE_ID PNEU00001, but its package SHA differs from the installed app.
+- Therefore the staged candidate is a different FULL BASE build at the same app version, not an update or patch. Do not install it over the existing app. A real update requires an explicitly versioned, associated patch package and a qualified install channel.
+- app.json packageDigest 7A65DF53... is not equal to the app.pkg SHA-256; treat it as a distinct internal digest, not a file hash.
+
+## Control-plane workflow hardening
+
+Main preflight run 45165799711 failed before collector execution because the Windows runner did not have git in PATH and the identity step used the default PowerShell shell. The corrected workflow uses the checkout action commit output (steps.checkout.outputs.commit), removes the git dependency, and applies the PowerShell execution-policy bypass to both privileged steps. The legacy PKG004/005 QA workflows now emit a successful skip report when their package is absent from the triggering build artifact, rather than failing every PKG006 build.
+
+## Alternate local install adapter research — BGFT / AppInstUtil
+
+A second installation path exists in PS4 homebrew source and may avoid the currently closed RPI TCP 12800 receiver, but it is **not yet qualified for NR or firmware 14.02**.
+- Pinned ItemzFlow implementation (LightningMods/Itemzflow, commit 4013e1ef188672db63346fef4221b1d8f4f13f02, itemzflow/source/installpkg.cpp) initializes AppInstUtil/BGFT, registers a local-storage task with sceBgftServiceIntDownloadRegisterTaskByStorageEx, starts it with sceBgftServiceDownloadStartTask, and polls sceBgftServiceDownloadGetProgress.
+- The pinned flatz BGFT definitions (flatz/ps4_stub_lib_maker_v2, commit a8d044c12ea2dc3fa190ce1769eeb48b30d28ed4, include/bgft.h) use 64-bit package-size/progress fields.
+- The OpenOrbis 0.5.4 header (OpenOrbis/OpenOrbis-PS4-Toolchain, commit 0a1aaf9dd4a92695538bdeb09fb056d06dd11725, include/orbis/_types/bgft.h) declares several corresponding fields as 32-bit. This ABI disagreement is a hard gate; do not call BGFT using the OpenOrbis declarations without resolving the exact 14.02 ABI and exports.
+- Static inspection of the console PRX readback (317,216 bytes, SHA-256 1481214d21aa5c826f9d51ae8cd55759e625c2b9ca7159dd9578ea632661d8e7) found no BGFT/AppInstUtil/install-agent strings. An inspected feature-build PRX artifact from run 45161735256 was 241,104 bytes, SHA-256 1e4531711a0768cfeb29f1d6f66b9541cf087b141eda7a05fed755d12507866c; it is not the same binary. No BGFT install agent is currently installed.
+- A future NR-only BGFT agent would need an allowlisted manifest, package SHA-256 and metadata validation, a base-vs-patch gate, idempotent task registration, terminal progress/error evidence, and post-install Title ID/version readback. It must run independently of the GNM renderer.
+- The existing NR PRX has no remote command/reload interface. A BGFT adapter in source is not enough: deployment, plugin reload/launch trigger, and GoldHEN lifecycle still require a qualified control channel. Do not deploy or invoke a speculative BGFT payload.
+
+References:
+- [ItemzFlow BGFT installer implementation](https://github.com/LightningMods/Itemzflow/blob/4013e1ef188672db63346fef4221b1d8f4f13f02/itemzflow/source/installpkg.cpp)
+- [flatz BGFT ABI definitions](https://github.com/flatz/ps4_stub_lib_maker_v2/blob/a8d044c12ea2dc3fa190ce1769eeb48b30d28ed4/include/bgft.h)
+- [OpenOrbis BGFT type declarations](https://github.com/OpenOrbis/OpenOrbis-PS4-Toolchain/blob/0a1aaf9dd4a92695538bdeb09fb056d06dd11725/include/orbis/_types/bgft.h)
