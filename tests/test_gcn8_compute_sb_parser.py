@@ -45,7 +45,7 @@ class ComputeShaderLayoutTests(unittest.TestCase):
             parse_compute_shader_layout(self.make_shader(api_slot=1))
 
     def test_rejects_multiple_descriptor_table_slots(self):
-        blob = bytearray(self.make_shader(slot_count=1, stage_words=11, code_offset=0x2C))
+        blob = bytearray(self.make_shader(slot_count=2, stage_words=11, code_offset=0x2C))
         stage = 0x34
         blob[stage + 0x28:stage + 0x2C] = bytes((0x1C, 1, 2, 0))
         with self.assertRaisesRegex(ValueError, "expected exactly one"):
