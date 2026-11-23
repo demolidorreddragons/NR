@@ -33,10 +33,21 @@ $targets = @(
 
 foreach ($target in $targets) {
   $entry = Get-EvidenceEntry $target.path
-  if (-not $entry -or $entry.result -ne "ok" -or -not $entry.local_file) {
+  if (-not $entry -or -not $entry.local_file -or $entry.result -notin @("ok","size_or_mutability_mismatch","partial")) {
     $results.Add([pscustomobject]@{remote_path=$target.path;role=$target.role;status="not_collected";required=$target.required})
     if ($target.required) { throw "Required installed package evidence is unavailable: $($target.path)" }
     continue
+  }
+  $pkg = Join-Path $env:EVIDENCE_DIR $entry.local_file
+  if (-not (Test-Path -LiteralPath $pkg -PathType Leaf)) { throw "Evidence file missing: $($entry.local_file)" }
+  $size = (Get-Item -LiteralPath $pkg).Length
+  $hash = (Get-FileHash -LiteralPath $pkg -Algorithm SHA256).Hash.ToLowerInvariant()
+  if ($size -ne [int64]$entry.local_bytes -or $hash -ne [string]$entry.sha256) { throw "Local artifact identity differs from collector manifest: $($target.path)" }
+  if ($entry.result -ne "ok") {
+    $results.Add([pscustomobject]@{remote_path=$target.path;role=$target.role;status=$entry.result;bytes=$size;sha256=$hash;required=$target.required})
+    if ($target.required) { throw "Required installed app.pkg snapshot is not size-stable." }
+    continue
+  }
   }
   $pkg = Join-Path $env:EVIDENCE_DIR $entry.local_file
   if (-not (Test-Path -LiteralPath $pkg -PathType Leaf)) { throw "Evidence file missing: $($entry.local_file)" }
