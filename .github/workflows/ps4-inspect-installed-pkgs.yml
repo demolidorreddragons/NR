@@ -40,6 +40,28 @@ jobs:
           run-id: ${{ github.event.workflow_run.id }}
           github-token: ${{ github.token }}
 
+      - name: Read collector commit from exact evidence manifest
+        id: manifest
+        shell: pwsh
+        env:
+          EVIDENCE_DIR: ${{ github.workspace }}/evidence
+          EXPECTED_PREFLIGHT_RUN_ID: ${{ github.event.workflow_run.id }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $manifestPath = Join-Path $env:EVIDENCE_DIR 'control-plane-preflight.json'
+          $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
+          if ([string]$manifest.preflight_run_id -ne $env:EXPECTED_PREFLIGHT_RUN_ID) { throw 'Evidence run ID does not match triggering preflight.' }
+          $commit = ([string]$manifest.collector_commit).Trim()
+          if ($commit -notmatch '^[a-fA-F0-9]{40}\z') { throw 'Evidence manifest collector commit is invalid.' }
+          "collector_commit=$commit" | Out-File $env:GITHUB_OUTPUT -Append -Encoding utf8
+
+      - name: Checkout exact NR inspector source revision
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.manifest.outputs.collector_commit }}
+          path: NR-src
+          persist-credentials: false
+
       - name: Build pinned independent inspector
         shell: pwsh
         run: |
@@ -55,8 +77,9 @@ jobs:
         env:
           EVIDENCE_DIR: ${{ github.workspace }}/evidence
           EXPECTED_PREFLIGHT_RUN_ID: ${{ github.event.workflow_run.id }}
+          EXPECTED_COLLECTOR_COMMIT: ${{ steps.manifest.outputs.collector_commit }}
         run: |
-          & "$env:GITHUB_WORKSPACE/tools/inspect_ps4_installed_packages.ps1"
+          & "$env:GITHUB_WORKSPACE/NR-src/tools/inspect_ps4_installed_packages.ps1"
 
       - name: Preserve offline package inspection evidence
         if: always()

@@ -68,3 +68,11 @@ A read-only FTP audit confirmed the installed `/user/app/PNEU00001/app.pkg` is b
 The PKG 015 packaged PRX hash `1e4531711a0768cfeb29f1d6f66b9541cf087b141eda7a05fed755d12507866c` differs from the current GoldHEN plugin PRX readback hash `1481214d21aa5c826f9d51ae8cd55759e625c2b9ca7159dd9578ea632661d8e7`. Preserve the current plugin and do not overwrite/activate a different binary until its exact filesystem identity and lifecycle are qualified.
 
 RPI TCP 12800 refused the read-only probe. A BGFT/AppInstUtil local-install alternative is not qualified: pinned flatz definitions use 64-bit package-size/progress fields while OpenOrbis 0.5.4 declarations use 32-bit fields. Do not call BGFT or deploy an install agent until the exact FW 14.02 ABI, exports, task lifecycle, and recovery path are independently proven. No speculative install POST, BinLoader 9090 probe, PRX activation, or GoldHEN restart is allowed.
+
+## Latest preflight and PRX identity conflict — 2026-11-23
+
+Successful read-only preflight run 45167844316, artifact 14815586255, collector commit 9feef27b83b4fa22255a9a578f496e78b9a6469. RPI TCP 12800 actively refused GET /api. No POST, BinLoader probe, file modification, package installation, PRX activation, or GoldHEN restart occurred.
+
+Current PRX GET is 317,216 bytes / SHA-256 1481214d21aa5c826f9d51ae8cd55759e625c2b9ca7159dd9578ea632661d8e7, while the raw FTP LIST reports 224,128 bytes. The adjacent release manifest expects SHA-256 54e8595144a3a7e1d36602a1100bae6189f0955175c355bd3ac67d9cb7f85277 and declares ABI unverified/hardware not tested. The directory listing shows .pne-tmp, .pne-backup and .pne-backup.001 files. Do not overwrite, restore, activate, or delete any of these files until the PR40 read-only backup snapshot and hash comparison completes.
+
+The offline inspector run 45167943764 failed before script execution because its workflow did not check out the NR repository; the preflight artifact remains intact. PR40 checks out the exact NR inspector source commit from the preflight manifest and compares release manifest, FTP LIST size, GET size, plugins.ini registration, and PRX backup hashes.

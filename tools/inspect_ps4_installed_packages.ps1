@@ -8,6 +8,7 @@ $control = Get-Content -LiteralPath $controlPath -Raw | ConvertFrom-Json
 if ($control.schema -ne "nr.ps4.control-plane-preflight.v3") { throw "Unexpected control-plane evidence schema." }
 if (-not $env:EXPECTED_PREFLIGHT_RUN_ID -or [string]$control.preflight_run_id -ne $env:EXPECTED_PREFLIGHT_RUN_ID) { throw "Evidence artifact does not belong to the triggering preflight run." }
 if ([string]$control.collector_commit -notmatch "^[a-fA-F0-9]{40}$") { throw "Collector source commit is missing from evidence manifest." }
+if ($env:EXPECTED_COLLECTOR_COMMIT -and [string]$control.collector_commit -ne $env:EXPECTED_COLLECTOR_COMMIT) { throw "Inspector source revision does not match the collector commit in the evidence manifest." }
 $entries = @($control.ftp_evidence)
 $output = Join-Path $env:GITHUB_WORKSPACE "installed-package-inspection"
 New-Item -ItemType Directory -Path $output -ErrorAction Stop | Out-Null
@@ -15,6 +16,9 @@ $results = [System.Collections.Generic.List[object]]::new()
 
 function Get-EvidenceEntry([string]$remotePath) {
   return $entries | Where-Object { $_.operation -eq "GET" -and $_.path -eq $remotePath } | Select-Object -First 1
+}
+function Get-ListingEntry([string]$remotePath) {
+  return $entries | Where-Object { $_.operation -eq "LIST" -and $_.path -eq $remotePath } | Select-Object -First 1
 }
 
 $targets = @(
@@ -112,13 +116,92 @@ $comparisons = [ordered]@{
   app_json_package_digest_semantics="not_assumed_to_be_raw_file_sha256"
 }
 $currentPrxEntry = Get-EvidenceEntry "/data/GoldHEN/plugins/ps4_neural_engine.prx"
-if ($currentPrxEntry -and $currentPrxEntry.local_file -and $currentPrxEntry.result -in @("ok","size_or_mutability_mismatch")) {
-  $currentPrx = Join-Path $env:EVIDENCE_DIR $currentPrxEntry.local_file
-  $currentPrxHash = (Get-FileHash -LiteralPath $currentPrx -Algorithm SHA256).Hash.ToLowerInvariant()
-  $comparisons["current_goldhen_prx_sha256"] = $currentPrxHash
-  $comparisons["current_goldhen_prx_snapshot_result"] = $currentPrxEntry.result
-  $comparisons["installed_app_prx_matches_goldhen_prx"] = ($currentPrxEntry.result -eq "ok" -and $installed.packaged_prx_sha256 -and $installed.packaged_prx_sha256 -eq $currentPrxHash)
+$prxSnapshotPaths = @(
+  "/data/GoldHEN/plugins/ps4_neural_engine.prx",
+  "/data/GoldHEN/plugins/ps4_neural_engine.prx.pne-tmp",
+  "/data/GoldHEN/plugins/ps4_neural_engine.prx.pne-backup",
+  "/data/GoldHEN/plugins/ps4_neural_engine.prx.pne-backup.001"
+)
+$prxSnapshots = [System.Collections.Generic.List[object]]::new()
+$pluginListingEntry = Get-ListingEntry "/data/GoldHEN/plugins/"
+$pluginListingLines = @()
+if ($pluginListingEntry -and $pluginListingEntry.local_file) {
+  $pluginListingPath = Join-Path $env:EVIDENCE_DIR $pluginListingEntry.local_file
+  if (Test-Path -LiteralPath $pluginListingPath -PathType Leaf) {
+    $pluginListingLines = Get-Content -LiteralPath $pluginListingPath
+  }
 }
+function Get-PluginListingSize([string]$fileName) {
+  $escaped = [regex]::Escape($fileName)
+  $line = $pluginListingLines | Where-Object { $_ -match ("\\s" + $escaped + "\\z") } | Select-Object -First 1
+  if (-not $line) { return $null }
+  $match = [regex]::Match($line, '^\\S+\\s+\\d+\\s+\\S+\\s+\\S+\\s+(\\d+)\\s+')
+  if ($match.Success) { return [int64]$match.Groups[1].Value }
+  return $null
+}
+foreach ($path in $prxSnapshotPaths) {
+  $entry = Get-EvidenceEntry $path
+  if (-not $entry -or -not $entry.local_file -or $entry.result -notin @("ok","size_or_mutability_mismatch","partial")) {
+    $prxSnapshots.Add([pscustomobject]@{remote_path=$path;status="not_collected"})
+    continue
+  }
+  $file = Join-Path $env:EVIDENCE_DIR $entry.local_file
+  if (-not (Test-Path -LiteralPath $file -PathType Leaf)) { throw "PRX evidence file is missing: $($entry.local_file)" }
+  $bytes = (Get-Item -LiteralPath $file).Length
+  $hash = (Get-FileHash -LiteralPath $file -Algorithm SHA256).Hash.ToLowerInvariant()
+  if ($bytes -ne [int64]$entry.local_bytes -or $hash -ne [string]$entry.sha256) { throw "PRX evidence differs from collector manifest: $path" }
+  $fileName = [IO.Path]::GetFileName($path)
+  $listingSize = Get-PluginListingSize $fileName
+  $listGetMatch = if ($null -ne $listingSize) { $listingSize -eq $bytes } else { $null }
+  $prxSnapshots.Add([pscustomobject]@{
+    remote_path=$path;status=$entry.result;bytes=$bytes;sha256=$hash
+    listing_bytes=$listingSize;list_get_size_match=$listGetMatch
+    stable_get=($entry.result -eq "ok")
+  })
+}
+$comparisons["goldhen_prx_snapshots"] = @($prxSnapshots)
+$releaseManifestEntry = Get-EvidenceEntry "/data/GoldHEN/plugins/ps4_neural_engine.prx.pne-release.ini"
+$releasePrxHash = $null
+if ($releaseManifestEntry -and $releaseManifestEntry.result -eq "ok" -and $releaseManifestEntry.local_file) {
+  $releasePath = Join-Path $env:EVIDENCE_DIR $releaseManifestEntry.local_file
+  $releaseText = Get-Content -LiteralPath $releasePath -Raw
+  $releaseHashMatch = [regex]::Match($releaseText, '(?m)^prx_sha256=([a-fA-F0-9]{64})\\z')
+  if ($releaseHashMatch.Success) { $releasePrxHash = $releaseHashMatch.Groups[1].Value.ToLowerInvariant() }
+  foreach ($key in @("release_number","app_version","title_id","content_id","abi_status","hardware_status")) {
+    $valueMatch = [regex]::Match($releaseText, "(?m)^" + [regex]::Escape($key) + "=([^\\r\\n]+)")
+    if ($valueMatch.Success) { $comparisons["release_manifest_" + $key] = $valueMatch.Groups[1].Value.Trim() }
+  }
+  $comparisons["release_manifest_prx_sha256"] = $releasePrxHash
+}
+$pluginsIniEntry = Get-EvidenceEntry "/data/GoldHEN/plugins.ini"
+$pluginsIniRegistersPrx = $false
+if ($pluginsIniEntry -and $pluginsIniEntry.result -eq "ok" -and $pluginsIniEntry.local_file) {
+  $pluginsIniPath = Join-Path $env:EVIDENCE_DIR $pluginsIniEntry.local_file
+  $pluginsIniText = Get-Content -LiteralPath $pluginsIniPath -Raw
+  $pluginsIniRegistersPrx = [regex]::IsMatch($pluginsIniText, '(?im)^\\s*/data/GoldHEN/plugins/ps4_neural_engine\\.prx\\s*\\z')
+}
+$comparisons["plugins_ini_registers_nr_prx"] = $pluginsIniRegistersPrx
+$currentPrxHash = $null
+$currentPrxTrusted = $false
+$currentPrxSnapshot = $prxSnapshots | Where-Object { $_.remote_path -eq "/data/GoldHEN/plugins/ps4_neural_engine.prx" } | Select-Object -First 1
+if ($currentPrxSnapshot) {
+  $currentPrxHash = $currentPrxSnapshot.sha256
+  $comparisons["current_goldhen_prx_sha256"] = $currentPrxHash
+  $comparisons["current_goldhen_prx_snapshot_result"] = $currentPrxSnapshot.status
+  $comparisons["current_goldhen_prx_get_bytes"] = $currentPrxSnapshot.bytes
+  $comparisons["current_goldhen_prx_listing_bytes"] = $currentPrxSnapshot.listing_bytes
+  $comparisons["current_goldhen_prx_list_get_size_match"] = $currentPrxSnapshot.list_get_size_match
+  $manifestMatches = ($releasePrxHash -and $currentPrxHash -and $releasePrxHash -eq $currentPrxHash)
+  $comparisons["release_manifest_matches_current_prx"] = [bool]$manifestMatches
+  $currentPrxTrusted = ($currentPrxSnapshot.status -eq "ok" -and $currentPrxSnapshot.list_get_size_match -eq $true -and $manifestMatches)
+  $comparisons["current_goldhen_prx_identity_trusted"] = [bool]$currentPrxTrusted
+  $comparisons["installed_app_prx_matches_goldhen_prx"] = [bool]($currentPrxTrusted -and $installed.packaged_prx_sha256 -and $installed.packaged_prx_sha256 -eq $currentPrxHash)
+}
+foreach ($snapshot in $prxSnapshots) {
+  $snapshot | Add-Member -NotePropertyName matches_release_manifest -NotePropertyValue ([bool]($releasePrxHash -and $snapshot.sha256 -eq $releasePrxHash)) -Force
+  $snapshot | Add-Member -NotePropertyName matches_installed_app_prx -NotePropertyValue ([bool]($installed.packaged_prx_sha256 -and $snapshot.sha256 -eq $installed.packaged_prx_sha256)) -Force
+}
+$comparisons["goldhen_prx_snapshots"] = @($prxSnapshots)
 $appJsonEntry = Get-EvidenceEntry "/user/app/PNEU00001/app.json"
 if ($appJsonEntry -and $appJsonEntry.result -eq "ok") {
   $appJsonPath = Join-Path $env:EVIDENCE_DIR $appJsonEntry.local_file
