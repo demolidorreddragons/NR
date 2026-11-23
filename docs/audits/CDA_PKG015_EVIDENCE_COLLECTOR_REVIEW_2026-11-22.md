@@ -90,3 +90,16 @@ Commits:
 
 
 **Ajuste final de validação PowerShell:** no commit `2fd7ae42b7f46dd8087ad336ad38b4ad9cb4d6a7`, a validação dos dois campos foi simplificada para verificações explícitas, evitando depender da enumeração de arrays aninhados do PowerShell 5.1. A revisão continua estática e o workflow continua não executado.
+
+
+## Terceira revisão estática — preservação byte a byte das listagens FTP
+
+Foi identificado que a primeira implementação de `Save-Listing` convertia o stream FTP em texto por `StreamReader` e o regravava como UTF-8. Isso normalizava a representação e contrariava a regra de preservar os bytes originais da aquisição.
+
+Correção no commit `716666a1f2742ad82f6c508b6f1e5d1777c10bb5`:
+- `LIST` agora copia o stream diretamente para arquivo binário criado com `CreateNew`;
+- registra início/fim UTC, tamanho local e SHA-256;
+- preserva eventual transferência parcial em arquivo `.partial`, também com tamanho e hash;
+- elimina a conversão `StreamReader`/UTF-8 e renomeia a extensão para `.raw.bin`.
+
+Validação limitada à revisão estática do código. Nenhum workflow de coleta foi executado e nenhum acesso ao PS4 ocorreu. O próximo CI host valida as verificações automatizadas existentes, mas não substitui teste real do runner Windows/PowerShell 5.1 nem da conexão FTP.
