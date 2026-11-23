@@ -31,14 +31,14 @@ The compiler candidate is research-only. The inspected checkout has a reproducib
 
 ### Gate A automation added
 
-`.github/workflows/gcn8-compute-artifact-gate.yml` now defines an isolated hosted-runner build for the pinned compiler candidate. It checks out:
+`.github/workflows/gcn8-compute-artifact-gate.yml` now defines an isolated hosted-runner build for the pinned compiler candidate. The independent verifier is stored under `tests/` (not `tools/`) so merging this gate cannot accidentally trigger the repository's separate PS4 PRX/PKG build path. It checks out:
 - `opengnm-psbc`: `28697f007862427ebec54388ec972ce6e3545912`
 - `opengnm` headers: `4b295ca54c82c83acf308d1c646a2dfa9ae57350`
 - `SPIRV-Headers`: `fb1379425b16e58dcbdda7be0f8604a7f5cdce78`
 
-The workflow supplies an explicit host `config.mak`, generates Mesa's `u_format_gen.h` (omitted from the candidate Makefile's generated-source list), compiles a deterministic compute shader with `-n`, and checks both compute stage and NEO/GFX8 target byte in addition to the upstream container/CRC verifier. It retains logs, SPIR-V, shader binary, report, and SHA-256. It runs only on `ubuntu-24.04`; no third-party source is executed on the privileged PS4-LAN runner.
+The workflow supplies an explicit host `config.mak`, generates Mesa's omitted `u_format_gen.h` plus GLSL `builtin_types.h/.c`, compiles a deterministic compute shader with `-n`, and checks both compute stage and NEO/GFX8 target byte in addition to the upstream container/CRC verifier. It retains logs, SPIR-V, shader binary, report, and SHA-256. It runs only on `ubuntu-24.04`; no third-party source is executed on the privileged PS4-LAN runner.
 
-The first automated run, `45200242052`, correctly failed before compilation because the upstream Makefile did not generate `src/util/format/u_format_gen.h`, required by `u_formats.h`. The failure and exact compiler error were inspected from the job log; the workflow now explicitly runs the pinned Mesa format generator before `make`. The corrected workflow is being rerun by the branch push; Gate A remains unpassed until that run's output is inspected.
+Automated build attempts `45200242052` and `45200602970` failed before shader compilation. The first exposed the omitted `u_format_gen.h`; the second showed that the first attempted generator mode omitted the enum definitions and that `builtin_types.h/.c` were also absent. The job logs were inspected and the workflow now uses Mesa's `--enums` mode and generates both builtin-type files before `make`. The corrected pipeline is rerun by the next branch push; Gate A remains unpassed until a complete build, shader compile, target check, and CRC verification succeed.
 
 **Scope limitation:** Gate A proves only that the pinned compiler emits a structurally valid GFX8/NEO compute shader container. It does not prove the binary executes, that firmware 14.02 accepts it, or that a GPU dispatch/readback works. No shader binary is staged to the console by this workflow.
 
@@ -95,4 +95,4 @@ This audit does **not** claim:
 
 ## Console state preservation
 
-No PS4 network request or console mutation is performed by Gate A. It does not modify PRX files, `plugins.ini`, GoldHEN configuration, installed applications, saves, or staged packages. The PRX identity conflict recorded in `AGENTS.md` remains a hard block on PRX replacement or activation until independently resolved.
+Gate A makes no PS4 network request and changes no console state. The existing `.github/workflows/ps4-installed-app-readonly-audit.yml` is also changed to run after a successful `PS4 Control Plane Preflight`; it collects installed title PKG, SFO, EBOOT, and PRX identities over FTP and uploads evidence without writing or deleting console files. This is a read-only state audit, not a GPU compute test. The PRX identity conflict recorded in `AGENTS.md` remains a hard block on PRX replacement or activation until independently resolved.
