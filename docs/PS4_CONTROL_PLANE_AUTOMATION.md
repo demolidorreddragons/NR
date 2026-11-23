@@ -12,7 +12,7 @@ The user explicitly authorized automated installation of approved NR PKGs, deplo
 
 GoldHEN upstream documents FTP TCP 2121, BinLoader TCP 9090, Klog TCP 3232, internal package installation from `/data/pkg`, plugin support, and remote package installation. Upstream warns BinLoader is experimental and may crash the console. These feature statements do not establish the exact protocol, firmware compatibility, or availability on the user's installed GoldHEN version. See [GoldHEN upstream README](https://github.com/GoldHEN/GoldHEN) and [release history](https://github.com/GoldHEN/GoldHEN/releases).
 
-The recorded console firmware is 14.02. The release page's listed firmware matrix must be checked against the exact installed GoldHEN build; do not infer compatibility from a port being open.
+The user reports GoldHEN v2.4b18.14 on firmware 14.02, and the GamerHack distribution advertises this pairing. Installed binary identity remains unverified; keep the version as USER_REPORTED until device evidence confirms it.
 
 ## Automation components
 
@@ -72,7 +72,7 @@ This resolves the version/firmware compatibility uncertainty at the release-docu
 
 ### Consequences for implementation
 
-- Treat 2121 FTP, 9090 BinLoader, 3232 Klog, remote package installation, `/data/pkg` internal package installation, and plugin support as features documented for the GoldHEN v2.4b18 family; verify the actual running endpoints with the read-only preflight.
+- FTP 2121 is reachable. The read-only preflight's HTTP GET fingerprint to RPI TCP 12800 was refused. Do not probe BinLoader 9090 or Klog 3232.
 - GoldHEN's BinLoader remains explicitly experimental. Do not use it as a generic shell or as a probe; any payload protocol/ABI must be separately pinned and reviewed before sending a payload.
 - The release advertises Remote Package Install and internal `/data/pkg` installation, but the public release note alone does not specify a machine protocol, request framing, response semantics, or remote success verification. Those must be derived from the exact v2.4b18.14 implementation or a trusted, version-matched client before automating installation.
 - Plugin support is documented, but that alone does not establish a safe remote PRX activation or GoldHEN restart command. Continue to require a version-matched documented mechanism and independent post-operation verification.
@@ -158,3 +158,13 @@ The legacy workflow was deleted from the working branch in commit `3a34afa73b004
 - **App launch/runtime observation:** not implemented/verified.
 
 The automation is therefore **not complete end-to-end**. It is not safe to mark installation, PRX activation, restart, or runtime test as automated until their protocol and rollback gates are actually satisfied. The immediate safe action is to merge the legacy-workflow retirement, qualify the new read-only collector on the Windows runner, and then source-qualify an available install adapter without sending a mutating request until the receiver is positively identified.
+
+## Live console evidence — 2026-11-23
+
+- Read-only preflight run: `45162859287`; repeat snapshot: `45164276080`.
+- RPI TCP 12800 refused connection; no install POST was sent.
+- Both `/user/app/PNEU00001/` and `/user/app/PNEU00004/` exist. The PNEU00001 app metadata references `/user/data/pkg/PS4-Neural-Engine-015.pkg`; this is evidence of an existing app, not a verified app.pkg/SFO version.
+- `plugins.ini` already has a `[default]` registration for `/data/GoldHEN/plugins/ps4_neural_engine.prx`.
+- PRX FTP GET readback is 317,216 bytes / SHA-256 `1481214d21aa5c826f9d51ae8cd55759e625c2b9ca7159dd9578ea632661d8e7`; FTP LIST reports 224,128 bytes. This discrepancy is stable across two snapshots. Preserve the file and do not replace/activate it.
+- PKG006 is FULL BASE, PNEU00001 APP_VER 01.02, QA PC-only; PKG015 is FULL BASE, PNEU00001 APP_VER 01.10, QA PC-only. Do not treat either as a patch or reinstall over existing app data.
+- The legacy PKG006 stage workflow now binds the exact build run through the QA report and skips if a newer NR package (015) is already in `/data/pkg/`; run `45164398673` succeeded with `STAGING_SKIPPED_NEWER_RELEASE_PRESENT=true`, preserving PKG015.
