@@ -19,6 +19,13 @@ add_executable(test_telemetry_bridge tests/test_telemetry_bridge.cpp)
 target_link_libraries(test_telemetry_bridge PRIVATE pne_telemetry)
 add_test(NAME telemetry_bridge COMMAND test_telemetry_bridge)
 
+add_executable(test_upload_confirmation
+    tests/test_upload_confirmation.cpp
+    platform/ps4/goldhen/plugin/upload_confirmation.cpp
+)
+target_include_directories(test_upload_confirmation PRIVATE platform/ps4/goldhen/plugin)
+add_test(NAME upload_confirmation COMMAND test_upload_confirmation)
+
 add_executable(test_gcn8_resource_table
     tests/test_gcn8_resource_table.cpp
     platform/ps4/gcn8/host/resource_table_contract.cpp
