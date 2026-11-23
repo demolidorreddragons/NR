@@ -90,6 +90,14 @@ jobs:
             dotnet "$tool" sfo read "$($sfo.FullName)" 2>&1 | Tee-Object ("audit-output/" + $name + ".sfo.txt")
             if ($LASTEXITCODE -ne 0) { throw "SFO parsing failed for $name." }
             "PACKAGE_SFO=PASS name=$name" | Out-File "audit-output/package-inspection-report.txt" -Append -Encoding utf8
+            $embeddedPrx = Get-ChildItem $out -Recurse -File -Filter ps4_neural_engine.prx | Select-Object -First 1
+            if ($embeddedPrx) {
+              $embeddedHash = (Get-FileHash -LiteralPath $embeddedPrx.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+              $embeddedBytes = (Get-Item -LiteralPath $embeddedPrx.FullName).Length
+              "PACKAGE_EMBEDDED_PRX_BYTES=$embeddedBytes" | Out-File "audit-output/package-inspection-report.txt" -Append -Encoding utf8
+              "PACKAGE_EMBEDDED_PRX_SHA256=$embeddedHash" | Out-File "audit-output/package-inspection-report.txt" -Append -Encoding utf8
+              Copy-Item -LiteralPath $embeddedPrx.FullName -Destination ("audit-output/" + $name + ".embedded-prx")
+            }
           }
 
           Get-Content "audit-output/package-inspection-report.txt" | Out-File $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
