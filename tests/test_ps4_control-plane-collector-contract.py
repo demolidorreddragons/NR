@@ -1,0 +1,78 @@
+#!/usr/bin/env python3
+"""Static safety contract for the PS4 control-plane read-only collector."""
+from pathlib import Path
+import re
+
+script = Path("tools/ps4-control-plane-preflight.ps1").read_text(encoding="utf-8")
+workflow = Path(".github/workflows/ps4-control-plane-preflight.yml").read_text(encoding="utf-8")
+
+# The privileged workflow must use the existing Windows LAN runner and reviewed default-branch source.
+assert "runs-on: [self-hosted, Windows, X64, ps4-lan]" in workflow
+assert "ref: main" in workflow
+assert "workflow_run:" in workflow and 'workflows: ["PS4 PRX and PKG build"]' in workflow
+assert "timeout-minutes: 15" in workflow
+assert "COLLECTOR_COMMIT=$collectorCommit" in workflow
+assert "COLLECTOR_COMMIT: ${{ steps.checkout.outputs.commit }}" in workflow
+assert "git -C $env:GITHUB_WORKSPACE rev-parse HEAD" not in workflow
+assert "shell: powershell -NoProfile -ExecutionPolicy Bypass -File {0}" in workflow
+assert "shell: powershell\n" not in workflow
+assert workflow.count("shell: powershell -NoProfile -ExecutionPolicy Bypass -File {0}") == 2
+assert r"PS4_IP: ${{ vars.PS4_IP }}" in workflow
+
+# Network target is constrained to a literal IPv4 and all run/provenance identifiers are required.
+assert "[System.Net.IPAddress]::TryParse" in script
+assert "AddressFamily]::InterNetwork" in script
+assert "GITHUB_RUN_ID" in script and "COLLECTOR_COMMIT" in script
+assert 'collector_commit=$env:COLLECTOR_COMMIT' in script
+
+assert workflow.count("Collect read-only PS4 control-plane inventory") == 1
+assert script.count("$root = Join-Path") == 1
+assert script.rstrip().endswith('Write-Host "CONTROL_PLANE_READ_ONLY_COMPLETE"')
+# Only the three explicitly read-only FTP verbs may be assigned to requests.
+ftp_methods = set(re.findall(r"\[System\.Net\.WebRequestMethods\+Ftp\]::(\w+)", script))
+assert ftp_methods == {"ListDirectoryDetails", "GetFileSize", "DownloadFile"}, ftp_methods
+assert not re.search(r"WebRequestMethods\+Ftp\]::(?:UploadFile|DeleteFile|Rename|MakeDirectory|RemoveDirectory)", script)
+
+# LIST evidence must remain byte-for-byte and must not be decoded/re-encoded.
+assert "ListDirectoryDetails" in script
+assert "$sourceStream.CopyTo($output)" in script
+assert ".raw.bin" in script
+listing_section = script.split("# Safe RPI fingerprint:")[0]
+assert "StreamReader" not in listing_section
+assert "WriteAllText($destination" not in script
+assert "[IO.FileMode]::CreateNew" in script
+assert "$output.Flush($true)" in script
+assert '".partial"' in script and 'result="partial"' in script
+
+# GET snapshots need pre/post remote size, local size/hash, and timestamp provenance.
+assert script.count("GetFileSize") >= 2
+assert "remote_bytes_before=$remoteBefore" in script
+assert "remote_bytes_after=$remoteAfter" in script
+assert "size_stable=$stable" in script
+for remote in (
+    "/data/GoldHEN/ps4_neural_engine_install.log",
+    "/data/GoldHEN/plugins/ps4_neural_engine.prx.pne-release.ini",
+    "/user/app/PNEU00001/app.pkg",
+    "/user/app/PNEU00004/app.pkg",
+    "/data/pkg/PS4-Neural-Engine-015.pkg",
+    "/data/pkg/PS4-Neural-Engine-006-8d95e10d45e9.pkg",
+):
+    assert remote in script
+assert 'schema="nr.ps4.control-plane-preflight.v3"' in script
+assert "16777216" in script, "large files must be bounded before GET"
+assert "Get-FileHash" in script
+assert "started_utc=$started" in script and "completed_utc=" in script
+
+# RPI fingerprint remains GET-only; no BinLoader payload or mutating HTTP request.
+assert '$request.Method="GET"' in script
+assert "POST" not in script.upper()
+assert "UploadFile" not in script and "DeleteFile" not in script and "Rename" not in script
+assert "CONTROL_PLANE_READ_ONLY_COMPLETE" in script
+assert not Path(".github/workflows/ps4-bridge-test.yml").exists(), "legacy auto-staging workflow must stay retired"
+for number in ("004", "005"):
+    qa = Path(f".github/workflows/ps4-base-pkg-qa-{number}.yml").read_text(encoding="utf-8")
+    assert f"QA_SKIPPED_PACKAGE_NOT_PRESENT={number}" in qa
+    assert "if (-not (Test-Path -LiteralPath $pkg))" in qa
+    assert "exit 0" in qa
+
+print("PS4 control-plane collector safety and evidence-integrity contract passed")
