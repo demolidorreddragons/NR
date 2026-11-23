@@ -27,7 +27,7 @@ The following references establish useful interfaces and candidate tooling, but 
 4. The opengnm API reference documents compute shader binding and dispatch interfaces (`sceGnmSetCsShader`, `sceGnmDispatchDirect`): https://ps4-opengnm.github.io/opengnm/reference/driver/
 5. The opengnm documentation distinguishes a firmware-backed Orbis backend from a generic software backend. A generic/host test cannot substitute for a retail-console GPU test: https://ps4-opengnm.github.io/opengnm/backends/
 
-The compiler candidate is research-only. Its source, dependencies, generated binaries, and toolchain have not been imported into NR, executed on the privileged Windows bridge, or deployed to the PS4. Before use, its complete dependency/build chain and shader output must be independently reviewed and pinned.
+The compiler candidate is research-only. The inspected checkout has a reproducibility gap: the top-level Makefile includes an untracked `config.mak` by default, and its code-generation rules reference a sibling `../SPIRV-Headers` tree; the PS4 cross-build configuration additionally expects sibling opengnm and Vulkan-Headers trees. The README's bare `make` command therefore does not, by itself, define a reproducible clean-checkout build. These dependencies/configuration must be pinned and the build recipe independently reproduced before trusting a generated shader. Its source, dependencies, generated binaries, and toolchain have not been imported into NR, executed on the privileged Windows bridge, or deployed to the PS4.
 
 ## Required engineering sequence
 
