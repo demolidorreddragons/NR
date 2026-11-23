@@ -18,6 +18,9 @@ assert "retention-days: 30" in workflow
 for forbidden in ("FtpWebRequest", "HttpWebRequest", "curl.exe", "Invoke-WebRequest", "UploadFile", "DeleteFile", "RenameTo", "POST"):
     assert forbidden not in script, forbidden
 assert "control-plane-preflight.json" in script
+assert "EXPECTED_PREFLIGHT_RUN_ID" in script
+assert "nr.ps4.control-plane-preflight.v3" in script
+assert "EXPECTED_PREFLIGHT_RUN_ID: ${{ github.event.workflow_run.id }}" in workflow
 assert "Get-EvidenceEntry" in script
 assert "dotnet $env:PKGTOOL validate" in script
 assert "dotnet $env:PKGTOOL extract" in script
