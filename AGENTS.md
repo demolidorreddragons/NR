@@ -83,3 +83,12 @@ Preflight run 45169044022 (artifact 14815193437) successfully read active PRX pl
 PRX identities are inconsistent: PKG015 embedded PRX SHA-256 1e4531711a0768cfeb29f1d6f66b9541cf087b141eda7a05fed755d12507866c; PKG006 embedded PRX and .pne-backup SHA-256 7561da3d3b83766becddcb37c1257d83c61009b5e814825ee60694d19f9cf704; release-manifest/.pne-tmp/.pne-backup.001 SHA-256 54e8595144a3a7e1d36602a1100bae6189f0955175c355bd3ac67d9cb7f85277; active-path GET SHA-256 1481214d21aa5c826f9d51ae8cd55759e625c2b9ca7159dd9578ea632661d8e7. FTP LIST says 224,128 bytes while active GET is 317,216 bytes. Do not replace, restore, activate, or delete any PRX until the corrected offline comparison and loader lifecycle are qualified.
 
 The first offline inspector run exposed double-escaped PowerShell regexes in its PRX manifest/LIST/plugins.ini parser. Package validation and SFO/embedded-PRX hashes are valid; those comparison fields are not. PR41 fixes the regexes and adds regression tests.
+## Corrected PRX inspection and current install boundary — 2026-11-23
+
+Preflight run 45170108890 (artifact 14816751257) and corrected offline inspection run 45170231258 (artifact 14815899052) succeeded. The inspector now checks out the exact collector commit from the evidence manifest and parses PRX manifest/LIST/plugins.ini evidence correctly.
+
+Current active PRX identity remains untrusted: GET 317,216 bytes / SHA-256 1481214d21aa5c826f9d51ae8cd55759e625c2b9ca7159dd9578ea632661d8e7; LIST 224,128 bytes; release manifest expects 54e8595144a3a7e1d36602a1100bae6189f0955175c355bd3ac67d9cb7f85277. .pne-tmp and .pne-backup.001 match the manifest; .pne-backup matches the older PKG006 embedded PRX. None matches the installed PKG015 embedded PRX. Do not restore or replace.
+
+Stage run 45170215738 succeeded by safely skipping: newer PKG015 releases already exist; no PKG006 upload occurred. The installed app and canonical staged PKG015 are byte-identical APP_VER 01.10; alternate PKG015 files are same-version FULL BASE, not patches. No valid higher-version patch is available.
+
+RPI TCP 12800 is refused and no identifiable RPI app appears in the /user/app listing. BGFT remains ABI/runtime-unqualified. PR44 safely fingerprints relevant config.ini boolean flags without uploading raw config, and captures plugins.ini temp/backup variants. Do not install, activate PRX, or restart GoldHEN until transport and file identity are qualified.
