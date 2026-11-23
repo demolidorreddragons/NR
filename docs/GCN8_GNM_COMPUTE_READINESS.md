@@ -232,3 +232,43 @@ Source files and reviewed regions:
 - `src/vk_ps4_sync.c`: fence label polling
 - `src/vk_ps4_command.c`: compute pipeline bind and `vk_ps4_CmdDispatch`
 - `src/vk_ps4_pipeline.c`: CS binary metadata/address setup
+
+### Gate C follow-up: pinned opengnm hardware smoke is graphics-only (2026-11-23)
+
+A direct inspection of PS4-OpenGNM/opengnm/tests/hardware_smoke.c at commit
+4b295ca54c82c83acf308d1c646a2dfa9ae57350 confirms that this sample is not a
+compute known-answer harness and cannot be treated as one:
+
+- It allocates/maps Garlic direct memory and initializes a DCB, but the submitted
+  command stream contains default hardware state, a zero-count index draw, and
+  an EOP event write. It does not call sceGnmSetCsShader or
+  sceGnmDispatchDirect.
+- The EOP label proves only that the submitted graphics command stream reached
+  its event-write point on the hardware/runtime where that sample is validated.
+  It does not prove a compute shader executed or that arbitrary GPU-written
+  buffer data is coherent for CPU readback.
+- The sample polls a volatile EOP label for a fixed spin count and then enters
+  an infinite status-display loop. That lifecycle is unsuitable for an opt-in
+  PRX diagnostic that must return control, unload cleanly, and recover after a
+  timeout.
+- Its Garlic mapping uses CPU read/write and GPU read/write protection flags,
+  but the sample does not demonstrate an explicit cache invalidation or
+  transfer contract for reading a compute output buffer.
+
+**Engineering decision:** do not copy this sample into NR or promote its EOP
+event into a compute-completion/readback proof. It is useful only as a
+source-level reference for a basic graphics DCB submission and event-write
+sequence. Gate B/C still require a separately qualified compute pipeline,
+buffer residency/address contract, bounded completion handling, and
+cache-coherent result readback on PS4 Pro firmware 14.02.
+
+### Host known-answer oracle regression coverage
+
+The host-side known-answer verifier is deliberately limited to validating the
+CPU reference contract. Its regression test constructs the expected 256-element
+odd-number sequence independently of the verifier implementation, checks
+boundary values, rejects null/wrong-sized buffers, and proves that one
+corrupted element fails the complete comparison. This is not GPU dispatch,
+hardware completion, or readback evidence. The test source was strengthened
+after review because generating the test output with the same production
+oracle would have made the comparison tautological.
