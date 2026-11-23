@@ -16,6 +16,7 @@ assert "COLLECTOR_COMMIT: ${{ steps.checkout.outputs.commit }}" in workflow
 assert "git -C $env:GITHUB_WORKSPACE rev-parse HEAD" not in workflow
 assert "shell: powershell -NoProfile -ExecutionPolicy Bypass -File {0}" in workflow
 assert "shell: powershell\n" not in workflow
+assert workflow.count("shell: powershell -NoProfile -ExecutionPolicy Bypass -File {0}") == 2
 assert r"PS4_IP: ${{ vars.PS4_IP }}" in workflow
 
 # Network target is constrained to a literal IPv4 and all run/provenance identifiers are required.
@@ -68,4 +69,10 @@ assert "POST" not in script.upper()
 assert "UploadFile" not in script and "DeleteFile" not in script and "Rename" not in script
 assert "CONTROL_PLANE_READ_ONLY_COMPLETE" in script
 assert not Path(".github/workflows/ps4-bridge-test.yml").exists(), "legacy auto-staging workflow must stay retired"
+for number in ("004", "005"):
+    qa = Path(f".github/workflows/ps4-base-pkg-qa-{number}.yml").read_text(encoding="utf-8")
+    assert f"QA_SKIPPED_PACKAGE_NOT_PRESENT={number}" in qa
+    assert "if (-not (Test-Path -LiteralPath $pkg))" in qa
+    assert "exit 0" in qa
+
 print("PS4 control-plane collector safety and evidence-integrity contract passed")
