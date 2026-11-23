@@ -145,9 +145,8 @@ $oldDirectory = @($rootEntries | Where-Object { $_.name -eq "old" })
 if ($oldDirectory.Count -ne 1 -or -not $oldDirectory[0].mode.StartsWith("d")) { throw "/data/pkg/old is not a verified directory; refusing archive." }
 $rootNr = @($rootEntries | Where-Object { $_.name -like "PS4-Neural-Engine-*.pkg" })
 if (@($rootNr | Where-Object { -not $_.mode.StartsWith("-") }).Count -gt 0) { throw "An NR PKG path is not a regular file; refusing to move it." }
-if ($rootNr.Count -ne $actualPaths.Count) { throw "Duplicate NR package names in the live root listing." }
-
 $actualPaths = @($rootNr | ForEach-Object { "/data/pkg/$($_.name)" } | Sort-Object -Unique)
+if ($rootNr.Count -ne $actualPaths.Count) { throw "Duplicate NR package names in the live root listing." }
 $reportedPaths = @($staged | ForEach-Object { [string]$_.remote_path } | Sort-Object -Unique)
 $unexpectedPaths = @($actualPaths | Where-Object { $_ -notin $reportedPaths })
 if ($unexpectedPaths.Count -gt 0) { throw "Current NR package root contains unvalidated NR PKG paths: $($unexpectedPaths -join ', ')" }
