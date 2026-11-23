@@ -40,6 +40,14 @@ The recorded console firmware is 14.02. The release page's listed firmware matri
 7. Run the controlled NR test; collect Klog/app/system evidence read-only; preserve originals and produce CDA E0-E4 manifest.
 8. If a stage fails, stop the transaction. Roll back only changes made by that transaction, never unrelated plugins, packages, logs, saves or user data.
 
+## Read-only collector evidence integrity — 2026-11-23
+
+The control-plane collector is deliberately checked out from the reviewed `main` branch before it runs on the privileged self-hosted Windows runner. The triggering build's branch, commit, and run ID are recorded as separate provenance fields; build-branch source code is not executed merely because its build succeeded. The collector itself is therefore identified by the workflow's checkout ref and repository commit, not conflated with the build commit.
+
+FTP directory listings are retained as raw byte streams (`.raw.bin`) without StreamReader decoding or text re-encoding. Each file GET records UTC start/end, remote GETSIZE before and after, local byte count, and SHA-256. A size change is reported as a mutability/size mismatch, not as authenticated remote content. Partial downloads are preserved separately with their own size and digest. Local files are created exclusively to prevent accidental evidence overwrite.
+
+A static CI contract checks the exact FTP read-only method allowlist (`LIST`, `GETSIZE`, `GET`), raw byte preservation, exclusive file creation, partial preservation, pre/post size checks, digest/timestamp fields, and HTTP GET-only RPI fingerprinting. This contract is source-level validation; it does not prove Windows PowerShell execution or a live PS4 collection.
+
 ## Required machine-readable evidence
 
 Every operation must emit JSON with schema version, UTC timestamp, runner identity, build run ID, commit SHA, artifact name, expected and observed hashes, target path, operation, result, and error. Runtime records must add firmware, GoldHEN version, Title ID, process/test identity, and E0-E4 evidence references. Secrets and credentials must never be logged.
