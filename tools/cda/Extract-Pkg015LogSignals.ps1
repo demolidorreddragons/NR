@@ -11,7 +11,7 @@ $targets = @{}
 foreach ($entry in $manifest) {
     if ($entry -match '^FILE_SNAPSHOT remote=(\S+) .* local=(\S+)$') {
         $remote = $Matches[1]; $local = $Matches[2]
-        if ($remote -match '(?i)(pne\.log|Loader_Logs\.txt|memory\.log|sce_logs/log\.bin)$') { $targets[$local] = $remote }
+        if ($remote -match '(?i)(pne\.log|Loader_Logs\.txt|memory\.log|pne_gcn8_compute_smoke_[^/]+\.log|sce_logs/log\.bin)$') { $targets[$local] = $remote }
     }
 }
 $patterns = @(
@@ -46,7 +46,7 @@ foreach ($localName in ($targets.Keys | Sort-Object)) {
     $bytes = [IO.File]::ReadAllBytes($path)
     $remote = $targets[$localName]
     $scanned.Add([pscustomobject]@{ source_remote=$remote; local_file=$localName; bytes=$bytes.Length; sha256=(Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant() })
-    $isKnownText = $remote -match '(?i)(pne\.log|Loader_Logs\.txt|memory\.log)$'
+    $isKnownText = $remote -match '(?i)(pne\.log|Loader_Logs\.txt|memory\.log|pne_gcn8_compute_smoke_[^/]+\.log)$'
     if ($isKnownText) {
         $encoding = [Text.Encoding]::UTF8; $offset = 0
         if ($bytes.Length -ge 3 -and $bytes[0] -eq 0xEF -and $bytes[1] -eq 0xBB -and $bytes[2] -eq 0xBF) { $encoding = [Text.Encoding]::UTF8; $offset = 3 }
