@@ -364,3 +364,8 @@ The archive manifest binds build/preflight/offline/archive run IDs and records a
 
 This proves the automatic build → read-only preflight → offline inspection → archive no-op chain and its post-normalization idempotency. It does **not** complete remote installation, PRX deployment/activation, GoldHEN restart, application launch, or GPU/runtime validation; those remain separately gated by unresolved firmware/API/PRX identity evidence.
 
+
+
+## Windows runner service availability
+
+The existing runner registration is `demolidorreddragons-NR.PS4-WINDOWS-BRIDGE`. It has previously connected successfully when started manually with `C:\actions-runner\run.cmd`, while the Windows service `actions.runner.demolidorreddragons-NR.PS4-WINDOWS-BRIDGE` failed to start with reported error 1068. This is a host availability/persistence issue, separate from PS4 FTP and package workflows. The read-only workflow `.github/workflows/ps4-windows-runner-service-diagnostics.yml` captures service/CIM/SC configuration, relevant event logs, runner ACLs and filtered runner `_diag` excerpts. It performs no service, registry, runner, or PS4 mutation. Do not alter the service or registry until the evidence establishes a specific cause.

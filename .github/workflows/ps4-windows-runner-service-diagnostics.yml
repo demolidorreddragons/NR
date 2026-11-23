@@ -1,0 +1,38 @@
+name: Windows PS4 bridge runner service diagnostics
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/ps4-windows-runner-service-diagnostics.yml"
+      - "tools/collect_windows_runner_service_diagnostics.ps1"
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose-runner-service:
+    runs-on: [self-hosted, Windows, X64, ps4-lan]
+    timeout-minutes: 10
+    steps:
+      - name: Checkout reviewed diagnostics source
+        uses: actions/checkout@v4
+        with:
+          ref: \${{ github.sha }}
+          persist-credentials: false
+
+      - name: Collect read-only Windows runner service diagnostics
+        shell: powershell -NoProfile -ExecutionPolicy Bypass -File {0}
+        env:
+          GITHUB_RUN_ID: \${{ github.run_id }}
+        run: |
+          & "$env:GITHUB_WORKSPACE\tools\collect_windows_runner_service_diagnostics.ps1"
+
+      - name: Preserve sanitized diagnostic evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: runner-service-diagnostics-\${{ github.run_id }}
+          path: \${{ runner.temp }}\nr-windows-runner-service-\${{ github.run_id }}\*
+          if-no-files-found: error
+          retention-days: 7

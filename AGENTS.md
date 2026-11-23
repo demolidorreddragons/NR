@@ -125,3 +125,8 @@ The archive workflow must allow a same-run rerun after a partial RENAME by compa
 
 The build → read-only PS4 preflight → offline PKG inspection → archive workflow chain passed on commit `1c314ada74cb6ce94ae4e5c9fd963d0aa3691b5c`: build `45175419701`, preflight `45175564496`, offline inspection `45175650256`, archive `45175810684`. The archive artifact `14819940505` (ZIP SHA-256 `2800f53a584c478bb2bf48df8dd4f5e1b78df8ebe88008405a80f7dfcf8b81b4`) proves an idempotent no-op: empty files/rename list, canonical PKG 015 only in the NR root, third-party names unchanged, and no installation/PRX/plugins.ini/GoldHEN mutation. This acceptance covers package-root archival only, not installation or runtime activation.
 
+
+
+## Windows PS4 bridge runner service diagnosis
+
+The Windows runner service `actions.runner.demolidorreddragons-NR.PS4-WINDOWS-BRIDGE` has previously failed to start (reported error 1068), while manually launching the registered runner with `run.cmd` successfully connects and listens for jobs. Preserve the registration, credentials, service, and working manual runner. Do not reinstall/remove the runner, change registry/service settings, or alter its logon identity without a cause established from read-only evidence and a separately reviewed repair plan. The `Windows PS4 bridge runner service diagnostics` workflow and `tools/collect_windows_runner_service_diagnostics.ps1` are read-only: they inspect service/CIM/SC state, selected registry values, ACLs, relevant Windows events and filtered runner diagnostic excerpts; they do not start/stop services or modify configuration.
