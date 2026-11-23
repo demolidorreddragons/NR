@@ -32,7 +32,7 @@ jobs:
           $report = Join-Path $env:GITHUB_WORKSPACE "approved/qa-report.txt"
           if (-not (Test-Path -LiteralPath $report)) { throw "QA report missing." }
           $reportText = Get-Content -LiteralPath $report -Raw
-          $buildRunId = [regex]::Match($reportText, "(?m)^BUILD_RUN_ID=(\\d+)$").Groups[1].Value
+          $buildRunId = [regex]::Match($reportText, "(?m)^BUILD_RUN_ID=(\d+)$").Groups[1].Value
           if (-not $buildRunId) { throw "QA report is not bound to a triggering build run." }
           "build_run_id=$buildRunId" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
           Write-Host "QA_SOURCE_BUILD_RUN_ID=$buildRunId"
