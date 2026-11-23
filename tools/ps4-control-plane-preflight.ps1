@@ -111,6 +111,7 @@ if(($api.status -in @(400,405)) -and ($api.body -match 'Unsupported method|"fail
 }
 $report=[ordered]@{
   schema="nr.ps4.control-plane-preflight.v3";timestamp_utc=[DateTime]::UtcNow.ToString("o")
+  preflight_run_id=$env:GITHUB_RUN_ID
   runner=$env:COMPUTERNAME;runner_identity="demolidorreddragons-NR.PS4-WINDOWS-BRIDGE"
   build_run_id=$env:BUILD_RUN_ID;build_commit=$env:BUILD_HEAD_SHA;build_branch=$env:BUILD_BRANCH;collector_ref=$env:COLLECTOR_REF;collector_commit=$env:COLLECTOR_COMMIT
   target=[ordered]@{ps4_ip_source="repository_actions_variable";firmware_reported="14.02";firmware_evidence="user_reported";goldhen_reported="2.4b18.14";goldhen_distribution="GamerHack host; patnawa mirror";payload_sha256_published_by_distribution="c5480587d99efc2e3cc132352d9b7cf052dd3068280f1686e7fbb37d57e9ba8b";installed_payload_hash="not_read_from_device"}
