@@ -82,6 +82,30 @@ Before adding code to the PRX, prove from pinned headers/source and ABI evidence
 
 Do not invent a standalone queue or call undocumented firmware exports based only on symbol names.
 
+
+#### Additional end-to-end compute stack investigated (2026-11-23)
+
+A second upstream candidate was inspected: `PS4-OpenGNM/vulkan-ps4` at commit `f4d940b723771b3fe637e8ac0704bb5d6ab19622` (repository's `main` at inspection time). It is a Vulkan ICD built on opengnm/opengnm-psbc and contains code paths for compute pipelines, descriptor sets, direct-memory allocation, command dispatch, queue submission, EOP labels, and fences. Relevant files inspected: `src/vk_ps4_pipeline.c`, `src/vk_ps4_command.c`, `src/vk_ps4_descriptor.c`, `src/vk_ps4_memory.c`, `src/vk_ps4_queue.c`, and `src/vk_ps4_sync.c`.
+
+**This is a research lead, not an accepted backend or Gate C evidence.** The inspected revision does not provide a deterministic PS4 compute hardware smoke test or a firmware-14.02 validation record. Its README advertises compute support, but the checked-in tests list triangle/descriptor/format/validation coverage and a compute shader asset without a corresponding compute known-answer hardware test.
+
+Specific implementation concerns found during source inspection:
+
+- `vk_ps4_CmdDispatch` records `sceGnmDrawCmdDispatchDirect`, but the source inspection alone does not establish that the CS pipeline bind, user-data/resource descriptors, and dispatch packet sequence is valid on the target retail firmware.
+- `vk_ps4_InvalidateMappedMemoryRanges` is implemented as an unconditional no-op with a comment that direct memory is GPU-visible. Visibility is not equivalent to cache coherency; this cannot currently serve as proof of GPU-to-CPU readback correctness.
+- Queue fence signaling uses an EOP event write and CPU polling of a mapped label. This is a plausible synchronization design, but it has not been qualified for firmware 14.02, and timeout/recovery and GPU-write visibility still need hardware evidence.
+- The memory path maps Onion/Garlic types and uses `sceGnmDirectMemoryAllocate`, but its selected memory-type constants, mapping semantics, address-space assumptions, and cache policies need validation against the actual OpenOrbis/GoldHEN runtime and PS4 Pro firmware.
+- The queue path submits command-buffer pointers directly through `sceGnmSubmitCommandBuffers`; source review does not establish residency, command-buffer address validity, safe lifetime, or correct submission semantics for the PRX's process context.
+
+**Engineering decision:** do not vendor or link this ICD into the current app yet. First pin and independently build its full dependency graph, audit the CS pipeline bind and resource-slot mapping, prove allocation/address/cache semantics, and add a minimal standalone compute known-answer sample. The sample must write a fixed sequence to a GPU buffer, signal completion with a proven fence, invalidate/transfer through a verified coherent path, and compare every element on the PS4 Pro. Only then can the reusable pieces be considered for the Neural Rendering backend.
+
+External source references used for this investigation:
+- opengnm GNM compute API reference: https://ps4-opengnm.github.io/opengnm/reference/driver/
+- opengnm shader stage/register reference: https://ps4-opengnm.github.io/opengnm/reference/shader/
+- opengnm direct-memory helper reference: https://ps4-opengnm.github.io/opengnm/reference/helpers/
+- opengnm backend distinction (Orbis firmware forwarding vs generic no-op submit): https://ps4-opengnm.github.io/opengnm/backends/
+- vulkan-ps4 candidate source revision: https://github.com/PS4-OpenGNM/vulkan-ps4/tree/f4d940b723771b3fe637e8ac0704bb5d6ab19622
+
 ### Gate C — isolated known-answer hardware proof
 
 The first console test must be a reversible, opt-in diagnostic workload, not a neural renderer and not a game framebuffer hook. It must dispatch a deterministic kernel, wait for GPU completion using a proven synchronization path, read back through a proven transfer/coherency path, and compare every output element with a CPU reference.
