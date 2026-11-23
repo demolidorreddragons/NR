@@ -10,7 +10,7 @@ The user explicitly authorized automated installation of approved NR PKGs, deplo
 
 ## Verified service facts
 
-GoldHEN upstream documents FTP TCP 2121, BinLoader TCP 9090, Klog TCP 3232, internal package installation from `/data/pkg`, plugin support, and remote package installation. Upstream warns BinLoader is experimental and may crash the console. These feature statements do not establish the exact protocol, firmware compatibility, or availability on the user's installed GoldHEN version. See [GoldHEN upstream README](https://github.com/GoldHEN/GoldHEN) and [release history](https://github.com/GoldHEN/GoldHEN/releases).
+GoldHEN upstream documents FTP 2121, BinLoader 9090, Klog 3232, internal PKG installation, plugin support and Remote Package Install. The current preflight uses FTP read-only operations and HTTP GET-only RPI fingerprinting on TCP 12800. It does not probe 9090 or 3232. GoldHEN warns that BinLoader is experimental; do not use it as a control channel or connectivity probe. See [GoldHEN upstream README](https://github.com/GoldHEN/GoldHEN) and [release history](https://github.com/GoldHEN/GoldHEN/releases).
 
 The recorded console firmware is 14.02. The release page's listed firmware matrix must be checked against the exact installed GoldHEN build; do not infer compatibility from a port being open.
 
@@ -20,7 +20,7 @@ The recorded console firmware is 14.02. The release page's listed firmware matri
 |---|---|---|
 | Existing Windows LAN runner | Previously verified | Reuse; never reinstall/reconfigure |
 | FTP transfer/readback/staging | Historical successful run 45151203751 | Continue per-artifact SHA-256 verification |
-| 2121/9090/3232 discovery | Added read-only preflight workflow | Successful run with JSON report |
+| FTP/RPI discovery | Read-only FTP inventory and HTTP GET-only fingerprint on 12800 | Successful runner artifact and device snapshot |
 | Remote PKG install | Not yet implemented/verified | Exact GoldHEN protocol and installed Title ID/version readback |
 | PRX deployment | FTP file transfer only | Hash verification and reversible NR-only registration |
 | PRX activation | Not yet implemented/verified | Firmware-qualified mechanism and runtime evidence |
@@ -64,10 +64,10 @@ This resolves the version/firmware compatibility uncertainty at the release-docu
 
 ### Consequences for implementation
 
-- Treat 2121 FTP, 9090 BinLoader, 3232 Klog, remote package installation, `/data/pkg` internal package installation, and plugin support as features documented for the GoldHEN v2.4b18 family; verify the actual running endpoints with the read-only preflight.
+- Use FTP 2121 for read-only inventory and RPI HTTP GET fingerprinting on TCP 12800. Never probe BinLoader 9090 or Klog 3232 from the preflight. A documented feature list is not evidence that the endpoint is running.
 - GoldHEN's BinLoader remains explicitly experimental. Do not use it as a generic shell or as a probe; any payload protocol/ABI must be separately pinned and reviewed before sending a payload.
-- The release advertises Remote Package Install and internal `/data/pkg` installation, but the public release note alone does not specify a machine protocol, request framing, response semantics, or remote success verification. Those must be derived from the exact v2.4b18.14 implementation or a trusted, version-matched client before automating installation.
-- Plugin support is documented, but that alone does not establish a safe remote PRX activation or GoldHEN restart command. Continue to require a version-matched documented mechanism and independent post-operation verification.
+- The RPI client dialect is source-reviewed separately below. The console's actual receiver must be detected by the preflight before any install request is attempted.
+- Plugin support is documented, but it does not establish a remote activation/reload API. No documented, firmware-qualified remote GoldHEN restart endpoint has been identified; do not invent one.
 - The 14.02 compatibility gate can now be marked `RELEASE_COMPATIBILITY_DOCUMENTED`; live console identity, service reachability, protocol qualification, and operation success remain separate evidence states.
 
 
