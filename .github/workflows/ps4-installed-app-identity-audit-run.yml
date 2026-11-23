@@ -29,8 +29,14 @@ jobs:
           function Get-RemoteFile([string]$remotePath, [string]$localName, [bool]$required = $false) {
             $local = Join-Path $capture $localName
             $url = $base + $remotePath
-            $out = & curl.exe --fail --silent --show-error --ftp-pasv --ftp-method nocwd --user $creds --output $local $url 2>&1
-            $code = $LASTEXITCODE
+            $previousPreference = $ErrorActionPreference
+            $ErrorActionPreference = "Continue"
+            try {
+              $out = & curl.exe --fail --silent --show-error --ftp-pasv --ftp-method nocwd --user $creds --output $local $url 2>&1
+              $code = $LASTEXITCODE
+            } finally {
+              $ErrorActionPreference = $previousPreference
+            }
             if ($code -ne 0 -or -not (Test-Path -LiteralPath $local)) {
               if (Test-Path -LiteralPath $local) { Remove-Item -LiteralPath $local -Force }
               Write-Host "REMOTE_FILE_UNAVAILABLE path=$remotePath exit=$code"
@@ -44,14 +50,20 @@ jobs:
             return $local
           }
 
-          $listing = & curl.exe --fail --silent --show-error --ftp-pasv --ftp-method nocwd --user $creds ($base + "/user/app/PNEU00001/") 2>&1
-          if ($LASTEXITCODE -ne 0) { throw "Cannot list installed PNEU00001 directory." }
+          $previousPreference = $ErrorActionPreference
+          $ErrorActionPreference = "Continue"
+          try {
+            $listing = & curl.exe --fail --silent --show-error --ftp-pasv --ftp-method nocwd --user $creds ($base + "/user/app/PNEU00001/") 2>&1
+            $listingExit = $LASTEXITCODE
+          } finally {
+            $ErrorActionPreference = $previousPreference
+          }
+          if ($listingExit -ne 0) { throw "Cannot list installed PNEU00001 directory." }
           $listing | ForEach-Object { Write-Host $_ }
 
           $installedPkg = Get-RemoteFile "/user/app/PNEU00001/app.pkg" "installed-app.pkg" $true
           $appJsonPath = Get-RemoteFile "/user/app/PNEU00001/app.json" "installed-app.json" $true
           $appXmlPath = Get-RemoteFile "/user/app/PNEU00001/app.xml" "installed-app.xml"
-          $sfoPath = Get-RemoteFile "/user/app/PNEU00001/sce_sys/param.sfo" "installed-param.sfo" $true
           $ebootPath = Get-RemoteFile "/user/app/PNEU00001/eboot.bin" "installed-eboot.bin"
           $prxPath = Get-RemoteFile "/user/app/PNEU00001/ps4_neural_engine.prx" "installed-app-prx.bin"
           $sourcePkg = Get-RemoteFile "/user/data/pkg/PS4-Neural-Engine-015.pkg" "user-data-source-pkg015.pkg"
