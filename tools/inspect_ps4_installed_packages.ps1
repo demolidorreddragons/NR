@@ -119,6 +119,63 @@ if ($currentPrxEntry -and $currentPrxEntry.local_file -and $currentPrxEntry.resu
   $comparisons["current_goldhen_prx_snapshot_result"] = $currentPrxEntry.result
   $comparisons["installed_app_prx_matches_goldhen_prx"] = ($currentPrxEntry.result -eq "ok" -and $installed.packaged_prx_sha256 -and $installed.packaged_prx_sha256 -eq $currentPrxHash)
 }
+$manifestEntry = Get-EvidenceEntry "/data/GoldHEN/plugins/ps4_neural_engine.prx.pne-release.ini"
+$manifestValues = @{}
+if ($manifestEntry -and $manifestEntry.result -eq "ok") {
+  $manifestPath = Join-Path $env:EVIDENCE_DIR $manifestEntry.local_file
+  foreach ($line in (Get-Content -LiteralPath $manifestPath)) {
+    if ($line -match "^\s*([^#=\s]+)\s*=\s*(.*?)\s*$") { $manifestValues[$matches[1]] = $matches[2] }
+  }
+}
+$expectedManifestPrx = ([string]$manifestValues["prx_sha256"]).ToLowerInvariant()
+$prxPaths = @(
+  "/data/GoldHEN/plugins/ps4_neural_engine.prx",
+  "/data/GoldHEN/plugins/ps4_neural_engine.prx.pne-tmp",
+  "/data/GoldHEN/plugins/ps4_neural_engine.prx.pne-backup",
+  "/data/GoldHEN/plugins/ps4_neural_engine.prx.pne-backup.001",
+  "/data/GoldHEN/plugins/ps4_neural_engine_002.prx",
+  "/data/GoldHEN/plugins/ps4_neural_engine_003.prx",
+  "/data/GoldHEN/plugins/ps4_neural_engine_004.prx",
+  "/data/GoldHEN/plugins/ps4_neural_engine_005.prx"
+)
+$prxSnapshots = [System.Collections.Generic.List[object]]::new()
+foreach ($remotePath in $prxPaths) {
+  $entry = Get-EvidenceEntry $remotePath
+  if (-not $entry -or -not $entry.local_file) {
+    $prxSnapshots.Add([pscustomobject]@{remote_path=$remotePath;status="not_collected"})
+    continue
+  }
+  $local = Join-Path $env:EVIDENCE_DIR $entry.local_file
+  $bytes = (Get-Item -LiteralPath $local).Length
+  $hash = (Get-FileHash -LiteralPath $local -Algorithm SHA256).Hash.ToLowerInvariant()
+  $stable = ($entry.result -eq "ok" -and $bytes -eq [int64]$entry.local_bytes -and $hash -eq [string]$entry.sha256)
+  $prxSnapshots.Add([pscustomobject]@{remote_path=$remotePath;status=$entry.result;bytes=$bytes;sha256=$hash;matches_manifest=($stable -and $expectedManifestPrx -and $hash -eq $expectedManifestPrx);matches_installed_app=($stable -and $installed.packaged_prx_sha256 -and $hash -eq $installed.packaged_prx_sha256)})
+}
+$iniSnapshots = [System.Collections.Generic.List[object]]::new()
+foreach ($remotePath in @("/data/GoldHEN/plugins.ini","/data/GoldHEN/plugins.ini.pne-tmp","/data/GoldHEN/plugins.ini.pne-backup")) {
+  $entry = Get-EvidenceEntry $remotePath
+  if (-not $entry -or $entry.result -ne "ok" -or -not $entry.local_file) {
+    $iniSnapshots.Add([pscustomobject]@{remote_path=$remotePath;status=$(if($entry){$entry.result}else{"not_collected"})})
+    continue
+  }
+  $local = Join-Path $env:EVIDENCE_DIR $entry.local_file
+  $text = Get-Content -LiteralPath $local -Raw
+  $iniSnapshots.Add([pscustomobject]@{remote_path=$remotePath;status="ok";bytes=(Get-Item -LiteralPath $local).Length;sha256=(Get-FileHash -LiteralPath $local -Algorithm SHA256).Hash.ToLowerInvariant();contains_nr_plugin=($text.Contains("/data/GoldHEN/plugins/ps4_neural_engine.prx"))})
+}
+$prxState = [ordered]@{
+  manifest_status=$(if($manifestEntry){$manifestEntry.result}else{"not_collected"})
+  manifest_release_number=[string]$manifestValues["release_number"]
+  manifest_app_version=[string]$manifestValues["app_version"]
+  manifest_expected_prx_sha256=$expectedManifestPrx
+  installed_app_prx_sha256=$installed.packaged_prx_sha256
+  installed_app_prx_matches_manifest=($installed.packaged_prx_sha256 -and $expectedManifestPrx -and $installed.packaged_prx_sha256 -eq $expectedManifestPrx)
+  current_goldhen_prx_matches_manifest=($currentPrxEntry -and $currentPrxEntry.result -eq "ok" -and $currentPrxHash -and $expectedManifestPrx -and $currentPrxHash -eq $expectedManifestPrx)
+  prx_files=$prxSnapshots
+  plugins_ini_files=$iniSnapshots
+}
+$comparisons["manifest_expected_prx_sha256"] = $expectedManifestPrx
+$comparisons["installed_app_prx_matches_manifest"] = $prxState.installed_app_prx_matches_manifest
+$comparisons["current_goldhen_prx_matches_manifest"] = $prxState.current_goldhen_prx_matches_manifest
 $appJsonEntry = Get-EvidenceEntry "/user/app/PNEU00001/app.json"
 if ($appJsonEntry -and $appJsonEntry.result -eq "ok") {
   $appJsonPath = Join-Path $env:EVIDENCE_DIR $appJsonEntry.local_file
@@ -133,6 +190,7 @@ $report = [ordered]@{
   build_run_id=$control.build_run_id
   build_commit=$control.build_commit
   collector_commit=$control.collector_commit
+  prx_state=$prxState
   results=$results
   comparisons=$comparisons
   hardware_validation="not_performed"
