@@ -13,9 +13,11 @@ class QaStageRunIdentityTests(unittest.TestCase):
     def test_stage_downloads_build_artifact_from_qa_report_run_id(self):
         self.assertIn("run-id: ${{ github.event.workflow_run.id }}", STAGE)
         self.assertIn("run-id: ${{ steps.source.outputs.build_run_id }}", STAGE)
-        self.assertIn("(?m)^BUILD_RUN_ID=(\\d+)$", STAGE)
+        self.assertIn(r"(?m)^BUILD_RUN_ID=(\d+)\r?$", STAGE)
         self.assertNotIn("44662999645", STAGE)
         self.assertNotIn("44663222188", STAGE)
+        self.assertIn("STAGING_SKIPPED_NEWER_RELEASE_PRESENT=true", STAGE)
+        self.assertIn("[int]$m.Groups[1].Value -gt 6", STAGE)
 
     def test_stage_only_runs_after_successful_qa_workflow(self):
         self.assertIn('workflows: ["PS4 Base PKG 006 Independent QA"]', STAGE)

@@ -24,6 +24,7 @@ jobs:
           repository: demolidorreddragons/NR
           run-id: ${{ github.event.workflow_run.id }}
           github-token: ${{ github.token }}
+
       - name: Resolve exact source build run from independent QA report
         id: source
         shell: powershell -NoProfile -ExecutionPolicy Bypass -File {0}
@@ -32,10 +33,11 @@ jobs:
           $report = Join-Path $env:GITHUB_WORKSPACE "approved/qa-report.txt"
           if (-not (Test-Path -LiteralPath $report)) { throw "QA report missing." }
           $reportText = Get-Content -LiteralPath $report -Raw
-          $buildRunId = [regex]::Match($reportText, "(?m)^BUILD_RUN_ID=(\d+)$").Groups[1].Value
+          $buildRunId = [regex]::Match($reportText, "(?m)^BUILD_RUN_ID=(\d+)\r?$").Groups[1].Value
           if (-not $buildRunId) { throw "QA report is not bound to a triggering build run." }
           "build_run_id=$buildRunId" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
           Write-Host "QA_SOURCE_BUILD_RUN_ID=$buildRunId"
+
       - name: Download exact PKG 006 build artifact
         uses: actions/download-artifact@v4
         with:
@@ -44,8 +46,9 @@ jobs:
           repository: demolidorreddragons/NR
           run-id: ${{ steps.source.outputs.build_run_id }}
           github-token: ${{ github.token }}
+
       - name: Verify QA and stage exact package with FTP readback
-        shell: powershell -ExecutionPolicy Bypass -File {0}
+        shell: powershell -NoProfile -ExecutionPolicy Bypass -File {0}
         env:
           PS4_IP: ${{ vars.PS4_IP }}
         run: |
@@ -88,6 +91,18 @@ jobs:
           }
 
           $rootBefore = @(Get-FtpNames $root)
+          # PKG 006 is older than any numbered NR package above 006. Never archive a newer
+          # release just to make this legacy 006 candidate the sole visible root package.
+          $newer = @($rootBefore | Where-Object {
+            $m = [regex]::Match($_, '^PS4-Neural-Engine-(\d{3,})(?:-[A-Fa-f0-9]{12})?[.]pkg$')
+            $m.Success -and [int]$m.Groups[1].Value -gt 6
+          })
+          if ($newer.Count -gt 0) {
+            Write-Host "STAGING_SKIPPED_NEWER_RELEASE_PRESENT=true"
+            Write-Host "NEWER_NR_PKGS=$($newer -join ',')"
+            exit 0
+          }
+
           $targetAlreadyPresent = $rootBefore -contains $name
           $oldNeural = @($rootBefore | Where-Object { $_ -match '^PS4-Neural-Engine-.*[.]pkg$' -and $_ -ne $name })
           $thirdParty = @($rootBefore | Where-Object { $_ -notmatch '^PS4-Neural-Engine-.*[.]pkg$' })
