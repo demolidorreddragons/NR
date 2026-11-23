@@ -65,9 +65,15 @@ jobs:
           git -C SPIRV-Headers fetch --depth=1 origin fb1379425b16e58dcbdda7be0f8604a7f5cdce78
           git -C SPIRV-Headers checkout --detach FETCH_HEAD
 
+          git init Vulkan-Headers
+          git -C Vulkan-Headers remote add origin https://github.com/KhronosGroup/Vulkan-Headers.git
+          git -C Vulkan-Headers fetch --depth=1 origin d277a0a3cda9c682708c93279f0c72cd6b0ae3f3
+          git -C Vulkan-Headers checkout --detach FETCH_HEAD
+
           test "$(git -C opengnm-psbc rev-parse HEAD)" = "28697f007862427ebec54388ec972ce6e3545912"
           test "$(git -C opengnm rev-parse HEAD)" = "4b295ca54c82c83acf308d1c646a2dfa9ae57350"
           test "$(git -C SPIRV-Headers rev-parse HEAD)" = "fb1379425b16e58dcbdda7be0f8604a7f5cdce78"
+          test "$(git -C Vulkan-Headers rev-parse HEAD)" = "d277a0a3cda9c682708c93279f0c72cd6b0ae3f3"
 
       - name: Generate omitted Mesa and GLSL generated headers/sources
         shell: bash
@@ -105,7 +111,7 @@ jobs:
           set -euo pipefail
           ROOT="$RUNNER_TEMP/nr-gcn8-deps"
           COMPILER="$ROOT/opengnm-psbc"
-          INC="-Iinclude -Ilibpsbc -I../opengnm/include -I../SPIRV-Headers/include -Isrc -Isrc/amd -Isrc/amd/common -Isrc/amd/common/nir -Isrc/amd/compiler -Isrc/amd/vulkan -Isrc/amd/vulkan/nir -Isrc/vulkan/runtime -Isrc/vulkan/runtime/bvh -Isrc/vulkan/util -Isrc/compiler -Isrc/compiler/nir -Isrc/compiler/spirv -Isrc/gallium/include -Isrc/mesa -Isrc/mesa/main -Isrc/util -Icmd/psbc -Iinclude/mesa"
+          INC="-Iinclude -Ilibpsbc -I../opengnm/include -I../SPIRV-Headers/include -I../Vulkan-Headers/include -Isrc -Isrc/amd -Isrc/amd/common -Isrc/amd/common/nir -Isrc/amd/compiler -Isrc/amd/vulkan -Isrc/amd/vulkan/nir -Isrc/vulkan/runtime -Isrc/vulkan/runtime/bvh -Isrc/vulkan/util -Isrc/compiler -Isrc/compiler/nir -Isrc/compiler/spirv -Isrc/gallium/include -Isrc/mesa -Isrc/mesa/main -Isrc/util -Icmd/psbc -Iinclude/mesa"
           cat > "$COMPILER/config.mak" <<EOF
           CC=gcc
           CXX=g++
@@ -123,6 +129,8 @@ jobs:
             git -C "$ROOT/opengnm" rev-parse HEAD
             echo "=== SPIRV-Headers revision ==="
             git -C "$ROOT/SPIRV-Headers" rev-parse HEAD
+            echo "=== Vulkan-Headers revision ==="
+            git -C "$ROOT/Vulkan-Headers" rev-parse HEAD
             echo "=== build ==="
             make -C "$COMPILER" -j2
           } 2>&1 | tee "$RUNNER_TEMP/gcn8-compiler-build.log"

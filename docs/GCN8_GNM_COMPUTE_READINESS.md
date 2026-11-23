@@ -35,10 +35,11 @@ The compiler candidate is research-only. The inspected checkout has a reproducib
 - `opengnm-psbc`: `28697f007862427ebec54388ec972ce6e3545912`
 - `opengnm` headers: `4b295ca54c82c83acf308d1c646a2dfa9ae57350`
 - `SPIRV-Headers`: `fb1379425b16e58dcbdda7be0f8604a7f5cdce78`
+- `Vulkan-Headers`: `d277a0a3cda9c682708c93279f0c72cd6b0ae3f3`
 
 The workflow supplies an explicit host `config.mak`, generates the Mesa format outputs, shader statistics header, sRGB helper, and GLSL `builtin_types.h/.c` omitted from the candidate Makefile's generated-source list, compiles a deterministic compute shader with `-n`, and checks both compute stage and NEO/GFX8 target byte in addition to the upstream container/CRC verifier. It retains logs, SPIR-V, shader binary, report, and SHA-256. It runs only on `ubuntu-24.04`; no third-party source is executed on the privileged PS4-LAN runner.
 
-Automated build attempts `45200242052`, `45200602970`, and `45201076372` failed before shader compilation. Their logs exposed missing generated Mesa/GLSL files in the candidate's incomplete Makefile recipe: `u_format_gen.h`, `builtin_types.h/.c`, and `shader_stats.h`. The workflow now reproduces the relevant pinned Meson generator outputs (including the format-table and sRGB sources) before `make`. Gate A remains unpassed until a complete build, shader compile, target check, and CRC verification succeed.
+Automated build attempts `45200242052`, `45200602970`, `45201076372`, and `45201396827` failed before shader compilation. Their logs exposed missing generated Mesa/GLSL files in the candidate's incomplete Makefile recipe (`u_format_gen.h`, `builtin_types.h/.c`, `shader_stats.h`) and an unpinned sibling `Vulkan-Headers` dependency (`vk_video/vulkan_video_codec_h264std.h`). The workflow now reproduces the relevant pinned Meson generator outputs and checks out the exact Vulkan-Headers revision before `make`. Gate A remains unpassed until a complete build, shader compile, target check, and CRC verification succeed.
 
 **Scope limitation:** Gate A proves only that the pinned compiler emits a structurally valid GFX8/NEO compute shader container. It does not prove the binary executes, that firmware 14.02 accepts it, or that a GPU dispatch/readback works. No shader binary is staged to the console by this workflow.
 
