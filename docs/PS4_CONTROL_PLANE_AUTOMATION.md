@@ -324,3 +324,9 @@ The workflow never deletes or uploads files, never creates/removes directories, 
 The `/data/GoldHEN/config.ini` file is present (the directory listing reports 1,127 bytes), but its contents have not been read. PR47 adds a safe in-memory fingerprint: size/SHA-256 plus only allowlisted relevant boolean states for RPI/remote/package/FTP/Klog/BinLoader/plugin/install keys. Non-boolean values are redacted, the raw file is never uploaded, and the temporary runner-local copy is deleted. It also captures `plugins.ini.pne-tmp` and `plugins.ini.pne-backup` so the active registration can be compared with the installer's backups.
 
 The `/user/app/` listing contains no identifiable Remote Package Installer title, and TCP 12800 refused the read-only GET probe. No setting is changed by this follow-up.
+## Reversible archive transport diagnostics — 2026-11-23
+
+- Archive run `45171209915` timed out during the initial directory LIST while using active FTP; no rename occurred.
+- Archive run `45171798451` used passive FTP successfully for directory listings and source package readback, then received FTP 550 while probing a non-existent archive destination with GETSIZE. The evidence manifest has an empty `files` array; `Invoke-FtpRename` was never reached. No PKG was moved.
+- PR49 aligned archive transport with the verified passive bridge mode and isolated evidence per run/attempt. PR50 uses the captured `/data/pkg/old/` LIST for collision detection, interprets 550 only as an unavailable lookup, and checks the root LIST before treating a source as absent. It also supports verified idempotent reruns after a partial archive.
+- The archive workflow remains reversible: FTP RENAME only, source/destination SHA-256 readback, canonical PKG015 revalidation, and third-party root-name preservation. No delete, install, PRX modification, plugins.ini change, or GoldHEN restart.
