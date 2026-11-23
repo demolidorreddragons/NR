@@ -77,4 +77,10 @@ assert "POST" not in script.upper()
 assert "UploadFile" not in script and "DeleteFile" not in script and "Rename" not in script
 assert "CONTROL_PLANE_READ_ONLY_COMPLETE" in script
 assert not Path(".github/workflows/ps4-bridge-test.yml").exists(), "legacy auto-staging workflow must stay retired"
+for number in ("004", "005"):
+    qa = Path(f".github/workflows/ps4-base-pkg-qa-{number}.yml").read_text(encoding="utf-8")
+    assert f"QA_SKIPPED_PACKAGE_NOT_PRESENT={number}" in qa
+    assert "if (-not (Test-Path -LiteralPath $pkg))" in qa
+    assert "exit 0" in qa
+
 print("PS4 control-plane collector safety and evidence-integrity contract passed")
