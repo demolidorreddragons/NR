@@ -31,6 +31,14 @@ diff --git a/src/amd/vulkan/radv_shader_args.c b/src/amd/vulkan/radv_shader_args
 -   state->args->num_user_sgprs++;
 +   state->args->num_user_sgprs += 2;
  }
+@@ -116,7 +116,7 @@ declare_global_input_sgprs(struct radv_shader_args_state *state, const enum amd
+       if (info->descriptor_heap) {
+          add_descriptor_heap(state, RADV_HEAP_RESOURCE);
+          add_descriptor_heap(state, RADV_HEAP_SAMPLER);
+       } else {
+-         /* 1 for each descriptor set */
++         /* 2 SGPRs for each descriptor-set pointer */
+          if (!user_sgpr_info->indirect_all_descriptor_sets) {
 @@ -123,7 +123,7 @@ declare_global_input_sgprs(struct radv_shader_args_state *state, const enum amd
              }
           } else {
