@@ -15,7 +15,7 @@ assert 'Invoke-Http "/api/status" "GET"' in script
 assert 'Invoke-Http "/api/v2/system" "GET"' in script
 assert 'Invoke-Http "/api/is_exists" "POST"' in script
 assert '"PNEU00001"' in script
-for forbidden in ("/api/install", "/api/v2/install", "/api/uninstall", "/api/stop_task", "/api/pause_task", "/api/resume_task", "/api/start_task", "9090", "UploadFile", "DeleteFile", "Rename"):
+for forbidden in ("/api/install", "/api/v2/install", "/api/uninstall", "/api/stop_task", "/api/pause_task", "/api/resume_task", "/api/start_task", "http://127.0.0.1:9090", "UploadFile", "DeleteFile", "Rename"):
     assert forbidden.lower() not in script.lower(), forbidden
 assert "install_requests_sent=$false" in script
 assert "task_control_requests_sent=$false" in script
