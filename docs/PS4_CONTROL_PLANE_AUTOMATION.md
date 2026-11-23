@@ -321,6 +321,6 @@ The workflow never deletes or uploads files, never creates/removes directories, 
 
 ## GoldHEN config discovery follow-up — 2026-11-23
 
-The `/data/GoldHEN/config.ini` file is present (the directory listing reports 1,127 bytes), but its contents have not been read. PR46 adds a safe in-memory fingerprint: size/SHA-256 plus only allowlisted relevant boolean states for RPI/remote/package/FTP/Klog/BinLoader/plugin/install keys. Non-boolean values are redacted, the raw file is never uploaded, and the temporary runner-local copy is deleted. It also captures `plugins.ini.pne-tmp` and `plugins.ini.pne-backup` so the active registration can be compared with the installer's backups.
+The `/data/GoldHEN/config.ini` file is present (the directory listing reports 1,127 bytes), but its contents have not been read. PR47 adds a safe in-memory fingerprint: size/SHA-256 plus only allowlisted relevant boolean states for RPI/remote/package/FTP/Klog/BinLoader/plugin/install keys. Non-boolean values are redacted, the raw file is never uploaded, and the temporary runner-local copy is deleted. It also captures `plugins.ini.pne-tmp` and `plugins.ini.pne-backup` so the active registration can be compared with the installer's backups.
 
 The `/user/app/` listing contains no identifiable Remote Package Installer title, and TCP 12800 refused the read-only GET probe. No setting is changed by this follow-up.
