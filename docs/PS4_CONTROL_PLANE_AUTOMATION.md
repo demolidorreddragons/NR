@@ -344,3 +344,6 @@ The archive plan now supports safe reruns of the same offline-inspection event a
 After archive run `45172997929`, subsequent preflight inventories no longer contain the seven moved files under `/data/pkg/`. The offline inspector still emits target records for known historical paths, marking absent files `not_collected`. The archive workflow now skips only such `not_collected` entries that are absent from the live root LIST; if any unvalidated path is still present in the root, it aborts. With only canonical PKG 015 remaining, the workflow performs identity/final-root checks and completes as a no-op.
 
 For same-run partial recovery, a source absent from the root may be accepted only when a same-basename archive exists under `/data/pkg/old/` and its GET readback matches the offline report's exact size and SHA-256. The search spans run IDs, so a fresh inspection can still recognize a previously verified archive. A missing source without a matching verified archive remains a hard failure.
+
+
+The post-normalization no-op path is syntax-checked by PowerShell Parser in CI and contract-tested: absent historical targets may be skipped only as `not_collected`, while every live root NR package must map to a `PASS_PC_ONLY` record.
