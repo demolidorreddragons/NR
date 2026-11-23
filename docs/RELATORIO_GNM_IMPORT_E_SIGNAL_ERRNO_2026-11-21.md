@@ -280,3 +280,61 @@ dessa etapa continuará sendo somente QA de PC/toolchain, não execução no PS4
 4. Só depois avaliar GNM-Init e medições de VA/4 GiB, sob o plano reversível
    aprovado separadamente. Não introduzir chamada de init sem ABI/NID/export
    confirmado. Dispatch permanece bloqueado por padrão.
+## Rebuild GNM-Link-Only com telemetria atual — 2026-11-23
+
+Execução OpenOrbis: https://github.com/demolidorreddragons/NR/actions/runs/45151860412
+Commit: b810c42a9035d4acf15f0309eb9dc45b436b3996
+Build job: build-prx-and-pkg — SUCCESS.
+QA independente: independent-pkg-qa — SUCCESS.
+Host-tests: https://github.com/demolidorreddragons/NR/actions/runs/45151860473 — SUCCESS.
+
+### Artefato GNM-Link-Only
+
+- Arquivo: PS4-Neural-Rendering-GCN8-gnm-link-45151860412.pkg
+- Local no artefato: gcn8-smoke/45151860412/gnm-link/
+- Tamanho: 6.619.136 bytes.
+- SHA-256 PKG: 86208571912781468918774b230ae2579d6b55ee55104e21908801731000485b
+- SHA-256 ELF: ab5ffb61b86f64b19bdab7e7be6dd2a077b3bc443d35327e9c13f2c891bba8e4
+- SHA-256 OELF: 3364bc39dc24f21cda41383fba6b10d74110be3c68937e6c22bee205941d2a60
+- SHA-256 MAP: 5f94f4180172d48f79065ab0a00230cf0cc5cf1d9333217bde940df03c7f28f5
+- Manifest: gnm_import_probe=sceGnmSubmitDone_address_only_no_call; gnm_function_calls=none; hardware_status=not_run.
+- QA artifact: 14807750099; GNM_LINK_QA_STATUS=PASS_PC_ONLY_NOT_HARDWARE_TESTED.
+- Resultado QA: SFO PASS; import estático esperado; GNM calls NONE; compute shader ABSENT.
+
+### Stub OpenOrbis reexaminado
+
+- Arquivo do sysroot: libSceGnmDriver.so, 40.472 bytes.
+- SHA-256: 21d38ac5e7d79ddc9ee9bc7b9a84547f43ea3144883f6ac787d16704c1b5121f.
+- readelf --dyn-syms confirma sceGnmSubmitDone como FUNC GLOBAL DEFAULT, valor 0x46cc, tamanho 10.
+- O corpo do stub termina em um salto para si próprio (jmp 0x46d4). Ele é um provedor de link/metadata, não a implementação de runtime do driver.
+- O OELF do novo probe contém libSceGnmDriver.prx, módulo libSceGnmDriver e NID yvZ73uQUqrk#C#C.
+
+Esta repetição fecha novamente a consistência estática de nome/biblioteca/NID e prova que o import esperado foi preservado no novo OELF. Não fecha o endereço nulo no firmware 14.02: nenhum código GNM foi chamado e nenhum teste de hardware ocorreu.
+
+### Comparação com um app de referência OpenGNM
+
+O exemplo público PS4-OpenGNM/freegnm-examples, triangle/src/main.c, chama
+sceGnmSubmitCommandBuffers() e sceGnmSubmitDone() no fluxo de apresentação.
+Seu Makefile, com USE_OPENGNM=1, liga -lSceGnmDriver e libopengnm.a; o
+caminho USE_OPENGNM também evita incluir diretamente orbis/GnmDriver.h.
+Referências:
+- https://github.com/PS4-OpenGNM/freegnm-examples/blob/main/triangle/src/main.c
+- https://github.com/PS4-OpenGNM/freegnm-examples/blob/main/triangle/Makefile
+- https://github.com/PS4-OpenGNM/opengnm/blob/4b295ca54c82c83acf308d1c646a2dfa9ae57350/src/driver_orbis.c
+
+No commit OpenGNM fixado, a implementação de sceGnmSubmitDone é um wrapper
+que chama resolvegnmdriversym("sceGnmSubmitDone"). Esse resolver enumera módulos
+e usa sceKernelDlsym no módulo GnmDriver, com fallback pelos demais módulos.
+Portanto, o exemplo de referência demonstra uma rota de resolução dinâmica
+com wrapper; não demonstra que a relocação estática direta do NR deva estar
+resolvida antes de qualquer resolução/carregamento de módulo. Também não prova
+compatibilidade do firmware 14.02 deste console.
+
+### Limite operacional
+
+O PKG foi construído e passou QA independente no PC, mas não foi staged em
+/data/pkg, instalado nem executado no PS4. O workflow de staging continua
+manual e não foi iniciado. Não converter PASS_PC_ONLY em resultado de hardware.
+Próximo gate: obter execução real do Link-Only com SIGNAL_DIAG/errno e
+GNM_IMPORT_ADDRESS; até lá, GNM-Init, VA/4 GiB, memória/cache e dispatch ficam
+bloqueados.
