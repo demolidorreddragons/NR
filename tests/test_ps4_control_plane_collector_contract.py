@@ -13,7 +13,7 @@ assert "workflow_run:" in workflow and 'workflows: ["PS4 PRX and PKG build"]' in
 assert "timeout-minutes: 15" in workflow
 assert "COLLECTOR_COMMIT=$collectorCommit" in workflow
 assert "git -C $env:GITHUB_WORKSPACE rev-parse HEAD" in workflow
-assert "PS4_IP: \${{ vars.PS4_IP }}" in workflow
+assert r"PS4_IP: ${{ vars.PS4_IP }}" in workflow
 
 # Network target is constrained to a literal IPv4 and all run/provenance identifiers are required.
 assert "[System.Net.IPAddress]::TryParse" in script
@@ -21,6 +21,9 @@ assert "AddressFamily]::InterNetwork" in script
 assert "GITHUB_RUN_ID" in script and "COLLECTOR_COMMIT" in script
 assert 'collector_commit=$env:COLLECTOR_COMMIT' in script
 
+assert workflow.count("Collect read-only PS4 control-plane inventory") == 1
+assert script.count("$root = Join-Path") == 1
+assert script.rstrip().endswith('Write-Host "CONTROL_PLANE_READ_ONLY_COMPLETE"')
 # Only the three explicitly read-only FTP verbs may be assigned to requests.
 ftp_methods = set(re.findall(r"\[System\.Net\.WebRequestMethods\+Ftp\]::(\w+)", script))
 assert ftp_methods == {"ListDirectoryDetails", "GetFileSize", "DownloadFile"}, ftp_methods
