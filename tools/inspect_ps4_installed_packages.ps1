@@ -1,4 +1,5 @@
 $ErrorActionPreference = "Stop"
+Import-Module (Join-Path $PSScriptRoot "ps4-evidence-parser.psm1") -Force
 if (-not $env:EVIDENCE_DIR -or -not (Test-Path -LiteralPath $env:EVIDENCE_DIR -PathType Container)) { throw "EVIDENCE_DIR is missing." }
 if (-not $env:PKGTOOL -or -not (Test-Path -LiteralPath $env:PKGTOOL -PathType Leaf)) { throw "Pinned OrbisPkgTool DLL is missing." }
 if (-not $env:RUNNER_TEMP) { throw "RUNNER_TEMP is missing." }
@@ -131,13 +132,6 @@ if ($pluginListingEntry -and $pluginListingEntry.local_file) {
     $pluginListingLines = Get-Content -LiteralPath $pluginListingPath
   }
 }
-function Get-PluginListingSize([string]$fileName) {
-  $line = $pluginListingLines | Where-Object { $_.TrimEnd().EndsWith($fileName, [StringComparison]::Ordinal) } | Select-Object -First 1
-  if (-not $line) { return $null }
-  $match = [regex]::Match($line, '^\S+\s+\d+\s+\S+\s+\S+\s+(\d+)\s+')
-  if ($match.Success) { return [int64]$match.Groups[1].Value }
-  return $null
-}
 foreach ($path in $prxSnapshotPaths) {
   $entry = Get-EvidenceEntry $path
   if (-not $entry -or -not $entry.local_file -or $entry.result -notin @("ok","size_or_mutability_mismatch","partial")) {
@@ -150,7 +144,7 @@ foreach ($path in $prxSnapshotPaths) {
   $hash = (Get-FileHash -LiteralPath $file -Algorithm SHA256).Hash.ToLowerInvariant()
   if ($bytes -ne [int64]$entry.local_bytes -or $hash -ne [string]$entry.sha256) { throw "PRX evidence differs from collector manifest: $path" }
   $fileName = [IO.Path]::GetFileName($path)
-  $listingSize = Get-PluginListingSize $fileName
+  $listingSize = Get-NrFtpListingSize -Lines $pluginListingLines -FileName $fileName
   $listGetMatch = if ($null -ne $listingSize) { $listingSize -eq $bytes } else { $null }
   $prxSnapshots.Add([pscustomobject]@{
     remote_path=$path;status=$entry.result;bytes=$bytes;sha256=$hash
@@ -164,7 +158,7 @@ $releasePrxHash = $null
 if ($releaseManifestEntry -and $releaseManifestEntry.result -eq "ok" -and $releaseManifestEntry.local_file) {
   $releasePath = Join-Path $env:EVIDENCE_DIR $releaseManifestEntry.local_file
   $releaseText = Get-Content -LiteralPath $releasePath -Raw
-  $releaseValues = ConvertFrom-StringData $releaseText
+  $releaseValues = ConvertFrom-NrReleaseManifest -Text $releaseText
   $candidateHash = ([string]$releaseValues["prx_sha256"]).Trim()
   if ($candidateHash -match '^[a-fA-F0-9]{64}$') { $releasePrxHash = $candidateHash.ToLowerInvariant() }
   foreach ($key in @("release_number","app_version","title_id","content_id","abi_status","hardware_status")) {
@@ -177,7 +171,7 @@ $pluginsIniRegistersPrx = $false
 if ($pluginsIniEntry -and $pluginsIniEntry.result -eq "ok" -and $pluginsIniEntry.local_file) {
   $pluginsIniPath = Join-Path $env:EVIDENCE_DIR $pluginsIniEntry.local_file
   $pluginsIniText = Get-Content -LiteralPath $pluginsIniPath -Raw
-$pluginsIniRegistersPrx = $pluginsIniText.Contains("/data/GoldHEN/plugins/ps4_neural_engine.prx")
+$pluginsIniRegistersPrx = Test-NrPluginsIniRegistration -Text $pluginsIniText
 }
 $comparisons["plugins_ini_registers_nr_prx"] = $pluginsIniRegistersPrx
 $currentPrxHash = $null
