@@ -57,3 +57,35 @@ The PS4 Windows LAN bridge is **already installed and configured**. This is esta
 - Treat the following capabilities separately and verify each from workflow code and run logs: (a) FTP connectivity/listing, (b) upload, (c) remote read-back and digest verification, (d) staging/promotion, (e) package installation, (f) app launch/termination, (g) screen/process/crash observation, and (h) log collection. Success at an earlier item does not prove a later item.
 - Current demonstrated capability includes FTP upload, read-back size/SHA-256 verification, and promotion into `/data/pkg/`. Do not claim that remote installation, app launch/close, screenshot capture, or runtime crash detection is automated unless a specific implemented workflow and successful run prove it.
 - Continue to preserve the existing authorization boundaries: read-only collection and verified staging are distinct from installation, PRX activation, GoldHEN restart, configuration changes, or destructive operations. Those sensitive actions require explicit, specific authorization.
+
+
+## Control-plane automation — implementation gates (2026-11-23)
+
+The user has explicitly authorized, for the Neural Rendering project scope, automated installation of approved NR PKGs, deployment/activation of the NR PRX, and GoldHEN restart. This supersedes the older manual-install handoff and the prior requirement to obtain a second per-operation authorization for these named NR operations. It does **not** authorize uninstalling unrelated software, touching saves/user data, deleting logs, or executing unreviewed payloads.
+
+### Discovered GoldHEN services and constraints
+
+GoldHEN's upstream project documents:
+- FTP on TCP 2121;
+- BinLoader on TCP 9090;
+- Klog on TCP 3232;
+- internal PKG installation from `/data/pkg`;
+- plugin support and remote package installation.
+
+Upstream explicitly warns that BinLoader is experimental and payloads may crash the console. Therefore, an open 9090 port is only service reachability, not proof of a compatible/validated payload protocol, safe execution, firmware support, or an install/restart API. Do not send a payload as a connectivity test. The user's recorded FW 14.02 must be matched against the exact installed GoldHEN build and supported firmware before selecting a control adapter.
+
+### Required control-plane stages
+
+1. **Discovery (read-only):** probe 2121/9090/3232 from the existing Windows runner; record timestamp, target, TCP result, runner identity, triggering build run/commit. Read available GoldHEN version/configuration evidence without changing it.
+2. **Protocol qualification:** pin the exact GoldHEN release/source commit and firmware compatibility; document the wire protocol and response framing for remote PKG install, BinLoader payload delivery, plugin activation, and restart. A TCP connect alone never qualifies a protocol.
+3. **Signed/hashed operation manifest:** accept only artifacts from the triggering successful build, matching repository, branch allowlist, commit, package metadata, QA result, SHA-256, and explicit NR target allowlist. Reject arbitrary paths, URLs, payloads, or commands.
+4. **PKG installation adapter:** use a documented GoldHEN remote-package-install mechanism or a reviewed NR-owned helper; verify install result and installed Title ID/version. Do not uninstall existing content automatically; detect conflicts and stop safely.
+5. **PRX adapter:** deploy to the documented GoldHEN plugin directory; back up the exact existing NR registration/configuration, make a minimal reversible change, verify bytes/hash and registration. Do not activate the current inert scaffold merely by bypassing its title-adapter gate.
+6. **GoldHEN restart/recovery:** use only a firmware-qualified, documented mechanism; record pre/post state and ensure a bounded recovery path. Never infer restart from a dropped TCP connection.
+7. **Runtime observation:** collect Klog and existing app/system evidence read-only; correlate timestamps and build/PKG/PRX hashes; preserve originals and create a CDA manifest. Separate E0-E4.
+8. **Rollback:** only reverse changes made by the same NR transaction; preserve unrelated plugins/configuration/data. If state is ambiguous, stop without cleanup.
+9. **Gates:** QA and package integrity must pass before install; install verification before PRX activation; plugin registration verification before restart; restart verification before runtime test; E0-E3 evidence before functional conclusions. Each stage emits machine-readable JSON and GitHub step summary.
+
+### Current status
+
+The existing bridge proves FTP upload/readback/staging only. A new read-only control-plane preflight workflow probes 9090 and 3232 as well as 2121. Until a successful run and exact GoldHEN version/firmware protocol qualification exist, install/activation/restart remain **authorized but technically unimplemented**. Never equate port reachability with execution capability.
