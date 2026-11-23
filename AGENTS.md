@@ -140,3 +140,10 @@ The optional PS4 RPI read-only readiness probe is a manually gated workflow that
 ## RPI readiness automation
 
 The RPI read-only readiness probe is triggered after successful PS4 Control Plane Preflight runs on main and may also be manually dispatched. It fetches the probe script from the exact preflight commit SHA and performs only GET fingerprint/status/identity requests plus POST /api/is_exists for PNEU00001. It never sends install/task-control requests, uses BinLoader, or modifies FTP files. The GoldHEN Package Installer must be in the foreground for the receiver to answer; otherwise the probe records NOT_CONFIRMED and exits without mutation.
+
+
+## Automation closure and runtime integrity hold
+
+The build/QA -> read-only PS4 preflight -> offline installed-package inspection -> version-gated staging -> idempotent archive chain is verified on the PS4 Windows bridge. Never treat this as authorization to install, deploy/activate a PRX, edit plugins.ini, restart GoldHEN, or claim GPU validation. The latest offline inspection reports the live /data/GoldHEN/plugins/ps4_neural_engine.prx as 317216 bytes with SHA-256 1481214d21aa5c826f9d51ae8cd55759e625c2b9ca7159dd9578ea632661d8e7, while FTP LIST reports 224128 bytes and the hash matches neither the release manifest nor the installed app's packaged PRX. Keep runtime activation blocked; preserve evidence and await explicit user feedback/authorization for separate runtime diagnosis. The .pne-tmp and .pne-backup.001 copies match the release-manifest PRX hash. The active plugins.ini registers NR and PluginLoader_Enabled is enabled.
+
+The read-only RPI readiness workflow is automatically triggered only after successful PS4 Control Plane Preflight runs on main; it pins its probe script to the upstream run's exact head SHA. It never installs or controls tasks. The GoldHEN Package Installer must be foreground; no listener response means NOT_CONFIRMED, not proof of missing support.
