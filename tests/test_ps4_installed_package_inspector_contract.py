@@ -11,6 +11,9 @@ assert "types: [completed]" in workflow
 assert "run-id: ${{ github.event.workflow_run.id }}" in workflow
 assert "name: ps4-control-plane-preflight-${{ github.event.workflow_run.id }}" in workflow
 assert "3de6da849b64a8ad0d5ba00dd4e8919934b868b0" in workflow
+assert "path: NR" in workflow
+assert "ref: ${{ github.sha }}" in workflow
+assert "NR\\tools\\inspect_ps4_installed_packages.ps1" in workflow
 assert "actions: read" in workflow and "contents: read" in workflow
 assert "retention-days: 30" in workflow
 
