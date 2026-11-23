@@ -7,6 +7,8 @@ assert "shell: powershell -NoProfile -ExecutionPolicy Bypass -File {0}" in audit
 assert "installed-app.pkg" in audit and "installed-app.json" in audit
 assert "user-data-source-pkg015.pkg" in audit and "staged-pkg015.pkg" in audit
 assert "Get-FileHash" in audit
+assert "ErrorActionPreference = \"Continue\"" in audit
+assert "sce_sys/param.sfo" not in audit
 assert "READ_ONLY=true" in audit and "NO_FILES_WRITTEN_OR_DELETED_ON_PS4=true" in audit
 assert "retention-days: 30" in audit
 
