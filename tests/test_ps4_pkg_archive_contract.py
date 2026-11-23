@@ -12,6 +12,9 @@ assert "UploadFile" not in script and "DeleteFile" not in script
 assert "MakeDirectory" not in script and "RemoveDirectory" not in script
 assert "POST" not in script.upper()
 assert "Remove-Item" not in script
+assert "$request.UsePassive = $true" in script
+assert "$request.UsePassive = $false" not in script
+assert "$request.Timeout = 60000" in script
 
 assert "workflow_run:" in workflow
 assert 'workflows: ["PS4 Installed Package Offline Inspection"]' in workflow
