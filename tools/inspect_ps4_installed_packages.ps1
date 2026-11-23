@@ -33,7 +33,7 @@ $targets = @(
 
 foreach ($target in $targets) {
   $entry = Get-EvidenceEntry $target.path
-  if (-not $entry -or $entry.result -ne "ok" -or -not $entry.local_file) {
+  if (-not $entry -or -not $entry.local_file -or $entry.result -notin @("ok","size_or_mutability_mismatch","partial")) {
     $results.Add([pscustomobject]@{remote_path=$target.path;role=$target.role;status="not_collected";required=$target.required})
     if ($target.required) { throw "Required installed package evidence is unavailable: $($target.path)" }
     continue
@@ -43,6 +43,11 @@ foreach ($target in $targets) {
   $size = (Get-Item -LiteralPath $pkg).Length
   $hash = (Get-FileHash -LiteralPath $pkg -Algorithm SHA256).Hash.ToLowerInvariant()
   if ($size -ne [int64]$entry.local_bytes -or $hash -ne [string]$entry.sha256) { throw "Local artifact identity differs from collector manifest: $($target.path)" }
+  if ($entry.result -ne "ok") {
+    $results.Add([pscustomobject]@{remote_path=$target.path;role=$target.role;status=$entry.result;bytes=$size;sha256=$hash;required=$target.required})
+    if ($target.required) { throw "Required installed app.pkg snapshot is not size-stable." }
+    continue
+  }
 
   $stem = [IO.Path]::GetFileNameWithoutExtension($target.path)
   $validationPath = Join-Path $output ($stem + ".validation.txt")
@@ -107,11 +112,12 @@ $comparisons = [ordered]@{
   app_json_package_digest_semantics="not_assumed_to_be_raw_file_sha256"
 }
 $currentPrxEntry = Get-EvidenceEntry "/data/GoldHEN/plugins/ps4_neural_engine.prx"
-if ($currentPrxEntry -and $currentPrxEntry.result -eq "ok") {
+if ($currentPrxEntry -and $currentPrxEntry.local_file -and $currentPrxEntry.result -in @("ok","size_or_mutability_mismatch")) {
   $currentPrx = Join-Path $env:EVIDENCE_DIR $currentPrxEntry.local_file
   $currentPrxHash = (Get-FileHash -LiteralPath $currentPrx -Algorithm SHA256).Hash.ToLowerInvariant()
   $comparisons["current_goldhen_prx_sha256"] = $currentPrxHash
-  $comparisons["installed_app_prx_matches_goldhen_prx"] = ($installed.packaged_prx_sha256 -and $installed.packaged_prx_sha256 -eq $currentPrxHash)
+  $comparisons["current_goldhen_prx_snapshot_result"] = $currentPrxEntry.result
+  $comparisons["installed_app_prx_matches_goldhen_prx"] = ($currentPrxEntry.result -eq "ok" -and $installed.packaged_prx_sha256 -and $installed.packaged_prx_sha256 -eq $currentPrxHash)
 }
 $appJsonEntry = Get-EvidenceEntry "/user/app/PNEU00001/app.json"
 if ($appJsonEntry -and $appJsonEntry.result -eq "ok") {
