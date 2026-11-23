@@ -69,7 +69,8 @@ jobs:
           "@
           $previous = $ErrorActionPreference
           $ErrorActionPreference = 'Continue'
-          $output = & $codex exec --sandbox workspace-write --skip-git-repo-check $prompt 2>&1 | ForEach-Object { "$_" }
+          # Codex exec consumes the full multiline task from stdin.
+          $output = $prompt | & $codex exec --sandbox workspace-write --skip-git-repo-check 2>&1 | ForEach-Object { "$_" }
           $exitCode = $LASTEXITCODE
           $ErrorActionPreference = $previous
           $output | ForEach-Object { Write-Host $_ }
@@ -81,8 +82,24 @@ jobs:
         shell: powershell
         run: |
           $ErrorActionPreference = 'Stop'
-          git diff --check
-          if ($LASTEXITCODE -ne 0) { throw 'git diff --check failed.' }
+          $gitCandidates = @(
+            'C:\Program Files\Git\cmd\git.exe',
+            'C:\Program Files\Git\bin\git.exe',
+            'C:\ProgramData\chocolatey\bin\git.exe'
+          )
+          foreach ($candidate in $gitCandidates) {
+            if (Test-Path -LiteralPath $candidate) {
+              $env:PATH = (Split-Path $candidate) + ';' + $env:PATH
+              break
+            }
+          }
+          $gitCommand = Get-Command git.exe -ErrorAction SilentlyContinue
+          if (-not $gitCommand) {
+            Write-Warning 'Git executable is not installed or not discoverable on this runner; preserving report and patch as artifact without pushing.'
+          } else {
+            git diff --check
+            if ($LASTEXITCODE -ne 0) { throw 'git diff --check failed.' }
+          }
           $report = 'docs/engineering/CODEX_AUTONOMOUS_CYCLE_REPORT.md'
           if (-not (Test-Path -LiteralPath $report -PathType Leaf)) {
             throw "Codex did not create the required report: $report"
@@ -92,8 +109,12 @@ jobs:
           $diff | ForEach-Object { Write-Host $_ }
           if (-not $diff) { throw 'Codex produced neither a report nor code changes.' }
           New-Item -ItemType Directory -Force -Path "$env:RUNNER_TEMP\nr-codex-cycle" | Out-Null
-          git diff --binary --output="$env:RUNNER_TEMP\nr-codex-cycle\changes.patch"
-          if ($LASTEXITCODE -ne 0) { throw "Could not export binary patch." }
+          if ($gitCommand) {
+            git diff --binary --output="$env:RUNNER_TEMP\nr-codex-cycle\changes.patch"
+            if ($LASTEXITCODE -ne 0) { throw "Could not export binary patch." }
+          } else {
+            'Git unavailable; inspect the report and workspace snapshot in this run.' | Set-Content -LiteralPath "$env:RUNNER_TEMP\nr-codex-cycle\changes.patch"
+          }
           Copy-Item $report "$env:RUNNER_TEMP\nr-codex-cycle\CODEX_AUTONOMOUS_CYCLE_REPORT.md"
           Copy-Item "$env:RUNNER_TEMP\codex-engineering-output.txt" "$env:RUNNER_TEMP\nr-codex-cycle\codex-output.txt"
 
@@ -112,8 +133,15 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           $ErrorActionPreference = 'Stop'
+          $gitCandidates = @('C:\Program Files\Git\cmd\git.exe','C:\Program Files\Git\bin\git.exe','C:\ProgramData\chocolatey\bin\git.exe')
+          foreach ($candidate in $gitCandidates) { if (Test-Path -LiteralPath $candidate) { $env:PATH = (Split-Path $candidate) + ';' + $env:PATH; break } }
+          if (-not (Get-Command git.exe -ErrorAction SilentlyContinue)) { Write-Warning 'Git unavailable; skipping commit/push and retaining artifact evidence.'; exit 0 }
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git init
+          git remote add origin https://github.com/demolidorreddragons/NR.git
+          git fetch --depth=1 origin engineering/codex-autonomous-cycle-20261123
+          git checkout -B engineering/codex-autonomous-cycle-20261123 FETCH_HEAD
           git add -A
           if (-not (git diff --cached --quiet)) {
             git commit -m "Codex autonomous engineering cycle"
