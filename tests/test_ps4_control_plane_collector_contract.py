@@ -52,6 +52,9 @@ assert "size_stable=$stable" in script
 for remote in (
     "/data/GoldHEN/ps4_neural_engine_install.log",
     "/data/GoldHEN/plugins/ps4_neural_engine.prx.pne-release.ini",
+    "/data/GoldHEN/plugins/ps4_neural_engine.prx.pne-tmp",
+    "/data/GoldHEN/plugins/ps4_neural_engine.prx.pne-backup",
+    "/data/GoldHEN/plugins/ps4_neural_engine.prx.pne-backup.001",
     "/user/app/PNEU00001/app.pkg",
     "/user/app/PNEU00004/app.pkg",
     "/user/data/pkg/PS4-Neural-Engine-015.pkg",
