@@ -383,3 +383,10 @@ It never calls /api/install, task-control endpoints, BinLoader, or any FTP mutat
 
 The latest inspected installed package remains PNEU00001 APP_VER 01.10, SHA-256 2fcaf679766fefbed4bc60cc31beb0227b8bfefd4eb8070160f65a402be747e9. The latest build artifact is PKG 006 APP_VER 01.02, older than the installed release; the staging guard correctly skipped it. Therefore there is currently no newer QA-approved PKG to install. Do not reinstall the existing 01.10 Full/Base PKG or stage the older 01.02 build.
 
+## Windows bridge runner service health — 2026-11-23
+
+Read-only diagnostics run 45180173337 completed successfully; artifact 14821062199 (ZIP SHA-256 37cb5ac316bdb2701971855020e3d360bbbbf30852384bd6d6e93081d247da41). The registered service actions.runner.demolidorreddragons-NR.PS4-WINDOWS-BRIDGE is currently RUNNING, configured Automatic (Delayed), logon LocalSystem, service SID UNRESTRICTED, with no configured dependencies. SC exit codes are zero; RunnerService, Runner.Listener and Runner.Worker processes were present. The captured System/Application event sample contains no runner-service startup failure; the 7031 event belongs to CDPUserSvc, not the runner. The earlier 1068 report is historical and is not reproduced by the current snapshot. No service, registry, runner, or PS4 changes were made. Reboot persistence has not been tested; do not change service configuration without new failure evidence.
+
+
+The RPI read-only readiness probe now runs automatically after each successful PS4 Control Plane Preflight on main, and remains manually dispatchable. It uses the exact preflight commit SHA to fetch its script, then only checks the RPI API fingerprint/status/identity and performs the read-only PNEU00001 existence query. If GoldHEN Package Installer is not foreground, it records NOT_CONFIRMED and sends no install request. This avoids requiring a separate manual workflow dispatch while preserving the console foreground prerequisite.
+
