@@ -18,4 +18,6 @@ assert "44654196789" not in inspect
 assert "OrbisPkgTool" in inspect and "3de6da849b64a8ad0d5ba00dd4e8919934b868b0" in inspect
 assert 'dotnet "$tool" validate "$pkg"' in inspect
 assert 'dotnet "$tool" sfo read' in inspect
+assert "PACKAGE_EMBEDDED_PRX_SHA256" in inspect
+assert "ps4_neural_engine.prx" in inspect
 print("Installed-app read-only audit and exact-run inspector contract passed")
