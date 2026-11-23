@@ -42,7 +42,16 @@ jobs:
           Write-Host ("CODEX_VERSION=" + (@($versionOutput) -join " "))
           Write-Host ("CODEX_ENTRYPOINT=" + $cli)
           Write-Host ("CODEX_INSTALL_ROOT=" + $root)
-          $authPresent = [bool]($env:OPENAI_API_KEY)
-          Write-Host ("OPENAI_API_KEY_PRESENT=" + $authPresent)
-          Write-Host "CODEX_AUTH_STATUS=NOT_CHECKED"
+          $openAiKeyPresent = [bool]($env:OPENAI_API_KEY)
+          $codexKeyPresent = [bool]($env:CODEX_API_KEY)
+          Write-Host ("OPENAI_API_KEY_PRESENT=" + $openAiKeyPresent)
+          Write-Host ("CODEX_API_KEY_PRESENT=" + $codexKeyPresent)
+          $authOutput = & $cli login status 2>&1
+          $authExit = $LASTEXITCODE
+          if ($authExit -eq 0) {
+            Write-Host ("CODEX_AUTH_STATUS=AUTHENTICATED " + (@($authOutput) -join " "))
+          } else {
+            Write-Host "CODEX_AUTH_STATUS=NOT_AUTHENTICATED"
+            if ($authOutput) { Write-Host ("CODEX_AUTH_DETAIL=" + (@($authOutput) -join " ")) }
+          }
           Write-Host "CODEX_CLI_INSTALL_VERIFIED"
