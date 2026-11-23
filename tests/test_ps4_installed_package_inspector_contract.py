@@ -19,7 +19,7 @@ assert "path: NR-src" in workflow
 assert "NR-src/tools/inspect_ps4_installed_packages.ps1" in workflow
 assert "EXPECTED_COLLECTOR_COMMIT: ${{ steps.manifest.outputs.collector_commit }}" in workflow
 assert "EXPECTED_COLLECTOR_COMMIT" in script
-assert "Get-ListingEntry" in script and "Get-PluginListingSize" in script
+assert "Get-ListingEntry" in script and "Get-NrFtpListingSize" in script
 assert "ps4-evidence-parser.psm1" in script
 assert "Import-Module" in script
 assert "ConvertFrom-NrReleaseManifest" in script
