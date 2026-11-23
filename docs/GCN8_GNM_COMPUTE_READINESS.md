@@ -195,3 +195,20 @@ The pinned compiler linked successfully; the deterministic SPIR-V compute smoke 
 A repository source inventory after Gate A found no implementation references to `sceGnmSetCsShader`, `sceGnmDispatchDirect`, or a compute readback path. Current `src/` contains telemetry and telemetry bridge sources; existing telemetry hooks capture submit/present timing and CPU-visible data, not a compute dispatch/readback pipeline. Therefore Gate B remains blocked on implementing and validating the PS4 GNM command submission, compute shader binding, resource allocation, synchronization/fence handling, and GPU-to-CPU readback path against the actual target SDK/firmware ABI.
 
 No PKG has been produced or installed as part of this Gate A pass. No console state was changed. The next work must establish the exact target SDK headers/library ABI and add a separately gated, opt-in PS4 hardware smoke harness before any production integration.
+
+
+### Gate B follow-up: current opengnm runtime documentation cross-check (2026-11-23)
+
+The current published opengnm documentation was rechecked after the earlier pinned-source review. It clarifies an important distinction: the Orbis backend lists `sceGnmSetCsShader`, `sceGnmDispatchDirect`, `sceGnmSubmitCommandBuffers`, and compute-queue functions among firmware externs, while separately identifying 172 other GNM entry points as retail stubs returning `ORBIS_GNM_ERROR_FAILURE`. The published API reference gives typed signatures for the CS bind and direct-dispatch calls and does **not** label those two calls as retail stubs. This is stronger source-level evidence that these compute entry points are intended to be callable on retail hardware than the placeholder OpenOrbis declarations alone. It still does not prove the exact export/ABI on firmware 14.02 or a successful GFX8 dispatch on this console.
+
+The same documentation says the generic backend's submit functions are no-ops and that its host tests validate packet construction only. Its Orbis backend forwards to `libSceGnmDriver`; this remains a distinct hardware path. Do not conflate the 172 unrelated retail stubs with the CS bind/dispatch functions, and do not infer that every GNM API is usable on retail.
+
+References checked:
+- Runtime API signatures and compute/submit sections: https://ps4-opengnm.github.io/opengnm/reference/driver/
+- Orbis vs generic backend, firmware extern list, and explicit retail-stub count: https://ps4-opengnm.github.io/opengnm/backends/
+
+**Revised Gate B assessment:** compute bind/dispatch/submit have credible typed source-level candidate contracts and are not identified as retail stubs by the current opengnm docs. Gate B nevertheless remains BLOCKED because there is still no independent firmware-14.02 ABI confirmation, no proven command-buffer and GPU allocation/residency path for this PRX process, no qualified synchronization/cache-coherent readback, and no console known-answer run. The immediate next engineering step is to build a separate non-invasive PS4 test harness using only the documented Orbis path, but only after resolving those runtime contracts. No changes to the live telemetry PRX are authorized by this source review.
+
+### CI confirmation for current audit head
+
+For branch head `a9c270afe171e14ac21ff12dff9d5a12e8a2a87e`, the latest Gate A pull-request run `45214108704` and push run `45214094984` both completed successfully; the matching host test run `45214108677` also completed successfully. These runs validate the hosted compiler/artifact gate and host tests only. They do not change the hardware status above.
