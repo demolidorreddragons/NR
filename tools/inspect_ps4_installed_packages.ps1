@@ -78,18 +78,20 @@ foreach ($target in $targets) {
   $titleMatch = [regex]::Match($sfoText, '(?m)^TITLE_ID\s*=\s*([^\r\n]+)')
   $contentMatch = [regex]::Match($sfoText, '(?m)^CONTENT_ID\s*=\s*([^\r\n]+)')
   $categoryMatch = [regex]::Match($sfoText, '(?m)^CATEGORY\s*=\s*([^\r\n]+)')
+  $storageMatch = [regex]::Match($sfoText, 'st_type=([^,\s]+)')
+  $storageType = if ($storageMatch.Success) { $storageMatch.Groups[1].Value.Trim() } else { "" }
   $titleId = if ($titleMatch.Success) { $titleMatch.Groups[1].Value.Trim() } else { "" }
   $contentId = if ($contentMatch.Success) { $contentMatch.Groups[1].Value.Trim() } else { "" }
   $category = if ($categoryMatch.Success) { $categoryMatch.Groups[1].Value.Trim() } else { "" }
   $expectedContent = if ($expectedTitle -eq "PNEU00004") { $contentId -match '^IV0000-PNEU00004_' } else { $contentId -eq "IV0000-PNEU00001_00-PS4NEURALENG0000" }
-  $semantic = ($category -eq "gde") -and ($titleId -eq $expectedTitle) -and $expectedContent -and ($sfoText -match 'st_type=digital50') -and ($appVer -ne "") -and ($appVer -eq $version)
+  $semantic = ($category -eq "gde") -and ($titleId -eq $expectedTitle) -and $expectedContent -and ($storageType -eq 'digital50') -and ($appVer -ne "") -and ($appVer -eq $version)
   $packagedPrx = Get-ChildItem -LiteralPath $extract -Recurse -File | Where-Object { $_.Name -eq "ps4_neural_engine.prx" } | Select-Object -First 1
   $prxHash = $null
   if ($packagedPrx) { $prxHash = (Get-FileHash -LiteralPath $packagedPrx.FullName -Algorithm SHA256).Hash.ToLowerInvariant() }
   $results.Add([pscustomobject]@{
     remote_path=$target.path;role=$target.role;status=$(if($semantic){"PASS_PC_ONLY"}else{"SFO_SEMANTIC_MISMATCH"})
     bytes=$size;sha256=$hash;category=$category;title_id=$titleId;app_ver=$appVer;version=$version
-    content_id=$contentId;storage_type="digital50";packaged_prx_sha256=$prxHash
+    content_id=$contentId;storage_type=$storageType;packaged_prx_sha256=$prxHash
   })
   if ($target.required -and -not $semantic) { throw "Installed app.pkg PARAM.SFO semantic fields do not match the NR base application contract." }
 }
