@@ -130,3 +130,23 @@ Inspection of the exact pinned upstream `src/util/blake3/meson.build` confirms t
 The workflow run triggered by commit `c6a6256edeed7ec26448921e938891442cb56cfd` (run `45207953801`, job `137808866934`) completed the dependency checkout and generated-source preparation, then stopped before compilation. The exact shell error was `BLAKE3_NO_SIMD: unbound variable`: the workflow wrote an assignment into the generated `config.mak` heredoc, but attempted to expand that name in the runner shell while `set -u` was active. This was a workflow scripting defect, not a compiler or console failure.
 
 Commit `04c36ba7ac52b9d0d59e14b0b9d065ad2dd1f1a9` fixes the defect by placing the four upstream portable BLAKE3 defines directly in both generated `CFLAGS` and `CXXFLAGS`, avoiding an unset shell-variable expansion. The corrected workflow still requires a fresh completed run; Gate A remains unpassed until the compiler links, the compute shader compiles, and the independent GNM stage/NEO/CRC verifier succeeds.
+
+
+### Gate A PASS: compiler and GNM compute artifact verified (2026-11-23)
+
+The corrected workflow completed successfully on commit `e010c91a4b4184bbc19721fb75a5f2ec5b66c4e7`:
+
+- GitHub Actions run `45209149062` (pull request) — all steps successful.
+- Matching push run `45209140192` — successful.
+- Host test run `45209149046` — successful.
+- Artifact bundle: `gcn8-compute-artifact-gate-45209149062` (artifact ID `14835836628`).
+
+The pinned compiler linked successfully; the deterministic SPIR-V compute smoke shader compiled to a 232-byte GNM shader binary; the independent verifier passed the PSSL/GNM structural checks, compute stage byte (`4`), NEO target byte (`2`), and PS4 CRC32 (`0x925b2070`). Artifact SHA-256: `32999d68fd9052a4833ba7cfa16517180544c78f173999ca8d8578f21584482d`. SPIR-V SHA-256: `964af9e2b13bdce7883cb2b53437e4b75547ddfa12580177e4d0da0d7509a626`.
+
+**Gate A is now PASS (artifact-only).** The verifier report explicitly records `hardware_dispatch_tested: false` and `firmware_14_02_tested: false`. This result proves compiler output format/target metadata/CRC only; it does not prove shader execution on the PS4 Pro.
+
+### Gate B status: hardware dispatch/readback integration is not implemented
+
+A repository source inventory after Gate A found no implementation references to `sceGnmSetCsShader`, `sceGnmDispatchDirect`, or a compute readback path. Current `src/` contains telemetry and telemetry bridge sources; existing telemetry hooks capture submit/present timing and CPU-visible data, not a compute dispatch/readback pipeline. Therefore Gate B remains blocked on implementing and validating the PS4 GNM command submission, compute shader binding, resource allocation, synchronization/fence handling, and GPU-to-CPU readback path against the actual target SDK/firmware ABI.
+
+No PKG has been produced or installed as part of this Gate A pass. No console state was changed. The next work must establish the exact target SDK headers/library ABI and add a separately gated, opt-in PS4 hardware smoke harness before any production integration.
