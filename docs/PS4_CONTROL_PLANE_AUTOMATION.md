@@ -292,3 +292,31 @@ References:
 - Offline inspection run `45167943764` failed before executing the script because the workflow checked out OrbisPkgTool but not the NR repository. No package inspection result was produced by that run. PR40 binds the NR script checkout to `collector_commit` from the exact preflight artifact and expands PRX integrity analysis.
 
 Current disposition: preserve the installed app, `plugins.ini`, active PRX, manifest, and all backup/temp files. Do not install a same-version FULL BASE PKG, replace/activate PRX, restart GoldHEN, or claim runtime validation.
+
+## Offline package inspection and PRX backup identity — 2026-11-23
+
+The PR40 offline inspector completed successfully:
+- Preflight run `45169044022`, build run `45168834153`, collector commit `dd08ba375c5e618c6472e465a67c45896b033b67`.
+- Preflight artifact `14815193437`, 68,042,986 bytes, SHA-256 `f4cedd493d93eaa0220c815e44c70b070d60054f21d13261bfffce051bf56496`.
+- Offline inspector run `45169142004`, artifact `14816675444`, SHA-256 `157f3488d481706251523ea731de9139f62ba4ff6c09f607cb6499f7c2277103`.
+- Pinned OrbisPkgTool validated and extracted all 11 captured packages. All 8 staged NR PKG candidates plus installed PNEU00001 and PNEU00004 app packages passed PC-only package validation and PARAM.SFO checks. No hardware validation was performed.
+- Installed PNEU00001 app.pkg, app.json source PKG, and canonical staged PKG 015 are identical at SHA-256 `2fcaf679766fefbed4bc60cc31beb0227b8bfefd4eb8070160f65a402be747e9`; APP_VER 01.10, CATEGORY `gde`, TITLE_ID `PNEU00001`, CONTENT_ID `IV0000-PNEU00001_00-PS4NEURALENG0000`, storage `digital50`.
+- The PNEU00004 diagnostic app also passed: SHA-256 `003baaa305dc6c6c9df20f0d383eba183ce795b873ead6f0f5e59a2d24b7383c`, APP_VER 01.00, TITLE_ID `PNEU00004`, CONTENT_ID `IV0000-PNEU00004_00-GCN8LINK00000000`. Preserve it separately.
+
+### PRX temp/backup chain — do not restore older files
+
+The exact read-only preflight GETs establish:
+- Active `ps4_neural_engine.prx`: 317,216 bytes, SHA-256 `1481214d21aa5c826f9d51ae8cd55759e625c2b9ca7159dd9578ea632661d8e7`.
+- Adjacent release manifest: release 010, app version 01.06, expected PRX SHA-256 `54e8595144a3a7e1d36602a1100bae6189f0955175c355bd3ac67d9cb7f85277`.
+- `ps4_neural_engine.prx.pne-tmp`: 224,128 bytes, SHA-256 `54e8595144a3a7e1d36602a1100bae6189f0955175c355bd3ac67d9cb7f85277` — matches the old release-010 manifest.
+- `ps4_neural_engine.prx.pne-backup.001`: same 224,128 bytes and same SHA-256 — also matches release 010.
+- `ps4_neural_engine.prx.pne-backup`: 206,528 bytes, SHA-256 `7561da3d3b83766becddcb37c1257d83c61009b5e814825ee60694d19f9cf704` — matches the packaged PRX in the five staged PKG 006 candidates (APP_VER 01.02).
+- The installed/staged PKG 015 packaged PRX is SHA-256 `1e4531711a0768cfeb29f1d6f66b9541cf087b141eda7a05fed755d12507866c`.
+
+Therefore the existing `.pne-tmp` and `.pne-backup.001` are **not** the PKG 015 PRX; they are the older release-010 PRX. The `.pne-backup` is the older PKG 006 PRX. None matches the current active PRX, whose hash is also not the PKG 015 PRX. Do not restore, rename, activate, or delete any of these files. The correct PKG 015 PRX is in the installed app.pkg, but the current GoldHEN path has not been updated to it.
+
+### Offline inspector parser correction
+
+The first successful offline inspection validated all package PKGs and SFO fields, but its newly added PRX sub-report had over-escaped regular expressions: LIST size parsed as null, the release manifest hash parsed as null, and plugins.ini registration was incorrectly reported false. These were parser defects, not console evidence. The raw preflight artifact independently contains the exact manifest text, active plugins.ini text, and stable GET hashes above.
+
+The follow-up replaces the fragile manifest regex with `ConvertFrom-StringData`, parses LIST size from the raw listing line with a single-escaped regex, and checks the registration path by exact string containment. The next inspection must report: active PRX does not match release manifest; temp and backup.001 do match release 010; backup matches PKG 006; none matches the PKG 015 packaged PRX; plugins.ini does register the active path.
