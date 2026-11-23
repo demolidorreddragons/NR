@@ -45,3 +45,10 @@ If no workflow currently implements all these steps, create or repair one before
 The preflight workflow runs `tools/ps4-control-plane-preflight.ps1` on the existing Windows LAN runner after an eligible successful build. It uses FTP LIST/GETSIZE/GET for narrowly allowlisted NR metadata and plugin paths, and HTTP GET-only fingerprinting on the RPI endpoint at TCP 12800. It never probes BinLoader 9090, sends payloads, issues POST, modifies remote files, installs packages, activates PRX, or restarts GoldHEN. It stores a timestamped JSON and raw evidence artifact for 30 days.
 
 The workflow definition is on the default branch so GitHub's `workflow_run` trigger can observe eligible build runs. It checks out the reviewed default-branch collector, not code from the triggering build, and records the build's source SHA as metadata. The preflight result is only a read-only snapshot.
+
+
+## Windows runner service troubleshooting
+
+The runner service has previously failed to start with reported error 1068, although the registered runner connects when started manually with `run.cmd`. Preserve the working manual registration and credentials. Do not reinstall the runner, remove its service, modify registry values, change the logon identity, or stop the manual listener as a diagnostic shortcut.
+
+Use `.github/workflows/ps4-windows-runner-service-diagnostics.yml` to collect read-only service state, service-control configuration, relevant event-log entries, runner directory ACLs, and filtered `_diag` excerpts. The workflow uses the existing `[self-hosted, Windows, X64, ps4-lan]` runner and retains a sanitized artifact for seven days. A repair may be considered only after the collected evidence identifies the specific failing dependency, account right, service SID, executable ACL, or runner service error. No automated repair is performed by the diagnostics workflow.
