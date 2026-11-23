@@ -1,7 +1,8 @@
 # Publishing console diagnostics
 
-The current PS4 PRX stores diagnostics locally. Console-to-GitHub upload is not
-implemented in this build.
+The PS4 PRX has an opt-in GitHub Device Flow uploader. A controller chord shows
+a preview and a second press confirms the batch. Upload remains unvalidated on
+the target console and is not automatic when recording stops.
 
 ## Planned authenticated flow
 
@@ -10,10 +11,25 @@ configuration in `include/pne/github_oauth.hpp`. The intended headless
 authorization is GitHub Device Flow; see
 [`GITHUB_DEVICE_FLOW.md`](GITHUB_DEVICE_FLOW.md).
 
-The remaining implementation includes PS4 HTTPS/TLS transport, Device Flow
-polling, short-lived token handling, GitHub Contents API upload, and an
-on-console review/confirmation screen. Until those pieces are implemented and
-validated on the target console, do not assume the PS4 can upload.
+The implementation includes PS4 HTTPS/TLS transport, Device Flow polling,
+short-lived token handling, GitHub Contents API upload, and the controller
+preview/confirmation flow. This is source-level implementation evidence only;
+it does not establish that uploads work on firmware 14.02.
+
+## Upload confirmation integrity
+
+The pending confirmation records every eligible relative filename, byte count,
+and SHA-256 of its contents. File ordering does not affect the snapshot. If a
+name, size, digest, or eligible file set changes, the next press previews and
+arms the changed batch instead of inheriting confirmation. Authorization start,
+successful authorization, and disconnect invalidate any pending snapshot.
+
+Immediately before upload, the worker re-enumerates and hashes the eligible
+batch and requires an exact snapshot match. Each file is then read again and
+its bytes are checked against the confirmed SHA-256 before any GitHub request
+for that file is made. A mismatch fails the upload. This protects the bytes
+sent from a same-size replacement between preview and upload; it is not a
+firmware, transport, or on-console validation result.
 
 ## Privacy requirements
 
