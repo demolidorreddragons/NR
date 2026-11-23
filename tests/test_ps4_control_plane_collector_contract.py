@@ -11,7 +11,7 @@ ftp_methods = set(re.findall(r"\[System\.Net\.WebRequestMethods\+Ftp\]::(\w+)", 
 assert ftp_methods == {"ListDirectoryDetails", "GetFileSize", "DownloadFile"}, ftp_methods
 assert not re.search(r"WebRequestMethods\+Ftp\]::(?:UploadFile|DeleteFile|Rename|MakeDirectory|RemoveDirectory)", script)
 assert "runs-on: [self-hosted, Windows, X64, ps4-lan]" in workflow
-assert "PS4_IP: \${{ vars.PS4_IP }}" in workflow
+assert r"PS4_IP: ${{ vars.PS4_IP }}" in workflow
 assert "persist-credentials: false" in workflow
 assert "ref: main" in workflow, "privileged runner must execute reviewed default-branch collector, not arbitrary build-branch code"
 assert "github.event.workflow_run.head_sha" in workflow, "build identity must be bound independently from collector source"
