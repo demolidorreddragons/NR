@@ -241,7 +241,7 @@ jobs:
             $contentUrl = "$api/contents/$encodedPath"
             $existing = $null
             try {
-              $existing = Invoke-RestMethod -Method Get -Uri "$contentUrl?ref=$branch" -Headers $headers
+              $existing = Invoke-RestMethod -Method Get -Uri "${contentUrl}?ref=$branch" -Headers $headers
             } catch {
               $status = 0
               if ($_.Exception.Response -and $_.Exception.Response.StatusCode) { $status = [int]$_.Exception.Response.StatusCode }
