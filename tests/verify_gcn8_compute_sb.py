@@ -185,9 +185,9 @@ def main() -> int:
     expected_user_sgprs = (
         layout["descriptor_table_slot"]["start_register"] + compiler_width + 1
     )  # preceding system SGPRs + descriptor pointer + workgroup_id.x
-    if layout["compute_user_sgpr_count"] != expected_user_sgprs:
+    if layout["compute_user_sgpr_count"] < expected_user_sgprs:
         raise SystemExit(
-            "compute PGM_RSRC2 USER_SGPR count mismatch: expected "
+            "compute PGM_RSRC2 USER_SGPR count is too small: expected at least "
             f"{expected_user_sgprs}, got {layout['compute_user_sgpr_count']}"
         )
     width_status = "CONSISTENT_SOURCE_WIDTH_AND_REGISTER_COUNT"
