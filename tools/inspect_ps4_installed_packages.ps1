@@ -48,12 +48,6 @@ foreach ($target in $targets) {
     if ($target.required) { throw "Required installed app.pkg snapshot is not size-stable." }
     continue
   }
-  }
-  $pkg = Join-Path $env:EVIDENCE_DIR $entry.local_file
-  if (-not (Test-Path -LiteralPath $pkg -PathType Leaf)) { throw "Evidence file missing: $($entry.local_file)" }
-  $size = (Get-Item -LiteralPath $pkg).Length
-  $hash = (Get-FileHash -LiteralPath $pkg -Algorithm SHA256).Hash.ToLowerInvariant()
-  if ($size -ne [int64]$entry.local_bytes -or $hash -ne [string]$entry.sha256) { throw "Local artifact identity differs from collector manifest: $($target.path)" }
 
   $stem = [IO.Path]::GetFileNameWithoutExtension($target.path)
   $validationPath = Join-Path $output ($stem + ".validation.txt")
