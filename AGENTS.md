@@ -129,9 +129,14 @@ The build → read-only PS4 preflight → offline PKG inspection → archive wor
 
 ## Windows PS4 bridge runner service diagnosis
 
-The Windows runner service `actions.runner.demolidorreddragons-NR.PS4-WINDOWS-BRIDGE` has previously failed to start (reported error 1068), while manually launching the registered runner with `run.cmd` successfully connects and listens for jobs. Preserve the registration, credentials, service, and working manual runner. Do not reinstall/remove the runner, change registry/service settings, or alter its logon identity without a cause established from read-only evidence and a separately reviewed repair plan. The `Windows PS4 bridge runner service diagnostics` workflow and `tools/collect_windows_runner_service_diagnostics.ps1` are read-only: they inspect service/CIM/SC state, selected registry values, ACLs, relevant Windows events and filtered runner diagnostic excerpts; they do not start/stop services or modify configuration.
+The Windows runner service was historically reported with startup error 1068. The latest read-only snapshot (run 45180173337, artifact 14821062199) instead shows the service RUNNING, Automatic (Delayed), LocalSystem, SID UNRESTRICTED, no dependencies, zero SC exit codes, and active RunnerService/Listener/Worker processes. No runner-service failure event was found in the bounded sample. Preserve the current healthy registration and do not alter service or registry settings without new failure evidence. The Windows PS4 bridge runner service diagnostics workflow is read-only and does not start/stop services or modify configuration.
 
 
 ## RPI readiness probe scope
 
 The optional PS4 RPI read-only readiness probe is a manually gated workflow that requires the GoldHEN Package Installer screen to be open in the foreground. It may issue GET fingerprint/status/identity requests and POST /api/is_exists for the NR Title ID only. It must never call install, uninstall, task-control, BinLoader, or FTP mutation endpoints. The automatic control-plane preflight remains GET-only. A connection refusal while the Package Installer is not foreground is not proof that the console lacks the receiver.
+
+
+## RPI readiness automation
+
+The RPI read-only readiness probe is triggered after successful PS4 Control Plane Preflight runs on main and may also be manually dispatched. It fetches the probe script from the exact preflight commit SHA and performs only GET fingerprint/status/identity requests plus POST /api/is_exists for PNEU00001. It never sends install/task-control requests, uses BinLoader, or modifies FTP files. The GoldHEN Package Installer must be in the foreground for the receiver to answer; otherwise the probe records NOT_CONFIRMED and exits without mutation.
