@@ -69,3 +69,18 @@ This resolves the version/firmware compatibility uncertainty at the release-docu
 - The release advertises Remote Package Install and internal `/data/pkg` installation, but the public release note alone does not specify a machine protocol, request framing, response semantics, or remote success verification. Those must be derived from the exact v2.4b18.14 implementation or a trusted, version-matched client before automating installation.
 - Plugin support is documented, but that alone does not establish a safe remote PRX activation or GoldHEN restart command. Continue to require a version-matched documented mechanism and independent post-operation verification.
 - The 14.02 compatibility gate can now be marked `RELEASE_COMPATIBILITY_DOCUMENTED`; live console identity, service reachability, protocol qualification, and operation success remain separate evidence states.
+
+
+## Provenance correction — GamerHack build/host (2026-11-23)
+
+The user clarifies that the GoldHEN v2.4b18.14 setup in use is the **GamerHack** version. Do not describe the user's installed distribution as a binary built or released by SiSTR0 unless its binary provenance is independently established.
+
+Public host metadata identifies the PS4 host as “Original host by GamerHack - hosted by patnawa” and lists GoldHEN v2.4b18.14 with firmware support through 14.02: https://patnawa.github.io/GoldhenPS4/g2all/. This proves host attribution and the host's advertised firmware routing, not by itself who compiled or modified the embedded GoldHEN payload. The upstream GoldHEN GitHub release page lists v2.4b18 with an older supported-firmware matrix; do not conflate that upstream release with the GamerHack v2.4b18.14 distribution.
+
+Operational classification:
+- Distribution/host: `GAMERHACK_ORIGINAL_HOST` (as advertised by the host page).
+- Host mirror: `PATNAWA_HOSTING`.
+- Embedded payload build provenance: `UNVERIFIED` until binary hash/source/build metadata is inspected.
+- Firmware 14.02 support: advertised by the GamerHack host page; independently verify live operation and the embedded payload before enabling privileged automation.
+
+For automation, pin the exact host repository/commit and the actual GoldHEN payload bytes/hash. Do not fetch a replacement payload from an unrelated upstream release or assume same-version strings imply identical binaries.
