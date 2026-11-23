@@ -107,4 +107,16 @@ This is reversible archival only; it is not installation or runtime validation. 
 The archive workflow must allow a same-run rerun after a partial RENAME by comparing the root LIST with the exact offline report and verifying matching archive names from the old-directory LIST. It must reject unvalidated extra root NR paths, distinguish a listed-but-550 source as access denied, and confirm final source absence with a fresh root LIST. It may never use GETSIZE as a destination collision probe.
 
 
+## Verified package-root normalization result — 2026-11-23
+
+Archive run `45172997929` completed with `ARCHIVE_COMPLETE_READBACK_VERIFIED`. It moved seven superseded NR packages from `/data/pkg/` into `/data/pkg/old/` using FTP RENAME and verified every destination by exact byte count and SHA-256 readback. The only NR PKG remaining in the root is canonical `PS4-Neural-Engine-015.pkg`, 6,619,136 bytes, SHA-256 `2fcaf679766fefbed4bc60cc31beb0227b8bfefd4eb8070160f65a402be747e9`. The two third-party game package names were unchanged. No install, PRX change, plugins.ini change, GoldHEN restart, or PNEU00004 action occurred. Do not re-archive the canonical PKG; reruns must remain idempotent and require a fresh exact offline inspection report.
+
+
+## Archive no-op after normalization
+
+
+
+The archive workflow must allow a same-run rerun after a partial RENAME by comparing the root LIST with the exact offline report and verifying matching archive names from the old-directory LIST. It must reject unvalidated extra root NR paths, distinguish a listed-but-550 source as access denied, and confirm final source absence with a fresh root LIST. It may never use GETSIZE as a destination collision probe.
+
+
 - After root normalization, `not_collected` historical staged targets may be skipped only when their paths are absent from the live `/data/pkg/` LIST. Any NR package present in the root must have PASS_PC_ONLY evidence. If only canonical PKG 015 remains, the archive workflow must complete as a verified no-op. For partial reruns, search matching same-basename archive names across run IDs and accept only exact GET readback size/SHA-256 matches; never assume a missing source was archived without that verification.
