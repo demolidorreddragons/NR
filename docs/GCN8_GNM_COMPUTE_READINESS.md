@@ -272,49 +272,99 @@ corrupted element fails the complete comparison. This is not GPU dispatch,
 hardware completion, or readback evidence. The test source was strengthened
 after review because generating the test output with the same production
 oracle would have made the comparison tautological.
-### Gate B follow-up: descriptor-table user-SGPR ABI disagreement (2026-11-23)
+### Gate B follow-up: descriptor pointer ABI aligned in offline artifact (2026-11-23)
 
-A focused cross-read of the pinned compiler and GNM shader metadata exposes an
-ABI disagreement that must be resolved before binding or dispatching compute:
+The original pinned PSBC source allocated the descriptor-table address as one
+ACO SGPR, while GNM classifies `PTR_INDIRECTRESOURCETABLE` as a two-SGPR
+pointer. A first attempt to widen the ACO argument itself to two components
+failed ACO validation with a `p_parallelcopy` operand/definition size
+mismatch; that approach was discarded.
 
-- In opengnm-psbc commit 28697f007862427ebec54388ec972ce6e3545912,
-  libpsbc/psbc_compile.c sets address32_hi to zero and builds descriptor set 0
-  with 64-byte binding stride and 16/32/48-byte descriptor records. In
-  radv_shader_args.c, add_descriptor_set allocates the descriptor base as one
-  SGPR (AC_ARG_SGPR size 1), records num_sgprs=1, and increments the user-SGPR
-  count by one. radv_nir_lower_descriptors.c expands that low address component
-  with the constant address32_hi when forming the 64-bit memory address.
-- The compiled GNM shader binary embeds a GnmInputUsageSlot table after the
-  GnmCsShader header. The compiler writes PTR_INDIRECTRESOURCETABLE (usage type
-  0x1c) and the compiler argument's startregister into that table. Therefore
-  the runtime can parse the SGPR start index from the binary; a separate
-  compiler sidecar is not inherently required.
-- In opengnm commit 4b295ca54c82c83acf308d1c646a2dfa9ae57350,
-  sceGnmShaderInputUsageTypeSize returns 2 for pointer input-usage types,
-  including PTR_INDIRECTRESOURCETABLE. Its
-  sceGnmDrawCmdSetPointerUserData helper also writes sizeof(void*) / 4 dwords
-  (two dwords on the 64-bit PS4 ABI). The pinned compiler allocates only one
-  SGPR for this descriptor base. The GNM metadata/helper convention and the
-  compiler's one-SGPR allocation therefore disagree unless a firmware/compiler
-  rule explicitly permits the high half to be implicit without reserving the
-  second SGPR. No such rule has yet been demonstrated for retail FW 14.02.
-- Because the descriptor argument is allocated before the compute workgroup-ID
-  arguments, blindly writing two dwords with SetPointerUserData may collide
-  with the next compiler-assigned SGPR. Conversely, emitting a one-dword write
-  without proving the GNM input-usage ABI may violate the GNM pointer contract.
+The reviewed compiler patch
+`patches/opengnm-psbc/0001-gcn8-descriptor-pointer-reserve-two-sgprs.patch`
+uses a narrower ABI correction for the direct descriptor-set and descriptor-
+heap paths:
 
-**Engineering decision:** keep Gate B blocked. Do not call the stock two-dword
-pointer helper for this compiler output, and do not replace it with a guessed
-single-dword PM4 write. The next engineering step is to resolve this exact
-compiler/GNM ABI disagreement against authoritative firmware or known-good
-retail shader evidence, then add a binary input-usage parser and packet-level
-tests before any isolated hardware harness. This is source-derived evidence;
-no compute command has been submitted to the console.
+- Keep the ACO address payload scalar (one SGPR), preserving the compiler's
+  `address32_hi=0` lowering.
+- Advertise two SGPRs in `ud_info->num_sgprs` and add two to
+  `num_user_sgprs`.
+- Increment `ac.num_sgprs_used` once after the scalar pointer argument. This
+  reserves the high-address dword in the SGPR layout, so following system
+  arguments cannot occupy the second half of the GNM pointer.
+- The indirect-all-descriptor-sets fallback is not covered by this patch. The
+  current smoke shader uses the direct set-0 path only.
+
+The patch is applied only to the exact pinned
+opengnm-psbc revision during the isolated hosted compiler build; it is not
+vendored into or linked by the live PRX.
+
+**Offline artifact evidence:** Gate run `45226345561` succeeded on commit
+`ddf094006edc64631edfa1f15f10d5480eaf82ab`; artifact
+`14843296604` has ZIP SHA-256
+`fcb722e38b40b0c947662e65426133f2e6b36a5c369deb9c5539672c612afa6c`.
+The independent report records:
+
+- GNM compute stage byte `0x04`, NEO target byte `0x02`, 228-byte shader
+  binary, SHA-256
+  `8f52fb74771164498a0c1e90bd828d8517f6414d34a1d28c395c9aae2563b6e1`.
+- One input-usage slot: type `0x1c` (`PTR_INDIRECTRESOURCETABLE`), API slot
+  0, start register 2.
+- Compiler pointer usage width 2 SGPRs, made of one scalar payload SGPR plus
+  one reserved high SGPR; the pinned GNM helper also reports width 2.
+- `COMPUTE_PGM_RSRC2=0x00000088`, user-data SGPR count 4. The GFX8 ring-offset
+  pointer occupies user SGPRs 0-1 and the descriptor-table pointer occupies
+  2-3. Workgroup-ID arguments are separate ACO system arguments, not part of
+  the `USER_SGPR` field.
+- Compiled compute thread dimensions `[64, 1, 1]`.
+- Status `PASS_ARTIFACT_ONLY_NOT_HARDWARE`; both
+  `hardware_dispatch_tested` and `firmware_14_02_tested` remain false.
+
+The SPIR-V input SHA-256 remains
+`964af9e2b13bdce7883cb2b53437e4b75547ddfa12580177e4d0da0d7509a626`.
+Host-tests run `45226359325` also succeeded on the same commit.
+
+This resolves the compiler/GNM pointer-width disagreement for the direct
+set-0 smoke-shader path at source and binary-metadata level. It does not prove
+that retail firmware writes the pointer as expected, and it does not validate
+the indirect-all-descriptor-sets path.
+
+### Gate B follow-up: compute dispatch ABI remains unresolved (2026-11-23)
+
+The compiled shader records local thread dimensions `[64, 1, 1]`; the
+256-element known-answer workload therefore requires a dispatch grid of
+`[4, 1, 1]`. The candidate dispatch helpers are not interchangeable:
+
+- The pinned opengnm generic `sceGnmDispatchDirect` implementation writes
+  `COMPUTE_NUM_THREAD_X/Y/Z` from the same arguments it then writes into the
+  `DISPATCH_DIRECT` dimensions. Its `sceGnmDrawCmdDispatchDirect` helper
+  follows the same pattern. For this shader, passing 4 would overwrite the
+  compiled local size 64; passing 64 would request 64 workgroups instead of 4.
+  Do not use these generic helpers for this known-answer shader.
+- The pinned shadPS4 HLE model at commit
+  `c4f8699581ef1f795a74669cc12fadf440cbe4a1` models
+  `sceGnmSetCsShader` as setting the compute-stage registers and
+  `sceGnmDispatchDirect` as emitting the dispatch packet only (9 dwords).
+  This is emulator behavior, not proof of the retail FW 14.02 ABI.
+- The pinned opengnm generic implementation requires a 12-dword buffer and
+  emits both thread-register writes and dispatch dimensions. This conflicts
+  with the shadPS4 HLE model and has not been validated against FW 14.02.
+
+**Engineering decision:** do not invoke either candidate dispatch path and do
+not emit a guessed PM4 packet. The exact retail `sceGnmSetCsShader` /
+`sceGnmDispatchDirect` ABI, command-buffer submission lifecycle, queue
+ownership, resource residency, completion/fence semantics, and cache-coherent
+readback still require independent qualification. No compute command has been
+submitted to the console. Gate B remains blocked; Gate C hardware known-answer
+execution and Gate D neural reconstruction remain incomplete.
 
 Reviewed source locations:
-- opengnm-psbc: libpsbc/psbc_compile.c, libpsbc/psbc_compile.h,
-  src/amd/vulkan/radv_shader_args.c,
-  src/amd/vulkan/nir/radv_nir_lower_descriptors.c at
-  28697f007862427ebec54388ec972ce6e3545912
-- opengnm: include/gnm_shader.h, include/gnm_shaderbinary.h,
-  src/drawcommandbuffer.c at 4b295ca54c82c83acf308d1c646a2dfa9ae57350
+- opengnm-psbc commit `28697f007862427ebec54388ec972ce6e3545912`:
+  `src/amd/vulkan/radv_shader_args.c`,
+  `src/amd/vulkan/radv_shader.c`, and
+  `src/amd/vulkan/nir/radv_nir_lower_descriptors.c`
+- opengnm commit `4b295ca54c82c83acf308d1c646a2dfa9ae57350`:
+  `include/gnm_shaderbinary.h`, `include/gnm_shader.h`,
+  `src/driver_generic.c`, and `src/drawcommandbuffer.c`
+- shadPS4 commit `c4f8699581ef1f795a74669cc12fadf440cbe4a1`:
+  `src/core/libraries/gnmdriver/gnmdriver.cpp`

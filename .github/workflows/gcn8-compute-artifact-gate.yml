@@ -26,7 +26,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: gcn8-compute-artifact-gate-${{ github.ref }}
+  group: gcn8-compute-artifact-gate-${{ github.event.pull_request.head.ref || github.ref_name }}
   cancel-in-progress: true
 
 jobs:
@@ -248,6 +248,9 @@ jobs:
           name: gcn8-compute-artifact-gate-${{ github.run_id }}
           path: |
             ${{ runner.temp }}/gcn8-compiler-build.log
+            ${{ runner.temp }}/gcn8-compiler-patch.diff
+            ${{ runner.temp }}/gcn8-compiler-patch.sha256
+            patches/opengnm-psbc/0001-gcn8-descriptor-pointer-reserve-two-sgprs.patch
             ${{ runner.temp }}/gcn8-shader-compile.log
             ${{ runner.temp }}/gcn8-artifact-report.json
             ${{ runner.temp }}/gcn8-sha256.txt

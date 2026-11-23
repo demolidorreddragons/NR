@@ -20,6 +20,11 @@ GNM_TARGET_NEO = 0x02
 GNM_COMPUTE_SHADER_HEADER_SIZE = 0x24
 GNM_INPUT_USAGE_SLOT_SIZE = 0x04
 GNM_PTR_INDIRECT_RESOURCE_TABLE = 0x1C
+COMPILER_REVISION = "28697f007862427ebec54388ec972ce6e3545912"
+OPENGNM_REVISION = "4b295ca54c82c83acf308d1c646a2dfa9ae57350"
+PATCH_PATH = pathlib.Path(__file__).resolve().parents[1] / (
+    "patches/opengnm-psbc/0001-gcn8-descriptor-pointer-reserve-two-sgprs.patch"
+)
 
 
 def parse_compute_shader_layout(data: bytes) -> dict:
@@ -219,6 +224,9 @@ def main() -> int:
     report = {
         "status": "PASS_ARTIFACT_ONLY_NOT_HARDWARE",
         "compiler": "PS4-OpenGNM/opengnm-psbc",
+        "compiler_revision": COMPILER_REVISION,
+        "opengnm_revision": OPENGNM_REVISION,
+        "compiler_patch_sha256": hashlib.sha256(PATCH_PATH.read_bytes()).hexdigest(),
         "shader_stage": "compute",
         "gpu_target": "PS4 Pro NEO/GFX8",
         "gnm_magic": f"0x{magic:08x}",
