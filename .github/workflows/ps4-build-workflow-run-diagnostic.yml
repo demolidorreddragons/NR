@@ -1,0 +1,38 @@
+name: PS4 Build Workflow Run Event Diagnostic
+
+on:
+  workflow_run:
+    workflows: ["PS4 PRX and PKG build"]
+    types: [completed]
+    branches:
+      - main
+      - feature/gcn8-numeric-kernels
+
+permissions:
+  contents: read
+
+jobs:
+  record-event:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Record non-secret triggering workflow metadata
+        env:
+          BUILD_RUN_ID: ${{ github.event.workflow_run.id }}
+          BUILD_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+          BUILD_EVENT: ${{ github.event.workflow_run.event }}
+          BUILD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          BUILD_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          BUILD_HEAD_REPOSITORY: ${{ github.event.workflow_run.head_repository.full_name }}
+          CURRENT_REPOSITORY: ${{ github.repository }}
+          BUILD_WORKFLOW_ID: ${{ github.event.workflow_run.workflow_id }}
+        run: |
+          {
+            echo "build_run_id=$BUILD_RUN_ID"
+            echo "build_conclusion=$BUILD_CONCLUSION"
+            echo "build_event=$BUILD_EVENT"
+            echo "build_branch=$BUILD_BRANCH"
+            echo "build_head_sha=$BUILD_HEAD_SHA"
+            echo "build_head_repository=$BUILD_HEAD_REPOSITORY"
+            echo "current_repository=$CURRENT_REPOSITORY"
+            echo "build_workflow_id=$BUILD_WORKFLOW_ID"
+          } | tee -a "$GITHUB_STEP_SUMMARY"
