@@ -40,6 +40,8 @@ jobs:
           "TOOL=$tool" | Out-File "$env:RUNNER_TEMP\pkg006-tool.txt"
       - name: Validate full base package, SFO, and executable payload
         shell: pwsh
+        env:
+          BUILD_RUN_ID: ${{ github.event.workflow_run.id }}
         run: |
           $ErrorActionPreference = "Stop"
           $tool = (Get-Content "$env:RUNNER_TEMP\pkg006-tool.txt" | Select-Object -First 1).Substring(5)
@@ -49,6 +51,7 @@ jobs:
           $size = (Get-Item $pkg).Length
           $hash = (Get-FileHash -Algorithm SHA256 $pkg).Hash.ToLowerInvariant()
           "PKG_NUMBER=006" | Out-File qa-output/qa-report.txt
+          "BUILD_RUN_ID=$env:BUILD_RUN_ID" | Out-File qa-output/qa-report.txt -Append
           "PKG_KIND=FULL_BASE_APPLICATION_NOT_PATCH" | Out-File qa-output/qa-report.txt -Append
           "PKG_BYTES=$size" | Out-File qa-output/qa-report.txt -Append
           "PKG_SHA256=$hash" | Out-File qa-output/qa-report.txt -Append
