@@ -28,6 +28,7 @@ assert "dotnet $env:PKGTOOL sfo read" in script
 assert "installed_matches_app_json_source" in script
 assert "staged_packages" in script
 assert "installed_app_prx_matches_goldhen_prx" in script
+assert "size_or_mutability_mismatch" in script
 assert "$storageMatch" in script and "storage_type=$storageType" in script
 assert "$expectedTitle" in script
 assert "not_assumed_to_be_raw_file_sha256" in script
