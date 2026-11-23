@@ -23,7 +23,7 @@ COMMON_FLAGS := --target=x86_64-pc-freebsd12-elf -fPIC -funwind-tables -fno-exce
 CFLAGS := $(COMMON_FLAGS) -std=c11 -c
 CXXFLAGS := $(COMMON_FLAGS) -std=c++17 -isystem $(TOOLCHAIN)/include/c++/v1 -c
 LIBS := -lSceLibcInternal -lSceGnmDriver -lScePad -lGoldHEN_Hook -lkernel -lSceSystemService -lSceUserService -lSceHttp -lSceSsl -lSceNet -lSceSysmodule -lc++
-OBJS := $(OBJDIR)/main.o $(OBJDIR)/plugin_common.o $(OBJDIR)/telemetry.o $(OBJDIR)/telemetry_bridge.o $(OBJDIR)/github_client.o
+OBJS := $(OBJDIR)/main.o $(OBJDIR)/plugin_common.o $(OBJDIR)/telemetry.o $(OBJDIR)/telemetry_bridge.o $(OBJDIR)/github_client.o $(OBJDIR)/upload_confirmation.o
 
 .PHONY: all clean
 all: $(TARGET_PRX)
@@ -39,7 +39,9 @@ $(OBJDIR)/telemetry.o: $(ROOT)/src/telemetry.cpp $(ROOT)/include/pne/telemetry.h
 	$(CXX) $(CXXFLAGS) -I$(ROOT)/include -o $@ $<
 $(OBJDIR)/telemetry_bridge.o: $(ROOT)/src/telemetry_bridge.cpp $(ROOT)/include/pne/telemetry.hpp telemetry_bridge.h | $(OBJDIR)
 	$(CXX) $(CXXFLAGS) -I$(ROOT)/include -o $@ $<
-$(OBJDIR)/github_client.o: github_client.cpp $(ROOT)/include/pne/github_oauth.hpp plugin_common.h | $(OBJDIR)
+$(OBJDIR)/github_client.o: github_client.cpp upload_confirmation.h $(ROOT)/include/pne/github_oauth.hpp plugin_common.h | $(OBJDIR)
+	$(CXX) $(CXXFLAGS) -o $@ $<
+$(OBJDIR)/upload_confirmation.o: upload_confirmation.cpp upload_confirmation.h | $(OBJDIR)
 	$(CXX) $(CXXFLAGS) -o $@ $<
 
 $(TARGET_PRX): $(OBJS) | $(OUTDIR)
