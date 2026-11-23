@@ -92,7 +92,8 @@ jobs:
           $diff | ForEach-Object { Write-Host $_ }
           if (-not $diff) { throw 'Codex produced neither a report nor code changes.' }
           New-Item -ItemType Directory -Force -Path "$env:RUNNER_TEMP\nr-codex-cycle" | Out-Null
-          git diff --binary | Set-Content -Encoding Byte -LiteralPath "$env:RUNNER_TEMP\nr-codex-cycle\changes.patch"
+          git diff --binary --output="$env:RUNNER_TEMP\nr-codex-cycle\changes.patch"
+          if ($LASTEXITCODE -ne 0) { throw "Could not export binary patch." }
           Copy-Item $report "$env:RUNNER_TEMP\nr-codex-cycle\CODEX_AUTONOMOUS_CYCLE_REPORT.md"
           Copy-Item "$env:RUNNER_TEMP\codex-engineering-output.txt" "$env:RUNNER_TEMP\nr-codex-cycle\codex-output.txt"
 
