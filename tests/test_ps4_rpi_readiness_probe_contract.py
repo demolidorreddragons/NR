@@ -6,6 +6,8 @@ workflow = Path(".github/workflows/ps4-rpi-readiness-probe.yml").read_text(encod
 assert "runs-on: [self-hosted, Windows, X64, ps4-lan]" in workflow
 assert "workflow_dispatch:" in workflow
 assert "github.token" in workflow and "github.sha" in workflow
+assert "vars.PS4_IP" in workflow
+assert r"\${{" not in workflow
 assert "SHA1]::Create()" in workflow and "RPI probe Git blob SHA-1 mismatch" in workflow
 assert "[System.Net.IPAddress]::TryParse" in script
 assert 'Invoke-Http "/api" "GET"' in script
@@ -20,5 +22,8 @@ assert "task_control_requests_sent=$false" in script
 assert "remote_files_modified=$false" in script
 assert "pkg_installed=$false" in script
 assert "target_ip=\"redacted\"" in script
+assert "redacted; see identity_summary" in script
+assert "redacted-ip" in script
+assert "existsValid" in script
 assert "RPI_READINESS_COMPLETE" in script
 print("PS4 RPI read-only readiness safety contract: PASS")
