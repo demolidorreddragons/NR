@@ -14,38 +14,74 @@ function New-FtpRequest([string]$remotePath, [string]$method) {
   $request.Timeout = 20000; $request.ReadWriteTimeout = 30000
   return $request
 }
-# Strictly read-only FTP: LIST, GETSIZE and GET.
-$directories = @("/data/","/data/pkg/","/data/GoldHEN/","/data/GoldHEN/plugins/","/user/app/","/user/app/PNEU00004/","/user/app/PNEU00001/")
-foreach ($remotePath in $directories) {
-  $safe = $remotePath.Trim("/") -replace "[^A-Za-z0-9_.-]", "_"
-  $destination = Join-Path $root ("listing-" + $safe + ".txt")
+# Strictly read-only FTP: LIST, GETSIZE and GET. Preserve LIST bytes verbatim.
+function Get-LocalKey([string]$value) {
+  $sha=[Security.Cryptography.SHA256]::Create()
+  try { $bytes=[Text.Encoding]::UTF8.GetBytes($value); return ([BitConverter]::ToString($sha.ComputeHash($bytes))).Replace("-","").ToLowerInvariant() }
+  finally { $sha.Dispose() }
+}
+function Save-Listing([string]$remotePath) {
+  $key=Get-LocalKey $remotePath
+  $destination=Join-Path $root ("listing-"+$key+".raw.bin")
+  $started=[DateTime]::UtcNow.ToString("o")
   try {
-    $response = (New-FtpRequest $remotePath ([System.Net.WebRequestMethods+Ftp]::ListDirectoryDetails)).GetResponse()
-    try { $reader = New-Object System.IO.StreamReader($response.GetResponseStream()); try { $body = $reader.ReadToEnd() } finally { $reader.Dispose() } } finally { $response.Dispose() }
-    [System.IO.File]::WriteAllText($destination,$body,[System.Text.UTF8Encoding]::new($false))
-    $evidence.Add([pscustomobject]@{operation="LIST";path=$remotePath;result="ok";bytes=[System.Text.Encoding]::UTF8.GetByteCount($body)})
+    $response=(New-FtpRequest $remotePath ([System.Net.WebRequestMethods+Ftp]::ListDirectoryDetails)).GetResponse()
+    try {
+      $input=$response.GetResponseStream()
+      $output=[IO.File]::Open($destination,[IO.FileMode]::CreateNew,[IO.FileAccess]::Write,[IO.FileShare]::None)
+      try { $input.CopyTo($output); $output.Flush($true) }
+      finally { $output.Dispose(); $input.Dispose() }
+    } finally { $response.Dispose() }
+    $item=Get-Item -LiteralPath $destination
+    $hash=(Get-FileHash -LiteralPath $destination -Algorithm SHA256).Hash.ToLowerInvariant()
+    $evidence.Add([pscustomobject]@{operation="LIST";path=$remotePath;result="ok";started_utc=$started;completed_utc=[DateTime]::UtcNow.ToString("o");local_bytes=$item.Length;sha256=$hash;local_file=[IO.Path]::GetFileName($destination)})
   } catch {
     $detail=$_.Exception.GetBaseException().Message
-    [System.IO.File]::WriteAllText($destination,("LIST_UNAVAILABLE "+$remotePath+[Environment]::NewLine+$detail),[System.Text.UTF8Encoding]::new($false))
-    $evidence.Add([pscustomobject]@{operation="LIST";path=$remotePath;result="unavailable";error=$detail})
+    if(Test-Path -LiteralPath $destination) {
+      $partial=$destination+".partial"; Move-Item -LiteralPath $destination -Destination $partial
+      $item=Get-Item -LiteralPath $partial; $hash=(Get-FileHash -LiteralPath $partial -Algorithm SHA256).Hash.ToLowerInvariant()
+      $evidence.Add([pscustomobject]@{operation="LIST";path=$remotePath;result="partial";started_utc=$started;completed_utc=[DateTime]::UtcNow.ToString("o");error=$detail;local_bytes=$item.Length;sha256=$hash;local_file=[IO.Path]::GetFileName($partial)})
+    } else { $evidence.Add([pscustomobject]@{operation="LIST";path=$remotePath;result="unavailable";started_utc=$started;completed_utc=[DateTime]::UtcNow.ToString("o");error=$detail}) }
   }
 }
+$directories=@("/data/","/data/pkg/","/data/GoldHEN/","/data/GoldHEN/plugins/","/user/app/","/user/app/PNEU00004/","/user/app/PNEU00001/")
+foreach($remotePath in $directories){Save-Listing $remotePath}
+
 # Only NR-owned registration/PRX, app metadata and loader log are downloaded.
-$files = @("/data/GoldHEN/plugins.ini","/data/GoldHEN/plugins/ps4_neural_engine.prx","/user/app/PNEU00004/app.json","/user/app/PNEU00004/app.xml","/user/app/PNEU00001/app.json","/user/app/PNEU00001/app.xml","/data/Loader_Logs.txt")
-foreach ($remotePath in $files) {
-  $safe=$remotePath.Trim("/") -replace "[^A-Za-z0-9_.-]","_"; $destination=Join-Path $root $safe
+function Save-RemoteFile([string]$remotePath) {
+  $key=Get-LocalKey $remotePath
+  $destination=Join-Path $root ("file-"+$key+".raw.bin")
+  $started=[DateTime]::UtcNow.ToString("o")
+  $remoteBefore=$null
   try {
     $sizeResponse=(New-FtpRequest $remotePath ([System.Net.WebRequestMethods+Ftp]::GetFileSize)).GetResponse()
-    try {$remoteSize=[int64]$sizeResponse.ContentLength} finally {$sizeResponse.Dispose()}
-    if ($remoteSize -gt 16777216) {$evidence.Add([pscustomobject]@{operation="GET";path=$remotePath;result="skipped_size_limit";remote_bytes=$remoteSize});continue}
+    try {$remoteBefore=[int64]$sizeResponse.ContentLength} finally {$sizeResponse.Dispose()}
+    if($remoteBefore -gt 16777216){$evidence.Add([pscustomobject]@{operation="GET";path=$remotePath;result="skipped_size_limit";remote_bytes_before=$remoteBefore;started_utc=$started});return}
     $response=(New-FtpRequest $remotePath ([System.Net.WebRequestMethods+Ftp]::DownloadFile)).GetResponse()
-    try {$stream=$response.GetResponseStream();$output=[System.IO.File]::Create($destination);try {$stream.CopyTo($output)} finally {$output.Dispose();$stream.Dispose()}} finally {$response.Dispose()}
-    $item=Get-Item -LiteralPath $destination; $hash=(Get-FileHash -LiteralPath $destination -Algorithm SHA256).Hash.ToLowerInvariant()
-    $result=if($item.Length -eq $remoteSize){"ok"}else{"size_mismatch"}
-    $evidence.Add([pscustomobject]@{operation="GET";path=$remotePath;result=$result;remote_bytes=$remoteSize;local_bytes=$item.Length;sha256=$hash})
-    if($item.Length -ne $remoteSize){throw "Read-only evidence size mismatch for $remotePath."}
-  } catch {$evidence.Add([pscustomobject]@{operation="GET";path=$remotePath;result="unavailable";error=$_.Exception.GetBaseException().Message})}
+    try {
+      $input=$response.GetResponseStream()
+      $output=[IO.File]::Open($destination,[IO.FileMode]::CreateNew,[IO.FileAccess]::Write,[IO.FileShare]::None)
+      try {$input.CopyTo($output);$output.Flush($true)}
+      finally {$output.Dispose();$input.Dispose()}
+    } finally {$response.Dispose()}
+    $remoteAfter=$null
+    $sizeResponse=(New-FtpRequest $remotePath ([System.Net.WebRequestMethods+Ftp]::GetFileSize)).GetResponse()
+    try {$remoteAfter=[int64]$sizeResponse.ContentLength} finally {$sizeResponse.Dispose()}
+    $item=Get-Item -LiteralPath $destination
+    $hash=(Get-FileHash -LiteralPath $destination -Algorithm SHA256).Hash.ToLowerInvariant()
+    $stable=($remoteBefore -eq $remoteAfter -and $remoteAfter -eq $item.Length)
+    $evidence.Add([pscustomobject]@{operation="GET";path=$remotePath;result=$(if($stable){"ok"}else{"size_or_mutability_mismatch"});started_utc=$started;completed_utc=[DateTime]::UtcNow.ToString("o");remote_bytes_before=$remoteBefore;remote_bytes_after=$remoteAfter;local_bytes=$item.Length;size_stable=$stable;sha256=$hash;local_file=[IO.Path]::GetFileName($destination)})
+  } catch {
+    $detail=$_.Exception.GetBaseException().Message
+    if(Test-Path -LiteralPath $destination) {
+      $partial=$destination+".partial"; Move-Item -LiteralPath $destination -Destination $partial
+      $item=Get-Item -LiteralPath $partial; $hash=(Get-FileHash -LiteralPath $partial -Algorithm SHA256).Hash.ToLowerInvariant()
+      $evidence.Add([pscustomobject]@{operation="GET";path=$remotePath;result="partial";started_utc=$started;completed_utc=[DateTime]::UtcNow.ToString("o");remote_bytes_before=$remoteBefore;error=$detail;local_bytes=$item.Length;sha256=$hash;local_file=[IO.Path]::GetFileName($partial)})
+    } else {$evidence.Add([pscustomobject]@{operation="GET";path=$remotePath;result="unavailable";started_utc=$started;completed_utc=[DateTime]::UtcNow.ToString("o");remote_bytes_before=$remoteBefore;error=$detail})}
+  }
 }
+$files=@("/data/GoldHEN/plugins.ini","/data/GoldHEN/plugins/ps4_neural_engine.prx","/user/app/PNEU00004/app.json","/user/app/PNEU00004/app.xml","/user/app/PNEU00001/app.json","/user/app/PNEU00001/app.xml","/data/Loader_Logs.txt")
+foreach($remotePath in $files){Save-RemoteFile $remotePath}
 # Safe RPI fingerprint: HTTP GET only on TCP 12800. Never probe BinLoader 9090.
 $rpi=[ordered]@{host=$env:PS4_IP;port=12800;probe="GET /api; GET /api/status; optional GET /api/v2/system";mutating_requests_sent=$false;backend_fingerprint="not_confirmed";api_status=$null;api_identity=$null;observations=@()}
 function Invoke-ReadOnlyHttpGet([string]$url) {
