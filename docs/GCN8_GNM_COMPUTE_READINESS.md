@@ -83,6 +83,13 @@ Before adding code to the PRX, prove from pinned headers/source and ABI evidence
 Do not invent a standalone queue or call undocumented firmware exports based only on symbol names.
 
 
+
+#### Cross-check against shadPS4 HLE declarations (2026-11-23)
+
+Inspected `shadps4-emu/shadPS4` commit `c4f8699581ef1f795a74669cc12fadf440cbe4a1`, files `src/core/libraries/gnmdriver/gnmdriver.h` and `gnmdriver.cpp`. This independently corroborates candidate C signatures for `sceGnmSetCsShader`, `sceGnmDispatchDirect`, `sceGnmSubmitCommandBuffers`, `sceGnmMapComputeQueue`, and `sceGnmDingDong`; it is emulator implementation evidence only, not proof of retail Sony firmware ABI or behavior.
+
+Notable implementation detail: the HLE `sceGnmSetCsShader` validates a 7-dword register block and rejects a nonzero high shader-address word; HLE `sceGnmDispatchDirect` accepts a 9-dword command reservation. The pinned opengnm generic backend's `sceGnmDispatchDirect` currently checks `size < 12` and writes a larger PM4 sequence (including thread-count register setup, dispatch, and NOP padding). This cross-implementation difference must be reconciled against a real Sony SDK/firmware contract before using either size convention in the PRX. Emulator HLE can help test packet shape but cannot qualify the console path.
+
 #### Additional end-to-end compute stack investigated (2026-11-23)
 
 A second upstream candidate was inspected: `PS4-OpenGNM/vulkan-ps4` at commit `f4d940b723771b3fe637e8ac0704bb5d6ab19622` (repository's `main` at inspection time). It is a Vulkan ICD built on opengnm/opengnm-psbc and contains code paths for compute pipelines, descriptor sets, direct-memory allocation, command dispatch, queue submission, EOP labels, and fences. Relevant files inspected: `src/vk_ps4_pipeline.c`, `src/vk_ps4_command.c`, `src/vk_ps4_descriptor.c`, `src/vk_ps4_memory.c`, `src/vk_ps4_queue.c`, and `src/vk_ps4_sync.c`.
