@@ -52,3 +52,20 @@ The workflow definition is on the default branch so GitHub's `workflow_run` trig
 The runner service has previously failed to start with reported error 1068, although the registered runner connects when started manually with `run.cmd`. Preserve the working manual registration and credentials. Do not reinstall the runner, remove its service, modify registry values, change the logon identity, or stop the manual listener as a diagnostic shortcut.
 
 Use `.github/workflows/ps4-windows-runner-service-diagnostics.yml` to collect read-only service state, service-control configuration, relevant event-log entries, runner directory ACLs, and filtered `_diag` excerpts. The workflow uses the existing `[self-hosted, Windows, X64, ps4-lan]` runner and retains a sanitized artifact for seven days. A repair may be considered only after the collected evidence identifies the specific failing dependency, account right, service SID, executable ACL, or runner service error. No automated repair is performed by the diagnostics workflow.
+
+## Codex CLI installed and locally authenticated — 2026-11-23
+
+The Codex CLI was installed on the existing Windows bridge runner host `DESKTOP-TG85GF4` (runner identity `PS4-WINDOWS-BRIDGE`) at the pinned version `0.171.0`. Executable:
+
+`C:\\ProgramData\\NR\\Codex\\node_modules\\.bin\\codex.cmd`
+
+The user completed device-code authentication. The terminal reported `Successfully logged in` / `Logged in using ChatGPT`. This confirms a local interactive-user session only; it does **not** prove that the GitHub Actions runner service identity can access the same Codex credentials. Do not copy, print, upload, or commit Codex authentication files/tokens, and do not expose device codes in Actions logs.
+
+A local read-only execution from `C:\\Windows\\System32` initially failed because the default Windows process policy rejected the PowerShell child process. A one-off MXC sandbox probe succeeded:
+
+`codex.cmd -c windows.sandbox=mxc sandbox --include-managed-config --permission-profile :workspace -- cmd.exe /d /c echo MXC_OK`
+
+Observed output: `MXC_OK`, exit code `0`. A subsequent Codex read-only execution using `-c windows.sandbox=mxc` successfully ran `Get-Location`, returned `C:\\Windows\\System32`, and exited successfully. The test did not modify files. MXC was selected per invocation; no persistent Windows policy, registry, service, or system-directory patch was made by these tests.
+
+**Operational boundary:** Codex CLI is installed and locally authenticated, and a basic sandboxed command execution has been demonstrated. Repository task execution, the runner service's access to the interactive login, and GitHub Actions integration remain unverified. Do not claim the Codex agent is operational in Actions until a separate non-mutating job proves authentication and execution under the actual runner service identity. Do not run Codex from `C:\\Windows\\System32`; set its working directory to the checked-out NR repository and use read-only sandboxing for the first repository inspection. Keep all initial inspection scoped to the repository. Any future write-capable Codex run must be explicitly scoped to NR project files, reviewed, and validated; no arbitrary system, PS4 deployment, installation, PRX activation, or restart operations are authorized by the CLI installation itself.
+
