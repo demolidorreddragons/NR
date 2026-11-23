@@ -9,17 +9,21 @@ workflow = Path(".github/workflows/ps4-control-plane-preflight.yml").read_text(e
 # The privileged workflow must use the existing Windows LAN runner and reviewed default-branch source.
 assert "runs-on: [self-hosted, Windows, X64, ps4-lan]" in workflow
 assert "ref: main" in workflow
+assert "id: checkout-collector" in workflow
+assert "steps.checkout-collector.outputs.commit" in workflow
+assert "COLLECTOR_REF: main" in workflow
+assert "shell: powershell -NoProfile -ExecutionPolicy Bypass -File {0}" in workflow
+assert "ps4-control-plane-preflight-${{ github.run_id }}" in workflow
+assert "GITHUB_RUN_ID" in script and "COLLECTOR_COMMIT" in script and "COLLECTOR_REF" in script
+assert "collector_commit=$env:COLLECTOR_COMMIT" in script
+assert "collector_ref=$env:COLLECTOR_REF" in script
 assert "workflow_run:" in workflow and 'workflows: ["PS4 PRX and PKG build"]' in workflow
 assert "timeout-minutes: 15" in workflow
-assert "COLLECTOR_COMMIT=$collectorCommit" in workflow
-assert "git -C $env:GITHUB_WORKSPACE rev-parse HEAD" in workflow
 assert r"PS4_IP: ${{ vars.PS4_IP }}" in workflow
 
 # Network target is constrained to a literal IPv4 and all run/provenance identifiers are required.
 assert "[System.Net.IPAddress]::TryParse" in script
 assert "AddressFamily]::InterNetwork" in script
-assert "GITHUB_RUN_ID" in script and "COLLECTOR_COMMIT" in script
-assert 'collector_commit=$env:COLLECTOR_COMMIT' in script
 
 assert workflow.count("Collect read-only PS4 control-plane inventory") == 1
 assert script.count("$root = Join-Path") == 1
@@ -50,7 +54,14 @@ for remote in (
     "/data/GoldHEN/plugins/ps4_neural_engine.prx.pne-release.ini",
     "/user/app/PNEU00001/app.pkg",
     "/user/app/PNEU00004/app.pkg",
+    "/user/data/pkg/PS4-Neural-Engine-015.pkg",
     "/data/pkg/PS4-Neural-Engine-015.pkg",
+    "/data/pkg/PS4-Neural-Engine-015-7609b5d2b536.pkg",
+    "/data/pkg/PS4-Neural-Engine-015-089684400316.pkg",
+    "/data/pkg/PS4-Neural-Engine-006-dfda3a974df8.pkg",
+    "/data/pkg/PS4-Neural-Engine-006-eb68c632848b.pkg",
+    "/data/pkg/PS4-Neural-Engine-006-a3c9eb2b185e.pkg",
+    "/data/pkg/PS4-Neural-Engine-006-0f0e7060fc3d.pkg",
     "/data/pkg/PS4-Neural-Engine-006-8d95e10d45e9.pkg",
 ):
     assert remote in script
