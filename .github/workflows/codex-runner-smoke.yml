@@ -63,10 +63,34 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           $codex = 'C:\ProgramData\NR\Codex\node_modules\.bin\codex.cmd'
-          $prompt = "Leia integralmente AGENTS.md e docs/GCN8_GNM_COMPUTE_READINESS.md. Faça uma auditoria somente de leitura do estado atual do Gate A, Gate B, Gate C e Gate D no repositório. Não altere arquivos, não crie commits, não acesse a rede do PS4 e não execute deploy. Informe evidências concretas por caminho de arquivo, o que está comprovado, o que continua bloqueado e os próximos passos técnicos mínimos."
+          # Feed the reviewed source directly to Codex. The Codex Windows
+          # sandbox currently blocks child-process reads, even in read-only mode.
+          # This keeps the agent read-only without granting broader shell access.
+          $contextFiles = @(
+            'AGENTS.md',
+            'docs/GCN8_GFX8_ARTIFACT_44739871394.md',
+            'platform/ps4/gcn8/host/resource_table_contract.h',
+            'platform/ps4/gcn8/host/resource_table_contract.cpp',
+            'tests/test_gcn8_resource_table.cpp'
+          )
+          $context = foreach ($path in $contextFiles) {
+            if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
+              throw "Required audit context file missing: $path"
+            }
+            "===== FILE: $path ====="
+            Get-Content -Raw -LiteralPath $path
+          }
+          $prompt = @"
+          Execute uma auditoria técnica somente de leitura dos Gates A, B, C e D do Neural Rendering.
+          IMPORTANTE: o contexto integral dos arquivos-fonte revisados está abaixo. Use EXCLUSIVAMENTE esse contexto; não invoque ferramentas, shell, PowerShell, Git, rede ou outras leituras. Não altere arquivos nem crie commits.
+          O documento docs/GCN8_GNM_COMPUTE_READINESS.md NÃO existe neste checkout; não invente seu conteúdo. Use o relatório GFX8 e os fontes/testes fornecidos.
+          Diferencie claramente compilação/artefato host de ABI GNM, dispatch, sincronização, readback e execução real no PS4 Pro. Liste evidências concretas com caminhos, o que está provado, o que não está provado e os próximos passos mínimos.
+          CONTEXTO:
+          $($context -join "`n")
+          "@
           $previousPreference = $ErrorActionPreference
           $ErrorActionPreference = 'Continue'
-          $auditOutput = & $codex exec --skip-git-repo-check --sandbox read-only $prompt 2>&1 | ForEach-Object { "$_" }
+          $auditOutput = $prompt | & $codex exec --skip-git-repo-check --sandbox read-only 2>&1 | ForEach-Object { "$_" }
           $auditExitCode = $LASTEXITCODE
           $ErrorActionPreference = $previousPreference
           $auditOutput | ForEach-Object { Write-Host $_ }
