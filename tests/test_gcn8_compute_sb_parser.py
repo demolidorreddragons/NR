@@ -23,6 +23,8 @@ class ComputeShaderLayoutTests(unittest.TestCase):
         blob[stage:stage + 4] = common.to_bytes(4, "little")
         blob[stage + 8:stage + 12] = code_offset.to_bytes(4, "little")
         blob[stage + 20:stage + 24] = (user_sgpr_count << 1).to_bytes(4, "little")
+        for offset, value in zip((24, 28, 32), (64, 1, 1)):
+            blob[stage + offset:stage + offset + 4] = value.to_bytes(4, "little")
         if slot_count:
             slot = stage + 0x24
             blob[slot:slot + 4] = bytes((slot_type, api_slot, start_register, 0))
@@ -33,6 +35,7 @@ class ComputeShaderLayoutTests(unittest.TestCase):
         self.assertEqual(layout["input_usage_slot_count"], 1)
         self.assertEqual(layout["compute_user_sgpr_count"], 3)
         self.assertEqual(layout["compute_pgm_rsrc2"], 6)
+        self.assertEqual(layout["compute_num_thread"], [64, 1, 1])
         self.assertEqual(layout["descriptor_table_slot"], {
             "usage_type": 0x1C,
             "api_slot": 0,
