@@ -180,6 +180,23 @@ jobs:
             '/data/memory.log'
           )
           foreach ($file in $files) { Save-Snapshot $file 'single' }
+          # Discover project-specific GCN8 smoke logs from the preserved /data listing.
+          # No run IDs are hard-coded; FTP access remains LIST/GETSIZE/GET only.
+          $dataListingPath = Join-Path $runRoot ("listing-" + (Get-LocalKey '/data/') + ".raw.bin")
+          $smokeLogNames = @()
+          if (Test-Path -LiteralPath $dataListingPath -PathType Leaf) {
+            $dataListingText = [Text.Encoding]::UTF8.GetString([IO.File]::ReadAllBytes($dataListingPath))
+            $smokeLogNames = @(
+              $dataListingText -split "`r?`n" | ForEach-Object {
+                $columns = $_ -split '\s+'
+                if ($columns.Count -gt 8 -and $columns[-1] -match '^pne_gcn8_compute_smoke_[A-Za-z0-9_.-]+\.log$') { $columns[-1] }
+              } | Sort-Object -Unique
+            )
+          }
+          $manifest.Add("DISCOVERED_GCN8_SMOKE_LOG_COUNT=$($smokeLogNames.Count)")
+          foreach ($smokeLogName in $smokeLogNames) {
+            Save-Snapshot ("/data/" + $smokeLogName) 'single'
+          }
           # Two independent raw snapshots: preserve both; differing hashes may mean normal mutation.
           Save-Snapshot '/data/sce_logs/log.bin' 'snapshot-a'
           Save-Snapshot '/data/sce_logs/log.bin' 'snapshot-b'
