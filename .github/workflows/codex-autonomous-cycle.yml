@@ -1,0 +1,126 @@
+name: NR Codex Autonomous Engineering Cycle
+
+on:
+  push:
+    branches:
+      - engineering/codex-autonomous-cycle-20261123
+    paths:
+      - .github/workflows/codex-autonomous-cycle.yml
+      - .github/codex/engineering-task.md
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: nr-codex-autonomous-engineering
+  cancel-in-progress: false
+
+jobs:
+  autonomous-engineering:
+    name: Codex engineering and bounded validation
+    runs-on: [self-hosted, Windows, X64, codex, engineering]
+    timeout-minutes: 90
+    steps:
+      - name: Checkout isolated engineering branch
+        uses: actions/checkout@v4
+        with:
+          ref: engineering/codex-autonomous-cycle-20261123
+          persist-credentials: false
+
+      - name: Verify user-scoped Codex runtime
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $identity = (whoami).Trim()
+          if ($identity -ne 'desktop-tg85gf4\deniz') { throw "Unexpected runner identity: $identity" }
+          $codex = 'C:\ProgramData\NR\Codex\node_modules\.bin\codex.cmd'
+          if (-not (Test-Path -LiteralPath $codex)) { throw 'Codex CLI missing.' }
+          $version = & $codex --version 2>&1 | Out-String
+          if ($LASTEXITCODE -ne 0) { throw "Codex version check failed: $version" }
+          Write-Host "CODEX_VERSION=$version"
+          $previous = $ErrorActionPreference
+          $ErrorActionPreference = 'Continue'
+          $loginOutput = & $codex login status 2>&1 | ForEach-Object { "$_" }
+          $loginCode = $LASTEXITCODE
+          $ErrorActionPreference = $previous
+          $login = $loginOutput -join "`n"
+          Write-Host $login
+          if ($loginCode -ne 0 -or $login -notmatch 'Logged in using ChatGPT') {
+            throw "Codex authentication check failed (exit=$loginCode)."
+          }
+
+      - name: Run Codex engineering cycle with bounded repair
+        shell: powershell
+        working-directory: ${{ github.workspace }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $codex = 'C:\ProgramData\NR\Codex\node_modules\.bin\codex.cmd'
+          $task = Get-Content -Raw -LiteralPath '.github/codex/engineering-task.md'
+          $prompt = @"
+          You are the autonomous engineering agent for this repository.
+          Follow the task contract below exactly. You may inspect and edit files in this checkout and run local tests.
+          Do not access networks, PS4, FTP, RPI, KLog, BinLoader, deployment, or secrets.
+          Use the workspace-write sandbox and never bypass the sandbox or approval controls.
+          Do not commit. Produce the required engineering report and leave a reviewable diff.
+          
+          TASK CONTRACT:
+          $task
+          "@
+          $previous = $ErrorActionPreference
+          $ErrorActionPreference = 'Continue'
+          $output = & $codex exec --full-auto --skip-git-repo-check $prompt 2>&1 | ForEach-Object { "$_" }
+          $exitCode = $LASTEXITCODE
+          $ErrorActionPreference = $previous
+          $output | ForEach-Object { Write-Host $_ }
+          $output | Set-Content -LiteralPath "$env:RUNNER_TEMP\codex-engineering-output.txt"
+          if ($exitCode -ne 0) { throw "Codex engineering cycle failed (exit=$exitCode)." }
+          if (-not ($output -join "`n")) { throw 'Codex returned no engineering output.' }
+
+      - name: Validate diff and preserve engineering evidence
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          git diff --check
+          if ($LASTEXITCODE -ne 0) { throw 'git diff --check failed.' }
+          $report = 'docs/engineering/CODEX_AUTONOMOUS_CYCLE_REPORT.md'
+          if (-not (Test-Path -LiteralPath $report -PathType Leaf)) {
+            throw "Codex did not create the required report: $report"
+          }
+          $diff = git status --short
+          Write-Host '===== WORKTREE ====='
+          $diff | ForEach-Object { Write-Host $_ }
+          if (-not $diff) { throw 'Codex produced neither a report nor code changes.' }
+          New-Item -ItemType Directory -Force -Path "$env:RUNNER_TEMP\nr-codex-cycle" | Out-Null
+          git diff --binary | Set-Content -Encoding Byte -LiteralPath "$env:RUNNER_TEMP\nr-codex-cycle\changes.patch"
+          Copy-Item $report "$env:RUNNER_TEMP\nr-codex-cycle\CODEX_AUTONOMOUS_CYCLE_REPORT.md"
+          Copy-Item "$env:RUNNER_TEMP\codex-engineering-output.txt" "$env:RUNNER_TEMP\nr-codex-cycle\codex-output.txt"
+
+      - name: Upload Codex engineering evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: nr-codex-engineering-cycle
+          path: ${{ runner.temp }}\nr-codex-cycle\
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Commit and push reviewed-scope engineering result
+        if: success()
+        shell: powershell
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          if (-not (git diff --cached --quiet)) {
+            git commit -m "Codex autonomous engineering cycle"
+            if ($LASTEXITCODE -ne 0) { throw 'Git commit failed.' }
+            $pair = "x-access-token:$env:GH_TOKEN"
+            $encoded = [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes($pair))
+            git -c "http.extraheader=AUTHORIZATION: basic $encoded" push origin HEAD:engineering/codex-autonomous-cycle-20261123
+            if ($LASTEXITCODE -ne 0) { throw 'Push of Codex engineering result failed.' }
+          } else {
+            Write-Host 'No staged changes to commit.'
+          }
