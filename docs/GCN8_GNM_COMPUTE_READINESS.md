@@ -272,40 +272,49 @@ corrupted element fails the complete comparison. This is not GPU dispatch,
 hardware completion, or readback evidence. The test source was strengthened
 after review because generating the test output with the same production
 oracle would have made the comparison tautological.
-### Gate B follow-up: descriptor-table user-SGPR width mismatch (2026-11-23)
+### Gate B follow-up: descriptor-table user-SGPR ABI disagreement (2026-11-23)
 
-A focused cross-read of the pinned compiler and opengnm command helpers exposed
-a binding hazard that must be resolved before emitting a compute descriptor
-pointer:
+A focused cross-read of the pinned compiler and GNM shader metadata exposes an
+ABI disagreement that must be resolved before binding or dispatching compute:
 
 - In opengnm-psbc commit 28697f007862427ebec54388ec972ce6e3545912,
-  libpsbc/psbc_compile.c sets address32_hi to zero and builds the descriptor
-  set layout as set 0 with 64-byte binding stride and 16/32/48-byte descriptor
-  records. For a compute shader that uses one set-0 SSBO, the compiler declares
-  the descriptor-set base as one SGPR in radv_shader_args.c.
-- For the pinned GFX8 target, load_grid_size_from_user_sgpr is false. In the
-  compute argument declaration path, the descriptor-set SGPR is allocated
-  before the workgroup-ID SGPRs. The current smoke shader uses
-  gl_GlobalInvocationID, so its workgroup-ID inputs are also relevant.
+  libpsbc/psbc_compile.c sets address32_hi to zero and builds descriptor set 0
+  with 64-byte binding stride and 16/32/48-byte descriptor records. In
+  radv_shader_args.c, add_descriptor_set allocates the descriptor base as one
+  SGPR (AC_ARG_SGPR size 1), records num_sgprs=1, and increments the user-SGPR
+  count by one. radv_nir_lower_descriptors.c expands that low address component
+  with the constant address32_hi when forming the 64-bit memory address.
+- The compiled GNM shader binary embeds a GnmInputUsageSlot table after the
+  GnmCsShader header. The compiler writes PTR_INDIRECTRESOURCETABLE (usage type
+  0x1c) and the compiler argument's startregister into that table. Therefore
+  the runtime can parse the SGPR start index from the binary; a separate
+  compiler sidecar is not inherently required.
 - In opengnm commit 4b295ca54c82c83acf308d1c646a2dfa9ae57350,
-  sceGnmDrawCmdSetPointerUserData writes sizeof(void*) / 4 dwords (two
-  dwords on the 64-bit PS4 ABI) starting at the selected user-data slot.
-  Blindly using it for the compiler's one-SGPR descriptor-set argument can
-  overwrite the following user-data SGPR, including a workgroup-ID input.
-- PsbcShaderOutput in the pinned compiler API exposes only the binary pointer
-  and byte size; it does not expose a stable reflection record for the
-  descriptor-set SGPR index/width. That metadata must be derived from the
-  exact compiled shader contract or added as an explicit compiler sidecar.
+  sceGnmShaderInputUsageTypeSize returns 2 for pointer input-usage types,
+  including PTR_INDIRECTRESOURCETABLE. Its
+  sceGnmDrawCmdSetPointerUserData helper also writes sizeof(void*) / 4 dwords
+  (two dwords on the 64-bit PS4 ABI). The pinned compiler allocates only one
+  SGPR for this descriptor base. The GNM metadata/helper convention and the
+  compiler's one-SGPR allocation therefore disagree unless a firmware/compiler
+  rule explicitly permits the high half to be implicit without reserving the
+  second SGPR. No such rule has yet been demonstrated for retail FW 14.02.
+- Because the descriptor argument is allocated before the compute workgroup-ID
+  arguments, blindly writing two dwords with SetPointerUserData may collide
+  with the next compiler-assigned SGPR. Conversely, emitting a one-dword write
+  without proving the GNM input-usage ABI may violate the GNM pointer contract.
 
-**Engineering decision:** do not use sceGnmDrawCmdSetPointerUserData as the
-descriptor-table setter for this smoke shader, and do not emit a guessed
-single-dword PM4 write into the live PRX. Gate B needs a tested one-SGPR
-descriptor binding path, a reflection/sidecar contract, and a host packet
-test before hardware execution. This finding is source-derived and does not
-yet establish that any command was submitted on the console.
+**Engineering decision:** keep Gate B blocked. Do not call the stock two-dword
+pointer helper for this compiler output, and do not replace it with a guessed
+single-dword PM4 write. The next engineering step is to resolve this exact
+compiler/GNM ABI disagreement against authoritative firmware or known-good
+retail shader evidence, then add a binary input-usage parser and packet-level
+tests before any isolated hardware harness. This is source-derived evidence;
+no compute command has been submitted to the console.
 
 Reviewed source locations:
-- opengnm-psbc: libpsbc/psbc_compile.c, src/amd/vulkan/radv_shader_args.c,
-  libpsbc/psbc_compile.h at 28697f007862427ebec54388ec972ce6e3545912
-- opengnm: src/drawcommandbuffer.c, include/gnm_shader.h at
-  4b295ca54c82c83acf308d1c646a2dfa9ae57350
+- opengnm-psbc: libpsbc/psbc_compile.c, libpsbc/psbc_compile.h,
+  src/amd/vulkan/radv_shader_args.c,
+  src/amd/vulkan/nir/radv_nir_lower_descriptors.c at
+  28697f007862427ebec54388ec972ce6e3545912
+- opengnm: include/gnm_shader.h, include/gnm_shaderbinary.h,
+  src/drawcommandbuffer.c at 4b295ca54c82c83acf308d1c646a2dfa9ae57350
