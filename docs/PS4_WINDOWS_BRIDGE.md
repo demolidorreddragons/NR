@@ -104,3 +104,12 @@ The existing bridge proves FTP upload/readback/staging only. A new read-only con
 ## Provenance clarification — GamerHack distribution
 
 The user identifies their v2.4b18.14 setup as the **GamerHack** version. Public host metadata calls GamerHack the original host and patnawa the host operator/mirror: https://patnawa.github.io/GoldhenPS4/g2all/. That attribution applies to the host/distribution page; it does not establish the embedded payload's compiler or binary provenance. Record the payload origin/hash as `UNVERIFIED` until inspected. Do not call the installed binary an official SiSTR0 build or replace it with the upstream v2.4b18 asset based only on the shared version string.
+
+## Control-plane preflight v2 — read-only inventory
+
+The preflight now runs `tools/ps4-control-plane-preflight.ps1` on this existing self-hosted runner after an eligible successful build. It records only:
+- FTP `LIST` for `/data/`, `/data/pkg/`, GoldHEN plugin directories, and NR current/legacy app directories;
+- FTP `GETSIZE` + `GET` for the NR-owned `plugins.ini`, NR PRX, NR app metadata, and GoldHEN loader log, with local SHA-256 evidence;
+- HTTP `GET`-only RPI API fingerprinting on TCP 12800.
+
+It does not probe BinLoader 9090, send payload bytes, issue HTTP POST, write/delete/rename remote files, install packages, activate plugins, or restart GoldHEN. The workflow checks out the exact successful build commit and stores the inventory as a 30-day artifact. Its report is a snapshot, not proof of application execution or hardware functionality.
