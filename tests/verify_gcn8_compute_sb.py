@@ -43,6 +43,8 @@ def parse_compute_shader_layout(data: bytes) -> dict:
         raise ValueError("input-usage table exceeds declared compute stage header")
 
     code_offset = int.from_bytes(data[stage_offset + 8:stage_offset + 12], "little")
+    compute_pgm_rsrc2 = int.from_bytes(data[stage_offset + 20:stage_offset + 24], "little")
+    compute_user_sgpr_count = (compute_pgm_rsrc2 >> 1) & 0x1F
     if code_offset != stage_header_size:
         raise ValueError(
             f"compute code offset {code_offset} does not match stage header size "
@@ -78,6 +80,8 @@ def parse_compute_shader_layout(data: bytes) -> dict:
     return {
         "stage_header_size_bytes": stage_header_size,
         "compute_code_offset_bytes": code_offset,
+        "compute_pgm_rsrc2": compute_pgm_rsrc2,
+        "compute_user_sgpr_count": compute_user_sgpr_count,
         "input_usage_slot_count": slot_count,
         "input_usage_slots": slots,
         "descriptor_table_slot": table_slots[0],
@@ -178,7 +182,13 @@ def main() -> int:
             "descriptor pointer ABI width mismatch: compiler allocates "
             f"{compiler_width} SGPR(s), GNM input-usage contract requires {gnm_width}"
         )
-    width_status = "CONSISTENT_SOURCE_WIDTH"
+    expected_user_sgprs = compiler_width + 1  # descriptor pointer + workgroup_id.x
+    if layout["compute_user_sgpr_count"] != expected_user_sgprs:
+        raise SystemExit(
+            "compute PGM_RSRC2 USER_SGPR count mismatch: expected "
+            f"{expected_user_sgprs}, got {layout['compute_user_sgpr_count']}"
+        )
+    width_status = "CONSISTENT_SOURCE_WIDTH_AND_REGISTER_COUNT"
     report = {
         "status": "PASS_ARTIFACT_ONLY_NOT_HARDWARE",
         "compiler": "PS4-OpenGNM/opengnm-psbc",
@@ -192,6 +202,8 @@ def main() -> int:
         "descriptor_table_slot": layout["descriptor_table_slot"],
         "input_usage_slot_count": layout["input_usage_slot_count"],
         "compute_stage_header_size_bytes": layout["stage_header_size_bytes"],
+        "compute_pgm_rsrc2": f"0x{layout['compute_pgm_rsrc2']:08x}",
+        "compute_user_sgpr_count": layout["compute_user_sgpr_count"],
         "compiler_descriptor_arg_sgprs": compiler_width,
         "gnm_indirect_resource_pointer_sgprs": gnm_width,
         "descriptor_pointer_abi_status": width_status,
