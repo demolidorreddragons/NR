@@ -93,6 +93,23 @@ jobs:
             throw "Windows runner diagnostics PowerShell syntax validation failed: $details"
           }
           Write-Host "Windows runner diagnostics PowerShell syntax: PASS"
+      - name: Validate PS4 RPI readiness probe safety contract
+        run: python3 tests/test_ps4_rpi_readiness_probe_contract.py
+      - name: Parse PS4 RPI readiness probe PowerShell AST
+        shell: pwsh
+        run: |
+          $tokens = $null
+          $errors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path "tools/ps4-rpi-readiness-probe.ps1"),
+            [ref]$tokens,
+            [ref]$errors
+          ) | Out-Null
+          if ($errors.Count -gt 0) {
+            $details = ($errors | ForEach-Object { $_.Message + " at line " + $_.Extent.StartLineNumber }) -join [Environment]::NewLine
+            throw "RPI readiness probe PowerShell syntax validation failed: $details"
+          }
+          Write-Host "PS4 RPI readiness probe PowerShell syntax: PASS"
       - name: Configure
         run: cmake -S . -B build
       - name: Build
