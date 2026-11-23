@@ -136,3 +136,18 @@ Automation gates resulting from this snapshot:
 ### Staging precedence correction
 
 The live `/data/pkg/` listing already contains `PS4-Neural-Engine-015-7609b5d2b536.pkg` (6,619,136 bytes) as well as legacy PKG006 files. Therefore the legacy PKG006 stage workflow must not archive or displace the newer PKG015. It now exits without remote changes whenever a higher numbered NR release is already present. The staged PKG015 filename is observed on-device, but its remote SHA-256 has not been read back by this snapshot.
+## Alternate local install adapter research — BGFT / AppInstUtil
+
+A second installation path exists in PS4 homebrew source and may avoid the currently closed RPI TCP 12800 receiver, but it is **not yet qualified for NR or firmware 14.02**.
+
+- Pinned ItemzFlow implementation (LightningMods/Itemzflow, commit 4013e1ef188672db63346fef4221b1d8f4f13f02, itemzflow/source/installpkg.cpp) initializes AppInstUtil/BGFT, registers a local-storage task with sceBgftServiceIntDownloadRegisterTaskByStorageEx, starts it with sceBgftServiceDownloadStartTask, and polls sceBgftServiceDownloadGetProgress.
+- The pinned flatz BGFT definitions (flatz/ps4_stub_lib_maker_v2, commit a8d044c12ea2dc3fa190ce1769eeb48b30d28ed4, include/bgft.h) use 64-bit package-size/progress fields.
+- The OpenOrbis 0.5.4 header (OpenOrbis/OpenOrbis-PS4-Toolchain, commit 0a1aaf9dd4a92695538bdeb09fb056d06dd11725, include/orbis/_types/bgft.h) declares several corresponding fields as 32-bit. This ABI disagreement is a hard gate; do not call BGFT using the OpenOrbis declarations without resolving the exact 14.02 ABI and exports.
+- Static inspection of the console PRX readback (317,216 bytes, SHA-256 1481214d21aa5c826f9d51ae8cd55759e625c2b9ca7159dd9578ea632661d8e7) found no BGFT/AppInstUtil/install-agent strings. An inspected feature-build PRX artifact from run 45161735256 was 241,104 bytes, SHA-256 1e4531711a0768cfeb29f1d6f66b9541cf087b141eda7a05fed755d12507866c; it is not the same binary. No BGFT install agent is currently installed.
+- A future NR-only BGFT agent would need a signed/allowlisted manifest, package SHA-256 and metadata validation, a base-vs-patch gate, idempotent task registration, terminal progress/error evidence, and post-install Title ID/version readback. It must run independently of the GNM renderer and must not bypass the current fail-closed title-adapter gate for rendering.
+- The existing NR PRX has no remote command/reload interface. A BGFT adapter in source is not enough: deployment, plugin reload/launch trigger, and GoldHEN lifecycle still require a qualified control channel. Do not deploy or invoke a speculative BGFT payload.
+
+References:
+- [ItemzFlow BGFT installer implementation](https://github.com/LightningMods/Itemzflow/blob/4013e1ef188672db63346fef4221b1d8f4f13f02/itemzflow/source/installpkg.cpp)
+- [flatz BGFT ABI definitions](https://github.com/flatz/ps4_stub_lib_maker_v2/blob/a8d044c12ea2dc3fa190ce1769eeb48b30d28ed4/include/bgft.h)
+- [OpenOrbis BGFT type declarations](https://github.com/OpenOrbis/OpenOrbis-PS4-Toolchain/blob/0a1aaf9dd4a92695538bdeb09fb056d06dd11725/include/orbis/_types/bgft.h)
