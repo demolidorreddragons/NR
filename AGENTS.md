@@ -99,3 +99,6 @@ This is reversible archival only; it is not installation or runtime validation. 
 ## Safe GoldHEN config discovery follow-up
 
 `/data/GoldHEN/config.ini` is listed on the console (1,127 bytes) but has not been read. PR47 collects only a local temporary copy, SHA-256/size, and allowlisted boolean states for RPI/remote/package/FTP/Klog/BinLoader/plugin/install keys; all non-boolean values are redacted, raw config is not uploaded, and the temporary file is deleted. It also collects plugins.ini temp/backup variants. This is read-only; do not modify config or registration based on a guessed key.
+## Archive workflow 550 handling
+
+Archive run 45171209915 failed at initial LIST using active FTP; no rename. Run 45171798451 used passive FTP, completed LIST and source readback, then failed on FTP 550 during an absent destination GETSIZE probe. Its manifest `files` array is empty and no FTP RENAME occurred; no PKG moved. PR49 uses passive FTP and per-attempt evidence paths. PR50 chooses archive names from the captured `/data/pkg/old/` listing, treats 550 as unavailable only after checking root listing, and supports verified idempotent reruns. Preserve this evidence; do not describe either failure as a completed archive.
