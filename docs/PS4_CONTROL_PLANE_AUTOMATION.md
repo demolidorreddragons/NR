@@ -142,7 +142,7 @@ The same successful build event also triggered the legacy `PS4 Windows Bridge Te
 - 6,619,136 bytes
 - SHA-256 `8d95e10d45e97ced884b0ab5b787cbc095047db8b7d24ec314a3052ecac92460`
 
-The read-only inventory subsequently showed that this file joined several existing NR PKGs in `/data/pkg/`; it did not archive or delete those files. This was an unintended side effect of the legacy workflow, not a requested release. No cleanup is being performed automatically: the archive/move operation is separate and the current root contains multiple historical NR packages that require exact per-file identity review first.
+The read-only inventory subsequently showed that this file joined several existing NR PKGs in `/data/pkg/`; it did not archive or delete those files. This was an unintended staging side effect of the legacy workflow. Independent QA for the exact build was performed by separate run `45164276177` and completed at 11:20:53Z, after the bridge had promoted the PKG at 11:20:30Z. QA artifact `14814061232` confirms the same hash and `QA_STATUS=PASS_PC_ONLY_NOT_HARDWARE_TESTED`. The package ultimately passed PC QA, but staging preceded the QA result; this is a confirmed sequencing defect, not a failed package QA result. No cleanup is being performed automatically.
 
 The legacy workflow was deleted from the working branch in commit `3a34afa73b004b4c9e8492b73ea9dcc72925191b`, and the static safety contract now asserts that it remains absent. This deletion must reach the repository's default branch before it prevents future `workflow_run` executions; the currently running default-branch workflow definition is not retroactively changed by a feature-branch commit.
 
@@ -170,7 +170,7 @@ The automation is therefore **not complete end-to-end**. It is not safe to mark 
 - The legacy PKG006 stage workflow now binds the exact build run through the QA report and skips if a newer NR package (015) is already in `/data/pkg/`; run `45164398673` succeeded with `STAGING_SKIPPED_NEWER_RELEASE_PRESENT=true`, preserving PKG015.
 
 
-### Second legacy auto-stage observed — PKG 015 build without QA gate
+### Second legacy auto-stage observed — PKG 015 build
 
 A later build event triggered the same legacy bridge workflow again:
 - Bridge run `45164889360`, job `137659150208`, successful.
@@ -178,7 +178,7 @@ A later build event triggered the same legacy bridge workflow again:
 - Staged path: `/data/pkg/PS4-Neural-Engine-015-089684400316.pkg`.
 - Size: 6,619,136 bytes.
 - SHA-256: `089684400316f26d4a7d8d04cb51f768ea14e4ea6351fdaab7007e5e073dc391`.
-- The bridge workflow checked build artifact transfer/readback, but it did not consume the independent QA report. This artifact is therefore classified `STAGED_UNDER_LEGACY_BUILD_TRIGGER; QA_GATE_NOT_PROVEN`, not an approved release and not installable.
+- The build run itself contained independent QA job `137658439809`, which completed successfully before the workflow_run event. Artifact `14814412124` includes a QA report matching this exact hash and `QA_STATUS=PASS_PC_ONLY_NOT_HARDWARE_TESTED`. This package therefore had a PC-only QA PASS before staging. The legacy bridge still failed to explicitly bind/verify that QA artifact, so its stage gate is structurally weak; it is not hardware-approved.
 
 This is distinct from the earlier independently QA'd PKG 015 hash `2fcaf679766fefbed4bc60cc31beb0227b8bfefd4eb8070160f65a402be747e9`. Do not conflate the two files because they share a release number. No file has been deleted or archived by this audit.
 
