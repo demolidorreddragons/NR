@@ -168,3 +168,25 @@ The automation is therefore **not complete end-to-end**. It is not safe to mark 
 - PRX FTP GET readback is 317,216 bytes / SHA-256 `1481214d21aa5c826f9d51ae8cd55759e625c2b9ca7159dd9578ea632661d8e7`; FTP LIST reports 224,128 bytes. This discrepancy is stable across two snapshots. Preserve the file and do not replace/activate it.
 - PKG006 is FULL BASE, PNEU00001 APP_VER 01.02, QA PC-only; PKG015 is FULL BASE, PNEU00001 APP_VER 01.10, QA PC-only. Do not treat either as a patch or reinstall over existing app data.
 - The legacy PKG006 stage workflow now binds the exact build run through the QA report and skips if a newer NR package (015) is already in `/data/pkg/`; run `45164398673` succeeded with `STAGING_SKIPPED_NEWER_RELEASE_PRESENT=true`, preserving PKG015.
+
+
+### Second legacy auto-stage observed — PKG 015 build without QA gate
+
+A later build event triggered the same legacy bridge workflow again:
+- Bridge run `45164889360`, job `137659150208`, successful.
+- Triggering build run `45163958301`, branch `feature/gcn8-numeric-kernels`, source commit `54ff897a07d59c318c73e23be1dd2286df9e9dce`.
+- Staged path: `/data/pkg/PS4-Neural-Engine-015-089684400316.pkg`.
+- Size: 6,619,136 bytes.
+- SHA-256: `089684400316f26d4a7d8d04cb51f768ea14e4ea6351fdaab7007e5e073dc391`.
+- The bridge workflow checked build artifact transfer/readback, but it did not consume the independent QA report. This artifact is therefore classified `STAGED_UNDER_LEGACY_BUILD_TRIGGER; QA_GATE_NOT_PROVEN`, not an approved release and not installable.
+
+This is distinct from the earlier independently QA'd PKG 015 hash `2fcaf679766fefbed4bc60cc31beb0227b8bfefd4eb8070160f65a402be747e9`. Do not conflate the two files because they share a release number. No file has been deleted or archived by this audit.
+
+### Collector v3 scope extension
+
+The reviewed collector now also snapshots, with GETSIZE/GET/GETSIZE and local SHA-256:
+- installed app package bytes for `/user/app/PNEU00001/app.pkg` and `/user/app/PNEU00004/app.pkg`;
+- the previously approved PKG 015 staging path;
+- the exact legacy-staged PKG 006 file and the later unqualified PKG 015 file.
+
+Each file remains subject to the 16 MiB upper bound. The new reads are read-only and are intended to establish E0/E2 identity on the next eligible preflight. They do not install, modify, or launch anything.
