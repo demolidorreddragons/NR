@@ -337,3 +337,10 @@ The corrected script uses the captured `/data/pkg/old/` LIST names for destinati
 ### Idempotent archive recovery hardening
 
 The archive plan now supports safe reruns of the same offline-inspection event after a partial sequence of successful renames. It tolerates missing reported source paths only when a corresponding run-scoped archive name is present in `/data/pkg/old/` and the archive readback matches the exact offline SHA-256 and byte count. Any source still present in the root LIST but returning FTP 550 is classified as access denied, not missing. Extra NR packages in the root that are absent from the validated report cause an immediate abort. Post-rename source absence is confirmed by the final root LIST, not by GETSIZE on a path expected to be absent.
+
+
+### Post-normalization no-op and cross-run recovery
+
+After archive run `45172997929`, subsequent preflight inventories no longer contain the seven moved files under `/data/pkg/`. The offline inspector still emits target records for known historical paths, marking absent files `not_collected`. The archive workflow now skips only such `not_collected` entries that are absent from the live root LIST; if any unvalidated path is still present in the root, it aborts. With only canonical PKG 015 remaining, the workflow performs identity/final-root checks and completes as a no-op.
+
+For same-run partial recovery, a source absent from the root may be accepted only when a same-basename archive exists under `/data/pkg/old/` and its GET readback matches the offline report's exact size and SHA-256. The search spans run IDs, so a fresh inspection can still recognize a previously verified archive. A missing source without a matching verified archive remains a hard failure.
