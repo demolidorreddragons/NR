@@ -83,4 +83,9 @@ for number in ("004", "005"):
     assert "if (-not (Test-Path -LiteralPath $pkg))" in qa
     assert "exit 0" in qa
 
+assert "branches:" in workflow and "- main" in workflow and "- feature/gcn8-numeric-kernels" in workflow
+assert "if: ${{ github.event.workflow_run.conclusion == 'success' }}" in workflow
+assert "head_repository.full_name" not in workflow
+assert "contains(fromJSON" not in workflow
+
 print("PS4 control-plane collector safety and evidence-integrity contract passed")
