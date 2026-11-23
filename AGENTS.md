@@ -120,3 +120,8 @@ The archive workflow must allow a same-run rerun after a partial RENAME by compa
 
 
 - After root normalization, `not_collected` historical staged targets may be skipped only when their paths are absent from the live `/data/pkg/` LIST. Any NR package present in the root must have PASS_PC_ONLY evidence. If only canonical PKG 015 remains, the archive workflow must complete as a verified no-op. For partial reruns, search matching same-basename archive names across run IDs and accept only exact GET readback size/SHA-256 matches; never assume a missing source was archived without that verification.
+
+## End-to-end archive automation acceptance — 2026-11-23
+
+The build → read-only PS4 preflight → offline PKG inspection → archive workflow chain passed on commit `1c314ada74cb6ce94ae4e5c9fd963d0aa3691b5c`: build `45175419701`, preflight `45175564496`, offline inspection `45175650256`, archive `45175810684`. The archive artifact `14819940505` (ZIP SHA-256 `2800f53a584c478bb2bf48df8dd4f5e1b78df8ebe88008405a80f7dfcf8b81b4`) proves an idempotent no-op: empty files/rename list, canonical PKG 015 only in the NR root, third-party names unchanged, and no installation/PRX/plugins.ini/GoldHEN mutation. This acceptance covers package-root archival only, not installation or runtime activation.
+
