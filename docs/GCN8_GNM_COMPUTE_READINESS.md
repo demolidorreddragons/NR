@@ -97,3 +97,22 @@ This audit does **not** claim:
 ## Console state preservation
 
 Gate A makes no PS4 network request and changes no console state. The existing `.github/workflows/ps4-installed-app-readonly-audit.yml` is also changed to run after a successful `PS4 Control Plane Preflight`; it collects installed title PKG, SFO, EBOOT, and PRX identities over FTP and uploads evidence without writing or deleting console files. This is a read-only state audit, not a GPU compute test. The PRX identity conflict recorded in `AGENTS.md` remains a hard block on PRX replacement or activation until independently resolved.
+
+
+## PS4 Pro FTP access and deployment control plane
+
+**Operational access record (user-confirmed, 2026-11-23):** the user has re-established access to the PS4 Pro over FTP and explicitly requires this access path to be treated as part of the project setup, not repeatedly described as though the console were unknown or unavailable.
+
+Previously supplied connection profile:
+
+- Console: PS4 Pro, GoldHEN FTP service
+- FTP endpoint: `192.168.0.17:2121`
+- Login: `anonymous` with an empty password
+- Upload destination for install packages: `/data/pkg/`
+- Passive mode: `PASV` works; `EPSV` returns FTP error `502`
+- Transfer mode: binary; prior bridge transfers were reported with matching SHA-256 hashes
+- Bridge/control-plane name used in the project: `PS4-WINDOWS-BRIDGE`
+
+**Access semantics:** FTP access is an established project capability through the user's PC/bridge path. It must not be conflated with direct reachability from an arbitrary hosted CI runner or this assistant's isolated execution environment. A previous direct connection attempt from that isolated environment was refused because its network (`172.26.36.0/22`) did not route to the console LAN (`192.168.0.0/24`). That historical failure does not invalidate the user's FTP access or the configured bridge. Deployment automation must run through the reachable bridge/control-plane path and verify connectivity at execution time; never silently fall back to a different host or claim an install succeeded without transfer, package verification, installation result, and post-install evidence.
+
+**Safety and install protocol:** FTP read access may be used for inventory and evidence collection. Before any write/install, preserve the existing PRX, `plugins.ini`, GoldHEN state, installed applications and saves. Stage only a validated release PKG under `/data/pkg/`, verify its SHA-256 after transfer, and follow the user's standing rule: notify with the exact installation procedure, document the package and procedure here, then wait for the user's installation feedback. After feedback, collect console logs and read-only state, diagnose, correct and retest. Do not describe a PKG as installed merely because it was uploaded to FTP.
