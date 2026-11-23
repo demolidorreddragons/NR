@@ -29,13 +29,14 @@ if ($staged.Count -lt 1) { throw "Offline report contains no staged NR package e
 $validatedStaged = @($staged | Where-Object { $_.status -eq "PASS_PC_ONLY" })
 
 $canonical = @($validatedStaged | Where-Object { $_.role -eq "staged_canonical_015" })
-if ($canonical.Count -ne 1) { throw "Expected exactly one validated canonical staged PKG 015." }
+if ($canonical.Count -ne 1) { throw "Expected exactly one canonical staged PKG 015." }
 if ($canonical[0].remote_path -ne "/data/pkg/PS4-Neural-Engine-015.pkg") { throw "Canonical staged PKG path changed." }
 if ($canonical[0].sha256 -ne $installed[0].sha256) { throw "Canonical staged PKG 015 is not byte-identical to installed app.pkg." }
 $installedVersion = [version]$installed[0].app_ver
 
 foreach ($pkg in $staged) {
   if ($pkg.remote_path -notmatch '^/data/pkg/PS4-Neural-Engine-[A-Za-z0-9._-]+\.pkg
+
 function New-FtpRequest([string]$remotePath, [string]$method) {
   $uri = "ftp://$($env:PS4_IP):2121$remotePath"
   $request = [System.Net.FtpWebRequest]::Create($uri)
@@ -144,7 +145,7 @@ $actualPaths = @($rootNr | ForEach-Object { "/data/pkg/$($_.name)" } | Sort-Obje
 if ($rootNr.Count -ne $actualPaths.Count) { throw "Duplicate NR package names in the live root listing." }
 $reportedPaths = @($staged | ForEach-Object { [string]$_.remote_path } | Sort-Object -Unique)
 $unexpectedPaths = @($actualPaths | Where-Object { $_ -notin $reportedPaths })
-if ($unexpectedPaths.Count -gt 0) { throw "Current NR package root contains NR PKG paths absent from the offline report: $($unexpectedPaths -join ', ')" }
+if ($unexpectedPaths.Count -gt 0) { throw "Current NR package root contains unvalidated NR PKG paths: $($unexpectedPaths -join ', ')" }
 $validatedPaths = @($validatedStaged | ForEach-Object { [string]$_.remote_path })
 $unvalidatedRootPaths = @($actualPaths | Where-Object { $_ -notin $validatedPaths })
 if ($unvalidatedRootPaths.Count -gt 0) { throw "NR packages present in the root lack PASS_PC_ONLY evidence: $($unvalidatedRootPaths -join ', ')" }
@@ -290,6 +291,7 @@ try {
   if ($pkg.title_id -ne "PNEU00001" -or $pkg.category -ne "gde" -or $pkg.storage_type -ne "digital50") { throw "Refusing non-NR or non-Full/Base package: $($pkg.remote_path)" }
   if ([version]$pkg.app_ver -gt $installedVersion) { throw "A staged package is newer than the installed app; refusing archive cleanup." }
   if ($pkg.sha256 -notmatch '^[a-fA-F0-9]{64}
+
 function New-FtpRequest([string]$remotePath, [string]$method) {
   $uri = "ftp://$($env:PS4_IP):2121$remotePath"
   $request = [System.Net.FtpWebRequest]::Create($uri)
