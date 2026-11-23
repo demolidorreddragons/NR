@@ -10,9 +10,9 @@ The user explicitly authorized automated installation of approved NR PKGs, deplo
 
 ## Verified service facts
 
-GoldHEN upstream documents FTP 2121, BinLoader 9090, Klog 3232, internal PKG installation, plugin support and Remote Package Install. The current preflight uses FTP read-only operations and HTTP GET-only RPI fingerprinting on TCP 12800. It does not probe 9090 or 3232. GoldHEN warns that BinLoader is experimental; do not use it as a control channel or connectivity probe. See [GoldHEN upstream README](https://github.com/GoldHEN/GoldHEN) and [release history](https://github.com/GoldHEN/GoldHEN/releases).
+GoldHEN upstream documents FTP TCP 2121, BinLoader TCP 9090, Klog TCP 3232, internal package installation from `/data/pkg`, plugin support, and remote package installation. Upstream warns BinLoader is experimental and may crash the console. These feature statements do not establish the exact protocol, firmware compatibility, or availability on the user's installed GoldHEN version. See [GoldHEN upstream README](https://github.com/GoldHEN/GoldHEN) and [release history](https://github.com/GoldHEN/GoldHEN/releases).
 
-The recorded console firmware is 14.02. The release page's listed firmware matrix must be checked against the exact installed GoldHEN build; do not infer compatibility from a port being open.
+The user reports GoldHEN v2.4b18.14 on firmware 14.02, and the GamerHack distribution advertises this pairing. Installed binary identity remains unverified; keep the version as USER_REPORTED until device evidence confirms it.
 
 ## Automation components
 
@@ -40,6 +40,14 @@ The recorded console firmware is 14.02. The release page's listed firmware matri
 7. Run the controlled NR test; collect Klog/app/system evidence read-only; preserve originals and produce CDA E0-E4 manifest.
 8. If a stage fails, stop the transaction. Roll back only changes made by that transaction, never unrelated plugins, packages, logs, saves or user data.
 
+## Read-only collector evidence integrity — 2026-11-23
+
+The control-plane collector is deliberately checked out from the reviewed `main` branch before it runs on the privileged self-hosted Windows runner. The triggering build's branch, commit, and run ID are recorded as separate provenance fields; build-branch source code is not executed merely because its build succeeded. The collector itself is therefore identified by the workflow's checkout ref and repository commit, not conflated with the build commit.
+
+FTP directory listings are retained as raw byte streams (`.raw.bin`) without StreamReader decoding or text re-encoding. Each file GET records UTC start/end, remote GETSIZE before and after, local byte count, and SHA-256. A size change is reported as a mutability/size mismatch, not as authenticated remote content. Partial downloads are preserved separately with their own size and digest. Local files are created exclusively to prevent accidental evidence overwrite.
+
+A static CI contract checks the exact FTP read-only method allowlist (`LIST`, `GETSIZE`, `GET`), raw byte preservation, exclusive file creation, partial preservation, pre/post size checks, digest/timestamp fields, and HTTP GET-only RPI fingerprinting. This contract is source-level validation; it does not prove Windows PowerShell execution or a live PS4 collection.
+
 ## Required machine-readable evidence
 
 Every operation must emit JSON with schema version, UTC timestamp, runner identity, build run ID, commit SHA, artifact name, expected and observed hashes, target path, operation, result, and error. Runtime records must add firmware, GoldHEN version, Title ID, process/test identity, and E0-E4 evidence references. Secrets and credentials must never be logged.
@@ -60,14 +68,14 @@ Every operation must emit JSON with schema version, UTC timestamp, runner identi
 
 The user reports that the installed console version is **GoldHEN v2.4b18.14**, paired with **PS4 firmware 14.02**. This exact GoldHEN build is the firmware-specific release that adds support for 14.02. The author SiSTRo's release listing states that v2.4b18.14 adds firmware 14.02 support and remains a beta; see [SiSTRo's v2.4b18.14 release listing](https://ko-fi.com/s/66eac96180). A separate host repository identifies the payload as v2.4b18.14 and publishes SHA-256 `c5480587d99efc2e3cc132352d9b7cf052dd3068280f1686e7fbb37d57e9ba8b`; that hash identifies that host's distributed payload, **not** a verified hash of the binary installed on this console ([host source](https://github.com/X-F1REBALL-X/ps4-jb)).
 
-This resolves the version/firmware compatibility uncertainty at the release-documentation level. The version is user-reported and has not yet been independently read from the console. The GamerHack exploit host's 14.02 route/offset data remains unproven on physical hardware.
+This resolves the version/firmware compatibility uncertainty at the release-documentation level. The version is user-reported and has not yet been independently read from the console.
 
 ### Consequences for implementation
 
-- Use FTP 2121 for read-only inventory and RPI HTTP GET fingerprinting on TCP 12800. Never probe BinLoader 9090 or Klog 3232 from the preflight. A documented feature list is not evidence that the endpoint is running.
+- FTP 2121 is reachable. The read-only preflight's HTTP GET fingerprint to RPI TCP 12800 was refused. Do not probe BinLoader 9090 or Klog 3232.
 - GoldHEN's BinLoader remains explicitly experimental. Do not use it as a generic shell or as a probe; any payload protocol/ABI must be separately pinned and reviewed before sending a payload.
-- The RPI client dialect is source-reviewed separately below. The console's actual receiver must be detected by the preflight before any install request is attempted.
-- Plugin support is documented, but it does not establish a remote activation/reload API. No documented, firmware-qualified remote GoldHEN restart endpoint has been identified; do not invent one.
+- The release advertises Remote Package Install and internal `/data/pkg` installation, but the public release note alone does not specify a machine protocol, request framing, response semantics, or remote success verification. Those must be derived from the exact v2.4b18.14 implementation or a trusted, version-matched client before automating installation.
+- Plugin support is documented, but that alone does not establish a safe remote PRX activation or GoldHEN restart command. Continue to require a version-matched documented mechanism and independent post-operation verification.
 - The 14.02 compatibility gate can now be marked `RELEASE_COMPATIBILITY_DOCUMENTED`; live console identity, service reachability, protocol qualification, and operation success remain separate evidence states.
 
 
@@ -113,26 +121,50 @@ No version-matched, documented remote GoldHEN restart endpoint has been identifi
 
 The public host source is `GamerHack/GamerHack.github.io`; the preserved mirror is `patnawa/GoldhenPS4`. The mirror's README/CHANGELOG identifies GoldHEN v2.4b18.14 (298,776 bytes), archive SHA-256 `fe67d34f2a67b1f4f018629b51318bab40ba7ad13f2293ae802e6cb57ea202cf`, extracted payload SHA-256 `c5480587d99efc2e3cc132352d9b7cf052dd3068280f1686e7fbb37d57e9ba8b`. The latter is a published distribution hash, not a console readback hash. The same mirror explicitly says 14.02 offset routing is upstream data and remains unproven on physical hardware. Keep exploit-chain compatibility, GoldHEN payload identity, and live console execution as three separate evidence items.
 
-## Observed console snapshot — 2026-11-23 (read-only)
 
-Source: workflow run `45162859287`, artifact `ps4-control-plane-preflight-45162545015`, collector commit `b6864210eebe474b33482083215f9f22b518da1d`. The collector completed successfully using only FTP LIST/GETSIZE/GET and HTTP GET. No package install, remote write, PRX activation, BinLoader probe, or GoldHEN restart occurred.
+## Live read-only preflight and legacy staging incident — 2026-11-23
 
-Observed facts:
-- FTP 2121 is reachable and read-only inventory succeeded.
-- RPI HTTP endpoint TCP 12800 actively refused the connection. No install API was available at snapshot time. The collector sent no POST requests.
-- Both `/user/app/PNEU00001/` and `/user/app/PNEU00004/` exist. Their `app.json` files reference `/user/data/pkg/PS4-Neural-Engine-015.pkg` and `/user/data/pkg/PS4-Neural-Rendering-GCN8-gnm-load-45040217180.pkg`, respectively. These references indicate existing installs; app.pkg/SFO was not independently parsed by this snapshot.
-- `/data/GoldHEN/plugins.ini` exists (55 bytes, SHA-256 `5b186ce425fcdc4cdc25312635114ca79dc24e73545c315ad645abca39abd5d0`) and contains a `[default]` registration for `/data/GoldHEN/plugins/ps4_neural_engine.prx`. Do not append a duplicate registration.
-- The NR PRX GET readback was 317,216 bytes, SHA-256 `1481214d21aa5c826f9d51ae8cd55759e625c2b9ca7159dd9578ea632661d8e7`. The same directory LIST reported 224,128 bytes for that path. This identity discrepancy, together with installer-log conflict messages, is a hard stop for replacing or activating that PRX until its filesystem identity is resolved. Preserve the original and backups.
-- `/data/pkg/` contains third-party game packages, old archives, multiple NR PKGs, and the current NR candidates. Preserve every non-NR package and do not clean the directory wholesale.
-- The independently QA-validated main-branch PKG 006 is a FULL BASE application (not a patch), Title ID `PNEU00001`, APP_VER `01.02`, 6,619,136 bytes, SHA-256 `a3c9eb2b185e69d819f15d755a7f032b84de00793808b1081399856eb1873244`, QA `PASS_PC_ONLY_NOT_HARDWARE_TESTED`. It is staged at `/data/pkg/PS4-Neural-Engine-006-a3c9eb2b185e.pkg` with FTP readback verification. Because PNEU00001 already exists, do not install this full-base package as an update or risk replacing existing app data.
-- The feature-branch PKG 015 artifact is a FULL BASE application, Title ID `PNEU00001`, APP_VER `01.10`, 6,619,136 bytes, SHA-256 `7609b5d2b53628bd0a22c85c31ac72df2ae36d9047c9a4908ad24ff2f8fc5548`, QA `PASS_PC_ONLY_NOT_HARDWARE_TESTED`. A filename with that hash prefix is present in `/data/pkg/`; this snapshot did not perform a remote readback hash for that file. The installed app metadata references an unversioned `PS4-Neural-Engine-015.pkg` path, so do not assume the installed app is this exact build.
+The read-only control-plane preflight completed on the existing Windows bridge:
+- Build context: run `45164006053`, commit `941caa50b08e2f3f65dee00901dd8e09aedb65a1`, branch `main`.
+- Preflight run: `45164276080`; job `137657095936`; result `success`.
+- Evidence artifact: `ps4-control-plane-preflight-45164006053`, artifact ID `14814021379`, ZIP digest `7bfa3fb5832d852e20ffdeba2110f55e5043545cb7779cce3b7ccdbc702477f2`.
+- FTP LIST/GETSIZE/GET completed for the enumerated NR paths. The snapshot contains `/data/GoldHEN/plugins.ini` with a `[default]` registration for `ps4_neural_engine.prx`; this proves registration text only, not that a particular PRX build was loaded or executed.
+- The observed PRX at `/data/GoldHEN/plugins/ps4_neural_engine.prx` was 317,216 bytes, SHA-256 `1481214d21aa5c826f9d51ae8cd55759e625c2b9ca7159dd9578ea632661d8e7`. This does not match the PKG 015 PRX hash recorded in its build manifest; do not overwrite or activate it until the deployment target and rollback transaction are qualified.
+- `/user/app/PNEU00001/app.json` and `app.xml` were readable. The metadata references `/user/data/pkg/PS4-Neural-Engine-015.pkg`; this is an installed-app metadata observation, not proof that the app was launched or that the current PKG 015 bytes match the staged PKG.
+- RPI TCP 12800 actively refused the connection. The preflight therefore did **not** identify an RPI receiver. No POST, BinLoader probe, installation, PRX activation, or GoldHEN restart was attempted.
+- Firmware 14.02 and GoldHEN v2.4b18.14 remain user-reported; the installed payload hash was not read from the device.
 
-Automation gates resulting from this snapshot:
-1. PKG install is blocked: RPI 12800 is not listening, and PNEU00001 is already installed. A base package is not an update/patch.
-2. PRX activation is blocked: it is already registered in `plugins.ini`, but the on-device PRX identity is inconsistent and the current NR title adapter remains unvalidated/fail-closed.
-3. GoldHEN restart is blocked: no version-matched remote restart endpoint is qualified. Do not probe BinLoader 9090 or invent a command.
-4. The next safe engineering step is to resolve the PRX path/readback inconsistency and qualify a real receiver/control channel; no console mutation is authorized by this snapshot alone.
+### Unintended legacy PKG 006 staging
 
-### Staging precedence correction
+The same successful build event also triggered the legacy `PS4 Windows Bridge Test` workflow. Despite its name, it was not read-only: it downloaded the build artifact and uploaded/promoted a legacy PKG 006 to the console. The observed run was `45164276134`, job `137657095682`, result `success`. It staged:
 
-The live `/data/pkg/` listing already contains `PS4-Neural-Engine-015-7609b5d2b536.pkg` (6,619,136 bytes) as well as legacy PKG006 files. Therefore the legacy PKG006 stage workflow must not archive or displace the newer PKG015. It now exits without remote changes whenever a higher numbered NR release is already present. The staged PKG015 filename is observed on-device, but its remote SHA-256 has not been read back by this snapshot.
+- `/data/pkg/PS4-Neural-Engine-006-8d95e10d45e9.pkg`
+- 6,619,136 bytes
+- SHA-256 `8d95e10d45e97ced884b0ab5b787cbc095047db8b7d24ec314a3052ecac92460`
+
+The read-only inventory subsequently showed that this file joined several existing NR PKGs in `/data/pkg/`; it did not archive or delete those files. This was an unintended side effect of the legacy workflow, not a requested release. No cleanup is being performed automatically: the archive/move operation is separate and the current root contains multiple historical NR packages that require exact per-file identity review first.
+
+The legacy workflow was deleted from the working branch in commit `3a34afa73b004b4c9e8492b73ea9dcc72925191b`, and the static safety contract now asserts that it remains absent. This deletion must reach the repository's default branch before it prevents future `workflow_run` executions; the currently running default-branch workflow definition is not retroactively changed by a feature-branch commit.
+
+### Automation disposition
+
+- **Build and host/PC QA:** automated.
+- **Independent PKG QA:** automated when its version-specific workflow is correctly bound to the build.
+- **FTP staging/readback:** historically demonstrated, but the legacy auto-stage path is retired in the working branch; the approved version-pinned staging workflow is separate.
+- **Read-only PS4 inventory:** completed once; the newer raw-byte/manifest collector still needs execution on Windows PowerShell 5.1.
+- **Remote installation:** blocked because the RPI endpoint refused TCP 12800 and the exact alternative receiver protocol/foreground precondition is not established.
+- **PRX replacement/activation:** blocked by the installed PRX identity mismatch and the current title-adapter fail-closed gate. The existing `[default]` registration must not be treated as permission to replace or activate a different build.
+- **GoldHEN restart:** blocked; no version-matched documented restart mechanism and recovery handshake are qualified.
+- **App launch/runtime observation:** not implemented/verified.
+
+The automation is therefore **not complete end-to-end**. It is not safe to mark installation, PRX activation, restart, or runtime test as automated until their protocol and rollback gates are actually satisfied. The immediate safe action is to merge the legacy-workflow retirement, qualify the new read-only collector on the Windows runner, and then source-qualify an available install adapter without sending a mutating request until the receiver is positively identified.
+
+## Live console evidence — 2026-11-23
+
+- Read-only preflight run: `45162859287`; repeat snapshot: `45164276080`.
+- RPI TCP 12800 refused connection; no install POST was sent.
+- Both `/user/app/PNEU00001/` and `/user/app/PNEU00004/` exist. The PNEU00001 app metadata references `/user/data/pkg/PS4-Neural-Engine-015.pkg`; this is evidence of an existing app, not a verified app.pkg/SFO version.
+- `plugins.ini` already has a `[default]` registration for `/data/GoldHEN/plugins/ps4_neural_engine.prx`.
+- PRX FTP GET readback is 317,216 bytes / SHA-256 `1481214d21aa5c826f9d51ae8cd55759e625c2b9ca7159dd9578ea632661d8e7`; FTP LIST reports 224,128 bytes. This discrepancy is stable across two snapshots. Preserve the file and do not replace/activate it.
+- PKG006 is FULL BASE, PNEU00001 APP_VER 01.02, QA PC-only; PKG015 is FULL BASE, PNEU00001 APP_VER 01.10, QA PC-only. Do not treat either as a patch or reinstall over existing app data.
+- The legacy PKG006 stage workflow now binds the exact build run through the QA report and skips if a newer NR package (015) is already in `/data/pkg/`; run `45164398673` succeeded with `STAGING_SKIPPED_NEWER_RELEASE_PRESENT=true`, preserving PKG015.
