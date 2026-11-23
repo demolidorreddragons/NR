@@ -54,6 +54,7 @@ jobs:
         shell: pwsh
         env:
           EVIDENCE_DIR: ${{ github.workspace }}/evidence
+          EXPECTED_PREFLIGHT_RUN_ID: ${{ github.event.workflow_run.id }}
         run: |
           & "$env:GITHUB_WORKSPACE/tools/inspect_ps4_installed_packages.ps1"
 
