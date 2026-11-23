@@ -1,0 +1,45 @@
+name: PS4 Control Plane Preflight
+
+on:
+  workflow_run:
+    workflows: ["PS4 PRX and PKG build"]
+    types: [completed]
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  control-plane-preflight:
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      contains(fromJSON('["main","feature/gcn8-numeric-kernels"]'), github.event.workflow_run.head_branch) &&
+      github.event.workflow_run.head_repository.full_name == github.repository
+    runs-on: [self-hosted, Windows, X64, ps4-lan]
+    timeout-minutes: 8
+    steps:
+      - name: Checkout exact successful build commit
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          persist-credentials: false
+
+      - name: Collect read-only PS4 control-plane inventory
+        shell: powershell
+        env:
+          PS4_IP: ${{ vars.PS4_IP }}
+          BUILD_RUN_ID: ${{ github.event.workflow_run.id }}
+          BUILD_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          BUILD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          GITHUB_RUN_ID: ${{ github.run_id }}
+        run: |
+          & "$env:GITHUB_WORKSPACE\tools\ps4-control-plane-preflight.ps1"
+
+      - name: Preserve read-only control-plane evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: ps4-control-plane-preflight-${{ github.event.workflow_run.id }}
+          path: ${{ runner.temp }}/nr-control-plane-preflight-${{ github.run_id }}/*
+          if-no-files-found: error
+          retention-days: 30
