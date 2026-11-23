@@ -120,3 +120,41 @@ No version-matched, documented remote GoldHEN restart endpoint has been identifi
 ## GamerHack distribution identity and hashes
 
 The public host source is `GamerHack/GamerHack.github.io`; the preserved mirror is `patnawa/GoldhenPS4`. The mirror's README/CHANGELOG identifies GoldHEN v2.4b18.14 (298,776 bytes), archive SHA-256 `fe67d34f2a67b1f4f018629b51318bab40ba7ad13f2293ae802e6cb57ea202cf`, extracted payload SHA-256 `c5480587d99efc2e3cc132352d9b7cf052dd3068280f1686e7fbb37d57e9ba8b`. The latter is a published distribution hash, not a console readback hash. The same mirror explicitly says 14.02 offset routing is upstream data and remains unproven on physical hardware. Keep exploit-chain compatibility, GoldHEN payload identity, and live console execution as three separate evidence items.
+
+
+## Live read-only preflight and legacy staging incident — 2026-11-23
+
+The read-only control-plane preflight completed on the existing Windows bridge:
+- Build context: run `45164006053`, commit `941caa50b08e2f3f65dee00901dd8e09aedb65a1`, branch `main`.
+- Preflight run: `45164276080`; job `137657095936`; result `success`.
+- Evidence artifact: `ps4-control-plane-preflight-45164006053`, artifact ID `14814021379`, ZIP digest `7bfa3fb5832d852e20ffdeba2110f55e5043545cb7779cce3b7ccdbc702477f2`.
+- FTP LIST/GETSIZE/GET completed for the enumerated NR paths. The snapshot contains `/data/GoldHEN/plugins.ini` with a `[default]` registration for `ps4_neural_engine.prx`; this proves registration text only, not that a particular PRX build was loaded or executed.
+- The observed PRX at `/data/GoldHEN/plugins/ps4_neural_engine.prx` was 317,216 bytes, SHA-256 `1481214d21aa5c826f9d51ae8cd55759e625c2b9ca7159dd9578ea632661d8e7`. This does not match the PKG 015 PRX hash recorded in its build manifest; do not overwrite or activate it until the deployment target and rollback transaction are qualified.
+- `/user/app/PNEU00001/app.json` and `app.xml` were readable. The metadata references `/user/data/pkg/PS4-Neural-Engine-015.pkg`; this is an installed-app metadata observation, not proof that the app was launched or that the current PKG 015 bytes match the staged PKG.
+- RPI TCP 12800 actively refused the connection. The preflight therefore did **not** identify an RPI receiver. No POST, BinLoader probe, installation, PRX activation, or GoldHEN restart was attempted.
+- Firmware 14.02 and GoldHEN v2.4b18.14 remain user-reported; the installed payload hash was not read from the device.
+
+### Unintended legacy PKG 006 staging
+
+The same successful build event also triggered the legacy `PS4 Windows Bridge Test` workflow. Despite its name, it was not read-only: it downloaded the build artifact and uploaded/promoted a legacy PKG 006 to the console. The observed run was `45164276134`, job `137657095682`, result `success`. It staged:
+
+- `/data/pkg/PS4-Neural-Engine-006-8d95e10d45e9.pkg`
+- 6,619,136 bytes
+- SHA-256 `8d95e10d45e97ced884b0ab5b787cbc095047db8b7d24ec314a3052ecac92460`
+
+The read-only inventory subsequently showed that this file joined several existing NR PKGs in `/data/pkg/`; it did not archive or delete those files. This was an unintended side effect of the legacy workflow, not a requested release. No cleanup is being performed automatically: the archive/move operation is separate and the current root contains multiple historical NR packages that require exact per-file identity review first.
+
+The legacy workflow was deleted from the working branch in commit `3a34afa73b004b4c9e8492b73ea9dcc72925191b`, and the static safety contract now asserts that it remains absent. This deletion must reach the repository's default branch before it prevents future `workflow_run` executions; the currently running default-branch workflow definition is not retroactively changed by a feature-branch commit.
+
+### Automation disposition
+
+- **Build and host/PC QA:** automated.
+- **Independent PKG QA:** automated when its version-specific workflow is correctly bound to the build.
+- **FTP staging/readback:** historically demonstrated, but the legacy auto-stage path is retired in the working branch; the approved version-pinned staging workflow is separate.
+- **Read-only PS4 inventory:** completed once; the newer raw-byte/manifest collector still needs execution on Windows PowerShell 5.1.
+- **Remote installation:** blocked because the RPI endpoint refused TCP 12800 and the exact alternative receiver protocol/foreground precondition is not established.
+- **PRX replacement/activation:** blocked by the installed PRX identity mismatch and the current title-adapter fail-closed gate. The existing `[default]` registration must not be treated as permission to replace or activate a different build.
+- **GoldHEN restart:** blocked; no version-matched documented restart mechanism and recovery handshake are qualified.
+- **App launch/runtime observation:** not implemented/verified.
+
+The automation is therefore **not complete end-to-end**. It is not safe to mark installation, PRX activation, restart, or runtime test as automated until their protocol and rollback gates are actually satisfied. The immediate safe action is to merge the legacy-workflow retirement, qualify the new read-only collector on the Windows runner, and then source-qualify an available install adapter without sending a mutating request until the receiver is positively identified.
