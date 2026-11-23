@@ -7,10 +7,12 @@ on:
         description: "Resultado literal informado pelo usuário"
         required: true
         type: string
+        default: "Pre flight PASS gcn8 assets 6/6 GNM computer exports 7/7; no GNM calls; NR PRX not activated"
       feedback_reference:
         description: "Referência/data do feedback do usuário"
         required: true
         type: string
+        default: "Feedback do usuário após instalação manual do PKG015 em 23/11/2026"
 
 permissions:
   contents: read
