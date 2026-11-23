@@ -13,6 +13,13 @@ assert "MakeDirectory" not in script and "RemoveDirectory" not in script
 assert "POST" not in script.upper()
 assert "Remove-Item" not in script
 assert "$request.UsePassive = $true" in script
+assert "[int]$ftpResponse.StatusCode -eq 550" in script
+assert "$reservedOldNames.Contains($archiveName)" in script
+assert "Get-RemoteSize $candidatePath" not in script
+assert "sourceListed" in script and "matchingArchives" in script
+assert "treating it as access denied" in script
+assert "$unexpectedPaths = @($actualPaths | Where-Object { $_ -notin $reportedPaths })" in script
+assert "rootNr.Count -ne $reportedPaths.Count" not in script
 assert "$request.UsePassive = $false" not in script
 assert "$request.Timeout = 60000" in script
 
