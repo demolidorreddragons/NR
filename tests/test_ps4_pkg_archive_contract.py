@@ -12,6 +12,9 @@ assert "UploadFile" not in script and "DeleteFile" not in script
 assert "MakeDirectory" not in script and "RemoveDirectory" not in script
 assert "POST" not in script.upper()
 assert "Remove-Item" not in script
+assert "$request.UsePassive = $true" in script
+assert "$request.UsePassive = $false" not in script
+assert "$request.Timeout = 60000" in script
 
 assert "workflow_run:" in workflow
 assert 'workflows: ["PS4 Installed Package Offline Inspection"]' in workflow
@@ -22,6 +25,8 @@ assert "actions/download-artifact@v4" in workflow
 assert r"run-id: ${{ github.event.workflow_run.id }}" in workflow
 assert "ExecutionPolicy Bypass" in workflow
 assert "if: always()" in workflow
+assert "archive-evidence-" + r"${{ github.run_id }}-${{ github.run_attempt }}" in workflow
+assert "evidence-" + r"${{ github.run_id }}-${{ github.run_attempt }}" in workflow
 
 assert 'nr.ps4.installed-package-inspection.v1' in script
 assert 'PASS_PC_ONLY' in script
