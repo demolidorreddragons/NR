@@ -1,3 +1,7 @@
+        self.assertIn("shell: powershell -NoProfile -ExecutionPolicy Bypass -File {0}", WORKFLOW)
+        self.assertIn("id: checkout-collector", WORKFLOW)
+        self.assertIn("steps.checkout-collector.outputs.commit", WORKFLOW)
+        self.assertIn("ps4-control-plane-preflight-${{ github.run_id }}", WORKFLOW)
 from pathlib import Path
 import re
 import unittest
@@ -33,7 +37,14 @@ class ControlPlanePreflightContractTests(unittest.TestCase):
             "/user/app/PNEU00001/app.xml",
             "/user/app/PNEU00001/app.pkg",
             "/user/app/PNEU00004/app.pkg",
+            "/user/data/pkg/PS4-Neural-Engine-015.pkg",
             "/data/pkg/PS4-Neural-Engine-015.pkg",
+            "/data/pkg/PS4-Neural-Engine-015-7609b5d2b536.pkg",
+            "/data/pkg/PS4-Neural-Engine-015-089684400316.pkg",
+            "/data/pkg/PS4-Neural-Engine-006-dfda3a974df8.pkg",
+            "/data/pkg/PS4-Neural-Engine-006-eb68c632848b.pkg",
+            "/data/pkg/PS4-Neural-Engine-006-a3c9eb2b185e.pkg",
+            "/data/pkg/PS4-Neural-Engine-006-0f0e7060fc3d.pkg",
             "/data/pkg/PS4-Neural-Engine-006-8d95e10d45e9.pkg",
         ):
             self.assertIn(path, SCRIPT)
@@ -50,9 +61,6 @@ class ControlPlanePreflightContractTests(unittest.TestCase):
         self.assertIn("workflow_run:", WORKFLOW)
         self.assertIn('workflows: ["PS4 PRX and PKG build"]', WORKFLOW)
         self.assertIn("runs-on: [self-hosted, Windows, X64, ps4-lan]", WORKFLOW)
-        self.assertIn("shell: powershell", WORKFLOW)
-        self.assertIn("Record reviewed collector source identity", WORKFLOW)
-        self.assertIn("COLLECTOR_COMMIT=$collectorCommit", WORKFLOW)
         self.assertIn("timeout-minutes: 15", WORKFLOW)
         self.assertIn("ref: main", WORKFLOW)
         self.assertIn("ps4-control-plane-preflight.ps1", WORKFLOW)
