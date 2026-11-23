@@ -17,6 +17,7 @@ assert "ps4-control-plane-preflight-${{ github.run_id }}" in workflow
 assert "GITHUB_RUN_ID" in script and "COLLECTOR_COMMIT" in script and "COLLECTOR_REF" in script
 assert "collector_commit=$env:COLLECTOR_COMMIT" in script
 assert "collector_ref=$env:COLLECTOR_REF" in script
+assert "preflight_run_id=$env:GITHUB_RUN_ID" in script
 assert "workflow_run:" in workflow and 'workflows: ["PS4 PRX and PKG build"]' in workflow
 assert "timeout-minutes: 15" in workflow
 assert r"PS4_IP: ${{ vars.PS4_IP }}" in workflow
