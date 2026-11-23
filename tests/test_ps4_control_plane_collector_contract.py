@@ -45,6 +45,15 @@ assert script.count("GetFileSize") >= 2
 assert "remote_bytes_before=$remoteBefore" in script
 assert "remote_bytes_after=$remoteAfter" in script
 assert "size_stable=$stable" in script
+for remote in (
+    "/user/app/PNEU00001/app.pkg",
+    "/user/app/PNEU00004/app.pkg",
+    "/data/pkg/PS4-Neural-Engine-015.pkg",
+    "/data/pkg/PS4-Neural-Engine-006-8d95e10d45e9.pkg",
+):
+    assert remote in script
+assert 'schema="nr.ps4.control-plane-preflight.v3"' in script
+assert "16777216" in script, "large files must be bounded before GET"
 assert "Get-FileHash" in script
 assert "started_utc=$started" in script and "completed_utc=" in script
 
