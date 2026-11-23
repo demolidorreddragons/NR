@@ -10,7 +10,8 @@ from verify_gcn8_compute_sb import parse_compute_shader_layout
 
 class ComputeShaderLayoutTests(unittest.TestCase):
     def make_shader(self, *, slot_type=0x1C, api_slot=0, start_register=0,
-                    slot_count=1, stage_words=10, code_offset=0x28):
+                    slot_count=1, stage_words=10, code_offset=0x28,
+                    user_sgpr_count=3):
         blob = bytearray(0x24 + 0x10 + stage_words * 4 + 16)
         gnm = 0x24
         stage = gnm + 0x10
@@ -21,6 +22,7 @@ class ComputeShaderLayoutTests(unittest.TestCase):
         common = (slot_count << 24) | 16
         blob[stage:stage + 4] = common.to_bytes(4, "little")
         blob[stage + 8:stage + 12] = code_offset.to_bytes(4, "little")
+        blob[stage + 20:stage + 24] = (user_sgpr_count << 1).to_bytes(4, "little")
         if slot_count:
             slot = stage + 0x24
             blob[slot:slot + 4] = bytes((slot_type, api_slot, start_register, 0))
@@ -29,6 +31,8 @@ class ComputeShaderLayoutTests(unittest.TestCase):
     def test_reads_descriptor_table_slot(self):
         layout = parse_compute_shader_layout(self.make_shader(start_register=3))
         self.assertEqual(layout["input_usage_slot_count"], 1)
+        self.assertEqual(layout["compute_user_sgpr_count"], 3)
+        self.assertEqual(layout["compute_pgm_rsrc2"], 6)
         self.assertEqual(layout["descriptor_table_slot"], {
             "usage_type": 0x1C,
             "api_slot": 0,
