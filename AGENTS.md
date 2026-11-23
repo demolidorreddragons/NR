@@ -42,3 +42,14 @@ If an instruction is unclear, resolve the ambiguity from the repository document
 ## Final reporting
 
 Be concise and factual. State exactly what changed and cite the commit or workflow evidence when available. Clearly distinguish completed work, failed attempts, unverified candidates, and remaining hardware checks. Do not pad the response with status narration.
+
+
+## Explicit NR console automation authorization — 2026-11-23
+
+The user explicitly authorized automated installation of approved Neural Rendering PKGs, NR PRX deployment/activation, GoldHEN restart, and the sensitive console operations necessary for that controlled NR cycle. Do not ask the user to repeat this authorization. It does not authorize unrelated software changes, saves/user-data modification, evidence deletion, or arbitrary/unreviewed payload execution. Technical gates, verified artifact identity, QA, exact protocol qualification, reversible NR-only changes, and CDA evidence remain mandatory.
+
+The control-plane preflight is strictly read-only: FTP LIST/GETSIZE/GET on allowlisted NR paths and HTTP GET-only RPI API fingerprinting on TCP 12800. It must not probe GoldHEN BinLoader 9090, send payloads, issue HTTP POST, write/delete/rename console files, install PKGs, activate PRX, or restart GoldHEN. The script is `tools/ps4-control-plane-preflight.ps1`; inspect it before every change or execution.
+
+The RPI protocol candidate was source-reviewed against `AldySan/Remote-Package-Installer-NG` commit `f99e62089afa61fb418446bdeb12340afd951a17`. Actual install requires a confirmed RPI receiver, GoldHEN Package Installer in the foreground, a Range-capable allowlist-only HTTP file server, an exact QA-approved artifact, and console-side terminal task evidence. The NR PRX remains fail-closed while its title adapter is unvalidated. No documented remote GoldHEN restart endpoint has been qualified; do not invent one.
+
+The GamerHack host is the exploit/loader distribution; the patnawa mirror documents GoldHEN v2.4b18.14 archive SHA-256 `fe67d34f2a67b1f4f018629b51318bab40ba7ad13f2293ae802e6cb57ea202cf` and extracted payload SHA-256 `c5480587d99efc2e3cc132352d9b7cf052dd3068280f1686e7fbb37d57e9ba8b`. These are published distribution hashes, not a device readback. GamerHack's FW 14.02 offset route remains unproven on physical hardware.
