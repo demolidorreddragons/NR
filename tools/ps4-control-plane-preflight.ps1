@@ -87,8 +87,64 @@ function Save-RemoteFile([string]$remotePath) {
     } else {$evidence.Add([pscustomobject]@{operation="GET";path=$remotePath;result="unavailable";started_utc=$started;completed_utc=[DateTime]::UtcNow.ToString("o");remote_bytes_before=$remoteBefore;error=$detail})}
   }
 }
-$files=@("/data/GoldHEN/plugins.ini","/data/GoldHEN/ps4_neural_engine_install.log","/data/GoldHEN/plugins/ps4_neural_engine.prx","/data/GoldHEN/plugins/ps4_neural_engine.prx.pne-release.ini","/data/GoldHEN/plugins/ps4_neural_engine.prx.pne-tmp","/data/GoldHEN/plugins/ps4_neural_engine.prx.pne-backup","/data/GoldHEN/plugins/ps4_neural_engine.prx.pne-backup.001","/user/app/PNEU00004/app.json","/user/app/PNEU00004/app.xml","/user/app/PNEU00004/app.pkg","/user/app/PNEU00001/app.json","/user/app/PNEU00001/app.xml","/user/app/PNEU00001/app.pkg","/user/data/pkg/PS4-Neural-Engine-015.pkg","/data/pkg/PS4-Neural-Engine-015.pkg","/data/pkg/PS4-Neural-Engine-015-7609b5d2b536.pkg","/data/pkg/PS4-Neural-Engine-015-089684400316.pkg","/data/pkg/PS4-Neural-Engine-006-dfda3a974df8.pkg","/data/pkg/PS4-Neural-Engine-006-eb68c632848b.pkg","/data/pkg/PS4-Neural-Engine-006-a3c9eb2b185e.pkg","/data/pkg/PS4-Neural-Engine-006-0f0e7060fc3d.pkg","/data/pkg/PS4-Neural-Engine-006-8d95e10d45e9.pkg","/data/Loader_Logs.txt")
+$files=@("/data/GoldHEN/plugins.ini","/data/GoldHEN/plugins.ini.pne-tmp","/data/GoldHEN/plugins.ini.pne-backup","/data/GoldHEN/ps4_neural_engine_install.log","/data/GoldHEN/plugins/ps4_neural_engine.prx","/data/GoldHEN/plugins/ps4_neural_engine.prx.pne-release.ini","/data/GoldHEN/plugins/ps4_neural_engine.prx.pne-tmp","/data/GoldHEN/plugins/ps4_neural_engine.prx.pne-backup","/data/GoldHEN/plugins/ps4_neural_engine.prx.pne-backup.001","/user/app/PNEU00004/app.json","/user/app/PNEU00004/app.xml","/user/app/PNEU00004/app.pkg","/user/app/PNEU00001/app.json","/user/app/PNEU00001/app.xml","/user/app/PNEU00001/app.pkg","/user/data/pkg/PS4-Neural-Engine-015.pkg","/data/pkg/PS4-Neural-Engine-015.pkg","/data/pkg/PS4-Neural-Engine-015-7609b5d2b536.pkg","/data/pkg/PS4-Neural-Engine-015-089684400316.pkg","/data/pkg/PS4-Neural-Engine-006-dfda3a974df8.pkg","/data/pkg/PS4-Neural-Engine-006-eb68c632848b.pkg","/data/pkg/PS4-Neural-Engine-006-a3c9eb2b185e.pkg","/data/pkg/PS4-Neural-Engine-006-0f0e7060fc3d.pkg","/data/pkg/PS4-Neural-Engine-006-8d95e10d45e9.pkg","/data/Loader_Logs.txt")
 foreach($remotePath in $files){Save-RemoteFile $remotePath}
+# Read GoldHEN config in memory only. Preserve hash and allowlisted boolean states; never upload raw config.
+function Get-SafeGoldHENConfigSnapshot([string]$remotePath) {
+  $key=Get-LocalKey $remotePath
+  $destination=Join-Path $root ("private-config-"+$key+".tmp")
+  $started=[DateTime]::UtcNow.ToString("o")
+  $remoteBefore=$null
+  try {
+    $sizeResponse=(New-FtpRequest $remotePath ([System.Net.WebRequestMethods+Ftp]::GetFileSize)).GetResponse()
+    try {$remoteBefore=[int64]$sizeResponse.ContentLength} finally {$sizeResponse.Dispose()}
+    if($remoteBefore -gt 65536) {
+      $result=[pscustomobject]@{path=$remotePath;result="skipped_size_limit";remote_bytes_before=$remoteBefore;sha256=$null;relevant_settings=@()}
+      $evidence.Add([pscustomobject]@{operation="SAFE_CONFIG_GET";path=$remotePath;result="skipped_size_limit";remote_bytes_before=$remoteBefore;started_utc=$started})
+      return $result
+    }
+    $response=(New-FtpRequest $remotePath ([System.Net.WebRequestMethods+Ftp]::DownloadFile)).GetResponse()
+    try {
+      $sourceStream=$response.GetResponseStream()
+      $output=[IO.File]::Open($destination,[IO.FileMode]::CreateNew,[IO.FileAccess]::Write,[IO.FileShare]::None)
+      try {$sourceStream.CopyTo($output);$output.Flush($true)}
+      finally {$output.Dispose();$sourceStream.Dispose()}
+    } finally {$response.Dispose()}
+    $sizeResponse=(New-FtpRequest $remotePath ([System.Net.WebRequestMethods+Ftp]::GetFileSize)).GetResponse()
+    try {$remoteAfter=[int64]$sizeResponse.ContentLength} finally {$sizeResponse.Dispose()}
+    $item=Get-Item -LiteralPath $destination
+    $hash=(Get-FileHash -LiteralPath $destination -Algorithm SHA256).Hash.ToLowerInvariant()
+    $stable=($remoteBefore -eq $remoteAfter -and $remoteAfter -eq $item.Length)
+    $flags=[System.Collections.Generic.List[object]]::new()
+    if($stable) {
+      foreach($line in Get-Content -LiteralPath $destination) {
+        if($line -match '^\s*([A-Za-z0-9_.-]+)\s*=\s*(.*?)\s*\z') {
+          $name=$matches[1]
+          $value=$matches[2].Trim().Trim('"')
+          if($name -match '(?i)(rpi|remote|package|pkg|ftp|klog|binloader|plugin|install)') {
+            $state="non_boolean_redacted"
+            switch($value.ToLowerInvariant()) {
+              {$_ -in @("1","true","on","yes","enabled")} {$state="enabled";break}
+              {$_ -in @("0","false","off","no","disabled")} {$state="disabled";break}
+            }
+            $flags.Add([pscustomobject]@{key=$name;state=$state})
+          }
+        }
+      }
+    }
+    $result=if($stable){"ok"}else{"size_or_mutability_mismatch"}
+    $snapshot=[pscustomobject]@{path=$remotePath;result=$result;remote_bytes_before=$remoteBefore;remote_bytes_after=$remoteAfter;local_bytes=$item.Length;size_stable=$stable;sha256=$hash;relevant_settings=@($flags)}
+    $evidence.Add([pscustomobject]@{operation="SAFE_CONFIG_GET";path=$remotePath;result=$result;started_utc=$started;completed_utc=[DateTime]::UtcNow.ToString("o");remote_bytes_before=$remoteBefore;remote_bytes_after=$remoteAfter;local_bytes=$item.Length;size_stable=$stable;sha256=$hash;raw_config_preserved=$false})
+    return $snapshot
+  } catch {
+    $detail=$_.Exception.GetBaseException().Message
+    $evidence.Add([pscustomobject]@{operation="SAFE_CONFIG_GET";path=$remotePath;result="unavailable";started_utc=$started;completed_utc=[DateTime]::UtcNow.ToString("o");error=$detail;raw_config_preserved=$false})
+    return [pscustomobject]@{path=$remotePath;result="unavailable";error=$detail;relevant_settings=@()}
+  } finally {
+    if(Test-Path -LiteralPath $destination){Remove-Item -LiteralPath $destination -Force}
+  }
+}
+$goldhenConfigSnapshot=Get-SafeGoldHENConfigSnapshot "/data/GoldHEN/config.ini"
 # Safe RPI fingerprint: HTTP GET only on TCP 12800. Never probe BinLoader 9090.
 $rpi=[ordered]@{host=$env:PS4_IP;port=12800;probe="GET /api; GET /api/status; optional GET /api/v2/system";mutating_requests_sent=$false;backend_fingerprint="not_confirmed";api_status=$null;api_identity=$null;observations=@()}
 function Invoke-ReadOnlyHttpGet([string]$url) {
@@ -115,7 +171,7 @@ $report=[ordered]@{
   runner=$env:COMPUTERNAME;runner_identity="demolidorreddragons-NR.PS4-WINDOWS-BRIDGE"
   build_run_id=$env:BUILD_RUN_ID;build_commit=$env:BUILD_HEAD_SHA;build_branch=$env:BUILD_BRANCH;collector_ref=$env:COLLECTOR_REF;collector_commit=$env:COLLECTOR_COMMIT
   target=[ordered]@{ps4_ip_source="repository_actions_variable";firmware_reported="14.02";firmware_evidence="user_reported";goldhen_reported="2.4b18.14";goldhen_distribution="GamerHack host; patnawa mirror";payload_sha256_published_by_distribution="c5480587d99efc2e3cc132352d9b7cf052dd3068280f1686e7fbb37d57e9ba8b";installed_payload_hash="not_read_from_device"}
-  ftp_operations="LIST_GETSIZE_GET_ONLY";ftp_evidence=$evidence;remote_package_installer=$rpi
+  ftp_operations="LIST_GETSIZE_GET_ONLY";ftp_evidence=$evidence;goldhen_config_snapshot=$goldhenConfigSnapshot;remote_package_installer=$rpi
   binloader_9090_probed=$false;remote_files_modified=$false;pkg_installed=$false;prx_activated=$false;goldhen_restarted=$false
   scope="read_only_discovery_and_identity_snapshot"
 }
