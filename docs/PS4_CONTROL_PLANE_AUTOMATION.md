@@ -304,3 +304,17 @@ Current disposition: preserve the installed app, `plugins.ini`, active PRX, mani
 - Thus there are at least three distinct PRX identities: PKG015 embedded PRX `1e453...`, PKG006 embedded PRX / `.pne-backup` `7561...`, and release-manifest / `.pne-tmp` / `.pne-backup.001` `54e859...`; the active-path FTP GET returns a fourth hash `148121...`. Do not restore or overwrite based only on filenames.
 - The first successful offline inspector run had a parser bug in the PRX metadata comparisons (double-escaped PowerShell regexes), so its PKG validation/SFO/embedded-PRX hashes are valid but its LIST-size, release-manifest and plugins.ini comparison fields are not yet trusted. PR41 corrects those regexes and adds regression assertions.
 - RPI TCP 12800 still actively refuses the GET-only probe. No mutating request, install, PRX activation, GoldHEN restart, or runtime test occurred.
+
+## Reversible NR package-root normalization workflow — 2026-11-23
+
+The project requires one canonical Full/Base NR PKG in `/data/pkg/`, with older/superseded NR packages preserved under `/data/pkg/old/`. The current read-only inventory contains eight NR packages in the root: canonical PKG 015 (identical to the installed app), two alternate PKG 015 builds, and five older PKG 006 builds. Two unrelated third-party game PKGs are also present and are out of scope.
+
+The new `PS4 Archive Superseded NR PKGs` workflow is triggered only after the offline installed-package inspection succeeds. It:
+1. Requires installed app.pkg, app.json source and canonical staged PKG 015 to remain byte-identical and PASS_PC_ONLY.
+2. Requires every other NR root PKG to be present in the exact inspection report and pass PKG/SFO validation as TITLE_ID PNEU00001, CATEGORY gde, storage digital50, and APP_VER no newer than installed.
+3. Re-reads installed/source/canonical packages and each archive candidate with GETSIZE-before/after + GET + SHA-256.
+4. Uses FTP RENAME only to move the seven superseded NR packages into the existing `/data/pkg/old/`, with collision-safe names containing the offline inspection run ID.
+5. Reads each archive destination back and verifies exact size/SHA-256.
+6. Verifies the root retains exactly `PS4-Neural-Engine-015.pkg` and that all non-NR root names (including third-party game PKGs) are unchanged.
+
+The workflow never deletes or uploads files, never creates/removes directories, and never touches installed apps, PNEU00004, plugins.ini, PRX files, GoldHEN state, or RPI. It is reversible archival only, not installation. If any identity or inventory gate fails, it stops and uploads partial chain-of-custody evidence. The workflow has not yet executed; it will run only after the next successful offline-inspection event.
