@@ -23,10 +23,11 @@ The following references establish useful interfaces and candidate tooling, but 
 
 1. OpenOrbis `GnmDriver.h` declares GNM entry points, including `sceGnmDispatchDirect`. The header contains placeholder declarations for several APIs and does not provide a working compute implementation by itself: https://github.com/OpenOrbis/OpenOrbis-PS4-Toolchain/blob/master/include/orbis/GnmDriver.h
 2. The opengnm API reference documents compute shader binding and dispatch interfaces (`sceGnmSetCsShader`, `sceGnmDispatchDirect`): https://ps4-opengnm.github.io/opengnm/reference/driver/
-3. opengnm-psbc documents SPIR-V-to-PS4 shader-binary compilation and a compute-shader output mode. Its published hardware validation statement is for VS/PS triangle rendering on PS4 FW 9.00; that is not evidence of compute dispatch or PS4 Pro FW 14.02 validation: https://github.com/PS4-OpenGNM/opengnm-psbc
-4. The opengnm documentation distinguishes a firmware-backed Orbis backend from a generic software backend. A generic/host test cannot substitute for a retail-console GPU test: https://ps4-opengnm.github.io/opengnm/backends/
+3. Compiler candidate **PS4-OpenGNM/opengnm-psbc**, pinned source revision `28697f007862427ebec54388ec972ce6e3545912` (2026-10-23), documents a compute stage and an explicit `-n` PS4 Pro/NEO (GFX8) target. Its repository includes `tests/test.comp`, a 64x1x1 compute shader, and a shader-binary verifier that recognizes compute stage type and NEO target metadata. The same README's hardware-validation claim is limited to VS/PS triangle rendering on PS4 FW 9.00/GFX7; it does **not** claim compute dispatch, GFX8 compute hardware validation, or FW 14.02 validation: https://github.com/PS4-OpenGNM/opengnm-psbc/tree/28697f007862427ebec54388ec972ce6e3545912
+4. The opengnm API reference documents compute shader binding and dispatch interfaces (`sceGnmSetCsShader`, `sceGnmDispatchDirect`): https://ps4-opengnm.github.io/opengnm/reference/driver/
+5. The opengnm documentation distinguishes a firmware-backed Orbis backend from a generic software backend. A generic/host test cannot substitute for a retail-console GPU test: https://ps4-opengnm.github.io/opengnm/backends/
 
-No third-party code, binary, compiler, or runtime has been imported into the NR repository or deployed to the self-hosted Windows bridge or PS4 as part of this audit.
+The compiler candidate is research-only. Its source, dependencies, generated binaries, and toolchain have not been imported into NR, executed on the privileged Windows bridge, or deployed to the PS4. Before use, its complete dependency/build chain and shader output must be independently reviewed and pinned.
 
 ## Required engineering sequence
 
@@ -34,7 +35,7 @@ No third-party code, binary, compiler, or runtime has been imported into the NR 
 
 - Pin and inspect the exact compiler source revision and its transitive dependencies.
 - Build it on an isolated hosted runner, never on the privileged PS4 LAN runner.
-- Compile a minimal deterministic compute shader for GFX8/NEO.
+- Compile a minimal deterministic compute shader for GFX8/NEO using the explicit NEO target.
 - Independently parse the produced shader binary: header, target mode, stage type, register metadata, code range, alignment, and integrity fields.
 - Preserve compiler logs, source hash, binary hash, and a machine-readable report.
 - Reject output that targets GFX7/base PS4 or GFX10+/PS5.
