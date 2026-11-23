@@ -44,6 +44,8 @@ jobs:
           assert 'read_block(verify_src' in installer and 'read_block(verify_dst' in installer, 'both streams must use full-block reads'
           print('Installer copy verification checks passed')
           PY
+      - name: Validate installed app identity audit chain
+        run: python3 tests/test_installed_app_audit_contract.py
       - name: Model manifest validator tests
         run: python3 -m unittest discover -s tools/tests -v
       - name: Configure
