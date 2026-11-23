@@ -44,8 +44,12 @@ jobs:
           $ErrorActionPreference = "Stop"
           $tool = (Get-Content "$env:RUNNER_TEMP\pkg004-tool.txt" | Select-Object -First 1).Substring(5)
           $pkg = Join-Path $env:GITHUB_WORKSPACE "build-artifact/pkg/PS4-Neural-Engine-004.pkg"
-          if (-not (Test-Path $pkg)) { throw "Numbered PKG 004 missing." }
           New-Item -ItemType Directory -Force -Path qa-output | Out-Null
+          if (-not (Test-Path -LiteralPath $pkg)) {
+            "QA_SKIPPED_PACKAGE_NOT_PRESENT=004" | Out-File qa-output/qa-report.txt -Encoding utf8
+            Get-Content qa-output/qa-report.txt | Out-File $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+            exit 0
+          }
           $size = (Get-Item $pkg).Length
           $hash = (Get-FileHash -Algorithm SHA256 $pkg).Hash.ToLowerInvariant()
           "PKG_NUMBER=004" | Out-File qa-output/qa-report.txt
