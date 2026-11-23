@@ -96,7 +96,7 @@ def parse_compute_shader_layout(data: bytes) -> dict:
 def compiler_descriptor_pointer_layout(compiler_root: pathlib.Path) -> dict:
     source = (compiler_root / "src/amd/vulkan/radv_shader_args.c").read_text()
     match = re.search(
-        r"static void\\s+add_descriptor_set\\s*\\([^)]*\\)\\s*\\{(.*?)\\n\\}",
+        r"static void\s+add_descriptor_set\s*\([^)]*\)\s*\{(.*?)\n\}",
         source,
         re.S,
     )
@@ -104,13 +104,13 @@ def compiler_descriptor_pointer_layout(compiler_root: pathlib.Path) -> dict:
         raise ValueError("could not locate pinned compiler add_descriptor_set")
     body = match.group(1)
     arg = re.search(
-        r"RADV_ADD_ARRAY_ARG\\(state,\\s*AC_ARG_SGPR,\\s*(\\d+),\\s*"
-        r"AC_ARG_CONST_ADDR,\\s*descriptors,\\s*set\\)",
+        r"RADV_ADD_ARRAY_ARG\(state,\s*AC_ARG_SGPR,\s*(\d+),\s*"
+        r"AC_ARG_CONST_ADDR,\s*descriptors,\s*set\)",
         body,
     )
-    metadata = re.search(r"ud_info->num_sgprs\\s*=\\s*(\\d+)\\s*;", body)
+    metadata = re.search(r"ud_info->num_sgprs\s*=\s*(\d+)\s*;", body)
     user_increment = re.search(
-        r"state->args->num_user_sgprs\\s*\\+=\\s*(\\d+)\\s*;", body
+        r"state->args->num_user_sgprs\s*\+=\s*(\d+)\s*;", body
     )
     reserve_high = "state->args->ac.num_sgprs_used++;" in body
     if not arg or not metadata or not user_increment:
