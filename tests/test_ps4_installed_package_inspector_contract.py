@@ -20,10 +20,14 @@ assert "NR-src/tools/inspect_ps4_installed_packages.ps1" in workflow
 assert "EXPECTED_COLLECTOR_COMMIT: ${{ steps.manifest.outputs.collector_commit }}" in workflow
 assert "EXPECTED_COLLECTOR_COMMIT" in script
 assert "Get-ListingEntry" in script and "Get-PluginListingSize" in script
-assert "ConvertFrom-StringData" in script
-assert ".EndsWith($fileName" in script
-assert "$pluginsIniText.Contains" in script
-assert "\\\\s" not in script
+assert "ps4-evidence-parser.psm1" in script
+assert "Import-Module" in script
+assert "ConvertFrom-NrReleaseManifest" in script
+assert "Get-NrFtpListingSize" in script
+assert "Test-NrPluginsIniRegistration" in script
+assert Path("tools/ps4-evidence-parser.psm1").is_file()
+assert Path("tools/tests/test_ps4_evidence_parser.ps1").is_file()
+
 assert "release_manifest_matches_current_prx" in script
 assert "current_goldhen_prx_list_get_size_match" in script
 assert "plugins_ini_registers_nr_prx" in script
