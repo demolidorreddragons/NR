@@ -272,3 +272,40 @@ corrupted element fails the complete comparison. This is not GPU dispatch,
 hardware completion, or readback evidence. The test source was strengthened
 after review because generating the test output with the same production
 oracle would have made the comparison tautological.
+### Gate B follow-up: descriptor-table user-SGPR width mismatch (2026-11-23)
+
+A focused cross-read of the pinned compiler and opengnm command helpers exposed
+a binding hazard that must be resolved before emitting a compute descriptor
+pointer:
+
+- In opengnm-psbc commit 28697f007862427ebec54388ec972ce6e3545912,
+  libpsbc/psbc_compile.c sets address32_hi to zero and builds the descriptor
+  set layout as set 0 with 64-byte binding stride and 16/32/48-byte descriptor
+  records. For a compute shader that uses one set-0 SSBO, the compiler declares
+  the descriptor-set base as one SGPR in radv_shader_args.c.
+- For the pinned GFX8 target, load_grid_size_from_user_sgpr is false. In the
+  compute argument declaration path, the descriptor-set SGPR is allocated
+  before the workgroup-ID SGPRs. The current smoke shader uses
+  gl_GlobalInvocationID, so its workgroup-ID inputs are also relevant.
+- In opengnm commit 4b295ca54c82c83acf308d1c646a2dfa9ae57350,
+  sceGnmDrawCmdSetPointerUserData writes sizeof(void*) / 4 dwords (two
+  dwords on the 64-bit PS4 ABI) starting at the selected user-data slot.
+  Blindly using it for the compiler's one-SGPR descriptor-set argument can
+  overwrite the following user-data SGPR, including a workgroup-ID input.
+- PsbcShaderOutput in the pinned compiler API exposes only the binary pointer
+  and byte size; it does not expose a stable reflection record for the
+  descriptor-set SGPR index/width. That metadata must be derived from the
+  exact compiled shader contract or added as an explicit compiler sidecar.
+
+**Engineering decision:** do not use sceGnmDrawCmdSetPointerUserData as the
+descriptor-table setter for this smoke shader, and do not emit a guessed
+single-dword PM4 write into the live PRX. Gate B needs a tested one-SGPR
+descriptor binding path, a reflection/sidecar contract, and a host packet
+test before hardware execution. This finding is source-derived and does not
+yet establish that any command was submitted on the console.
+
+Reviewed source locations:
+- opengnm-psbc: libpsbc/psbc_compile.c, src/amd/vulkan/radv_shader_args.c,
+  libpsbc/psbc_compile.h at 28697f007862427ebec54388ec972ce6e3545912
+- opengnm: src/drawcommandbuffer.c, include/gnm_shader.h at
+  4b295ca54c82c83acf308d1c646a2dfa9ae57350
