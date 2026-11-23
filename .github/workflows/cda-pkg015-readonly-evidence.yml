@@ -180,6 +180,53 @@ jobs:
             '/data/memory.log'
           )
           foreach ($file in $files) { Save-Snapshot $file 'single' }
+          # Discover project-specific GCN8 smoke logs from the already preserved /data listing.
+          # This avoids hard-coding run IDs and keeps FTP operations read-only.
+          $dataListingPath = Join-Path $runRoot ("listing-" + (Get-LocalKey '/data/') + ".raw.bin")
+          $smokeLogNames = @()
+          if (Test-Path -LiteralPath $dataListingPath -PathType Leaf) {
+            $dataListingText = [Text.Encoding]::UTF8.GetString([IO.File]::ReadAllBytes($dataListingPath))
+            $smokeLogNames = @(
+              [regex]::Matches($dataListingText, '(?im)^\S+\s+\d+\s+\S+\s+\S+\s+\d+\s+[A-Za-z]{3}\s+\d{1,2}\s+\d{4}\s+(pne_gcn8_compute_smoke_[A-Za-z0-9_.-]+\.log)
+          Save-Snapshot '/data/sce_logs/log.bin' 'snapshot-a'
+          Save-Snapshot '/data/sce_logs/log.bin' 'snapshot-b'
+          $manifest.Add('LOG_BIN_DECODING=OPAQUE_UNDECODED')
+          $manifest.Add('STRING_EXTRACTION=NOT_PERFORMED')
+          $manifest.Add('INSTALLATION_PERFORMED=FALSE')
+          $manifest.Add('PRX_ACTIVATED=FALSE')
+          $manifest.Add('PLUGINS_INI_TOUCHED=FALSE')
+          $manifest.Add("COLLECTION_END_UTC=$([DateTime]::UtcNow.ToString('o'))")
+          [IO.File]::WriteAllLines((Join-Path $runRoot 'evidence-manifest.txt'),$manifest,[Text.UTF8Encoding]::new($false))
+          $manifest | ForEach-Object { Write-Host $_ }
+          Get-ChildItem -LiteralPath $runRoot -File | ForEach-Object {
+            $h=(Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+            Write-Host ("LOCAL_EVIDENCE file={0} bytes={1} sha256={2}" -f $_.Name,$_.Length,$h)
+          }
+          Write-Host 'CDA_PKG015_READ_ONLY_COLLECTION_COMPLETE'
+      - name: Search preserved logs for PKG015 preflight and crash/error signals
+        shell: powershell -ExecutionPolicy Bypass -Command "& '{0}'"
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $evidence = Join-Path $env:RUNNER_TEMP ("cda-pkg015-" + $env:GITHUB_RUN_ID)
+          $extractor = Join-Path $env:GITHUB_WORKSPACE 'tools/cda/Extract-Pkg015LogSignals.ps1'
+          if (-not (Test-Path -LiteralPath $extractor -PathType Leaf)) { throw 'Reviewed log-signal extractor is missing.' }
+          & $extractor -EvidenceDirectory $evidence
+      - name: Preserve raw evidence artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: cda-pkg015-evidence-${{ github.run_id }}
+          path: ${{ runner.temp }}/cda-pkg015-${{ github.run_id }}/
+          if-no-files-found: error
+          retention-days: 30
+) |
+                ForEach-Object { $_.Groups[1].Value } |
+                Sort-Object -Unique
+            )
+          }
+          $manifest.Add("DISCOVERED_GCN8_SMOKE_LOG_COUNT=$($smokeLogNames.Count)")
+          foreach ($smokeLogName in $smokeLogNames) {
+            Save-Snapshot ("/data/" + $smokeLogName) 'single'
+          }
           # Two independent raw snapshots: preserve both; differing hashes may mean normal mutation.
           Save-Snapshot '/data/sce_logs/log.bin' 'snapshot-a'
           Save-Snapshot '/data/sce_logs/log.bin' 'snapshot-b'
