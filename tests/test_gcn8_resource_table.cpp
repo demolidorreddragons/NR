@@ -1,6 +1,8 @@
 #include "resource_table_contract.h"
 
 #include <cstdio>
+#include <cstdint>
+#include <limits>
 
 #define CHECK(condition) do { \
     if (!(condition)) { \
@@ -8,9 +10,6 @@
         return 1; \
     } \
 } while (0)
-#include <cstdint>
-#include <limits>
-
 using namespace pne::gcn8;
 
 int main() {
