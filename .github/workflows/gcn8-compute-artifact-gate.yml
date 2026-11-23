@@ -97,6 +97,12 @@ jobs:
             "$UTIL/shader_stats.xml" > "$UTIL/shader_stats.h"
           python3 "$UTIL/format_srgb.py" > "$UTIL/format_srgb.c"
 
+          VULKAN_UTIL="$COMPILER/src/vulkan/util"
+          python3 "$VULKAN_UTIL/vk_struct_type_cast_gen.py" \
+            --xml "$ROOT/Vulkan-Headers/registry/vk.xml" \
+            --out "$VULKAN_UTIL/vk_struct_type_cast.h" --beta false
+
+          test -s "$VULKAN_UTIL/vk_struct_type_cast.h"
           test -s "$FORMAT/u_format_gen.h"
           test -s "$FORMAT/u_format_pack.h"
           test -s "$FORMAT/u_format_table.c"
