@@ -71,18 +71,22 @@ foreach ($target in $targets) {
   $versionMatch = [regex]::Match($sfoText, '(?m)^VERSION\s*=\s*([^\r\n]+)')
   $appVer = if ($appVerMatch.Success) { $appVerMatch.Groups[1].Value.Trim() } else { "" }
   $version = if ($versionMatch.Success) { $versionMatch.Groups[1].Value.Trim() } else { "" }
-  $semantic = ($sfoText -match '(?m)^CATEGORY\s*=\s*gde\s*$') -and
-              ($sfoText -match '(?m)^TITLE_ID\s*=\s*PNEU00001\s*$') -and
-              ($sfoText -match '(?m)^CONTENT_ID\s*=\s*IV0000-PNEU00001_00-PS4NEURALENG0000\s*$') -and
-              ($sfoText -match 'st_type=digital50') -and
-              ($appVer -ne "") -and ($appVer -eq $version)
+  $expectedTitle = if ($target.role -eq "legacy_app") { "PNEU00004" } else { "PNEU00001" }
+  $titleMatch = [regex]::Match($sfoText, '(?m)^TITLE_ID\s*=\s*([^\r\n]+)')
+  $contentMatch = [regex]::Match($sfoText, '(?m)^CONTENT_ID\s*=\s*([^\r\n]+)')
+  $categoryMatch = [regex]::Match($sfoText, '(?m)^CATEGORY\s*=\s*([^\r\n]+)')
+  $titleId = if ($titleMatch.Success) { $titleMatch.Groups[1].Value.Trim() } else { "" }
+  $contentId = if ($contentMatch.Success) { $contentMatch.Groups[1].Value.Trim() } else { "" }
+  $category = if ($categoryMatch.Success) { $categoryMatch.Groups[1].Value.Trim() } else { "" }
+  $expectedContent = if ($expectedTitle -eq "PNEU00004") { $contentId -match '^IV0000-PNEU00004_' } else { $contentId -eq "IV0000-PNEU00001_00-PS4NEURALENG0000" }
+  $semantic = ($category -eq "gde") -and ($titleId -eq $expectedTitle) -and $expectedContent -and ($sfoText -match 'st_type=digital50') -and ($appVer -ne "") -and ($appVer -eq $version)
   $packagedPrx = Get-ChildItem -LiteralPath $extract -Recurse -File | Where-Object { $_.Name -eq "ps4_neural_engine.prx" } | Select-Object -First 1
   $prxHash = $null
   if ($packagedPrx) { $prxHash = (Get-FileHash -LiteralPath $packagedPrx.FullName -Algorithm SHA256).Hash.ToLowerInvariant() }
   $results.Add([pscustomobject]@{
     remote_path=$target.path;role=$target.role;status=$(if($semantic){"PASS_PC_ONLY"}else{"SFO_SEMANTIC_MISMATCH"})
-    bytes=$size;sha256=$hash;category="gde";title_id="PNEU00001";app_ver=$appVer;version=$version
-    content_id="IV0000-PNEU00001_00-PS4NEURALENG0000";storage_type="digital50";packaged_prx_sha256=$prxHash
+    bytes=$size;sha256=$hash;category=$category;title_id=$titleId;app_ver=$appVer;version=$version
+    content_id=$contentId;storage_type="digital50";packaged_prx_sha256=$prxHash
   })
   if ($target.required -and -not $semantic) { throw "Installed app.pkg PARAM.SFO semantic fields do not match the NR base application contract." }
 }
@@ -97,17 +101,24 @@ $comparisons = [ordered]@{
   staged_packages=@($staged | ForEach-Object { [pscustomobject]@{role=$_.role;sha256=$_.sha256;matches_installed=($_.sha256 -and $_.sha256 -eq $installed.sha256)} })
   app_json_package_digest_semantics="not_assumed_to_be_raw_file_sha256"
 }
+$currentPrxEntry = Get-EvidenceEntry "/data/GoldHEN/plugins/ps4_neural_engine.prx"
+if ($currentPrxEntry -and $currentPrxEntry.result -eq "ok") {
+  $currentPrx = Join-Path $env:EVIDENCE_DIR $currentPrxEntry.local_file
+  $currentPrxHash = (Get-FileHash -LiteralPath $currentPrx -Algorithm SHA256).Hash.ToLowerInvariant()
+  $comparisons.current_goldhen_prx_sha256 = $currentPrxHash
+  $comparisons.installed_app_prx_matches_goldhen_prx = ($installed.packaged_prx_sha256 -and $installed.packaged_prx_sha256 -eq $currentPrxHash)
+}
 $appJsonEntry = Get-EvidenceEntry "/user/app/PNEU00001/app.json"
 if ($appJsonEntry -and $appJsonEntry.result -eq "ok") {
   $appJsonPath = Join-Path $env:EVIDENCE_DIR $appJsonEntry.local_file
   $appJson = Get-Content -LiteralPath $appJsonPath -Raw | ConvertFrom-Json
-  $comparisons.app_json_package_digest = [string]$appJson.packageDigest
-  $comparisons.app_json_source_url = [string]$appJson.pieces[0].url
+  $comparisons["app_json_package_digest"] = [string]$appJson.packageDigest
+  $comparisons["app_json_source_url"] = [string]$appJson.pieces[0].url
 }
 $report = [ordered]@{
   schema="nr.ps4.installed-package-inspection.v1"
   inspected_utc=[DateTime]::UtcNow.ToString("o")
-  preflight_run_id=$control.collector_commit
+  preflight_run_id=$control.preflight_run_id
   build_run_id=$control.build_run_id
   build_commit=$control.build_commit
   collector_commit=$control.collector_commit
