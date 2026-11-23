@@ -87,7 +87,7 @@ $report = [ordered]@{
   observations=$observations
   install_requests_sent=$false
   task_control_requests_sent=$false
-  binloader_9090_probed=$false
+  binloader_used=$false
   remote_files_modified=$false
   pkg_installed=$false
 }
