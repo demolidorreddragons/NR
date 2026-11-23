@@ -105,16 +105,30 @@ jobs:
           }
           function Save-Listing([string]$remoteDir) {
             $key = Get-LocalKey $remoteDir
-            $dest = Join-Path $runRoot ("listing-" + $key + ".raw.txt")
+            $dest = Join-Path $runRoot ("listing-" + $key + ".raw.bin")
+            $beforeUtc = [DateTime]::UtcNow.ToString('o')
             try {
               $response = (New-FtpRequest $remoteDir ([System.Net.WebRequestMethods+Ftp]::ListDirectoryDetails)).GetResponse()
               try {
-                $reader = [IO.StreamReader]::new($response.GetResponseStream())
-                try { $listing = $reader.ReadToEnd() } finally { $reader.Dispose() }
+                $inputStream = $response.GetResponseStream()
+                $outputStream = [IO.File]::Open($dest,[IO.FileMode]::CreateNew,[IO.FileAccess]::Write,[IO.FileShare]::None)
+                try { $inputStream.CopyTo($outputStream); $outputStream.Flush($true) }
+                finally { $outputStream.Dispose(); $inputStream.Dispose() }
               } finally { $response.Dispose() }
-              [IO.File]::WriteAllText($dest,$listing,[Text.UTF8Encoding]::new($false))
-              $manifest.Add("LIST_OK remote=$remoteDir local=$([IO.Path]::GetFileName($dest)) bytes=$([Text.Encoding]::UTF8.GetByteCount($listing))")
-            } catch { $manifest.Add("LIST_ERROR remote=$remoteDir error=$($_.Exception.Message)") }
+              $afterUtc = [DateTime]::UtcNow.ToString('o')
+              $item = Get-Item -LiteralPath $dest
+              $hash = (Get-FileHash -LiteralPath $dest -Algorithm SHA256).Hash.ToLowerInvariant()
+              $manifest.Add("LIST_OK remote=$remoteDir before_utc=$beforeUtc after_utc=$afterUtc bytes=$($item.Length) sha256=$hash local=$([IO.Path]::GetFileName($dest))")
+            } catch {
+              $manifest.Add("LIST_ERROR remote=$remoteDir error=$($_.Exception.Message)")
+              if (Test-Path -LiteralPath $dest) {
+                $partial = $dest + ".partial"
+                Move-Item -LiteralPath $dest -Destination $partial
+                $p = Get-Item -LiteralPath $partial
+                $ph = (Get-FileHash -LiteralPath $partial -Algorithm SHA256).Hash.ToLowerInvariant()
+                $manifest.Add("LIST_PARTIAL_PRESERVED remote=$remoteDir bytes=$($p.Length) sha256=$ph local=$([IO.Path]::GetFileName($partial))")
+              }
+            }
           }
           function Save-Snapshot([string]$remote, [string]$label) {
             $key = Get-LocalKey $remote
