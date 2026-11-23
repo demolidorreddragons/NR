@@ -89,3 +89,13 @@ Upstream explicitly warns that BinLoader is experimental and payloads may crash 
 ### Current status
 
 The existing bridge proves FTP upload/readback/staging only. A new read-only control-plane preflight workflow probes 9090 and 3232 as well as 2121. Until a successful run and exact GoldHEN version/firmware protocol qualification exist, install/activation/restart remain **authorized but technically unimplemented**. Never equate port reachability with execution capability.
+
+
+## User-reported GoldHEN build and firmware pairing — 2026-11-23
+
+- Installed GoldHEN version reported by the user: **v2.4b18.14**.
+- Console firmware recorded for this project: **14.02**.
+- SiSTRo's v2.4b18.14 release listing explicitly adds firmware 14.02 support: https://ko-fi.com/s/66eac96180.
+- This confirms release-level firmware compatibility, not an independent live read of the console version. Record the version as `USER_REPORTED` until read-only device evidence confirms it.
+- The release advertises FTP 2121, BinLoader 9090, Klog 3232, Remote Package Install, internal `/data/pkg` installation and plugins. BinLoader is experimental; do not send test payloads.
+- Remote PKG install protocol framing/response, remote PRX activation and GoldHEN restart are not specified by the release feature list. Do not infer those commands from feature presence; qualify them against the exact v2.4b18.14 source/client and verify each operation independently.
