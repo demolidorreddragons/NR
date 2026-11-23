@@ -19,7 +19,7 @@ assert "collector_commit=$env:COLLECTOR_COMMIT" in script
 assert "collector_ref=$env:COLLECTOR_REF" in script
 assert "preflight_run_id=$env:GITHUB_RUN_ID" in script
 assert "workflow_run:" in workflow and 'workflows: ["PS4 PRX and PKG build"]' in workflow
-assert "timeout-minutes: 15" in workflow
+assert "timeout-minutes: 30" in workflow
 assert r"PS4_IP: ${{ vars.PS4_IP }}" in workflow
 
 # Network target is constrained to a literal IPv4 and all run/provenance identifiers are required.
