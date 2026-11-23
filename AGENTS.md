@@ -59,3 +59,12 @@ The GamerHack host is the exploit/loader distribution; the patnawa mirror docume
 Preflight run `45162859287` completed successfully. FTP 2121 works; RPI HTTP 12800 actively refused connection. `PNEU00001` and `PNEU00004` app directories already exist. `plugins.ini` already registers the NR PRX under `[default]`. The PRX FTP GET readback is 317,216 bytes / SHA-256 `1481214d21aa5c826f9d51ae8cd55759e625c2b9ca7159dd9578ea632661d8e7`, while FTP LIST reported 224,128 bytes; installer logs also contain a symlink/identity conflict. Do not replace, activate, or rewrite that PRX until the mismatch is resolved.
 
 The staged PKG 006 is a full base app for already-installed Title ID PNEU00001, APP_VER 01.02. Do not install it over an existing app. The feature PKG 015 is also a full base app (APP_VER 01.10); do not treat it as a patch or reinstall over existing data. Third-party PKGs in `/data/pkg` must be preserved. No RPI service was listening at 12800, and no restart API is qualified. This snapshot was read-only; it did not install, activate, or restart anything.
+
+
+## Installed package identity and alternative install adapter gate — 2026-11-23
+
+A read-only FTP audit confirmed the installed `/user/app/PNEU00001/app.pkg` is byte-identical to the app.json-referenced source `/user/data/pkg/PS4-Neural-Engine-015.pkg`: 6,619,136 bytes, SHA-256 `2fcaf679766fefbed4bc60cc31beb0227b8bfefd4eb8070160f65a402be747e9`. Do not reinstall this full/base PKG over the existing app. The app.json `packageDigest` is not the raw-file SHA-256; its semantics are unverified and must not be treated as a checksum failure.
+
+The PKG 015 packaged PRX hash `1e4531711a0768cfeb29f1d6f66b9541cf087b141eda7a05fed755d12507866c` differs from the current GoldHEN plugin PRX readback hash `1481214d21aa5c826f9d51ae8cd55759e625c2b9ca7159dd9578ea632661d8e7`. Preserve the current plugin and do not overwrite/activate a different binary until its exact filesystem identity and lifecycle are qualified.
+
+RPI TCP 12800 refused the read-only probe. A BGFT/AppInstUtil local-install alternative is not qualified: pinned flatz definitions use 64-bit package-size/progress fields while OpenOrbis 0.5.4 declarations use 32-bit fields. Do not call BGFT or deploy an install agent until the exact FW 14.02 ABI, exports, task lifecycle, and recovery path are independently proven. No speculative install POST, BinLoader 9090 probe, PRX activation, or GoldHEN restart is allowed.
