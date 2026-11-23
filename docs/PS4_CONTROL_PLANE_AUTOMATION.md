@@ -255,9 +255,11 @@ A separate read-only identity audit completed on the Windows PS4 bridge:
 
 ### First post-merge preflight failure and correction
 
-The first post-merge preflight run `45165799711` failed before any FTP request. The Windows runner had no Git executable, so checkout used the GitHub REST archive; the collector-identity step incorrectly ran `git rev-parse`. In addition, that step used the runner's restrictive PowerShell execution policy. No console data was collected or changed by this failed run.
+The first post-merge preflight run `45165799711` failed before any FTP request. The Windows runner had no Git executable, so checkout used the GitHub REST archive; the collector-identity step incorrectly ran `git rev-parse`. It also used the runner's restrictive PowerShell execution policy. No console data was collected or changed.
 
-This branch now uses the documented `actions/checkout` output `steps.checkout-collector.outputs.commit` to bind the exact collector commit, sets `COLLECTOR_REF=main`, and invokes the script with `-ExecutionPolicy Bypass`. The bypass applies only to this reviewed workflow script and does not change the machine policy. The artifact is named with the preflight run ID so a downstream offline inspector can download the exact run without guessing.
+A second attempt, run `45167496411`, fixed the PowerShell policy but exposed that `actions/checkout` output `commit` is empty when the action falls back to the REST archive. It also failed before FTP; the log shows `COLLECTOR_COMMIT` empty and no network request to the PS4.
+
+The corrected follow-up pins checkout to `${{ github.sha }}` in the `workflow_run` context and passes that same exact default-branch SHA as `COLLECTOR_COMMIT`. This avoids depending on Git or checkout outputs and makes the collector source commit identical to the checked-out archive. It keeps `COLLECTOR_REF=main` and invokes the reviewed script with `-ExecutionPolicy Bypass` for that process only; the machine policy is not changed. The artifact is named with the preflight run ID so the downstream offline inspector can download the exact run without guessing.
 
 ### Offline installed-package inspection
 
