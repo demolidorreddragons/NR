@@ -38,3 +38,22 @@ A deployment workflow must:
 - emit machine-readable success markers with run ID, commit SHA, artifact name, remote path, byte count, and digest.
 
 If no workflow currently implements all these steps, create or repair one before claiming the bridge can transfer packages. Do not ask the user to repeat LAN setup or collect the same diagnostics when the self-hosted runner is available.
+
+## Current verified installation state — 2026-11-23
+
+The PS4 Windows LAN bridge is **already installed and configured**. This is established project infrastructure, not a setup task to repeat with the user.
+
+- Runner identity: `demolidorreddragons-NR.PS4-WINDOWS-BRIDGE`.
+- Labels: `self-hosted`, `Windows`, `X64`, `ps4-lan`.
+- The runner can reach the PS4 GoldHEN FTP endpoint using `PS4_IP` from Actions variables and TCP port `2121`.
+- A successful live transfer/integrity verification is recorded in bridge workflow run `45151203751` (job `ps4-connectivity`): PKG 006 was uploaded, read back, SHA-256 checked, and promoted to `/data/pkg/PS4-Neural-Engine-006-eb68c632848b.pkg`.
+- Verified transfer evidence for that historical PKG 006: 6,619,136 bytes; SHA-256 `eb68c632848b6072213459d25b74da239d1535eaaf7b1af2314c732a8002bbff`. This is evidence of bridge transfer only, not installation or app execution, and must not be reused as the hash of later builds.
+
+### Operating rule: reuse, do not recreate
+
+- Never ask the user to reinstall, reconfigure, re-register, or manually retest the bridge merely because a new development task begins.
+- Before each use, inspect current runner/workflow status and the exact workflow implementation. If a workflow is skipped or unavailable, diagnose its trigger/branch/permissions and repair the repository workflow where possible; do not send the user back through bridge setup.
+- Prefer the existing self-hosted runner for LAN transfer and read-only evidence collection. Hosted runners and the ChatGPT container are not substitutes for the user's LAN bridge.
+- Treat the following capabilities separately and verify each from workflow code and run logs: (a) FTP connectivity/listing, (b) upload, (c) remote read-back and digest verification, (d) staging/promotion, (e) package installation, (f) app launch/termination, (g) screen/process/crash observation, and (h) log collection. Success at an earlier item does not prove a later item.
+- Current demonstrated capability includes FTP upload, read-back size/SHA-256 verification, and promotion into `/data/pkg/`. Do not claim that remote installation, app launch/close, screenshot capture, or runtime crash detection is automated unless a specific implemented workflow and successful run prove it.
+- Continue to preserve the existing authorization boundaries: read-only collection and verified staging are distinct from installation, PRX activation, GoldHEN restart, configuration changes, or destructive operations. Those sensitive actions require explicit, specific authorization.
