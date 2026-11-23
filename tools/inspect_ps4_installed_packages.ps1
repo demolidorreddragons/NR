@@ -132,10 +132,9 @@ if ($pluginListingEntry -and $pluginListingEntry.local_file) {
   }
 }
 function Get-PluginListingSize([string]$fileName) {
-  $escaped = [regex]::Escape($fileName)
-  $line = $pluginListingLines | Where-Object { $_ -match ("\\s" + $escaped + "\\z") } | Select-Object -First 1
+  $line = $pluginListingLines | Where-Object { $_.TrimEnd().EndsWith($fileName, [StringComparison]::Ordinal) } | Select-Object -First 1
   if (-not $line) { return $null }
-  $match = [regex]::Match($line, '^\\S+\\s+\\d+\\s+\\S+\\s+\\S+\\s+(\\d+)\\s+')
+  $match = [regex]::Match($line, '^\S+\s+\d+\s+\S+\s+\S+\s+(\d+)\s+')
   if ($match.Success) { return [int64]$match.Groups[1].Value }
   return $null
 }
@@ -165,11 +164,11 @@ $releasePrxHash = $null
 if ($releaseManifestEntry -and $releaseManifestEntry.result -eq "ok" -and $releaseManifestEntry.local_file) {
   $releasePath = Join-Path $env:EVIDENCE_DIR $releaseManifestEntry.local_file
   $releaseText = Get-Content -LiteralPath $releasePath -Raw
-  $releaseHashMatch = [regex]::Match($releaseText, '(?m)^prx_sha256=([a-fA-F0-9]{64})\\z')
-  if ($releaseHashMatch.Success) { $releasePrxHash = $releaseHashMatch.Groups[1].Value.ToLowerInvariant() }
+  $releaseValues = ConvertFrom-StringData $releaseText
+  $candidateHash = ([string]$releaseValues["prx_sha256"]).Trim()
+  if ($candidateHash -match '^[a-fA-F0-9]{64}$') { $releasePrxHash = $candidateHash.ToLowerInvariant() }
   foreach ($key in @("release_number","app_version","title_id","content_id","abi_status","hardware_status")) {
-    $valueMatch = [regex]::Match($releaseText, "(?m)^" + [regex]::Escape($key) + "=([^\\r\\n]+)")
-    if ($valueMatch.Success) { $comparisons["release_manifest_" + $key] = $valueMatch.Groups[1].Value.Trim() }
+    if ($releaseValues.ContainsKey($key)) { $comparisons["release_manifest_" + $key] = [string]$releaseValues[$key] }
   }
   $comparisons["release_manifest_prx_sha256"] = $releasePrxHash
 }
@@ -178,7 +177,7 @@ $pluginsIniRegistersPrx = $false
 if ($pluginsIniEntry -and $pluginsIniEntry.result -eq "ok" -and $pluginsIniEntry.local_file) {
   $pluginsIniPath = Join-Path $env:EVIDENCE_DIR $pluginsIniEntry.local_file
   $pluginsIniText = Get-Content -LiteralPath $pluginsIniPath -Raw
-  $pluginsIniRegistersPrx = [regex]::IsMatch($pluginsIniText, '(?im)^\\s*/data/GoldHEN/plugins/ps4_neural_engine\\.prx\\s*\\z')
+$pluginsIniRegistersPrx = $pluginsIniText.Contains("/data/GoldHEN/plugins/ps4_neural_engine.prx")
 }
 $comparisons["plugins_ini_registers_nr_prx"] = $pluginsIniRegistersPrx
 $currentPrxHash = $null
