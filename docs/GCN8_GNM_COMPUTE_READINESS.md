@@ -868,3 +868,39 @@ It does not resolve the retail firmware contract. The pinned OpenGNM generic imp
 This pass improves the candidate validation matrix and clarifies the ring/read-pointer alignment distinction. It does not prove ring allocation/residency, GPU virtual addressing, command-buffer ownership, queue mapping on retail firmware, cache coherency, completion, or readback. It also does not qualify `sceGnmDispatchDirect` reservation semantics for firmware 14.02.
 
 Gate A remains **PASS — artifact-only**. Gate B remains **BLOCKED**. Gate C remains **NOT PASSED** and Gate D remains **NOT STARTED**. No console calls, queue mapping, compute dispatch, PRX modification/activation, PKG installation, or console-state changes were made in this source audit.
+
+
+### Gate B follow-up: firmware-evidence provenance and FW 14.02 gap (2026-11-24)
+
+A targeted search for firmware-14.02-specific `libSceGnmDriver` exports, NIDs, or disassembly did not locate a public driver image or an ABI record for the required compute calls. The newly located FW 14.02 material is useful for planning evidence acquisition, but must not be overstated.
+
+#### What the public sources establish
+
+- The OpenGNM project documentation describes its Orbis backend as forwarding to the official `libSceGnmDriver`, with 74 real firmware externs and a reverse-engineering workflow based on decrypted firmware modules. Its rewrite plan explicitly identifies its firmware dump material as FW 9.00 (including `libSceGnmDriver.sprx` and the Neo variant). This is evidence of a documented FW 9.00 research baseline, **not** FW 14.02 compatibility or ABI verification. The current public docs are project-maintained and can evolve independently of the pinned OpenGNM revision used by this repository.
+- A public PS4 kernel-dumper fork advertises FW 14.02 (build `J02700521`) support and documents kernel offsets. It dumps `kernel.bin`; the public description does not provide a decrypted FW 14.02 `libSceGnmDriver.sprx`, its export table, NID mapping, or function disassembly. Kernel-dump support therefore does not close the GNM driver evidence gap.
+- OpenOrbis' public `GnmDriver.h` leaves several GNM prototypes as untyped `void function()` declarations, including compute queue functions. Its submit declarations are more informative but still do not establish the exact runtime ABI or semantics for FW 14.02.
+- A public fpPS4 compatibility issue records a missing `sceGnmMapComputeQueue` NID in that emulator. This confirms that the import is encountered by at least one title, but does not provide the function's implementation or hardware semantics.
+
+#### Consequence for the NR harness
+
+Do not derive the FW 14.02 ABI from:
+1. FW 9.00 exports/disassembly;
+2. OpenOrbis placeholder declarations;
+3. shadPS4 HLE signatures/validation;
+4. a game's static call sites; or
+5. an emulator's missing-import report.
+
+These remain separate evidence classes. A firmware-specific ABI record must identify the target firmware/build, module variant (including Neo where applicable), export/NID, calling convention, argument widths/order, return behavior, and any reservation-size contract. For memory and queue operations it must additionally establish the GPU-visible address domain, allocation/mapping requirements, ring/read-pointer lifetime, queue ownership, and completion/readback behavior.
+
+#### Practical next evidence milestone
+
+The next non-invasive milestone is an auditable FW 14.02 evidence package containing (if lawfully available): exact firmware build identity, decrypted `libSceGnmDriver` and `libSceGnmDriverForNeoMode` module hashes, export/NID tables, and disassembly notes for `sceGnmMapComputeQueue`, `sceGnmMapComputeQueueWithPriority`, `sceGnmDingDong`, `sceGnmUnmapComputeQueue`, `sceGnmDispatchDirect`, `sceGnmSubmitCommandBuffers`, and `sceGnmSubmitDone`. No firmware dump, console access, or runtime test was performed as part of this pass.
+
+Sources:
+- [OpenGNM backend documentation](https://ps4-opengnm.github.io/opengnm/backends/)
+- [OpenGNM reverse-engineering plan and FW 9.00 dump inventory](https://github.com/PS4-OpenGNM/opengnm/blob/main/OPENGNM_REWRITE_PLAN.md)
+- [FW 14.02 kernel dumper description](https://github.com/iHaiDeeZ/ps4-kernel-dumper)
+- [OpenOrbis GnmDriver.h](https://github.com/OpenOrbis/OpenOrbis-PS4-Toolchain/blob/master/include/orbis/GnmDriver.h)
+- [fpPS4 missing sceGnmMapComputeQueue report](https://github.com/red-prig/fpps4-game-compatibility/issues/430)
+
+**Gate disposition unchanged:** Gate A PASS (artifact-only); Gate B BLOCKED; Gate C NOT PASSED; Gate D NOT STARTED. This was source/documentation research only. No console interaction, compute dispatch, PRX/PKG operation, or console-state change occurred.
