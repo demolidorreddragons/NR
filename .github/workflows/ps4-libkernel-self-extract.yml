@@ -1,0 +1,70 @@
+name: PS4 FW 14.02 libkernel SELF extraction
+
+on:
+  push:
+    branches:
+      - ops/libkernel-1402-self-download
+    paths:
+      - ".github/workflows/ps4-libkernel-self-extract.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  extract:
+    runs-on: [self-hosted, Windows, X64, ps4-lan]
+    timeout-minutes: 20
+    steps:
+      - name: Retrieve libkernel through FTP SELF mode (read-only)
+        shell: powershell -NoProfile -ExecutionPolicy Bypass -File {0}
+        env:
+          PS4_IP: ${{ vars.PS4_IP }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          if ([string]::IsNullOrWhiteSpace($env:PS4_IP)) { throw "Repository variable PS4_IP is not configured" }
+          $outDir = Join-Path $env:RUNNER_TEMP "ps4-libkernel"
+          New-Item -ItemType Directory -Force -Path $outDir | Out-Null
+          $elf = Join-Path $outDir "libkernel.sprx"
+          $raw = Join-Path $outDir "libkernel.sprx.self"
+          $url = "ftp://$($env:PS4_IP):2121/system/common/lib/libkernel.sprx"
+          $creds = "anonymous:anonymous@example.com"
+
+          # SELF is a per-connection toggle in ftpsrv. Try its documented command first.
+          & curl.exe --fail --silent --show-error --ftp-pasv --user $creds --quote "SELF" --output $elf $url
+          $selfExit = $LASTEXITCODE
+          if ($selfExit -ne 0) {
+            Write-Warning "FTP SELF command was not accepted (curl exit $selfExit); retrieving the untouched source for diagnosis."
+            & curl.exe --fail --silent --show-error --ftp-pasv --user $creds --output $raw $url
+            if ($LASTEXITCODE -ne 0) { throw "Raw libkernel FTP download failed: $LASTEXITCODE" }
+            $candidate = $raw
+          } else {
+            $candidate = $elf
+          }
+
+          $bytes = [IO.File]::ReadAllBytes($candidate)
+          if ($bytes.Length -lt 4) { throw "Downloaded file is too small" }
+          $magic = [BitConverter]::ToString($bytes[0..3])
+          $sha = (Get-FileHash $candidate -Algorithm SHA256).Hash.ToLowerInvariant()
+          Write-Host "LIBKERNEL_BYTES=$($bytes.Length)"
+          Write-Host "LIBKERNEL_MAGIC=$magic"
+          Write-Host "LIBKERNEL_SHA256=$sha"
+          if ($magic -ne "7F-45-4C-46") {
+            if ($candidate -eq $elf) {
+              # Preserve the response for analysis and separately retrieve original SELF bytes.
+              & curl.exe --fail --silent --show-error --ftp-pasv --user $creds --output $raw $url
+              if ($LASTEXITCODE -ne 0) { throw "SELF response was not ELF and raw fallback failed: $LASTEXITCODE" }
+            }
+            Write-Host "LIBKERNEL_NOT_ELF: artifact will preserve downloaded bytes; extraction did not validate."
+            "LIBKERNEL_NOT_ELF" | Out-File (Join-Path $outDir "RESULT.txt") -Encoding ascii
+          } else {
+            "LIBKERNEL_ELF_VALIDATED" | Out-File (Join-Path $outDir "RESULT.txt") -Encoding ascii
+            Write-Host "LIBKERNEL_ELF_VALIDATED"
+          }
+      - name: Publish downloaded image and validation record
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ps4-fw1402-libkernel-image
+          path: ${{ runner.temp }}/ps4-libkernel/
+          if-no-files-found: error
+          retention-days: 7
