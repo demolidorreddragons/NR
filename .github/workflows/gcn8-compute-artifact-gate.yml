@@ -20,6 +20,7 @@ on:
       - "tests/verify_gcn8_compute_sb.py"
       - "tests/test_gcn8_compute_sb_parser.py"
       - "patches/opengnm-psbc/0001-gcn8-descriptor-pointer-reserve-two-sgprs.patch"
+      - "patches/opengnm-psbc/0002-advertise-core-spirv-shader-capability.patch"
       - "docs/GCN8_GNM_COMPUTE_READINESS.md"
   workflow_dispatch:
 
@@ -27,7 +28,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: gcn8-compute-artifact-gate-${{ github.event.pull_request.head.ref || github.ref_name }}
+  group: gcn8-compute-artifact-gate-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -276,6 +277,7 @@ jobs:
             ${{ runner.temp }}/gcn8-compiler-patch.diff
             ${{ runner.temp }}/gcn8-compiler-patch.sha256
             patches/opengnm-psbc/0001-gcn8-descriptor-pointer-reserve-two-sgprs.patch
+            patches/opengnm-psbc/0002-advertise-core-spirv-shader-capability.patch
             ${{ runner.temp }}/gcn8-shader-compile.log
             ${{ runner.temp }}/gcn8-verify.log
             ${{ runner.temp }}/gcn8-artifact-report.json
