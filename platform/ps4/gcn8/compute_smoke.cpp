@@ -134,17 +134,43 @@ bool address_range(uint64_t address, uint64_t size, uint64_t limit) {
     return address != 0 && address < limit && size <= limit - address;
 }
 
-bool kernel_dlsym_lookup(void* context, const char* name, void** address) {
-    if (!context || !name || !address) return false;
+bool kernel_dlsym_lookup(void*, uint32_t provider_handle,
+                         const char* name, void** address) {
+    if (!name || !address) return false;
     *address = nullptr;
-    const auto module = *static_cast<const int32_t*>(context);
-    return sceKernelDlsym(module, name, address) == 0 && *address != nullptr;
+    return sceKernelDlsym(static_cast<OrbisKernelModule>(provider_handle),
+                          name, address) == 0 && *address != nullptr;
 }
 
 bool passive_module_list(void*, uint32_t* handles, size_t capacity,
                          size_t* count) {
-    return sceKernelGetModuleList(
-        reinterpret_cast<OrbisKernelModule*>(handles), capacity, count) == 0;
+    // Keep the Orbis API's native element type at its boundary. The policy
+    // layer uses uint32_t handles, so convert explicitly instead of aliasing
+    // its storage as OrbisKernelModule[].
+    constexpr size_t kMaxCensusModules = 256;
+    if (!handles || !count || capacity == 0 ||
+        capacity > kMaxCensusModules) {
+        return false;
+    }
+
+    OrbisKernelModule modules[kMaxCensusModules]{};
+    // Public declarations say "size" but do not settle its units: observed
+    // callers disagree (some pass entry count, GoldHEN passes sizeof(array)).
+    // Use 256, which is safe as either 256 entries or 256 bytes (64 handles),
+    // and reject counts above the smaller interpretation until FW14.02 ABI
+    // evidence settles the contract.
+    constexpr size_t kAmbiguousSizeArgument = 256;
+    constexpr size_t kConservativeMaxReportedModules =
+        kAmbiguousSizeArgument / sizeof(OrbisKernelModule);
+    if (sceKernelGetModuleList(modules, kAmbiguousSizeArgument, count) != 0)
+        return false;
+    // Never accept a census that may have been truncated under byte semantics.
+    if (*count > capacity || *count > kConservativeMaxReportedModules)
+        return false;
+
+    for (size_t i = 0; i < *count; ++i)
+        handles[i] = static_cast<uint32_t>(modules[i]);
+    return true;
 }
 
 bool passive_module_name(void*, uint32_t handle, char* name, size_t capacity) {
@@ -154,7 +180,7 @@ bool passive_module_name(void*, uint32_t handle, char* name, size_t capacity) {
     if (sceKernelGetModuleInfo(static_cast<OrbisKernelModule>(handle), &info) != 0)
         return false;
     std::strncpy(name, info.name, capacity - 1);
-    name[capacity - 1] = '\\0';
+    name[capacity - 1] = '\0';
     return true;
 }
 
@@ -171,18 +197,23 @@ bool find_loaded_gnm_runtime_module(int32_t* module_handle, Logger& log) {
         log.message("GNM_MODULE_CENSUS_INCOMPLETE=1");
         return false;
     }
-    if (census.has_normal) {
-        *module_handle = static_cast<int32_t>(census.normal_handle);
+    if (census.has_normal)
         log.line("GNM_NORMAL_PROVIDER_HANDLE", census.normal_handle);
-    }
     if (census.has_neo)
         log.line("GNM_NEO_PROVIDER_HANDLE", census.neo_handle);
     log.line("GNM_NORMAL_PROVIDER_PRESENT", census.has_normal ? 1 : 0);
     log.line("GNM_NEO_PROVIDER_PRESENT", census.has_neo ? 1 : 0);
-    if (!census.has_normal) {
+    uint32_t selected_handle = 0;
+    if (!pne::gcn8::runtime::select_gnm_provider_handle(
+            census, &selected_handle)) {
         log.message("GNM_PROVIDER_NOT_FOUND_NO_MODULE_LOAD_ATTEMPTED");
         return false;
     }
+    *module_handle = static_cast<int32_t>(selected_handle);
+    log.line("GNM_SELECTED_PROVIDER_HANDLE", selected_handle);
+    log.message(census.has_normal
+        ? "GNM_SELECTED_PROVIDER=NORMAL"
+        : "GNM_SELECTED_PROVIDER=NEO");
     return true;
 }
 } // namespace
@@ -206,8 +237,9 @@ extern "C" int pne_gcn8_compute_smoke_run(const char* shader_path,
         return 28;
     }
     pne::gcn8::runtime::GnmRuntimeFunctions gnm{};
-    if (!pne::gcn8::runtime::resolve_gnm_runtime_functions(
-            kernel_dlsym_lookup, &gnm_module_handle, &gnm)) {
+    if (!pne::gcn8::runtime::resolve_gnm_runtime_functions_from_provider(
+            kernel_dlsym_lookup, nullptr,
+            static_cast<uint32_t>(gnm_module_handle), &gnm)) {
         log.message("RESULT=BLOCKED; REASON=GNM_REQUIRED_EXPORT_MISSING");
         return 29;
     }

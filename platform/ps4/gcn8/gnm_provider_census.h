@@ -63,4 +63,22 @@ inline ProviderCensus census_loaded_gnm_providers(
     return result;
 }
 
+ 
+// Prefer the standard provider when both are loaded; use Neo as a real
+// fallback on Pro configurations where only the Neo-mode driver is present.
+inline bool select_gnm_provider_handle(const ProviderCensus& census,
+                                       uint32_t* handle) noexcept {
+    if (!handle || census.status != ProviderCensusStatus::complete)
+        return false;
+    if (census.has_normal) {
+        *handle = census.normal_handle;
+        return true;
+    }
+    if (census.has_neo) {
+        *handle = census.neo_handle;
+        return true;
+    }
+    return false;
+}
+
 } // namespace pne::gcn8::runtime

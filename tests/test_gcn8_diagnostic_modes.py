@@ -60,6 +60,16 @@ assert "sceKernelLoadStartModule" not in compute, "compute smoke must never load
 assert "sceKernelGetFsSandboxRandomWord" not in compute, "compute smoke must not derive a driver load path"
 assert "libSceGnmDriver" in census and "libSceGnmDriverForNeoMode" in census
 assert "census_loaded_gnm_providers" in compute, "compute smoke must use the tested passive census policy"
+assert "select_gnm_provider_handle" in compute, "compute smoke must resolve from the selected normal/Neo provider"
+assert "resolve_gnm_runtime_functions_from_provider" in compute, "GNM exports must resolve against the selected provider handle"
+assert "OrbisKernelModule modules[kMaxCensusModules]" in compute, "kernel module API must receive native typed storage"
+assert "reinterpret_cast<OrbisKernelModule*>(handles)" not in compute, "do not type-pun policy handle storage at the Orbis ABI boundary"
+assert "handles[i] = static_cast<uint32_t>(modules[i])" in compute, "convert native module handles explicitly"
+assert "kAmbiguousSizeArgument = 256" in compute, "use an argument safe under both observed size-unit conventions"
+assert "sceKernelGetModuleList(modules, kAmbiguousSizeArgument, count)" in compute, "module list call must use conservative cross-interpretation size"
+assert "*count > kConservativeMaxReportedModules" in compute, "reject census that may be truncated under byte-count interpretation"
 assert "ProviderCensusStatus::capacity_exceeded" in census
 assert "ProviderCensusStatus::module_info_failed" in census
+assert "name[capacity - 1] = '\\\\0';" not in compute, "module name terminator must not be a multi-character literal"
+assert "name[capacity - 1] = '\\0';" in compute, "module name must be null-terminated with a single NUL escape"
 print("Compute smoke passive GNM census invariants: PASS")
