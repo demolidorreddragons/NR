@@ -24,6 +24,13 @@ name, size, digest, or eligible file set changes, the next press previews and
 arms the changed batch instead of inheriting confirmation. Authorization start,
 successful authorization, and disconnect invalidate any pending snapshot.
 
+The preview is sorted and includes the exact filename and byte count of every
+file, plus the batch count and total bytes. It is sent only if the complete
+message fits the platform notification buffer and the notification call
+succeeds. If the complete preview cannot be delivered, the pending confirmation
+is invalidated and upload is blocked; the implementation never confirms a
+silently truncated file list.
+
 Immediately before upload, the worker re-enumerates and hashes the eligible
 batch and requires an exact snapshot match. Each file is then read again and
 its bytes are checked against the confirmed SHA-256 before any GitHub request
