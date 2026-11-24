@@ -1068,3 +1068,17 @@ queue/dispatch ABI, compute completion ordering, or GPU-to-CPU readback.
 Gate A remains PASS (artifact-only); Gate B remains BLOCKED; Gate C remains
 NOT PASSED; Gate D remains NOT STARTED. No console interaction, compute
 dispatch, PRX/PKG operation, or console-state change occurred.
+
+### Gate B follow-up: resource-registration APIs are not a retail residency shortcut (2026-11-24)
+
+A targeted inspection of the pinned OpenGNM Orbis backend found that the resource-registration family is deliberately stubbed rather than forwarded to the firmware:
+
+- `sceGnmRegisterOwner`, `sceGnmRegisterResource`, `sceGnmRegisterOwnerForSystem`, and the resource-registration user-memory/query helpers return `ORBIS_GNM_ERROR_FAILURE` in `src/driver_orbis.c`.
+- The same backend returns failure for `sceGnmUnregisterResource`, `sceGnmUnregisterAllResourcesForOwner`, and `sceGnmUnregisterOwnerAndResources`.
+- OpenGNM's pinned `OPENGNM_REWRITE_PLAN.md` explicitly labels RE-9 “Resource registration internals [DONE — stubs on retail]” and says the registration APIs are devkit-only. This is the project's firmware-research conclusion, based on its documented FW 9.00 reverse-engineering baseline; it is not independent FW 14.02 disassembly.
+
+Sources: [pinned Orbis backend implementation](https://github.com/PS4-OpenGNM/opengnm/blob/4b295ca54c82c83acf308d1c646a2dfa9ae57350/src/driver_orbis.c), [pinned OpenGNM rewrite plan, RE-9](https://github.com/PS4-OpenGNM/opengnm/blob/4b295ca54c82c83acf308d1c646a2dfa9ae57350/OPENGNM_REWRITE_PLAN.md), and [typed declarations](https://github.com/PS4-OpenGNM/opengnm/blob/4b295ca54c82c83acf308d1c646a2dfa9ae57350/include/gnmdriver.h).
+
+**Engineering consequence:** do not design the Gate B resource path around `sceGnmRegisterResource` or related registration calls as a way to establish residency on a retail console. The remaining candidate must establish the actual GPU-visible address and lifetime rules through the supported allocation/mapping and GNM command interfaces. The fact that these registration calls fail in the pinned Orbis backend does not itself prove that no other firmware-managed residency mechanism exists.
+
+Gate B remains **BLOCKED** pending a firmware-14.02-qualified allocation/address contract, queue/dispatch ABI, bounded completion, and GPU-to-CPU visibility/readback. Gate C remains **NOT PASSED**; Gate D remains **NOT STARTED**. This was source inspection only: no console interaction, queue mapping, compute dispatch, PRX/PKG operation, or console-state change occurred.
