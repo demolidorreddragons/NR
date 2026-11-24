@@ -69,3 +69,18 @@ The same pinned source provides a more specific candidate contract for shader-co
 This confirms the pinned OpenGNM local PM4 builder's internal candidate shape. It also means its CS shader binder only accepts an address whose >> 40 component is zero; the low register stores addr >> 8. The source does not establish that a CPU pointer returned by DirectMemory mapping is the correct GPU address for all firmware 14.02 allocations, nor does it qualify the shader's required 256-byte placement/alignment and residency lifetime. The 9-dword local command-buffer helper is distinct from the firmware-facing sceGnmDispatchDirect wrapper and must not be conflated with that function's reservation ABI.
 
 The source regression now checks this encoding and 9-dword local builder alongside the allocation and graphics-smoke findings. This remains source-contract evidence, not a hardware test.
+
+
+### 6. Independent PS4 Mesa backend cross-check (DolphinPS4, pinned source)
+
+A separate PS4 implementation of Mesa's AMDGPU DRM interface was inspected at iHaiDeeZ/DolphinPS4 commit `879b3e57f3d3180bcb5f2234db3903688b28cd7d`, file `port/mesa/ac_ps4_drm.c`. Its file-level design notes explicitly describe the Liverpool process address space as shared by CPU and GPU, map direct-memory buffers at reserved CPU virtual addresses, submit command buffers through `sceGnmSubmitCommandBuffers`, and use an EOP sequence write as a fence. The implementation reserves GPU VA windows below a 40-bit limit, uses `sceKernelReserveVirtualRange` plus `sceKernelMapDirectMemory`, and delays unmapping/freeing until prior submissions complete.
+
+This is useful independent corroboration that a production-style PS4 graphics backend can build a GPU-usable address space from direct-memory allocations and use EOP plus kernel event-queue waits for bounded completion. It is not a Sony SDK/firmware ABI record and does not identify retail firmware 14.02 as its validation target. It therefore cannot be promoted to an FW-14.02 guarantee or copied into NR as an assumed contract.
+
+Crucially, the same pinned backend explicitly reports only one exposed hardware IP, the graphics ring; its compute queue/userqueue entry points return `-ENOSYS`. This means it is evidence for a GFX-ring submission/fence/address-space model, not a working dedicated compute queue. It does not demonstrate that our exact GCN8 compute shader binding, dispatch, resource residency, or cache visibility works on PS4 Pro firmware 14.02. A compute dispatch through a graphics command stream remains a separate hypothesis requiring direct validation.
+
+Source: https://github.com/iHaiDeeZ/DolphinPS4/blob/879b3e57f3d3180bcb5f2234db3903688b28cd7d/port/mesa/ac_ps4_drm.c
+
+### 7. Revised Gate B decision
+
+The cross-check narrows the design space but does not close the gate. There is a plausible shared-VA + graphics-ring + EOP-fence route worth evaluating for the first compute harness, rather than assuming a dedicated compute queue is available. However, no source examined so far supplies the exact retail 14.02 export ABI, no NR hardware run has confirmed a compute dispatch, and no test has proven deterministic output readback. Gate B remains BLOCKED until those specific conditions are met. No host-only source audit can substitute for the missing firmware-qualified evidence and hardware result.
