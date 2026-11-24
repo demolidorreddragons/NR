@@ -904,3 +904,78 @@ Sources:
 - [fpPS4 missing sceGnmMapComputeQueue report](https://github.com/red-prig/fpps4-game-compatibility/issues/430)
 
 **Gate disposition unchanged:** Gate A PASS (artifact-only); Gate B BLOCKED; Gate C NOT PASSED; Gate D NOT STARTED. This was source/documentation research only. No console interaction, compute dispatch, PRX/PKG operation, or console-state change occurred.
+
+
+### Gate B follow-up: firmware 10.71 queue disassembly cross-check (2026-11-24)
+
+A newer pinned research snapshot was inspected at
+`boykopovar/AnyPS5@403fbe6fc19ba5d19cd62566728dfadca1924978`,
+specifically `docs/dev/debt/libSceGnmDriver.md`,
+`docs/dev/debt/libSceGnmDriverForNeoMode.md`, and the corresponding
+`Export.cpp` implementation. This is a separate evidence class from the
+shadPS4 HLE and The Last Guardian call-site analysis. The project documents
+parts of its PS4 GNM model as derived from firmware 10.71 disassembly and
+native firmware 13.42 runs with imports stubbed; its own debt notes repeatedly
+state that the queue behavior is not measured on console hardware. It is not
+evidence for firmware 14.02.
+
+#### Additional queue details reported by that research
+
+- The candidate map validation distinguishes pipe IDs above 6, queue IDs above
+  7, ring bases not aligned to 256 bytes, non-power-of-two ring sizes, and
+  read-pointer addresses not aligned to 4 bytes. The notes attribute the
+  10.71 `sceGnmMapComputeQueueWithPriority` error range
+  `0x80D17000..0x80D17004` to invalid pipe, queue, ring size, ring base, and
+  read-pointer arguments respectively. This is a firmware-10.71-derived
+  candidate, not a verified 14.02 contract.
+- The same notes report that `sceGnmDingDong` updates the mapped read offset
+  before the queued packets execute, and that unmapping does not wait for GPU
+  completion. They also identify a path where the driver records a call and
+  rings the queue through an ioctl, or stores the new offset in the mapped
+  queue write pointer. These details materially warn against treating the
+  read offset as a completion fence or treating unmap as a synchronization
+  primitive.
+- The research describes compute-ring command-buffer handling, including
+  restrictions on nested indirect buffers and REWIND packets. Those are
+  implementation-specific observations from this research project and must
+  not be generalized to Sony firmware without independent confirmation.
+- The PS5-oriented `libSceGnmDriverForNeoMode` notes explicitly distinguish
+  their PS4 10.71 disassembly observations from PS5 exports and mark several
+  signatures as unverified. Those PS5 exports are not used as PS4 ABI evidence.
+
+**Engineering consequence:** even if the reported early read-offset update is
+correct for the analyzed firmware path, it cannot be used as proof that GPU
+work has completed. The NR harness must require an independently established
+completion event/fence and readback visibility path; it must not infer
+completion from `sceGnmDingDong` return, queue read-offset movement, or
+`sceGnmUnmapComputeQueue`.
+
+Source: [pinned AnyPS5 GNM driver research](https://github.com/boykopovar/AnyPS5/blob/403fbe6fc19ba5d19cd62566728dfadca1924978/docs/dev/debt/libSceGnmDriver.md),
+[queue/Neo-mode export notes](https://github.com/boykopovar/AnyPS5/blob/403fbe6fc19ba5d19cd62566728dfadca1924978/docs/dev/debt/libSceGnmDriverForNeoMode.md),
+and [pinned implementation snapshot](https://github.com/boykopovar/AnyPS5/blob/403fbe6fc19ba5d19cd62566728dfadca1924978/core/libs/prx/libSceGnmDriver/Export.cpp).
+
+#### Updated Gate B disposition
+
+This cross-check adds a concrete hazard to the queue contract: queue progress
+indicators and unmap may not represent GPU completion. It does not resolve the
+firmware-14.02 ABI, ring allocation/residency, submission ownership, cache
+coherency, bounded completion, or readback requirements. No values or call
+sequences from this source are promoted into the NR implementation.
+
+Gate A remains **PASS — artifact-only**. Gate B remains **BLOCKED**. Gate C
+remains **NOT PASSED** and Gate D remains **NOT STARTED**. No console queue
+was mapped, no compute dispatch was submitted, and no PRX, PKG, or console
+state was changed.
+
+### Gate A rerun confirmation for the firmware-evidence audit head
+
+The workflows triggered for head commit
+`3c7635a51616ed7567c05be47d101a52c7108436` have now completed successfully:
+
+- [GCN8 artifact gate run 45392325919](https://github.com/demolidorreddragons/NR/actions/runs/45392325919) — success.
+- [Host validation run 45392316010](https://github.com/demolidorreddragons/NR/actions/runs/45392316010) — success.
+- [Additional validation run 45392325906](https://github.com/demolidorreddragons/NR/actions/runs/45392325906) — success.
+
+These are validation results for the current source/documentation head. The
+GCN8 workflow remains an artifact-only compiler test and does not change the
+Gate B/C/D disposition.
