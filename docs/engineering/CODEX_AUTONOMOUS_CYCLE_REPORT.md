@@ -86,6 +86,8 @@ No `.github/workflows` file was edited. No PRX compile workflow was run: the ins
 The follow-up review closed a user-visible integrity gap in the preview. A confirmation is no longer armed unless the complete per-file list and byte sizes can be sent without truncation. If it cannot fit the SDK's actual notification message field, or the notification call fails, the batch is disarmed and upload does not start.
 
 Additional host validation performed against the current branch source snapshot:
+- C++ command: `g++ -std=c++17 -fno-exceptions -fno-rtti -Wall -Wextra -Wpedantic -Werror -fsanitize=address,undefined -fno-omit-frame-pointer /tmp/nr-host-check/upload_confirmation.cpp /tmp/nr-host-check/test_upload_confirmation.cpp -o /tmp/nr-host-check/test_upload_confirmation_ps4flags && /tmp/nr-host-check/test_upload_confirmation_ps4flags` — exit 0.
+- C notification stub command: `gcc -std=c11 -Wall -Wextra -Wpedantic -Werror -I/tmp/nr-host-check /tmp/nr-host-check/plugin_common.c /tmp/nr-host-check/test_notify_checked.c -o /tmp/nr-host-check/test_notify_checked && /tmp/nr-host-check/test_notify_checked` — exit 0.
 - C++17 standalone upload helper/test harness with `-fno-exceptions -fno-rtti`, warnings-as-errors, AddressSanitizer, and UndefinedBehaviorSanitizer — exit 0.
 - SHA-256 vectors for empty input, short input, the 55/56-byte padding transition, 63/64/65-byte block transition, 119/120/127/128-byte transitions, and the published multi-block vector — PASS.
 - Preview ordering, exact per-file byte sizes, exact-capacity success, one-byte-too-small rejection, duplicate filename rejection, and control-character filename rejection — PASS.
