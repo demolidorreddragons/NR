@@ -180,3 +180,29 @@ Classification:
 - Reinforces need to inspect normal and Neo providers separately.
 - Does not prove FW 14.02 exports, ABI, queue semantics, or compute execution.
 - No NR code or target behavior changed as a result.
+
+## Cross-check: public module API declarations and enumeration bounds
+
+A fresh source-level cross-check compared the ps4dev SDK declarations, its exact public structure definitions, and the pinned shadPS4 HLE implementation:
+
+- `sceKernelGetModuleList(SceKernelModule *array, size_t size, size_t *available)` is declared by ps4dev/ps4sdk. shadPS4 models the second argument as the number of handle-array elements, returns an insufficient-capacity error when the module list exceeds that capacity, and only writes the returned count on success. This is useful for designing fail-closed truncation handling, but HLE behavior is not proof of the retail FW 14.02 syscall contract.
+- The public `SceKernelModuleInfo` layout is explicit in ps4dev/ps4sdk: `size_t size; char name[256]; segmentInfo[4]; uint32_t segmentCount; uint8_t fingerprint[20]`. Segment records are `{ void *address; uint32_t size; int32_t prot; }`. This confirms the public header's expected field arrangement, not that FW 14.02 accepts the same structure version/size or preserves identical semantics.
+- Crucially, ps4dev/ps4sdk README says the SDK currently supports approximately FW 1.76. Its declaration/layout therefore cannot be promoted to FW 14.02 ABI qualification.
+- Independent homebrew code (Conker-PS4) uses a fixed 256-handle array and the same size/count pattern. That is an implementation precedent only; 256 is not established as a retail maximum. A census must treat an insufficient-capacity result as incomplete and must not report absence of a provider from a truncated enumeration.
+
+Sources:
+- https://github.com/ps4dev/ps4sdk/blob/master/include/sce/kernel.h
+- https://github.com/ps4dev/ps4sdk/blob/master/include/sce/types/kernel.h
+- https://github.com/ps4dev/ps4sdk/blob/master/README.md
+- https://github.com/shadps4-emu/shadPS4/blob/main/src/core/libraries/kernel/process.cpp
+- https://github.com/iHaiDeeZ/Conker-PS4/blob/main/port/ps4_sampler.cpp
+
+## Authorization and execution disposition — 2026-11-24
+
+The user explicitly authorized the passive census of already-loaded normal and Neo-mode GNM providers, limited to module enumeration, module-info inspection, and name-based symbol lookup. The authorization excludes module loading, GNM function calls, memory allocation, command submission, compute dispatch, PRX activation, and package installation.
+
+The repository/bridge capability review found no existing checked-in target-side census executable or passive live-process inspection endpoint. The installed-app read-only workflow only retrieves files over FTP/HTTP; it cannot inspect module handles in the running process. The available GitHub connector can inspect and edit repository content but cannot execute code on the PS4. No target execution was attempted.
+
+The public API shape is now better bounded at source level, including a known truncation failure mode, but the only public SDK declaration found explicitly targets approximately FW 1.76, and the HLE implementation is not retail evidence. Therefore it would be unsafe to compile and deploy a target census using that unqualified ABI as if it were FW 14.02 verified. The remaining minimum artifact is a FW 14.02-qualified `sceKernelGetModuleList` / `sceKernelGetModuleInfo` / `sceKernelDlsym` contract or a trusted read-only inspector already operating against the running process. Once that exists, the approved passive census can be run without invoking any GNM entry point.
+
+No target probe, module load, GNM call, memory allocation, command submission, compute dispatch, PRX activation, PKG installation, or console-state change occurred.
