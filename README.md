@@ -2,6 +2,14 @@
 
 Public source repository for the PS4 Neural Engine project. The currently implemented runtime is the **GoldHEN diagnostics/capture scaffold**, not a completed neural renderer.
 
+## Project objective
+
+The objective of this project is to deliver a **working, verifiable neural-rendering pipeline on PS4 Pro running firmware 14.02**. The key milestone is a real GCN8 compute workload executed by the console GPU, with firmware-qualified GNM memory/submission/synchronization contracts and deterministic GPU readback. Host tests, CI artifacts, static analysis, and emulator behavior are supporting evidence; they do not substitute for execution on the target hardware.
+
+The delivery path is Gate A (GCN8 compiler/artifacts), Gate B (GNM backend readiness), Gate C (deterministic PS4 Pro hardware execution), and Gate D (neural graph/reconstruction integration). A gate is not complete until its acceptance evidence is recorded. No firmware ABI, GPU address, runtime result, or hardware execution may be assumed or fabricated, and console operations must remain within the user's explicit authorization.
+
+See **[the full project objective and acceptance criteria](docs/OBJETIVO_NEURAL_RENDERING.md)** for the detailed goal, milestones, execution rules, and current status.
+
 ## Implemented
 
 - Bounded, non-blocking presentation-event queue and worker-thread file writer.
