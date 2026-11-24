@@ -1,5 +1,4 @@
 diff --git a/src/drawcommandbuffer.c b/src/drawcommandbuffer.c
-index 0000000..0000000 100644
 --- a/src/drawcommandbuffer.c
 +++ b/src/drawcommandbuffer.c
 @@ -66,9 +66,10 @@ static inline void setcontextregister(
