@@ -629,3 +629,54 @@ successful no-op submit result as a pass condition.
 **Gate B decision remains BLOCKED.** Source inspection has improved the
 candidate map but has not supplied the missing retail firmware or hardware
 evidence. Gate C remains NOT PASSED and Gate D remains NOT STARTED.
+
+
+### Gate B follow-up: direct-memory consumers, dispatch sizing, and Vulkan candidate rejection (2026-11-24)
+
+A second source pass was completed after Gate A run `45383567856` finished successfully. Its downloaded artifact was inspected locally: the ZIP contains the 228-byte GNM shader, 1,020-byte SPIR-V module, compiler/build logs, verifier log, report JSON, patch files and SHA-256 manifest. The report states `PASS_ARTIFACT_ONLY_NOT_HARDWARE`, `hardware_dispatch_tested=false`, and `firmware_14_02_tested=false`. The binary and SPIR-V hashes match the previous successful runs. This confirms the hosted build's retained outputs; it does not add hardware evidence.
+
+#### Direct-memory allocation: what the pinned OpenGNM helper actually proves
+
+In pinned OpenGNM `src/helpers.c` at revision `4b295ca54c82c83acf308d1c646a2dfa9ae57350`:
+
+- `sceGnmDirectMemoryAllocate` validates size/alignment, rounds size up, calls `sceKernelAllocateDirectMemory(0, sceKernelGetDirectMemorySize(), ...)`, then maps the returned direct-memory offset with `sceKernelMapDirectMemory`.
+- The helper stores the mapped CPU pointer in `GnmDirectMemory.mapped` and the direct-memory allocation offset in `GnmDirectMemory.directmemory`; release unmaps and releases the direct-memory range.
+- The only in-repository consumer of this helper in that OpenGNM revision is the VideoOut buffer path in `src/helpers.c`. The hardware smoke sample separately allocates Garlic direct memory for its display buffers and graphics DCB/EOP label. Neither use is a compute-resource allocation/residency demonstration.
+- The helper itself does not create a distinct GPU virtual address, establish a GPU VA mapping contract, register residency, or define cache behavior for shader code, descriptor tables, compute outputs, or completion labels. A CPU mapped pointer and a direct-memory offset must not be silently treated as a proven GPU address for every resource class.
+- The documented Garlic memory type value `3` and CPU/GPU read-write protection constants are source/documentation declarations in this project. They are not firmware-14.02 qualification.
+
+Source: [pinned OpenGNM helpers.c](https://github.com/PS4-OpenGNM/opengnm/blob/4b295ca54c82c83acf308d1c646a2dfa9ae57350/src/helpers.c), [gnm_helpers.h](https://github.com/PS4-OpenGNM/opengnm/blob/4b295ca54c82c83acf308d1c646a2dfa9ae57350/include/gnm_helpers.h), and [hardware_smoke.c](https://github.com/PS4-OpenGNM/opengnm/blob/4b295ca54c82c83acf308d1c646a2dfa9ae57350/tests/hardware_smoke.c).
+
+#### Corrected generic dispatch packet-size finding
+
+The pinned generic implementation in `src/driver_generic.c` was re-counted from the exact function body:
+
+- It checks `size < 12`.
+- It writes a 5-dword SET_SH_REG packet for COMPUTE_NUM_THREAD_X/Y/Z.
+- It then writes a 5-dword DISPATCH_DIRECT packet.
+- It then writes a 3-dword NOP packet.
+- Total body writes: **13 dwords**, despite the 12-dword minimum guard.
+- The pinned `tests/test_api.c` calls this function with `size=12`.
+
+This is a source-level size-guard/body-length inconsistency. If `size` is the dword capacity—as the surrounding command-builder APIs and test usage indicate—the 12-dword accepted case can write one dword beyond the declared capacity. The function's exact intended reservation contract remains unqualified; do not use it as a firmware ABI template. This correction supersedes earlier wording in this audit that described the generic path simply as a 12-dword sequence. The separate local `sceGnmDrawCmdDispatchDirect` builder remains a 9-dword packet candidate and is not the firmware-facing function.
+
+Source: [pinned driver_generic.c](https://github.com/PS4-OpenGNM/opengnm/blob/4b295ca54c82c83acf308d1c646a2dfa9ae57350/src/driver_generic.c), [test_api.c](https://github.com/PS4-OpenGNM/opengnm/blob/4b295ca54c82c83acf308d1c646a2dfa9ae57350/tests/test_api.c).
+
+#### Vulkan-PS4 candidate: useful architecture, not an accepted compute backend
+
+The pinned `PS4-OpenGNM/vulkan-ps4` revision `f4d940b723771b3fe637e8ac0704bb5d6ab19622` exposes candidate implementations for direct-memory allocation, compute pipeline binding, dispatch recording, EOP labels, and queue submission. A closer audit finds reasons it cannot unblock Gate B:
+
+- `vk_ps4_AllocateMemory` maps Vulkan Onion/Garlic memory types to project-defined direct-memory types and maps the direct memory for CPU access. The implementation does not independently prove GPU VA translation, residency, or retail firmware memory semantics.
+- `vk_ps4_InvalidateMappedMemoryRanges` is explicitly a no-op. The source comment equates direct GPU visibility with cache invalidation; that is not evidence of CPU-visible GPU writes or cache coherency.
+- Descriptor binding passes host-side pointers such as `b->buffers`, `b->textures`, or `b->samplers` directly to `sceGnmDrawCmdSetPointerUserData`. No independently verified GPU address translation/residency contract is established by that source.
+- Queue fence/semaphore signaling uses EOP event writes to label addresses derived by casting CPU pointers to integers. This is a plausible design sketch, not a validated GPU-address contract.
+- The fence wait has a timeout-capable polling path, but the queue-idle path contains an unbounded spin loop. The wait-semaphore error fallback can also continue when the semaphore is not signaled. These behaviors do not meet this project's bounded-wait and safe-recovery requirements.
+- The candidate's host fallback deliberately marks synchronization objects signaled because generic submission is a no-op. Such host success cannot validate the hardware path.
+
+Sources: [vulkan-ps4 memory](https://github.com/PS4-OpenGNM/vulkan-ps4/blob/f4d940b723771b3fe637e8ac0704bb5d6ab19622/src/vk_ps4_memory.c), [descriptor](https://github.com/PS4-OpenGNM/vulkan-ps4/blob/f4d940b723771b3fe637e8ac0704bb5d6ab19622/src/vk_ps4_descriptor.c), [command](https://github.com/PS4-OpenGNM/vulkan-ps4/blob/f4d940b723771b3fe637e8ac0704bb5d6ab19622/src/vk_ps4_command.c), [queue](https://github.com/PS4-OpenGNM/vulkan-ps4/blob/f4d940b723771b3fe637e8ac0704bb5d6ab19622/src/vk_ps4_queue.c), and [sync](https://github.com/PS4-OpenGNM/vulkan-ps4/blob/f4d940b723771b3fe637e8ac0704bb5d6ab19622/src/vk_ps4_sync.c).
+
+#### Gate B disposition
+
+The new source evidence narrows the implementation choices but does not supply a complete safe compute contract. In particular, the allocation helper is presently proven only for its VideoOut use; the Vulkan candidate's no-op invalidation and unbounded queue-idle wait are unacceptable as-is; and the generic dispatch function has a 12-versus-13-dword inconsistency.
+
+**Gate B remains BLOCKED. Gate C remains NOT PASSED. Gate D remains NOT STARTED.** No compute command was submitted, no PRX was activated or modified, no PKG was installed, and no console state was changed during this audit.
