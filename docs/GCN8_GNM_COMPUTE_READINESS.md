@@ -691,3 +691,94 @@ The same candidate's descriptor path passes pointers to descriptor backing array
 Source: [pinned compute pipeline](https://github.com/PS4-OpenGNM/vulkan-ps4/blob/f4d940b723771b3fe637e8ac0704bb5d6ab19622/src/vk_ps4_pipeline.c) and [descriptor implementation](https://github.com/PS4-OpenGNM/vulkan-ps4/blob/f4d940b723771b3fe637e8ac0704bb5d6ab19622/src/vk_ps4_descriptor.c).
 
 **Implementation consequence:** do not vendor this Vulkan ICD or reuse its compute pipeline, descriptor, or synchronization code in the live PRX. Treat it only as a reference for packet ordering and API decomposition until a separately verified GPU-visible allocation/address model and cache-coherent readback path exist.
+
+### Gate B follow-up: ACE queue reality check and workflow reruns (2026-11-24)
+
+The two GCN8 artifact workflows previously running against commit
+`aec9cd1e813112f92744c0a3c687745a8eebea89` have now both completed
+successfully:
+
+- Gate A run
+  [45384490914](https://github.com/demolidorreddragons/NR/actions/runs/45384490914)
+  — success; artifact `14915228471`.
+- Duplicate Gate A run
+  [45384478416](https://github.com/demolidorreddragons/NR/actions/runs/45384478416)
+  — success; artifact `14916215310`.
+- Host tests
+  [45384491038](https://github.com/demolidorreddragons/NR/actions/runs/45384491038)
+  — success.
+
+Both artifact ZIPs were downloaded and inspected. The retained report identifies
+the result as `PASS_ARTIFACT_ONLY_NOT_HARDWARE`, with
+`hardware_dispatch_tested=false` and `firmware_14_02_tested=false`.
+The 228-byte GNM output retains the previously verified structural values:
+magic `0x72646853`, compute stage `0x04`, NEO target `0x02`,
+40-byte stage header, four user SGPRs, descriptor slot
+`[0x1c, 0, 2, 0]`, `COMPUTE_PGM_RSRC2=0x00000088`, and
+thread dimensions `[64,1,1]`. GNM and SPIR-V SHA-256 values remain
+`8f52fb74771164498a0c1e90bd828d8517f6414d34a1d28c395c9aae2563b6e1`
+and
+`964af9e2b13bdce7883cb2b53437e4b75547ddfa12580177e4d0da0d7509a626`,
+respectively. These are repeated artifact-only successes, not hardware
+dispatch evidence.
+
+#### ACE queue path is advertised but not wired in the inspected Vulkan candidate
+
+At pinned `PS4-OpenGNM/vulkan-ps4` revision
+`f4d940b723771b3fe637e8ac0704bb5d6ab19622`:
+
+- `vk_ps4_GetPhysicalDeviceQueueFamilyProperties` advertises queue family 1
+  as compute + transfer and describes it as an asynchronous ACE queue.
+- `vk_ps4_CreateDevice` allocates queue objects and records
+  `queueFamilyIndex`; `vk_ps4_GetDeviceQueue` returns those cached objects.
+- The inspected queue submit implementation sends command buffers through
+  `sceGnmSubmitCommandBuffers`. A repository-wide search of this pinned
+  source did not find calls to `sceGnmMapComputeQueue`,
+  `sceGnmDingDong`, or `sceGnmUnmapComputeQueue`.
+
+Therefore the advertised second queue family is not evidence that an ACE
+ring is mapped or rung by this candidate. Do not reuse its queue-family
+advertisement as a working async-compute implementation.
+
+Sources: [queue-family properties](https://github.com/PS4-OpenGNM/vulkan-ps4/blob/f4d940b723771b3fe637e8ac0704bb5d6ab19622/src/vk_ps4_instance.c),
+[device queue creation](https://github.com/PS4-OpenGNM/vulkan-ps4/blob/f4d940b723771b3fe637e8ac0704bb5d6ab19622/src/vk_ps4_device.c),
+[queue submission](https://github.com/PS4-OpenGNM/vulkan-ps4/blob/f4d940b723771b3fe637e8ac0704bb5d6ab19622/src/vk_ps4_queue.c).
+
+#### Independent queue reverse-engineering leads are conflicting and not FW 14.02 qualification
+
+Two additional public source investigations provide useful leads but cannot
+be promoted to the target firmware contract:
+
+- `Kravickas/PS4-apps` documents static analysis of one game's PRX and call
+  sites. It reports pipe IDs up to 6, queue IDs up to 7, a 4-byte ring-address
+  alignment check, and two mapped queues at pipe 0/queue 4 and pipe 1/queue 4
+  with a 0x1000-dword ring. It also notes that the observed doorbell action
+  was a null kick. This is title-specific reverse engineering, not a
+  general Sony ABI guarantee.
+- `boykopovar/AnyPS5` documents a separate implementation derived partly
+  from PS4 firmware 10.71 disassembly and shadPS4. It reports a 256-byte ring
+  base alignment and power-of-two ring size for its compute-queue validation,
+  and explicitly labels queue IDs, refused-input results, and read-offset
+  timing as not measured on console hardware.
+
+The 4-byte versus 256-byte alignment observations conflict. They may reflect
+different validation layers, call-site assumptions, or firmware revisions;
+the current evidence does not resolve which constraint applies to a retail
+PS4 Pro on 14.02. Do not choose either alignment, queue ID, ring size, or
+doorbell behavior for a harness by guesswork.
+
+Sources: [PS4-apps reverse-engineering notes](https://github.com/Kravickas/PS4-apps/blob/3a79e374b821d5dfc4077c75df712f942d068478/src/nid_resolve.h),
+[AnyPS5 GNM driver research notes](https://github.com/boykopovar/AnyPS5/blob/e43d0cf296603edaab247cc77cbbec96b64be5e6/docs/dev/debt/libSceGnmDriver.md).
+
+#### Updated Gate B decision
+
+The async queue candidate is now more clearly scoped: the Vulkan-PS4
+implementation advertises an ACE family without wiring the mapping/doorbell
+calls in the inspected revision, while independent queue notes disagree on
+ring alignment and are not specific to firmware 14.02. No firmware-qualified
+queue contract has been established.
+
+Gate A remains **PASS — artifact-only**. Gate B remains **BLOCKED**.
+Gate C remains **NOT PASSED** and Gate D remains **NOT STARTED**. No compute
+dispatch was submitted, no PRX was changed or activated, no PKG was installed,
+and no console state was changed.
