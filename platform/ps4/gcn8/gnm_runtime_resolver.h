@@ -5,6 +5,7 @@
 namespace pne::gcn8::runtime {
 
 using SymbolLookup = bool (*)(void* context, const char* name, void** address);
+using ProviderSymbolLookup = bool (*)(void* context, uint32_t provider_handle, const char* name, void** address);
 
 struct GnmRuntimeFunctions {
     DispatchInitDefaultHardwareStateFn dispatch_init_default_hardware_state = nullptr;
@@ -26,6 +27,21 @@ struct GnmRuntimeFunctions {
         submit_done = nullptr;
     }
 };
+
+
+struct ProviderLookupAdapter {
+    ProviderSymbolLookup lookup;
+    void* context;
+    uint32_t provider_handle;
+};
+
+inline bool lookup_selected_provider(void* opaque, const char* name,
+                                     void** address) noexcept {
+    auto* adapter = static_cast<ProviderLookupAdapter*>(opaque);
+    return adapter && adapter->lookup &&
+           adapter->lookup(adapter->context, adapter->provider_handle,
+                           name, address);
+}
 
 // Resolves all required entry points atomically from the caller's module.
 // No function is invoked here. On any missing/invalid symbol, the output
@@ -55,6 +71,17 @@ inline bool resolve_gnm_runtime_functions(
         reinterpret_cast<SubmitCommandBuffersFn>(submit);
     output->submit_done = reinterpret_cast<SubmitDoneFn>(done);
     return output->complete();
+}
+
+inline bool resolve_gnm_runtime_functions_from_provider(
+    ProviderSymbolLookup lookup, void* context, uint32_t provider_handle,
+    GnmRuntimeFunctions* output) noexcept {
+    if (!output) return false;
+    output->clear();
+    if (!lookup) return false;
+    ProviderLookupAdapter adapter{lookup, context, provider_handle};
+    return resolve_gnm_runtime_functions(
+        lookup_selected_provider, &adapter, output);
 }
 
 } // namespace pne::gcn8::runtime
