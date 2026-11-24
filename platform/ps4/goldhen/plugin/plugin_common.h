@@ -20,6 +20,8 @@
 extern "C" {
 #endif
 void NotifyStatic(const char* icon_uri, const char* text);
+// Sends only if the complete message fits; never silently truncates a preview.
+int NotifyStaticChecked(const char* icon_uri, const char* text);
 void Notify(const char* icon_uri, const char* format, ...);
 #ifdef __cplusplus
 }

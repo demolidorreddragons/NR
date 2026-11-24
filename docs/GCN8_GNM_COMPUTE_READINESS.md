@@ -388,3 +388,7 @@ Reviewed source locations:
   `src/driver_generic.c`, and `src/drawcommandbuffer.c`
 - shadPS4 commit `c4f8699581ef1f795a74669cc12fadf440cbe4a1`:
   `src/core/libraries/gnmdriver/gnmdriver.cpp`
+
+### Independent reproduction rerun — PR #64 (2026-11-23)
+
+The pinned compiler artifact gate is being rerun from the PR #64 checkout as a second, separately provisioned hosted-runner execution. This is intended to independently reproduce the compiler output and structural verification from the original Gate A run, not to claim hardware execution. Record the second run ID, artifact ID, shader SHA-256, and verifier result here only after inspecting the completed workflow and downloaded artifact. Until then, the independent reproduction checkbox above remains open.

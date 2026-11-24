@@ -1,0 +1,268 @@
+name: NR Codex Autonomous Engineering Cycle
+
+on:
+  push:
+    branches:
+      - engineering/codex-autonomous-cycle-20261123
+    paths:
+      - .github/workflows/codex-autonomous-cycle.yml
+      - .github/codex/engineering-task.md
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: nr-codex-autonomous-engineering
+  cancel-in-progress: false
+
+jobs:
+  autonomous-engineering:
+    name: Codex engineering and bounded validation
+    runs-on: [self-hosted, Windows, X64, codex, engineering]
+    timeout-minutes: 90
+    steps:
+      - name: Checkout isolated engineering branch
+        uses: actions/checkout@v4
+        with:
+          ref: engineering/codex-autonomous-cycle-20261123
+          persist-credentials: false
+
+      - name: Capture pristine checkout file hashes
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $root = (Resolve-Path .).Path
+          $manifest = @{}
+          Get-ChildItem -LiteralPath . -Recurse -File -Force |
+            Where-Object { $_.FullName -notmatch '[\\/](\.git|\.codex|__pycache__|\.pytest_cache|build|out)[\\/]' -and $_.Extension -ne '.pyc' } |
+            ForEach-Object {
+              $relative = $_.FullName.Substring($root.Length + 1).Replace('\','/')
+              $manifest[$relative] = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+            }
+          $manifest | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath "$env:RUNNER_TEMP\nr-codex-baseline.json" -Encoding UTF8
+          Write-Host "BASELINE_FILE_COUNT=$($manifest.Count)"
+
+      - name: Verify user-scoped Codex runtime
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $identity = (whoami).Trim()
+          if ($identity -ne 'desktop-tg85gf4\deniz') { throw "Unexpected runner identity: $identity" }
+          $codex = 'C:\ProgramData\NR\Codex\node_modules\.bin\codex.cmd'
+          if (-not (Test-Path -LiteralPath $codex)) { throw 'Codex CLI missing.' }
+          $version = & $codex --version 2>&1 | Out-String
+          if ($LASTEXITCODE -ne 0) { throw "Codex version check failed: $version" }
+          Write-Host "CODEX_VERSION=$version"
+          $previous = $ErrorActionPreference
+          $ErrorActionPreference = 'Continue'
+          $loginOutput = & $codex login status 2>&1 | ForEach-Object { "$_" }
+          $loginCode = $LASTEXITCODE
+          $ErrorActionPreference = $previous
+          $login = $loginOutput -join "`n"
+          Write-Host $login
+          if ($loginCode -ne 0 -or $login -notmatch 'Logged in using ChatGPT') {
+            throw "Codex authentication check failed (exit=$loginCode)."
+          }
+
+      - name: Verify native Windows MXC workspace-write sandbox
+        shell: powershell
+        working-directory: ${{ github.workspace }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $codex = 'C:\ProgramData\NR\Codex\node_modules\.bin\codex.cmd'
+          $probe = & $codex -c windows.sandbox=mxc sandbox --include-managed-config --permission-profile :workspace -- cmd.exe /d /c echo MXC_OK 2>&1 | ForEach-Object { "$_" }
+          $probeCode = $LASTEXITCODE
+          $probe | ForEach-Object { Write-Host $_ }
+          if ($probeCode -ne 0 -or (($probe -join "`n") -notmatch 'MXC_OK')) {
+            throw 'Native MXC sandbox is not ready; refusing to fall back to read-only or unrestricted execution.'
+          }
+
+      - name: Fetch exact PR #63 review context
+        shell: powershell
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $headers = @{ Authorization = "Bearer $env:GH_TOKEN"; Accept = 'application/vnd.github+json'; 'X-GitHub-Api-Version' = '2022-11-28' }
+          $pr = Invoke-RestMethod -Method Get -Uri 'https://api.github.com/repos/demolidorreddragons/NR/pulls/63' -Headers $headers
+          $files = Invoke-RestMethod -Method Get -Uri 'https://api.github.com/repos/demolidorreddragons/NR/pulls/63/files?per_page=100' -Headers $headers
+          $lines = @(
+            "# PR #63 context",
+            "Title: $($pr.title)",
+            "State: $($pr.state)",
+            "Base branch: $($pr.base.ref)",
+            "Base SHA: $($pr.base.sha)",
+            "Head branch: $($pr.head.ref)",
+            "Head SHA: $($pr.head.sha)",
+            "Changed files:"
+          )
+          foreach ($file in $files) {
+            $lines += "- $($file.filename) [$($file.status), +$($file.additions)/-$($file.deletions)]"
+            if ($file.patch) { $lines += 'PATCH:' + [Environment]::NewLine + $file.patch }
+          }
+          $lines | Set-Content -LiteralPath "$env:RUNNER_TEMP\pr63-context.md" -Encoding UTF8
+          Write-Host "PR63_HEAD_SHA=$($pr.head.sha)"
+          Write-Host "PR63_CHANGED_FILES=$($files.Count)"
+      - name: Run Codex engineering cycle with bounded repair
+        shell: powershell
+        working-directory: ${{ github.workspace }}
+        env:
+          NR_BASE_SHA: ${{ github.sha }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $codex = 'C:\ProgramData\NR\Codex\node_modules\.bin\codex.cmd'
+          $task = Get-Content -Raw -LiteralPath '.github/codex/engineering-task.md'
+          $prContext = Get-Content -Raw -LiteralPath "$env:RUNNER_TEMP\pr63-context.md"
+          $baseSha = $env:NR_BASE_SHA
+          $prompt = @"
+          You are the autonomous engineering agent for this repository.
+          Follow the task contract below exactly. You may inspect and edit files in this checkout and run local tests.
+          Do not access networks, PS4, FTP, RPI, KLog, BinLoader, deployment, or secrets.
+          Use the workspace-write sandbox and never bypass the sandbox or approval controls.
+          Do not commit. Produce the required engineering report and leave a reviewable diff.
+          
+          Exact checkout commit SHA: $baseSha
+          GitHub PR #63 context:
+          $prContext
+          TASK CONTRACT:
+          $task
+          "@
+          $previous = $ErrorActionPreference
+          $ErrorActionPreference = 'Continue'
+          # Codex exec consumes the full multiline task from stdin.
+          $output = $prompt | & $codex -c windows.sandbox=mxc -c features.prefer_mxc=true exec --sandbox workspace-write --skip-git-repo-check 2>&1 | ForEach-Object { "$_" }
+          $exitCode = $LASTEXITCODE
+          $ErrorActionPreference = $previous
+          $output | ForEach-Object { Write-Host $_ }
+          $output | Set-Content -LiteralPath "$env:RUNNER_TEMP\codex-engineering-output.txt"
+          if ($exitCode -ne 0) { throw "Codex engineering cycle failed (exit=$exitCode)." }
+          if (-not ($output -join "`n")) { throw 'Codex returned no engineering output.' }
+
+      - name: Validate diff and preserve engineering evidence
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $gitCandidates = @(
+            'C:\Program Files\Git\cmd\git.exe',
+            'C:\Program Files\Git\bin\git.exe',
+            'C:\ProgramData\chocolatey\bin\git.exe'
+          )
+          foreach ($candidate in $gitCandidates) {
+            if (Test-Path -LiteralPath $candidate) {
+              $env:PATH = (Split-Path $candidate) + ';' + $env:PATH
+              break
+            }
+          }
+          $gitCommand = Get-Command git.exe -ErrorAction SilentlyContinue
+          if (-not $gitCommand) {
+            Write-Warning 'Git executable is not installed or not discoverable on this runner; preserving report and patch as artifact without pushing.'
+          } else {
+            git diff --check
+            if ($LASTEXITCODE -ne 0) { throw 'git diff --check failed.' }
+          }
+          $report = 'docs/engineering/CODEX_AUTONOMOUS_CYCLE_REPORT.md'
+          if (-not (Test-Path -LiteralPath $report -PathType Leaf)) {
+            throw "Codex did not create the required report: $report"
+          }
+          if ($gitCommand) {
+            $diff = git status --short
+          } else {
+            $diff = Get-ChildItem -LiteralPath . -Recurse -File -Force |
+              Where-Object { $_.FullName -notmatch '\\(\.git|\.codex)\\' } |
+              Select-Object -ExpandProperty FullName
+          }
+          Write-Host '===== WORKTREE ====='
+          $diff | ForEach-Object { Write-Host $_ }
+          if (-not $diff) { throw 'Codex produced neither a report nor code changes.' }
+          New-Item -ItemType Directory -Force -Path "$env:RUNNER_TEMP\nr-codex-cycle" | Out-Null
+          if ($gitCommand) {
+            git diff --binary --output="$env:RUNNER_TEMP\nr-codex-cycle\changes.patch"
+            if ($LASTEXITCODE -ne 0) { throw "Could not export binary patch." }
+          } else {
+            'Git unavailable; inspect the report and workspace snapshot in this run.' | Set-Content -LiteralPath "$env:RUNNER_TEMP\nr-codex-cycle\changes.patch"
+          }
+          Copy-Item $report "$env:RUNNER_TEMP\nr-codex-cycle\CODEX_AUTONOMOUS_CYCLE_REPORT.md"
+          Copy-Item "$env:RUNNER_TEMP\codex-engineering-output.txt" "$env:RUNNER_TEMP\nr-codex-cycle\codex-output.txt"
+
+      - name: Upload Codex engineering evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: nr-codex-engineering-cycle
+          path: ${{ runner.temp }}\nr-codex-cycle\
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Commit Codex changes through GitHub Contents API
+        if: success()
+        shell: powershell
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $repo = 'demolidorreddragons/NR'
+          $branch = 'engineering/codex-autonomous-cycle-20261123'
+          $api = 'https://api.github.com/repos/' + $repo
+          $headers = @{
+            Authorization = "Bearer $env:GH_TOKEN"
+            Accept = 'application/vnd.github+json'
+            'X-GitHub-Api-Version' = '2022-11-28'
+          }
+          $baseSha = $env:GITHUB_SHA
+          $branchInfo = Invoke-RestMethod -Method Get -Uri "$api/branches/$branch" -Headers $headers
+          if ($branchInfo.commit.sha -ne $baseSha) {
+            throw "Branch moved during this run; refusing writeback. checkout=$baseSha branch=$($branchInfo.commit.sha)"
+          }
+          $baseline = Get-Content -Raw -LiteralPath "$env:RUNNER_TEMP\nr-codex-baseline.json" | ConvertFrom-Json
+          $baselineMap = @{}
+          foreach ($property in $baseline.PSObject.Properties) { $baselineMap[$property.Name] = $property.Value }
+          $root = (Resolve-Path .).Path
+          $localMap = @{}
+          $changed = New-Object System.Collections.ArrayList
+          Get-ChildItem -LiteralPath . -Recurse -File -Force |
+            Where-Object { $_.FullName -notmatch '[\\/](\.git|\.codex|__pycache__|\.pytest_cache|build|out)[\\/]' -and $_.Extension -ne '.pyc' } |
+            ForEach-Object {
+              $relative = $_.FullName.Substring($root.Length + 1).Replace('\','/')
+              $localMap[$relative] = $true
+              $hash = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+              if (-not $baselineMap.ContainsKey($relative) -or $baselineMap[$relative] -ne $hash) {
+                [void]$changed.Add(@{ path = $relative; full = $_.FullName; hash = $hash; deleted = $false })
+              }
+            }
+          foreach ($path in $baselineMap.Keys) {
+            if (-not $localMap.ContainsKey($path)) {
+              [void]$changed.Add(@{ path = $path; full = $null; hash = $null; deleted = $true })
+            }
+          }
+          if ($changed.Count -eq 0) { Write-Host 'CODEX_NO_CHANGES'; exit 0 }
+          Write-Host "CODEX_CHANGED_PATHS=$($changed.Count)"
+          foreach ($item in $changed) {
+            $encodedPath = ($item.path -split '/' | ForEach-Object { [Uri]::EscapeDataString($_) }) -join '/'
+            $contentUrl = "$api/contents/$encodedPath"
+            $existing = $null
+            try {
+              $existing = Invoke-RestMethod -Method Get -Uri "${contentUrl}?ref=$branch" -Headers $headers
+            } catch {
+              $status = 0
+              if ($_.Exception.Response -and $_.Exception.Response.StatusCode) { $status = [int]$_.Exception.Response.StatusCode }
+              if ($status -ne 404) { throw }
+            }
+            if ($item.deleted) {
+              if (-not $existing) { continue }
+              $deleteBody = @{ message = "Codex autonomous cycle: delete $($item.path)"; sha = $existing.sha; branch = $branch } | ConvertTo-Json -Compress
+              Invoke-RestMethod -Method Delete -Uri $contentUrl -Headers $headers -ContentType 'application/json' -Body $deleteBody | Out-Null
+              Write-Host "CODEX_DELETED=$($item.path)"
+              continue
+            }
+            $bytes = [System.IO.File]::ReadAllBytes($item.full)
+            if ($bytes.Length -gt 10000000) { throw "Changed-file safety limit exceeded: $($item.path)" }
+            $putBody = @{
+              message = "Codex autonomous cycle: update $($item.path)"
+              content = [Convert]::ToBase64String($bytes)
+              branch = $branch
+            }
+            if ($existing) { $putBody.sha = $existing.sha }
+            $json = $putBody | ConvertTo-Json -Depth 5 -Compress
+            Invoke-RestMethod -Method Put -Uri $contentUrl -Headers $headers -ContentType 'application/json' -Body $json | Out-Null
+            Write-Host "CODEX_WRITTEN=$($item.path)"
+          }
