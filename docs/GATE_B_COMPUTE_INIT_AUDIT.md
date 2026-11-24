@@ -363,3 +363,30 @@ For the minimal NR proof, the useful takeaway is the separation of:
 The actual title report identifies an `AsyncMap` readback call site and
 `StallUntilSignaled`, but does not establish their bounded timeout or cache
 coherency implementation. These remain explicit acceptance criteria.
+
+
+### 9. Compute-ring constraints cross-check (emulator model only)
+
+The same pinned shadPS4 HLE source implements
+`sceGnmMapComputeQueue` with the following validation:
+- `pipe_id < Liverpool::NumComputePipes`;
+- `queue_id < Liverpool::NumQueuesPerPipe`;
+- ring base aligned to 256 bytes;
+- ring size expressed in dwords and constrained to a power of two;
+- read-pointer address aligned to 4 bytes;
+- returned virtual queue ID is the internal queue index plus one.
+
+Its `sceGnmDingDong(vqid, next_offs_dw)` model treats the second argument as
+a write offset in dwords, detects wraparound and submits the ring segment(s).
+Its `sceGnmDispatchDirect` HLE accepts exactly 9 dwords and writes a compute
+`DISPATCH_DIRECT` packet followed by a three-dword NOP.
+
+These checks align with the broad shape of the retail-title reverse-engineered
+queue report and the pinned OpenGNM local 9-dword dispatch builder. They are
+useful candidate host invariants, but they are still emulator validation
+rules, not verified Sony firmware 14.02 contracts. In particular, NR must
+not hard-code shadPS4's pipe/queue counts or infer that its emulated ring
+submission and synchronization behavior matches the console.
+
+Reference:
+https://github.com/shadps4-emu/shadPS4/blob/5c3b6910b99ea4e4d019533490137fe80e400306/src/core/libraries/gnmdriver/gnmdriver.cpp
