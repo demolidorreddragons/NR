@@ -68,3 +68,16 @@ A follow-up source comparison found two independent emulator implementations for
 These implementations agree on a plausible ABI interpretation for syscall 659's three forwarded arguments: (pointer to 32-bit handle array, **capacity in elements**, pointer to 64-bit output count), rather than a byte-size argument. This is materially better corroboration than inferring semantics from legacy syscall 592.
 
 **Qualification boundary:** both sources are emulator implementations, not Sony kernel source or a FW 14.02 retail syscall handler. They corroborate a candidate contract but do not prove that retail FW 14.02 uses identical validation, error behavior, or exact ABI. Therefore the target census remains blocked pending target-specific qualification; do not silently promote the candidate to a verified retail ABI. The safe next implementation step is to encode this as a documented candidate and keep runtime census fail-closed until the target contract is established.
+
+
+## Module-info layout cross-check (candidate ABI)
+
+A second independent cross-check now supports the 0x160-byte module-info record layout used by PS4 tooling:
+
+- DolphinPS4's [read-only module sampler](https://github.com/iHaiDeeZ/DolphinPS4/blob/879b3e57f3d3180bcb5f2234db3903688b28cd7d/port/ps4_sampler.cpp) declares `size_t size; char name[256]; ModuleSegment segments[4]; uint32_t segment_count; uint8_t fingerprint[20]`, and calls `sceKernelGetModuleInfo(handle, &info)` after setting `info.size = sizeof(info)`.
+- PS4Recomp's [module shim](https://github.com/wie-project/PS4Recomp/blob/97d9f6e3f74717d9fc15ebcf398d9a0808163417/pkg/runtime/modules/libkernel/ps4_kernel_modules.c) uses a size-prefixed module record, fills the name, segment count, and up to four segment records; its comments identify the same public `sceKernelGetModuleInfo` contract.
+- KytyPS5's [ModuleInfo2 definition](https://github.com/KytyPS5/KytyPS5/blob/30781dcda029cbd669aa81337ac2902c9c3015d8/src/libs/libKernel.cpp) explicitly asserts `sizeof(ModuleInfo2) == 0x160` and lays out the 256-byte name, four {u64 address, u32 size, s32 prot} segments, segment count, and 20-byte fingerprint.
+
+The arithmetic is consistent on x86-64: 8-byte size + 256-byte name + 4×16-byte segments + 4-byte segment count + 20-byte fingerprint = 0x160 bytes. The name begins at +0x08, segments at +0x108, count at +0x148, and fingerprint at +0x14c.
+
+**Qualification boundary:** this is strong cross-project corroboration of the public PS4 module-info structure, but none of these sources is Sony's FW 14.02 kernel implementation. The 0x160 layout is now a well-supported candidate for passive parsing; it is not a claim that the retail syscall 593 behavior or every field is proven on FW 14.02. Keep the census fail-closed until the target-side ABI can be confirmed safely.
