@@ -56,3 +56,16 @@ This audit closes a source-inspection subtask and removes an unsupported assumpt
 - GPU-to-CPU visibility/readback and full-buffer deterministic comparison.
 
 No console interaction, compute dispatch, PRX activation, PKG installation, or console-state change was performed. Gate A remains PASS (artifact-only); Gate C remains NOT PASSED; Gate D remains NOT STARTED.
+
+
+### 5. Compute shader address encoding and dispatch reservation
+
+The same pinned source provides a more specific candidate contract for shader-code addressing:
+
+- include/gnm_shader.h implements sceGnmCsRegsSetAddress by placing addr >> 8 in COMPUTE_PGM_LO and addr >> 40 in COMPUTE_PGM_HI.
+- src/drawcommandbuffer.c:sceGnmDrawCmdSetCsShaderWithModifier rejects a nonzero COMPUTE_PGM_HI, then emits COMPUTE_PGM_LO/HI, COMPUTE_PGM_RSRC1/2, and COMPUTE_NUM_THREAD_X/Y/Z through the compute-specific SET_SH_REG helper.
+- src/drawcommandbuffer.c:sceGnmDrawCmdDispatchDirect reserves exactly 9 dwords and emits a compute-engine DISPATCH_DIRECT packet followed by a 3-data-dword NOP.
+
+This confirms the pinned OpenGNM local PM4 builder's internal candidate shape. It also means its CS shader binder only accepts an address whose >> 40 component is zero; the low register stores addr >> 8. The source does not establish that a CPU pointer returned by DirectMemory mapping is the correct GPU address for all firmware 14.02 allocations, nor does it qualify the shader's required 256-byte placement/alignment and residency lifetime. The 9-dword local command-buffer helper is distinct from the firmware-facing sceGnmDispatchDirect wrapper and must not be conflated with that function's reservation ABI.
+
+The source regression now checks this encoding and 9-dword local builder alongside the allocation and graphics-smoke findings. This remains source-contract evidence, not a hardware test.
