@@ -65,8 +65,9 @@ assert "resolve_gnm_runtime_functions_from_provider" in compute, "GNM exports mu
 assert "OrbisKernelModule modules[kMaxCensusModules]" in compute, "kernel module API must receive native typed storage"
 assert "reinterpret_cast<OrbisKernelModule*>(handles)" not in compute, "do not type-pun policy handle storage at the Orbis ABI boundary"
 assert "handles[i] = static_cast<uint32_t>(modules[i])" in compute, "convert native module handles explicitly"
-assert "sceKernelGetModuleList(modules, sizeof(modules), count)" in compute, "module-list buffer size is passed in bytes, per libkernel call convention"
-assert "if (*count > capacity) return false;" in compute, "incomplete/truncated module census must fail closed"
+assert "kAmbiguousSizeArgument = 256" in compute, "use an argument safe under both observed size-unit conventions"
+assert "sceKernelGetModuleList(modules, kAmbiguousSizeArgument, count)" in compute, "module list call must use conservative cross-interpretation size"
+assert "*count > kConservativeMaxReportedModules" in compute, "reject census that may be truncated under byte-count interpretation"
 assert "ProviderCensusStatus::capacity_exceeded" in census
 assert "ProviderCensusStatus::module_info_failed" in census
 print("Compute smoke passive GNM census invariants: PASS")
