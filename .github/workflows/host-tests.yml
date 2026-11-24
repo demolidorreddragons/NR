@@ -21,6 +21,9 @@ jobs:
           git -C "$ROOT" apply --recount --check "$GITHUB_WORKSPACE/patches/opengnm/0001-compute-userdata-set-sh-reg-shader-type.patch"
           git -C "$ROOT" apply --recount "$GITHUB_WORKSPACE/patches/opengnm/0001-compute-userdata-set-sh-reg-shader-type.patch"
           python3 tests/test_opengnm_compute_userdata_pm4.py "$ROOT/src/drawcommandbuffer.c"
+          cmake -S "$ROOT" -B "$ROOT/build" -DOPENGNM_PLATFORM=generic -DOPENGNM_BUILD_TESTS=ON
+          cmake --build "$ROOT/build" --parallel 2
+          ctest --test-dir "$ROOT/build" --output-on-failure
       - name: Validate CDA PKG 015 log-signal extractor contract
         run: python3 tests/test_cda_pkg015_log_extractor_contract.py
       - name: Validate PS4 superseded package archive safety contract
