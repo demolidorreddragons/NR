@@ -206,3 +206,29 @@ The repository/bridge capability review found no existing checked-in target-side
 The public API shape is now better bounded at source level, including a known truncation failure mode, but the only public SDK declaration found explicitly targets approximately FW 1.76, and the HLE implementation is not retail evidence. Therefore it would be unsafe to compile and deploy a target census using that unqualified ABI as if it were FW 14.02 verified. The remaining minimum artifact is a FW 14.02-qualified `sceKernelGetModuleList` / `sceKernelGetModuleInfo` / `sceKernelDlsym` contract or a trusted read-only inspector already operating against the running process. Once that exists, the approved passive census can be run without invoking any GNM entry point.
 
 No target probe, module load, GNM call, memory allocation, command submission, compute dispatch, PRX activation, PKG installation, or console-state change occurred.
+
+
+## Additional kernel-dynlib evidence: module-info availability is a separate risk
+
+A separate public PS4 syscall reference documents the dynamic-library syscalls as follows:
+
+- sys_dynlib_get_list (syscall 592) accepts a module-handle array, its element capacity, and an actual-count pointer.
+- sys_dynlib_get_info (syscall 593) accepts a module handle and SceDbgModuleInfo pointer.
+- The same reference annotates sys_dynlib_get_info: **“Sony has stripped module information since 1.76 FW (STO)”**.
+
+Reference: https://www.psdevwiki.com/ps4/Syscalls
+
+This is not a FW 14.02 call trace and does not establish whether the public sceKernelGetModuleInfo wrapper returns the ps4dev SceKernelModuleInfo layout, a reduced structure, or an error on the target. It does, however, invalidate any assumption that the public 1.76-era structure can simply be trusted to yield populated names, segments, and fingerprints on 14.02.
+
+### Consequence for the passive census
+
+The earlier procedure's module-info step must be treated as conditional, not guaranteed:
+
+1. Obtain a FW 14.02-qualified contract for the exact sceKernelGetModuleInfo wrapper and structure before allocating/passing a structure of guessed size.
+2. If module enumeration is available but module-info returns stripped/empty data or an unsupported result, record MODULE_INFO_UNAVAILABLE and stop provider classification. Do not scan guessed offsets or infer module identity from segment addresses.
+3. Do not substitute sceKernelGetModuleInfoFromAddr, undocumented kernel structures, or arbitrary memory reads without a separate evidence review and authorization.
+4. Name-based sceKernelDlsym requires a trustworthy already-enumerated handle-to-provider association. If module names cannot be obtained safely, symbol resolution alone cannot prove which provider supplied an address.
+
+This narrows the minimum prerequisite: a FW 14.02-qualified module-list and module-info contract (or a trusted passive inspector that already exposes provider identity) is required before the authorized census can safely classify normal versus Neo-mode providers. The public syscall reference adds a reason for this requirement; it does not itself satisfy it.
+
+No repository runtime code or target behavior was changed by this finding.
