@@ -142,3 +142,16 @@ The earlier note that syscall 593 has stripped module information needs a precis
 **Impact:** the passive census reads only `info.name`; it does not consume code/data addresses or sizes. The published evidence therefore supports the continued plausibility of name-only enumeration through syscall 593, with the name at `+0x08`. This is historical cross-version evidence, not direct FW 14.02 validation of the full `OrbisKernelModuleInfo` layout or call result. Keep the exact FW 14.02 record-size/output contract marked as a candidate, and do not use syscall 593 for segment metadata.
 
 This clarification narrows the blocker: syscall 593's stripped segment fields do not, by themselves, invalidate name-only provider matching. Remaining retail qualification is the exact 14.02 output record contract and syscall-659 enumeration behavior.
+
+## Critical census-scope caveat: syscall 659 may omit system libraries
+
+A further cross-check changes the risk assessment for the planned GNM provider census:
+
+- The OpenProspero PS4 11.00 syscall-659 contract is explicitly partial and records a console sample in which syscall 659 returned one module while legacy syscall 592 returned 33. This is consistent with a restricted list, not a complete process module inventory.
+- shadPS4's HLE implementation of `sceKernelGetModuleList2` explicitly filters out modules marked as system libraries (`IsSystemLib()`), while its `sceKernelGetModuleList` implementation includes the full linker list. Its `sceKernelGetModuleInfo2` also rejects system libraries with `EPERM`. This is emulator behavior, not retail proof, but it is a concrete explanation for the observed restricted-list behavior.
+- The actual FW 14.02 `libkernel.sprx` disassembly already established that both the modern `sceKernelGetModuleList` branch and the explicit `sceKernelGetModuleList2` export reach syscall 659. Therefore, simply switching the PR68 caller from one exported name to the other does not bypass the syscall-659 restriction.
+- The GNM providers (`libSceGnmDriver` and `libSceGnmDriverForNeoMode`) are system libraries by role. Until retail FW 14.02 evidence proves syscall 659 includes them, the current passive census must be treated as potentially incapable of discovering its target modules.
+
+**Engineering consequence:** do not loosen the fail-closed behavior, do not assume a successful short list is complete, and do not promote the PR68 provider census to target-ready. The next required step is to identify a supported passive enumeration path that includes system libraries, or obtain target-specific evidence that syscall 659 includes the exact GNM provider handles. This is a substantive blocker to the current census approach, not merely an unresolved size-unit detail.
+
+Sources: [OpenProspero PS4 11.00 syscall contract and implementation](https://github.com/unemu-org/openprospero/blob/44dc5dc3cea8e528d4e2945c5d100771b47b1b73/contracts/orbis/syscalls.toml), [shadPS4 process implementation](https://github.com/shadps4-emu/shadPS4/blob/5c3b6910b99ea4e4d019533490137fe80e400306/src/core/libraries/kernel/process.cpp). Both are cross-version/implementation evidence, not a Sony FW 14.02 kernel contract.
