@@ -324,3 +324,14 @@ be interpreted as target submit/compute validation.
 - **PS4 Pro compute known-answer/readback:** not performed.
 
 No target module census was performed, and no GNM function was called.
+
+
+## 14.02-capable debugger is not a passive census endpoint
+
+A closer inspection of the public ps4debug-NG repository clarifies an important distinction. Its README documents FW 14.02 support and says its kernel/libkernel offsets were checked against decrypted retail 14.02 binaries. It also advertises process maps, remote function calls, arbitrary process memory access, and in-target RPC. Its architecture, however, requires sending `ps4debug-ng.bin` to a payload loader; that package installs a companion kernel module and starts a userland command server. It is therefore an active debugger deployment, not an already-available passive inspection endpoint.
+
+The README does not document a command that directly enumerates the GNM provider modules and resolves their symbols using only an existing stock/read-only interface. The advertised process maps expose virtual-memory regions/backing names, but that alone does not prove a safe module-handle + `sceKernelDlsym` census, nor does it qualify the GNM driver's ABI.
+
+Reference: https://github.com/Pharaoh2k/ps4debug-NG (README sections “Supported firmwares”, “Process inspection and manipulation”, and “Architecture”).
+
+Disposition for NR: do not deploy or inject this debugger as a workaround. Its installation would change console runtime state and is outside the passive census authorization. This closes another candidate-tool path: FW 14.02 kernel/libkernel inspection support exists publicly, but it is not a passive GNM census channel and provides no GNM export capture. No debugger payload was sent and no console operation occurred.
