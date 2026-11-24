@@ -232,3 +232,45 @@ dispatch, but that is OpenGNM documentation, not an FW-14.02 trace. The
 candidate must continue to reserve and validate the actual returned dword
 count on target, with a proven maximum reservation before any submission.
 
+
+
+### 7. Independent GFX8 compute-init packet candidate found in shadPS4
+
+A further cross-check was made against
+`shadps4-emu/shadPS4@5c3b6910b99ea4e4d019533490137fe80e400306`,
+`src/core/libraries/gnmdriver/gnmdriver.cpp`, function
+`sceGnmDispatchInitDefaultHardwareState`, and
+`src/core/libraries/gnmdriver/gnmdriver_init.h`.
+
+The emulator's HLE implementation provides a concrete GFX8/Neo candidate:
+- requires a reservation of `HwInitPacketSize = 0x100` dwords and returns
+  that fixed size;
+- emits compute-type `SET_SH_REG` writes for
+  `COMPUTE_STATIC_THREAD_MGMT_SE0/SE1`;
+- on Neo mode also writes `SE2/SE3`;
+- writes `COMPUTE_RESOURCE_LIMITS = 0x170`;
+- emits an `ACQUIRE_MEM` packet;
+- pads the remaining reservation with a `NOP` packet.
+
+This is materially more useful than OpenGNM Generic's four-dword
+`CLEAR_STATE + NOP` placeholder: it gives NR an independently implemented
+Neo-specific packet shape and a concrete 256-dword reservation candidate.
+It also confirms that the compute-init packets must use the compute shader
+type, not graphics.
+
+However, shadPS4 is an emulator HLE implementation. Its source does not
+establish that this exact sequence is byte-for-byte the retail Sony
+implementation on firmware 14.02, nor that all return/reservation semantics
+are identical on that firmware. The 256-dword value is therefore an
+evidence-backed candidate for the isolated host contract and future target
+probe, not permission to submit it to hardware. No initializer was copied
+into NR's production dispatch path and no console test was performed.
+
+Pinned source:
+- https://github.com/shadps4-emu/shadPS4/blob/5c3b6910b99ea4e4d019533490137fe80e400306/src/core/libraries/gnmdriver/gnmdriver.cpp
+- https://github.com/shadps4-emu/shadPS4/blob/5c3b6910b99ea4e4d019533490137fe80e400306/src/core/libraries/gnmdriver/gnmdriver_init.h
+
+The target-specific gate remains blocked until a read-only FW 14.02
+symbol/ABI check and an approved, isolated PS4 Pro validation establish the
+reservation, emitted dword count, submit behavior and completion/readback
+contract. The emulator source narrows the uncertainty; it does not close it.
