@@ -41,7 +41,13 @@ The three relevant exported functions were disassembled from the RX `PT_LOAD` se
 - `sceKernelGetModuleList` (`0x2c7d0`) saves incoming `RDI`, `RSI`, and `RDX`; its wrapper forwards those values unchanged to syscall stubs. No multiplication or conversion of the second argument is performed in this userland export.
 - `sceKernelGetModuleInfo` (`0x2c940`) forwards the 32-bit first argument in `EDI` and the second pointer in `RSI` to its syscall wrapper.
 
-The disassembly therefore confirms the register-level argument count/order for these exports and shows that `sceKernelGetModuleList` passes the second argument straight through. It does **not**, by itself, prove whether the kernel interprets that value as a number of entries or a byte count. The existing shadPS4 HLE prototype calls it `num_array` (entry count), but that is emulator evidence, not a retail-kernel measurement. Keep the unit marked unresolved until the syscall implementation or an authoritative FW 14.02 ABI source is available.
+The syscall stubs themselves expose the syscall IDs in immediate constants:
+
+- `sceKernelDlsym` calls syscall **591** (`0x24f`).
+- `sceKernelGetModuleInfo` calls syscall **593** (`0x251`).
+- `sceKernelGetModuleList` performs a runtime version-gate check. Its helper validates an ORBI-tagged version structure (minimum size 0x14) and returns the 32-bit value at offset 0x10. The caller compares that value with `0x05000000`: at or above the threshold it calls syscall **659** (`0x293`); below it calls syscall **592** (`0x250`). For the FW 14.02 target, the newer branch is the applicable one, so the exported `sceKernelGetModuleList` reaches syscall 659 (`sys_dynlib_get_list2`), not the legacy 592 path. The public PS4 syscall reference identifies 659 as `sys_dynlib_get_list2`, while 591/592/593 are the Dlsym/list/info syscalls ([PS4 Developer Wiki — Syscalls](https://www.psdevwiki.com/ps4/Syscalls); [PS4-SCE syscall table](https://github.com/a0zhar/PS4-SCE/blob/main/syscalls.md)).
+
+This materially narrows the FW 14.02 path: the userland export passes `RDI`, `RSI`, and `RDX` unchanged into syscall 659. However, the public syscall table does not provide a confirmed retail prototype or unit for syscall 659's second argument. Do **not** assume that the legacy syscall 592 prototype (`numArray`) proves the semantics of syscall 659. The unit and exact output semantics remain unresolved pending a syscall-659 handler/prototype source specific to the target.
 
 ## Limits / next qualification
 
