@@ -70,4 +70,6 @@ assert "sceKernelGetModuleList(modules, kAmbiguousSizeArgument, count)" in compu
 assert "*count > kConservativeMaxReportedModules" in compute, "reject census that may be truncated under byte-count interpretation"
 assert "ProviderCensusStatus::capacity_exceeded" in census
 assert "ProviderCensusStatus::module_info_failed" in census
+assert "name[capacity - 1] = '\\\\0';" not in compute, "module name terminator must not be a multi-character literal"
+assert "name[capacity - 1] = '\\0';" in compute, "module name must be null-terminated with a single NUL escape"
 print("Compute smoke passive GNM census invariants: PASS")
