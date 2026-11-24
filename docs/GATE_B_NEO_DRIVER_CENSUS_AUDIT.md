@@ -135,3 +135,20 @@ The current NR evidence paths were inspected to determine whether the proposed c
 The existing read-only workflow is **not** a hidden runtime probe and must not be represented as one. No suitable checked-in target-side module-census implementation was found in the inspected PR #63/PR #64 source context. Implementing one would require a separately reviewed target-side executable/PRX or another explicitly supported runtime inspection channel. Do not add or activate such code as part of this source-only audit.
 
 This closes the search for an already-existing NR runtime census path. The smallest next target-side deliverable, if separately approved, is a bounded read-only module inventory using the APIs above, with both normal and Neo-mode GNM provider names and symbol lookups. It must not invoke any GNM function or allocate GPU memory.
+
+
+## Cross-check: OpenGNM has a resolver, but it is not a census
+
+The pinned OpenGNM `src/driver_orbis.c` contains `resolvegnmdriversym` and `opengnm_is_hle_runtime`. Both enumerate module handles with `sceKernelGetModuleList`, initialize `OrbisKernelModuleInfo.size = sizeof(info)`, and query module info. The resolver uses `strstr(info.name, "GnmDriver")`, so the match can include either the normal or Neo-mode provider. It tries name-based `sceKernelDlsym` on the first matching GNM module, then falls back to all loaded modules if the symbol is not found.
+
+This confirms a practical source-level calling pattern and reinforces that a resolver should not hardcode the normal provider. It does **not** provide the required census artifact:
+- it returns the first matching symbol pointer rather than recording every provider and every symbol result;
+- it does not report both GNM modules independently;
+- its fallback searches every module, obscuring which provider supplied a symbol;
+- the failure diagnostics call `submitlog`, which appends to `/data/eden_ps4_runtime.log`, so the helper is not strictly read-only if those diagnostics execute;
+- its fixed 128-handle array and `uasize` call are implementation choices, not a firmware-14.02-verified maximum or API-size contract.
+
+Therefore this resolver is useful as an API-usage reference only. Do not copy it unchanged into the target census. A new census must use a bounded enumeration strategy, avoid file writes/logging, record both provider modules independently, and report all lookup results without invoking the resolved GNM functions.
+
+Pinned source:
+https://github.com/PS4-OpenGNM/opengnm/blob/4b295ca54c82c83acf308d1c646a2dfa9ae57350/src/driver_orbis.c
