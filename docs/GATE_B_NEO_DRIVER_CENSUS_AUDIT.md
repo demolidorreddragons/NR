@@ -122,3 +122,16 @@ This is a concrete correction to the target evidence plan and a new candidate NI
 Gate B remains **BLOCKED** pending target-specific FW 14.02 provider/symbol evidence, verified memory and synchronization contracts, and a controlled PS4 Pro compute run with deterministic full-buffer readback. Gate A remains PASS (artifact-only); Gate C remains NOT PASSED; Gate D remains NOT STARTED.
 
 No target probe, GNM call, command submission, compute dispatch, PRX activation, PKG installation or console-state change was performed.
+
+
+## Existing NR read-only workflows do not provide a live module census
+
+The current NR evidence paths were inspected to determine whether the proposed census can be collected without adding target-side code:
+
+- `.github/workflows/ps4-installed-app-readonly-audit.yml` runs after a successful `PS4 Control Plane Preflight` on the self-hosted Windows PS4-LAN runner. It uses FTP to list the installed NR app directory and retrieve the installed PKG, `param.sfo`, `eboot.bin`, and `ps4_neural_engine.prx`. It hashes those files and uploads a read-only artifact. It does not execute code in the PS4 process, enumerate loaded modules, call `sceKernelGetModuleInfo`, or resolve GNM symbols.
+- `docs/PS4_WINDOWS_BRIDGE.md` describes the control-plane preflight as FTP LIST/GETSIZE/GET plus HTTP GET-only fingerprinting. It explicitly does not issue payloads, POST requests, BinLoader operations, PRX activation, or remote file writes.
+- The installed-app audit is therefore useful for confirming which NR binary is installed, but it cannot return the live module handles or loaded GNM provider state required by this census.
+
+The existing read-only workflow is **not** a hidden runtime probe and must not be represented as one. No suitable checked-in target-side module-census implementation was found in the inspected PR #63/PR #64 source context. Implementing one would require a separately reviewed target-side executable/PRX or another explicitly supported runtime inspection channel. Do not add or activate such code as part of this source-only audit.
+
+This closes the search for an already-existing NR runtime census path. The smallest next target-side deliverable, if separately approved, is a bounded read-only module inventory using the APIs above, with both normal and Neo-mode GNM provider names and symbol lookups. It must not invoke any GNM function or allocate GPU memory.
