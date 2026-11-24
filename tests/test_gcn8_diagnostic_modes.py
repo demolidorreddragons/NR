@@ -61,6 +61,7 @@ assert "sceKernelGetFsSandboxRandomWord" not in compute, "compute smoke must not
 assert "libSceGnmDriver" in census and "libSceGnmDriverForNeoMode" in census
 assert "census_loaded_gnm_providers" in compute, "compute smoke must use the tested passive census policy"
 assert "select_gnm_provider_handle" in compute, "compute smoke must resolve from the selected normal/Neo provider"
+assert "resolve_gnm_runtime_functions_from_provider" in compute, "GNM exports must resolve against the selected provider handle"
 assert "OrbisKernelModule modules[kMaxCensusModules]" in compute, "kernel module API must receive native typed storage"
 assert "reinterpret_cast<OrbisKernelModule*>(handles)" not in compute, "do not type-pun policy handle storage at the Orbis ABI boundary"
 assert "handles[i] = static_cast<uint32_t>(modules[i])" in compute, "convert native module handles explicitly"
