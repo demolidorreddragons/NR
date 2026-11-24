@@ -18,3 +18,25 @@ add_test(NAME telemetry_writer COMMAND test_telemetry)
 add_executable(test_telemetry_bridge tests/test_telemetry_bridge.cpp)
 target_link_libraries(test_telemetry_bridge PRIVATE pne_telemetry)
 add_test(NAME telemetry_bridge COMMAND test_telemetry_bridge)
+
+add_executable(test_gcn8_resource_table
+    tests/test_gcn8_resource_table.cpp
+    platform/ps4/gcn8/host/resource_table_contract.cpp
+)
+target_include_directories(test_gcn8_resource_table PRIVATE platform/ps4/gcn8/host)
+add_test(NAME gcn8_resource_table_contract COMMAND test_gcn8_resource_table)
+
+add_executable(test_gcn8_known_answer
+    tests/test_gcn8_known_answer.cpp
+    platform/ps4/gcn8/host/known_answer_contract.cpp
+)
+target_include_directories(test_gcn8_known_answer PRIVATE platform/ps4/gcn8/host)
+add_test(NAME gcn8_known_answer_contract COMMAND test_gcn8_known_answer)
+
+add_executable(test_gcn8_compute_shader_contract
+    tests/test_gcn8_compute_shader_contract.cpp
+    platform/ps4/gcn8/host/compute_shader_contract.cpp
+)
+target_include_directories(test_gcn8_compute_shader_contract PRIVATE platform/ps4/gcn8/host)
+add_test(NAME gcn8_compute_shader_contract COMMAND test_gcn8_compute_shader_contract)
+set_tests_properties(gcn8_compute_shader_contract PROPERTIES WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})

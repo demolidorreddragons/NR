@@ -1,0 +1,13 @@
+diff --git a/libpsbc/psbc_compile.c b/libpsbc/psbc_compile.c
+--- a/libpsbc/psbc_compile.c
++++ b/libpsbc/psbc_compile.c
+@@ -1133,4 +1133,9 @@
+     /* Construct radv_compiler_info */
+     struct radv_compiler_info compiler_info = {0};
++    /*
++     * Core SPIR-V Shader capability is required for Vulkan 1.0 shader
++     * modules and is supported by this compiler's shader pipeline.
++     */
++    compiler_info.spirv_caps.Shader = true;
+     compiler_info.ac = &ac_info;
+     compiler_info.hw.address32_hi = 0;

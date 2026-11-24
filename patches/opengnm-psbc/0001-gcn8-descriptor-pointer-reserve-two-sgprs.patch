@@ -1,0 +1,33 @@
+diff --git a/src/amd/vulkan/radv_shader_args.c b/src/amd/vulkan/radv_shader_args.c
+--- a/src/amd/vulkan/radv_shader_args.c
++++ b/src/amd/vulkan/radv_shader_args.c
+@@ -82,11 +82,12 @@ static void
+ add_descriptor_set(struct radv_shader_args_state *state, uint32_t set)
+ {
+    RADV_ADD_ARRAY_ARG(state, AC_ARG_SGPR, 1, AC_ARG_CONST_ADDR, descriptors, set);
+ 
+    struct radv_userdata_info *ud_info = &state->args->user_sgprs_locs.descriptor_sets[set];
+    ud_info->sgpr_idx = state->args->num_user_sgprs;
+-   ud_info->num_sgprs = 1;
++   ud_info->num_sgprs = 2;
++   state->args->ac.num_sgprs_used++; /* Reserve the GNM pointer high dword. */
+ 
+    state->args->user_sgprs_locs.descriptor_sets_enabled |= 1u << set;
+-   state->args->num_user_sgprs++;
++   state->args->num_user_sgprs += 2;
+ }
+@@ -98,11 +99,12 @@ static void
+ add_descriptor_heap(struct radv_shader_args_state *state, uint32_t heap)
+ {
+    RADV_ADD_ARRAY_ARG(state, AC_ARG_SGPR, 1, AC_ARG_CONST_ADDR, descriptors, heap);
+ 
+    struct radv_userdata_info *ud_info = &state->args->user_sgprs_locs.descriptor_heaps[heap];
+    ud_info->sgpr_idx = state->args->num_user_sgprs;
+-   ud_info->num_sgprs = 1;
++   ud_info->num_sgprs = 2;
++   state->args->ac.num_sgprs_used++; /* Reserve the GNM pointer high dword. */
+ 
+    state->args->user_sgprs_locs.descriptor_heaps_enabled |= 1u << heap;
+-   state->args->num_user_sgprs++;
++   state->args->num_user_sgprs += 2;
+ }

@@ -1,0 +1,57 @@
+name: Install Codex CLI on NR Windows runner
+
+on:
+  push:
+    branches:
+      - engineering/gcn8-compute-readiness-audit
+    paths:
+      - ".github/workflows/install-codex-windows-runner.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nr-windows-runner-codex-install
+  cancel-in-progress: false
+
+jobs:
+  install-codex:
+    runs-on: [self-hosted, Windows, X64, ps4-lan]
+    timeout-minutes: 10
+    steps:
+      - name: Install pinned official Codex CLI package for runner service
+        shell: powershell -NoProfile -ExecutionPolicy Bypass -File {0}
+        run: |
+          $ErrorActionPreference = "Stop"
+          $node = Get-Command node.exe -ErrorAction SilentlyContinue
+          $npm = Get-Command npm.cmd -ErrorAction SilentlyContinue
+          if (-not $node -or -not $npm) {
+            Write-Error "NODE_NPM_MISSING: Node.js and npm are required for the official @openai/codex package install. No machine changes were made."
+          }
+          Write-Host ("NODE_VERSION=" + (& $node.Source --version))
+          Write-Host ("NPM_VERSION=" + (& $npm.Source --version))
+          $root = Join-Path $env:ProgramData "NR\Codex"
+          New-Item -ItemType Directory -Path $root -Force | Out-Null
+          & $npm.Source install --prefix $root --no-audit --no-fund --omit=dev "@openai/codex@0.171.0"
+          if ($LASTEXITCODE -ne 0) { throw "NPM_INSTALL_FAILED exit=$LASTEXITCODE" }
+          $cli = Join-Path $root "node_modules\.bin\codex.cmd"
+          if (-not (Test-Path -LiteralPath $cli -PathType Leaf)) { throw "CODEX_ENTRYPOINT_MISSING: $cli" }
+          $versionOutput = & $cli --version 2>&1
+          if ($LASTEXITCODE -ne 0) { throw "CODEX_VERSION_CHECK_FAILED: $versionOutput" }
+          Write-Host ("CODEX_VERSION=" + (@($versionOutput) -join " "))
+          Write-Host ("CODEX_ENTRYPOINT=" + $cli)
+          Write-Host ("CODEX_INSTALL_ROOT=" + $root)
+          $openAiKeyPresent = [bool]($env:OPENAI_API_KEY)
+          $codexKeyPresent = [bool]($env:CODEX_API_KEY)
+          Write-Host ("OPENAI_API_KEY_PRESENT=" + $openAiKeyPresent)
+          Write-Host ("CODEX_API_KEY_PRESENT=" + $codexKeyPresent)
+          $authOutput = & $cli login status 2>&1
+          $authExit = $LASTEXITCODE
+          if ($authExit -eq 0) {
+            Write-Host ("CODEX_AUTH_STATUS=AUTHENTICATED " + (@($authOutput) -join " "))
+          } else {
+            Write-Host "CODEX_AUTH_STATUS=NOT_AUTHENTICATED"
+            if ($authOutput) { Write-Host ("CODEX_AUTH_DETAIL=" + (@($authOutput) -join " ")) }
+          }
+          Write-Host "CODEX_CLI_INSTALL_VERIFIED"

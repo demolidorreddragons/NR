@@ -1,0 +1,287 @@
+name: GCN8 compute shader artifact gate
+
+on:
+  push:
+    branches:
+      - main
+      - engineering/gcn8-compute-readiness-audit
+    paths:
+      - ".github/workflows/gcn8-compute-artifact-gate.yml"
+      - "tests/gcn8_compute_smoke.comp"
+      - "tests/verify_gcn8_compute_sb.py"
+      - "tests/test_gcn8_compute_sb_parser.py"
+      - "patches/opengnm-psbc/0001-gcn8-descriptor-pointer-reserve-two-sgprs.patch"
+      - "patches/opengnm-psbc/0002-advertise-core-spirv-shader-capability.patch"
+      - "docs/GCN8_GNM_COMPUTE_READINESS.md"
+  pull_request:
+    paths:
+      - ".github/workflows/gcn8-compute-artifact-gate.yml"
+      - "tests/gcn8_compute_smoke.comp"
+      - "tests/verify_gcn8_compute_sb.py"
+      - "tests/test_gcn8_compute_sb_parser.py"
+      - "patches/opengnm-psbc/0001-gcn8-descriptor-pointer-reserve-two-sgprs.patch"
+      - "patches/opengnm-psbc/0002-advertise-core-spirv-shader-capability.patch"
+      - "docs/GCN8_GNM_COMPUTE_READINESS.md"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gcn8-compute-artifact-gate-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  compile-and-verify:
+    # Deliberately hosted and isolated: never run third-party compiler source on
+    # the privileged Windows PS4-LAN runner.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Checkout NR sources
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Install host-only build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential git python3 python3-mako glslang-tools
+
+      - name: Fetch exact reviewed compiler and pinned headers
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/nr-gcn8-deps"
+          cd "$RUNNER_TEMP/nr-gcn8-deps"
+
+          git init opengnm-psbc
+          git -C opengnm-psbc remote add origin https://github.com/PS4-OpenGNM/opengnm-psbc.git
+          git -C opengnm-psbc fetch --depth=1 origin 28697f007862427ebec54388ec972ce6e3545912
+          git -C opengnm-psbc checkout --detach FETCH_HEAD
+
+          git init opengnm
+          git -C opengnm remote add origin https://github.com/PS4-OpenGNM/opengnm.git
+          git -C opengnm fetch --depth=1 origin 4b295ca54c82c83acf308d1c646a2dfa9ae57350
+          git -C opengnm checkout --detach FETCH_HEAD
+
+          git init SPIRV-Headers
+          git -C SPIRV-Headers remote add origin https://github.com/KhronosGroup/SPIRV-Headers.git
+          git -C SPIRV-Headers fetch --depth=1 origin fb1379425b16e58dcbdda7be0f8604a7f5cdce78
+          git -C SPIRV-Headers checkout --detach FETCH_HEAD
+
+          git init Vulkan-Headers
+          git -C Vulkan-Headers remote add origin https://github.com/KhronosGroup/Vulkan-Headers.git
+          git -C Vulkan-Headers fetch --depth=1 origin d277a0a3cda9c682708c93279f0c72cd6b0ae3f3
+          git -C Vulkan-Headers checkout --detach FETCH_HEAD
+
+          test "$(git -C opengnm-psbc rev-parse HEAD)" = "28697f007862427ebec54388ec972ce6e3545912"
+          test "$(git -C opengnm rev-parse HEAD)" = "4b295ca54c82c83acf308d1c646a2dfa9ae57350"
+          test "$(git -C SPIRV-Headers rev-parse HEAD)" = "fb1379425b16e58dcbdda7be0f8604a7f5cdce78"
+          test "$(git -C Vulkan-Headers rev-parse HEAD)" = "d277a0a3cda9c682708c93279f0c72cd6b0ae3f3"
+          git -C opengnm-psbc apply --check "$GITHUB_WORKSPACE/patches/opengnm-psbc/0001-gcn8-descriptor-pointer-reserve-two-sgprs.patch"
+          git -C opengnm-psbc apply "$GITHUB_WORKSPACE/patches/opengnm-psbc/0001-gcn8-descriptor-pointer-reserve-two-sgprs.patch"
+          git -C opengnm-psbc apply --check "$GITHUB_WORKSPACE/patches/opengnm-psbc/0002-advertise-core-spirv-shader-capability.patch"
+          git -C opengnm-psbc apply "$GITHUB_WORKSPACE/patches/opengnm-psbc/0002-advertise-core-spirv-shader-capability.patch"
+          git -C opengnm-psbc diff --check
+          git -C opengnm-psbc diff --binary > "$RUNNER_TEMP/gcn8-compiler-patch.diff"
+          sha256sum "$GITHUB_WORKSPACE/patches/opengnm-psbc/0001-gcn8-descriptor-pointer-reserve-two-sgprs.patch" \
+            "$GITHUB_WORKSPACE/patches/opengnm-psbc/0002-advertise-core-spirv-shader-capability.patch" \
+            > "$RUNNER_TEMP/gcn8-compiler-patch.sha256"
+
+      - name: Generate omitted Mesa and GLSL generated headers/sources
+        shell: bash
+        run: |
+          set -euo pipefail
+          COMPILER="$RUNNER_TEMP/nr-gcn8-deps/opengnm-psbc"
+          FORMAT="$COMPILER/src/util/format"
+          python3 "$FORMAT/u_format_table.py" "$FORMAT/u_format.yaml" --enums \
+            > "$FORMAT/u_format_gen.h"
+          python3 "$FORMAT/u_format_table.py" "$FORMAT/u_format.yaml" --header \
+            > "$FORMAT/u_format_pack.h"
+          python3 "$FORMAT/u_format_table.py" "$FORMAT/u_format.yaml" \
+            > "$FORMAT/u_format_table.c"
+
+          COMPILER_SRC="$COMPILER/src/compiler"
+          python3 "$COMPILER_SRC/builtin_types_h.py" "$COMPILER_SRC/builtin_types.h"
+          python3 "$COMPILER_SRC/builtin_types_c.py" "$COMPILER_SRC/builtin_types.c"
+
+          UTIL="$COMPILER/src/util"
+          python3 "$UTIL/process_shader_stats.py" "$UTIL/shader_stats.rnc" \
+            "$UTIL/shader_stats.xml" > "$UTIL/shader_stats.h"
+          python3 "$UTIL/format_srgb.py" > "$UTIL/format_srgb.c"
+
+          ROOT="$RUNNER_TEMP/nr-gcn8-deps"
+          VULKAN_UTIL="$COMPILER/src/vulkan/util"
+          python3 "$VULKAN_UTIL/vk_struct_type_cast_gen.py" \
+            --xml "$ROOT/Vulkan-Headers/registry/vk.xml" \
+            --out "$VULKAN_UTIL/vk_struct_type_cast.h" --beta false
+
+          AMD_COMMON="$COMPILER/src/amd/common"
+          AMD_PACKETS="$COMPILER/src/amd/packets"
+          PACKET_GEN="$AMD_PACKETS/parse_cp_pm4_table_data_json.py"
+          python3 "$PACKET_GEN" \
+            "$AMD_PACKETS/cp_pm4_table_data_gfx11.json" \
+            "$AMD_PACKETS/pm4_it_opcodes_gfx11.h" \
+            "$AMD_PACKETS/cp_pm4_table_data_gfx12.json" \
+            "$AMD_PACKETS/pm4_it_opcodes_gfx12.h" gfx11 packets_h \
+            > "$AMD_COMMON/amd_cp_packets_gfx11.h"
+          python3 "$PACKET_GEN" \
+            "$AMD_PACKETS/cp_pm4_table_data_gfx11.json" \
+            "$AMD_PACKETS/pm4_it_opcodes_gfx11.h" \
+            "$AMD_PACKETS/cp_pm4_table_data_gfx12.json" \
+            "$AMD_PACKETS/pm4_it_opcodes_gfx12.h" gfx12 packets_h \
+            > "$AMD_COMMON/amd_cp_packets_gfx12.h"
+          for GEN in gfx11 gfx12; do
+            python3 "$PACKET_GEN" \
+              "$AMD_PACKETS/cp_pm4_table_data_$GEN.json" \
+              "$AMD_PACKETS/pm4_it_opcodes_$GEN.h" "$GEN" print_c \
+              > "$AMD_COMMON/amd_cp_print_packet_$GEN.c"
+            python3 "$PACKET_GEN" \
+              "$AMD_PACKETS/cp_pm4_table_data_$GEN.json" \
+              "$AMD_PACKETS/pm4_it_opcodes_$GEN.h" "$GEN" print_h \
+              > "$AMD_COMMON/amd_cp_print_packet_$GEN.h"
+          done
+          python3 "$AMD_COMMON/gfx10_format_table.py" \
+            "$FORMAT/u_format.yaml" \
+            "$COMPILER/src/amd/registers/gfx10-rsrc.json" \
+            "$COMPILER/src/amd/registers/gfx11-rsrc.json" \
+            > "$AMD_COMMON/gfx10_format_table.c"
+
+          test -s "$VULKAN_UTIL/vk_struct_type_cast.h"
+          test -s "$AMD_COMMON/amd_cp_packets_gfx11.h"
+          test -s "$AMD_COMMON/amd_cp_packets_gfx12.h"
+          test -s "$AMD_COMMON/amd_cp_print_packet_gfx11.c"
+          test -s "$AMD_COMMON/amd_cp_print_packet_gfx11.h"
+          test -s "$AMD_COMMON/amd_cp_print_packet_gfx12.c"
+          test -s "$AMD_COMMON/amd_cp_print_packet_gfx12.h"
+          test -s "$AMD_COMMON/gfx10_format_table.c"
+          test -s "$FORMAT/u_format_gen.h"
+          test -s "$FORMAT/u_format_pack.h"
+          test -s "$FORMAT/u_format_table.c"
+          test -s "$COMPILER_SRC/builtin_types.h"
+          test -s "$COMPILER_SRC/builtin_types.c"
+          test -s "$UTIL/shader_stats.h"
+          test -s "$UTIL/format_srgb.c"
+
+      - name: Configure and build pinned compiler on hosted runner
+        shell: bash
+        run: |
+          set -euo pipefail
+          ROOT="$RUNNER_TEMP/nr-gcn8-deps"
+          COMPILER="$ROOT/opengnm-psbc"
+          INC="-Iinclude -Ilibpsbc -I../opengnm/include -I../SPIRV-Headers/include -I../Vulkan-Headers/include -Isrc -Isrc/amd -Isrc/amd/common -Isrc/amd/common/nir -Isrc/amd/compiler -Isrc/amd/vulkan -Isrc/amd/vulkan/nir -Isrc/vulkan/runtime -Isrc/vulkan/runtime/bvh -Isrc/vulkan/util -Isrc/compiler -Isrc/compiler/nir -Isrc/compiler/spirv -Isrc/gallium/include -Isrc/mesa -Isrc/mesa/main -Isrc/util -Icmd/psbc -Iinclude/mesa"
+          cat > "$COMPILER/config.mak" <<EOF
+          CC=gcc
+          CXX=g++
+          LD=g++
+          AR=ar
+          PYTHON=python3
+          # The pinned standalone Makefile omits BLAKE3 x86 assembly objects. Match upstream Meson fallback: portable implementation only.
+          CFLAGS=-std=gnu11 -O2 -g $INC -DBLAKE3_NO_SSE2 -DBLAKE3_NO_SSE41 -DBLAKE3_NO_AVX2 -DBLAKE3_NO_AVX512 -D_XOPEN_SOURCE=700 -DUTIL_ARCH_LITTLE_ENDIAN=1 -DUTIL_ARCH_BIG_ENDIAN=0 -DHAVE_STRUCT_TIMESPEC=1 -DHAVE_PTHREAD=1 -DHAVE_SYSCONF=1 -Dalloca=__builtin_alloca -include strings.h -Wno-unused-function -Wno-unused-variable
+          CXXFLAGS=-std=c++17 -O2 -g $INC -DBLAKE3_NO_SSE2 -DBLAKE3_NO_SSE41 -DBLAKE3_NO_AVX2 -DBLAKE3_NO_AVX512 -D_XOPEN_SOURCE=700 -DUTIL_ARCH_LITTLE_ENDIAN=1 -DUTIL_ARCH_BIG_ENDIAN=0 -DHAVE_STRUCT_TIMESPEC=1 -DHAVE_PTHREAD=1 -DHAVE_SYSCONF=1 -Dalloca=__builtin_alloca -include strings.h -Wno-unused-function -Wno-unused-variable
+          LDFLAGS=-lm -pthread -ldl
+          EOF
+          # The pinned upstream Makefile owns the complete Mesa NIR/SPIR-V/ACO
+          # generated-source graph. Run its documented target instead of
+          # maintaining a partial hand-copied list of generators here.
+          make -C "$COMPILER" generated
+
+          # Upstream Makefile defines the aco_opcodes.h rule but accidentally
+          # omits that header from GENERATED. Emit it explicitly before any
+          # ACO translation unit is compiled.
+          python3 "$COMPILER/src/amd/compiler/aco_opcodes_h.py" \
+            > "$COMPILER/src/amd/compiler/aco_opcodes.h"
+
+          # Fail early if code generation did not emit the exact translation
+          # units that defined symbols missing from the previous link attempt.
+          test -s "$COMPILER/src/compiler/nir/nir_intrinsics.c"
+          test -s "$COMPILER/src/compiler/nir/nir_opcodes.c"
+          test -s "$COMPILER/src/compiler/spirv/spirv_info.c"
+          test -s "$COMPILER/src/amd/compiler/aco_opcodes.cpp"
+          test -s "$COMPILER/src/amd/compiler/aco_opcodes.h"
+          grep -q 'nir_intrinsic_infos' "$COMPILER/src/compiler/nir/nir_intrinsics.c"
+          grep -q 'nir_op_infos' "$COMPILER/src/compiler/nir/nir_opcodes.c"
+          grep -q 'spirv_decoration_to_string' "$COMPILER/src/compiler/spirv/spirv_info.c"
+          grep -q 'spirv_builtin_to_string' "$COMPILER/src/compiler/spirv/spirv_info.c"
+          grep -q 'instr_info' "$COMPILER/src/amd/compiler/aco_opcodes.cpp"
+          {
+            echo "=== compiler revision ==="
+            git -C "$COMPILER" rev-parse HEAD
+            echo "=== opengnm revision ==="
+            git -C "$ROOT/opengnm" rev-parse HEAD
+            echo "=== SPIRV-Headers revision ==="
+            git -C "$ROOT/SPIRV-Headers" rev-parse HEAD
+            echo "=== Vulkan-Headers revision ==="
+            git -C "$ROOT/Vulkan-Headers" rev-parse HEAD
+            echo "=== build ==="
+            make -C "$COMPILER" -j2
+          } 2>&1 | tee "$RUNNER_TEMP/gcn8-compiler-build.log"
+          test -x "$COMPILER/opengnm-psbc"
+
+      - name: Compile deterministic compute shader for PS4 Pro NEO
+        shell: bash
+        run: |
+          set -euo pipefail
+          ROOT="$RUNNER_TEMP/nr-gcn8-deps"
+          mkdir -p "$RUNNER_TEMP/gcn8-output"
+          glslangValidator -V --target-env vulkan1.0 -S comp \
+            tests/gcn8_compute_smoke.comp \
+            -o "$RUNNER_TEMP/gcn8-output/gcn8-compute.spv"
+          "$ROOT/opengnm-psbc/opengnm-psbc" \
+            -s compute -n -vv \
+            -f "$RUNNER_TEMP/gcn8-output/gcn8-compute.spv" \
+            -o "$RUNNER_TEMP/gcn8-output/gcn8-compute.sb" \
+            2>&1 | tee "$RUNNER_TEMP/gcn8-shader-compile.log"
+          if grep -q "Unsupported SPIR-V capability: SpvCapabilityShader" "$RUNNER_TEMP/gcn8-shader-compile.log"; then
+            echo "Core SPIR-V Shader capability was incorrectly reported unsupported."
+            exit 1
+          fi
+
+      - name: Independently verify GNM compute stage and NEO target
+        shell: bash
+        run: |
+          set -euo pipefail
+          set +e
+          python3 tests/verify_gcn8_compute_sb.py \
+            "$RUNNER_TEMP/nr-gcn8-deps/opengnm-psbc" \
+            "$RUNNER_TEMP/nr-gcn8-deps/opengnm" \
+            "$RUNNER_TEMP/gcn8-output/gcn8-compute.sb" \
+            > "$RUNNER_TEMP/gcn8-artifact-report.json" \
+            2> "$RUNNER_TEMP/gcn8-verify.log"
+          verify_status=$?
+          cat "$RUNNER_TEMP/gcn8-verify.log"
+          cat "$RUNNER_TEMP/gcn8-artifact-report.json"
+          exit "$verify_status"
+
+      - name: Hash generated shader artifacts
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -f "$RUNNER_TEMP/gcn8-output/gcn8-compute.sb" && -f "$RUNNER_TEMP/gcn8-output/gcn8-compute.spv" ]]; then
+            (cd "$RUNNER_TEMP/gcn8-output" && sha256sum gcn8-compute.sb gcn8-compute.spv) > "$RUNNER_TEMP/gcn8-sha256.txt"
+            cat "$RUNNER_TEMP/gcn8-sha256.txt"
+          else
+            echo "Compute outputs unavailable; no SHA-256 manifest generated."
+          fi
+
+      - name: Preserve compiler logs and generated artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gcn8-compute-artifact-gate-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/gcn8-compiler-build.log
+            ${{ runner.temp }}/gcn8-compiler-patch.diff
+            ${{ runner.temp }}/gcn8-compiler-patch.sha256
+            patches/opengnm-psbc/0001-gcn8-descriptor-pointer-reserve-two-sgprs.patch
+            patches/opengnm-psbc/0002-advertise-core-spirv-shader-capability.patch
+            ${{ runner.temp }}/gcn8-shader-compile.log
+            ${{ runner.temp }}/gcn8-verify.log
+            ${{ runner.temp }}/gcn8-artifact-report.json
+            ${{ runner.temp }}/gcn8-sha256.txt
+            ${{ runner.temp }}/gcn8-output/
+          if-no-files-found: warn
+          retention-days: 30
