@@ -81,3 +81,14 @@ A second independent cross-check now supports the 0x160-byte module-info record 
 The arithmetic is consistent on x86-64: 8-byte size + 256-byte name + 4×16-byte segments + 4-byte segment count + 20-byte fingerprint = 0x160 bytes. The name begins at +0x08, segments at +0x108, count at +0x148, and fingerprint at +0x14c.
 
 **Qualification boundary:** this is strong cross-project corroboration of the public PS4 module-info structure, but none of these sources is Sony's FW 14.02 kernel implementation. The 0x160 layout is now a well-supported candidate for passive parsing; it is not a claim that the retail syscall 593 behavior or every field is proven on FW 14.02. Keep the census fail-closed until the target-side ABI can be confirmed safely.
+
+## Direct exported GetModuleList2 wrapper disassembly
+
+A targeted disassembly of the recovered export `sceKernelGetModuleList2` at ELF value `0x2d3d0` provides an additional target-binary cross-check:
+
+- The function saves incoming `RDI`, `RSI`, and `RDX` into callee-saved registers, performs its version/context bookkeeping, then restores those same three values and calls the wrapper at `0x2410`.
+- The wrapper at `0x2410` loads `RAX=0x293` (decimal **659**) and executes `syscall`.
+- No multiplication, division, scaling, or conversion of the second argument is visible in this exported wrapper. It is passed unchanged to syscall 659.
+- This independently confirms from the actual FW 14.02 libkernel image that the explicit `sceKernelGetModuleList2` export reaches syscall 659 with the same three-register forwarding pattern.
+
+This strengthens the target-binary call-path evidence, but it still does not reveal the kernel handler's interpretation of the second argument. In particular, disassembling a userland wrapper cannot establish whether the kernel treats that value as an element count or byte count. The emulator agreement remains candidate corroboration only; retail handler semantics remain unqualified.
