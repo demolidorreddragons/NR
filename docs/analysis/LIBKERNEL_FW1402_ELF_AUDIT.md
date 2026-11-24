@@ -129,3 +129,16 @@ A review of the PS4 Developer Wiki syscall reference found a limitation that mus
 **Impact on passive census:** the current design must not depend on syscall 593 returning segment addresses or sizes. The provider census only needs module identity/name and symbol lookup by name; any future use of segment metadata must first identify the correct retail 14.02 info API and qualify its output. The available FW 14.02 libkernel disassembly currently proves the exported `sceKernelGetModuleInfo` path reaches syscall 593, but does not prove the semantics of syscall 660 or that a usable `sceKernelGetModuleInfo2` export exists in this exact image.
 
 This finding narrows the safe ABI contract and prevents accidentally treating an old/public structure declaration as a full runtime guarantee. It does not qualify the census or authorize a target call.
+
+
+## Clarification: syscall 593 still returns the module name
+
+The earlier note that syscall 593 has stripped module information needs a precise distinction for the passive provider census:
+
+- The PS4 Developer Wiki says the stripped fields include code/data base addresses and code/data sizes; it does not say the entire record is unusable.
+- A separate historical technical note for FW 3.55 reports that the module name remains at offset `+0x08`, while the old code/data fields are zeroed. It identifies syscall 608 (`sys_dynlib_get_info_ex`) as an alternate source for the code base at offset `+0x110`, but does not establish a complete segment-size solution.
+- Sources: [PS4 Developer Wiki syscall 593 changelog](https://www.psdevwiki.com/ps4/Syscalls) and [PS4 3.55 notes — System Call 593 and Dumping Modules](https://ps4.editzz.com/3.55/doc/notes.html).
+
+**Impact:** the passive census reads only `info.name`; it does not consume code/data addresses or sizes. The published evidence therefore supports the continued plausibility of name-only enumeration through syscall 593, with the name at `+0x08`. This is historical cross-version evidence, not direct FW 14.02 validation of the full `OrbisKernelModuleInfo` layout or call result. Keep the exact FW 14.02 record-size/output contract marked as a candidate, and do not use syscall 593 for segment metadata.
+
+This clarification narrows the blocker: syscall 593's stripped segment fields do not, by themselves, invalidate name-only provider matching. Remaining retail qualification is the exact 14.02 output record contract and syscall-659 enumeration behavior.
