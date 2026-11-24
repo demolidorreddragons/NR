@@ -782,3 +782,52 @@ Gate A remains **PASS — artifact-only**. Gate B remains **BLOCKED**.
 Gate C remains **NOT PASSED** and Gate D remains **NOT STARTED**. No compute
 dispatch was submitted, no PRX was changed or activated, no PKG was installed,
 and no console state was changed.
+
+
+### Gate B follow-up: retail-game compute queue and readback trace (2026-11-24)
+
+A static reverse-engineering report for **The Last Guardian v1.03 (CUSA03627)** was inspected at pinned source revision `HayatoG/tlg_pc@ee3327d7c1a1c107a16327d7c7a33c6c148b6dce`, file `analysis/02_rendering_gnm.md`. The report analyzes that title's `eboot.bin` with Ghidra and labels findings as confirmed [C], probable [P], or guesses [?]. This is materially stronger evidence of a real game's GNM usage than an emulator declaration, but it remains title-specific static analysis: it is not Sony SDK documentation, not a retail firmware 14.02 ABI record, and not a test performed on this project's PS4 Pro.
+
+#### Queue mapping and dispatch call sites observed
+
+The report identifies three distinct queue/context arrangements:
+
+- A device-level `JsComputeContext` maps pipe 1 / queue 4 with priority 0 and a ring of `0x400` dwords. Its described workload includes asynchronous copy, map/readback, and resource updates.
+- Three per-frame `JsComputeContext` instances map pipe 2 / queues 0, 1, and 2 with priority 1. Their ACBs are submitted before the frame's DCB during Present.
+- A separate Gnmx `JsComputeQueue` maps pipe 0 / queue 3 with a 1 MiB ring for dispatch-draw work.
+
+The report finds direct call sites for `sceGnmMapComputeQueueWithPriority`, `sceGnmMapComputeQueue`, `sceGnmDingDong`, and `sceGnmUnmapComputeQueue`. The compute-queue submit path calls `sceGnmDingDong`; unmap paths call `sceGnmUnmapComputeQueue`. The title also calls `sceGnmDispatchDirect` with a reservation size of 9 dwords at identified call sites.
+
+These observations prove that the analyzed title contains code paths using those imports and queue configurations. They do **not** establish that the same pipe/queue IDs, ring sizes, priorities, alignment, or call arguments are valid for an unrelated process or for firmware 14.02. In particular, the 9-dword call-site observation does not resolve the 9-versus-12/13-dword source discrepancy already recorded above; the exact callee ABI and reservation semantics still need independent qualification.
+
+#### Submission and completion ordering observed
+
+The report describes the following title-specific flow:
+
+1. Compute work is recorded in an ACB and submitted through the Gnmx compute queue; its submit path issues `sceGnmDingDong`.
+2. During Present, the frame's compute ACB is submitted before the graphics DCB.
+3. The graphics path writes an EOP event and calls `sceGnmSubmitAndFlipCommandBuffers` for the frame.
+4. A dedicated `ps4render_submitDone` thread waits for the EOP event through an equeue and then calls `sceGnmSubmitDone`.
+
+This gives a concrete candidate ordering to investigate, rather than assuming that a successful generic submit call means GPU execution has completed. It is still a game's rendering architecture, not a reusable standalone PRX contract. The report's EOP/equeue mechanism must not be copied until its label allocation, address space, event registration, memory visibility, timeout, and error semantics are independently established.
+
+#### Resource placement and CPU readback observed
+
+The report identifies shader creation paths that copy shader code into Garlic memory, patch its GPU address, and construct input-resource offset tables through CUE/LCUE. It also identifies asynchronous compute workflows using `AsyncCopyResource`, `AsyncMap` (GPU result readback to CPU), and `StallUntilSignaled`.
+
+This is important evidence that a shipping title implements a complete compute-to-CPU data path. However, the report does not establish the underlying allocator's exact firmware ABI, GPU VA mapping/residency rules, cache maintenance operations, or whether the same path is accessible and safe from this project's GoldHEN PRX context. It must not be reduced to the assumption that any CPU pointer can be cast to a GPU address.
+
+#### Gate B implications and next evidence targets
+
+The Last Guardian trace narrows the research targets:
+
+- Recover the exact argument and return contracts for `sceGnmMapComputeQueue`, `sceGnmMapComputeQueueWithPriority`, `sceGnmDingDong`, and `sceGnmUnmapComputeQueue`, including ring-size units, alignment, queue ownership, and failure behavior.
+- Establish whether the title's queue arrangements depend on privileged title/runtime setup, owner registration, command-buffer context, or other initialization omitted by the high-level summary.
+- Trace the Garlic allocation and shader-address patching path down to allocator calls and address conversion; separately trace ACB/DCB and EOP-label allocation.
+- Trace `AsyncMap` and `StallUntilSignaled` down to the exact synchronization and cache-coherency operations, including bounded wait and recovery behavior.
+- Reconcile the 9-dword `sceGnmDispatchDirect` call sites with the 12/13-dword OpenGNM generic implementation and the 9-dword shadPS4 HLE reservation, without selecting a convention by majority vote.
+- Find firmware-14.02-qualified ABI evidence or a controlled hardware experiment before writing any firmware-facing call into NR.
+
+Source: [The Last Guardian v1.03 GNM rendering analysis](https://github.com/HayatoG/tlg_pc/blob/ee3327d7c1a1c107a16327d7c7a33c6c148b6dce/analysis/02_rendering_gnm.md).
+
+**Disposition:** this is accepted as a high-value reverse-engineering lead, not as a Gate B pass. Gate B remains **BLOCKED**; Gate C remains **NOT PASSED**; Gate D remains **NOT STARTED**. No queue was mapped, no compute command was submitted, no PRX was modified or activated, no PKG was installed, and no console state was changed.
