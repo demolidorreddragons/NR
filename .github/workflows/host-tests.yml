@@ -9,6 +9,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Apply pinned OpenGNM compute user-data PM4 patch and test contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          ROOT="$RUNNER_TEMP/opengnm-pinned"
+          git init "$ROOT"
+          git -C "$ROOT" remote add origin https://github.com/PS4-OpenGNM/opengnm.git
+          git -C "$ROOT" fetch --depth=1 origin 4b295ca54c82c83acf308d1c646a2dfa9ae57350
+          git -C "$ROOT" checkout --detach FETCH_HEAD
+          git -C "$ROOT" apply --check "$GITHUB_WORKSPACE/patches/opengnm/0001-compute-userdata-set-sh-reg-shader-type.patch"
+          git -C "$ROOT" apply "$GITHUB_WORKSPACE/patches/opengnm/0001-compute-userdata-set-sh-reg-shader-type.patch"
+          python3 tests/test_opengnm_compute_userdata_pm4.py "$ROOT/src/drawcommandbuffer.c"
       - name: Validate CDA PKG 015 log-signal extractor contract
         run: python3 tests/test_cda_pkg015_log_extractor_contract.py
       - name: Validate PS4 superseded package archive safety contract
