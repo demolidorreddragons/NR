@@ -388,3 +388,36 @@ Reviewed source locations:
   `src/driver_generic.c`, and `src/drawcommandbuffer.c`
 - shadPS4 commit `c4f8699581ef1f795a74669cc12fadf440cbe4a1`:
   `src/core/libraries/gnmdriver/gnmdriver.cpp`
+
+
+### Gate A artifact re-verification — 2026-11-24
+
+The latest hosted run, GitHub Actions run `45299287689` on branch
+`engineering/codex-autonomous-cycle-20261123`, was independently inspected
+from its downloaded artifact ZIP (`gcn8-compute-artifact-gate-45299287689`,
+artifact ID `14878131997`). The ZIP integrity check passed. The binary and
+SPIR-V hashes were recomputed from the extracted bytes rather than copied from
+the report:
+
+- `gcn8-compute.sb`: 228 bytes,
+  SHA-256 `8f52fb74771164498a0c1e90bd828d8517f6414d34a1d28c395c9aae2563b6e1`.
+- `gcn8-compute.spv`: 1,020 bytes,
+  SHA-256 `964af9e2b13bdce7883cb2b53437e4b75547ddfa12580177e4d0da0d7509a626`.
+- Container fields independently decoded from the binary: GNM magic
+  `0x72646853`, compute stage `0x04`, NEO target `0x02`, 40-byte stage
+  header, one input-usage slot `[0x1c, 0, 2, 0]`, `COMPUTE_PGM_RSRC2=0x88`,
+  four user SGPRs, and thread dimensions `[64, 1, 1]`.
+- The independently decoded values and recomputed SHA-256 match the JSON
+  artifact report. The compiler build log records the pinned revisions:
+  opengnm-psbc `28697f007862427ebec54388ec972ce6e3545912`, opengnm
+  `4b295ca54c82c83acf308d1c646a2dfa9ae57350`, SPIRV-Headers
+  `fb1379425b16e58dcbdda7be0f8604a7f5cdce78`, and Vulkan-Headers
+  `d277a0a3cda9c682708c93279f0c72cd6b0ae3f3`.
+
+This is an independent artifact-byte and metadata re-verification, not a
+second compiler build. The artifact explicitly reports
+`PASS_ARTIFACT_ONLY_NOT_HARDWARE`; firmware 14.02 and hardware dispatch are
+both untested. Gate A remains artifact-only PASS. Gates B/C remain blocked
+until a qualified FW 14.02 command submission, allocation/residency,
+completion/recovery, and cache-coherent readback path is validated on the
+PS4 Pro. No console command, PRX, package, or device state was touched.
