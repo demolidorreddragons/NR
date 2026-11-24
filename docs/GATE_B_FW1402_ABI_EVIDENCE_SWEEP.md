@@ -283,3 +283,44 @@ is still a lawful FW 14.02 GNM module artifact or a separately authorized
 passive census of already-loaded providers. No module loading, symbol
 invocation, allocation, dispatch, PRX activation, PKG installation, or
 console-state change is authorized or performed by this documentation work.
+
+
+## Additional 14.02 debugger validation and current API-reference cross-check
+
+The public ps4debug-NG support notes are more specific than a generic
+"firmware supported" label: they state that 14.02 kernel symbols, patch
+sites, and all three libkernel variants were checked against decrypted
+retail 14.02 kernel/libkernel binaries, with comparisons to 14.00 and
+13.52. This materially strengthens confidence in the availability of a
+14.02 inspection toolchain. It still does not include a decrypted
+`libSceGnmDriver.sprx` or `libSceGnmDriverForNeoMode.sprx` export table,
+GNM import stub, or GNM function disassembly, so it cannot close the GNM
+provider/ABI sub-gate:
+https://github.com/Pharaoh2k/ps4debug-NG
+
+The current public OpenGNM API reference now publishes typed declarations
+for the compute initializer, dispatch commands, compute queue management,
+and submit functions, and its backend page describes the Orbis forwarding
+path. This is useful cross-project API documentation and strengthens the
+candidate signature set. It remains OpenGNM-maintained documentation and
+does not identify a retail FW 14.02 export capture, provider selection, or
+target-observed argument semantics:
+https://ps4-opengnm.github.io/opengnm/reference/driver/
+https://ps4-opengnm.github.io/opengnm/backends/
+
+The same current reference explicitly separates the generic backend
+(no-op submit / PM4 capture for host testing) from the Orbis backend
+(firmware forwarding). Consequently, passing generic host tests cannot
+be interpreted as target submit/compute validation.
+
+### Updated evidence classification
+
+- **FW 14.02 kernel/libkernel inspection support:** corroborated against
+  decrypted retail binaries by ps4debug-NG documentation.
+- **FW 14.02 GNM provider/export/ABI:** still not evidenced.
+- **Typed candidate GNM API signatures:** documented by OpenGNM, not
+  firmware-qualified for 14.02.
+- **Host generic packet/build tests:** software-only, not GPU execution.
+- **PS4 Pro compute known-answer/readback:** not performed.
+
+No target module census was performed, and no GNM function was called.
