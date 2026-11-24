@@ -44,15 +44,33 @@ int main() {
     assert(r.has_normal && r.normal_handle == 11);
     assert(r.has_neo && r.neo_handle == 22);
 
+    uint32_t selected = 0;
+    assert(select_gnm_provider_handle(r, &selected));
+    assert(selected == 11); // normal provider wins when both exist
+
     f.count = 1;
     r = census_loaded_gnm_providers(list, name, &f, handles, 4);
     assert(r.status == ProviderCensusStatus::complete);
     assert(r.has_normal && !r.has_neo);
+    assert(select_gnm_provider_handle(r, &selected));
+    assert(selected == 11);
+
+    f.count = 4;
+    f.names[0] = "unrelated";
+    f.names[1] = "libSceGnmDriverForNeoMode";
+    r = census_loaded_gnm_providers(list, name, &f, handles, 4);
+    assert(r.status == ProviderCensusStatus::complete);
+    assert(!r.has_normal && r.has_neo);
+    assert(select_gnm_provider_handle(r, &selected));
+    assert(selected == 22);
+
+    f.names[0] = "libSceGnmDriver";
 
     f.count = 4;
     r = census_loaded_gnm_providers(list, name, &f, handles, 3);
     assert(r.status == ProviderCensusStatus::capacity_exceeded);
     assert(!r.has_normal && !r.has_neo);
+    assert(!select_gnm_provider_handle(r, &selected));
 
     f.list_ok = false;
     r = census_loaded_gnm_providers(list, name, &f, handles, 4);
