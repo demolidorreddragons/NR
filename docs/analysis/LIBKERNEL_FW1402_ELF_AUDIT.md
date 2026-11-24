@@ -116,3 +116,16 @@ A targeted source search found a substantially stronger public reference than em
 - shadPS4 independently declares `sceKernelGetModuleList2(s32* handles, u64 num_array, u64* out_count)`, but this remains emulator behavior and is not used as retail proof: [implementation](https://github.com/shadps4-emu/shadPS4/blob/5c3b6910b99ea4e4d019533490137fe80e400306/src/core/libraries/kernel/process.cpp).
 
 **Impact on this project:** the 14.02 libkernel disassembly already proves that its `sceKernelGetModuleList2` wrapper preserves RDI/RSI/RDX and invokes syscall 659. The new external evidence supports interpreting RSI as an element capacity for the 11.00 contract, but does not establish that FW 14.02's kernel handler is identical or that its module selection matches the required census. Therefore the PR68 implementation remains fail-closed on the existing legacy call; no target-facing call or ABI-dependent code change is justified yet. The remaining qualification requires 14.02 kernel-side evidence or an explicitly authorized, safe retail ABI measurement.
+
+
+## Important qualification: syscall 593 does not expose the full module record
+
+A review of the PS4 Developer Wiki syscall reference found a limitation that must be applied to the module-info candidate above:
+
+- The reference explicitly states that, since FW 1.76, Sony removed key information from `sys_dynlib_get_info` (syscall 593), including module code/data base addresses and code/data sizes: [PS4 Developer Wiki — Syscalls, changelog and syscall 593](https://www.psdevwiki.com/ps4/Syscalls).
+- The same table identifies syscall **660** separately as `sys_dynlib_get_info2`, introduced in the 4.50 generation, but does not publish a prototype or structure contract for it.
+- The 0x160 record independently corroborated by DolphinPS4, PS4Recomp, and KytyPS5 is therefore only a candidate structure shape. It must not be interpreted as evidence that syscall 593 on retail 14.02 returns usable segment addresses/sizes, or that its output is interchangeable with syscall 660.
+
+**Impact on passive census:** the current design must not depend on syscall 593 returning segment addresses or sizes. The provider census only needs module identity/name and symbol lookup by name; any future use of segment metadata must first identify the correct retail 14.02 info API and qualify its output. The available FW 14.02 libkernel disassembly currently proves the exported `sceKernelGetModuleInfo` path reaches syscall 593, but does not prove the semantics of syscall 660 or that a usable `sceKernelGetModuleInfo2` export exists in this exact image.
+
+This finding narrows the safe ABI contract and prevents accidentally treating an old/public structure declaration as a full runtime guarantee. It does not qualify the census or authorize a target call.
