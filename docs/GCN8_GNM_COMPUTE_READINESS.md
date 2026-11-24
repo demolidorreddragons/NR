@@ -421,3 +421,54 @@ both untested. Gate A remains artifact-only PASS. Gates B/C remain blocked
 until a qualified FW 14.02 command submission, allocation/residency,
 completion/recovery, and cache-coherent readback path is validated on the
 PS4 Pro. No console command, PRX, package, or device state was touched.
+
+### Gate A follow-up: compiler capability warning and descriptor-patch scope review (2026-11-24)
+
+The latest successful compiler job log for run `45299287689` was re-read
+at the exact warning site. The shader compile emits:
+
+```
+Unsupported SPIR-V capability: SpvCapabilityShader (1)
+```
+
+Pinned-source inspection of
+`PS4-OpenGNM/opengnm-psbc` revision
+`28697f007862427ebec54388ec972ce6e3545912` establishes the following:
+
+- `SpvCapabilityShader` is present in the pinned compiler's
+  `implemented_capabilities` table (`src/compiler/spirv/spirv_to_nir.c`).
+  Therefore it is not rejected by the earlier
+  `Unimplemented SPIR-V capability` failure check.
+- The warning is emitted by the subsequent comparison against
+  `b->supported_capabilities`. In the RADV path, that mask is supplied by
+  `compiler_info->spirv_caps`, rather than automatically copied from the
+  compiler's implemented-capability table.
+- Consequently, the warning means the supplied device/compiler capability
+  mask does not advertise the core Shader capability, even though the parser
+  recognizes it. The successful compiler exit and produced artifact show
+  that this warning was non-fatal for this invocation; they do **not** prove
+  that all shader requirements are supported or that the binary is valid for
+  retail firmware. No warning suppression or source change was made.
+
+This narrows the warning's meaning but leaves a reproducibility/quality
+follow-up: inspect the exact initialization of `compiler_info->spirv_caps`
+and run an independent SPIR-V validation pass on the generated module under
+the intended Vulkan/SPIR-V environment. Until then, retain the warning in
+the audit trail and do not label the SPIR-V capability set fully validated.
+
+The descriptor-pointer patch was also reviewed directly against the pinned
+`radv_shader_args.c` implementation. It keeps the ACO argument payload at
+one SGPR, increments `ac.num_sgprs_used` to reserve the high dword, and
+advances the GNM user-data metadata by two SGPRs. This is internally
+consistent with the patch's intended low-address scalar lowering and the
+pinned GNM input-usage width helper for the direct descriptor-set path.
+The patch applies the same accounting to `add_descriptor_heap`, but the
+current smoke shader and independent artifact verifier exercise only the
+direct set-0 descriptor-table slot. The descriptor-heap and indirect
+all-descriptor-sets paths remain untested and are not covered by the Gate A
+PASS.
+
+**Result:** no change to gate status. Gate A remains artifact-only PASS;
+Gate B remains BLOCKED. The successful compiler run is evidence that this
+particular shader compiled despite a non-fatal capability warning, not a
+general SPIR-V capability or firmware-compatibility certification.
