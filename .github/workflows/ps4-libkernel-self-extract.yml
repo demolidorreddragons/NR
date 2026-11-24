@@ -1,0 +1,69 @@
+name: PS4 FW 14.02 libkernel retrieval (FTP-compatible)
+
+on:
+  push:
+    branches:
+      - ops/libkernel-1402-self-download
+    paths:
+      - ".github/workflows/ps4-libkernel-self-extract.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  retrieve:
+    runs-on: [self-hosted, Windows, X64, ps4-lan]
+    timeout-minutes: 20
+    steps:
+      - name: Retrieve libkernel over read-only FTP
+        shell: powershell -NoProfile -ExecutionPolicy Bypass -File {0}
+        env:
+          PS4_IP: ${{ vars.PS4_IP }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          if ([string]::IsNullOrWhiteSpace($env:PS4_IP)) { throw "Repository variable PS4_IP is not configured" }
+          $outDir = Join-Path $env:RUNNER_TEMP "ps4-libkernel"
+          New-Item -ItemType Directory -Force -Path $outDir | Out-Null
+          $elf = Join-Path $outDir "libkernel.sprx.elf"
+          $url = "ftp://$($env:PS4_IP):2121/system/common/lib/libkernel.sprx"
+
+          # Use ordinary read-only RETR. The deployed FTP server previously
+          # returned 502 to the SELF command; RETR success does not prove SELF
+          # conversion or repair the server-side extension.
+          & curl.exe --fail --silent --show-error --ftp-pasv --user "anonymous:" --output $elf $url
+          if ($LASTEXITCODE -ne 0) { throw "FTP RETR failed: curl exit $LASTEXITCODE" }
+
+          $bytes = [IO.File]::ReadAllBytes($elf)
+          if ($bytes.Length -lt 64) { throw "Downloaded image is too small to be an ELF header" }
+          $magic = [BitConverter]::ToString($bytes[0..3])
+          $class = [int]$bytes[4]
+          $data = [int]$bytes[5]
+          $osabi = [int]$bytes[7]
+          $type = [BitConverter]::ToUInt16($bytes, 16)
+          $machine = [BitConverter]::ToUInt16($bytes, 18)
+          $sha = (Get-FileHash $elf -Algorithm SHA256).Hash.ToLowerInvariant()
+
+          Write-Host "LIBKERNEL_BYTES=$($bytes.Length)"
+          Write-Host "LIBKERNEL_MAGIC=$magic"
+          Write-Host "ELF_CLASS=$class"
+          Write-Host "ELF_DATA=$data"
+          Write-Host "ELF_OSABI=$osabi"
+          Write-Host ("ELF_TYPE=0x{0:X4}" -f $type)
+          Write-Host "ELF_MACHINE=$machine"
+          Write-Host "LIBKERNEL_SHA256=$sha"
+
+          if ($magic -ne "7F-45-4C-46" -or $class -ne 2 -or $data -ne 1 -or $machine -ne 62) {
+            "ELF_HEADER_INVALID" | Out-File (Join-Path $outDir "RESULT.txt") -Encoding ascii
+            throw "FTP response is not a valid little-endian ELF64 x86-64 image"
+          }
+
+          "ELF64_X86_64_HEADER_VALIDATED" | Out-File (Join-Path $outDir "RESULT.txt") -Encoding ascii
+          Write-Host "ELF64_X86_64_HEADER_VALIDATED"
+      - name: Publish retrieved image and validation record
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ps4-fw1402-libkernel-image
+          path: ${{ runner.temp }}/ps4-libkernel/
+          if-no-files-found: error
+          retention-days: 7
