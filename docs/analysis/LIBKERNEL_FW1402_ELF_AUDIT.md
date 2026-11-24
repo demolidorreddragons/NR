@@ -209,3 +209,17 @@ Pinned source: [remote_lua_loader misc.lua](https://github.com/n0llptr/remote_lu
 A separate fpPS4 implementation uses the same three-argument shape, but labels its implementation as an alias/guess; it is emulator evidence only and is not relied upon for retail behavior.
 
 **Scope limitation:** the Lua call site is community software and is not proof of the exact retail FW 14.02 kernel handler, completeness, error semantics, or inclusion of both GNM system libraries. It does, however, corroborate the argument shape and capacity units enough to narrow the next passive-only validation. No code on the console was executed by this investigation.
+
+
+## Resolver handle candidate for the internal list export
+
+The next prerequisite is obtaining a valid libkernel module handle for the existing `sceKernelDlsym` import. Independent PS4 homebrew sources provide corroboration for the conventional value `0x2001`:
+
+- The pinned `remote_lua_loader` revision used in the previous section defines `LIBKERNEL_HANDLE = 0x2001` and passes it to `dlsym` for `sceKernelGetModuleListInternal`, `sceKernelGetModuleInfo`, and other libkernel exports.
+- etaHEN's pinned PS4 source independently defines `LIBKERNEL_HANDLE = 0x2001` (guarded by `#ifndef LIBKERNEL_HANDLE`).
+
+Sources: [remote_lua_loader globals.lua](https://github.com/n0llptr/remote_lua_loader/blob/7c2840e47506f258fc815533d5f7ed7c842cbc3c/savedata/globals.lua), [etaHEN hijacker.hpp](https://github.com/etaHEN/etaHEN/blob/dafa13b562ddb137a4b4a97b9aaa287c0c57cc9c/Source%20Code/include/hijacker/hijacker.hpp).
+
+**Assessment:** `0x2001` is a well-corroborated PS4 homebrew convention and a reasonable *runtime-validated candidate* for resolving the FW 14.02 export through the already-imported `sceKernelDlsym`. It is not a Sony-published FW 14.02 guarantee, and these sources do not prove the handle's validity in this specific title/process. Any implementation must therefore treat failed resolution as a hard stop, must not fall back to a guessed address or raw syscall, and must not load a module to obtain a handle.
+
+This narrows the implementation path to a passive sequence: attempt name-based resolution against candidate handle `0x2001`; if resolution succeeds, call the FW 14.02 exported `sceKernelGetModuleListInternal` using the already corroborated three-argument shape; otherwise fail closed. The resulting list and GNM-provider inclusion still require a target run and must not be inferred from successful symbol resolution alone. No target call was made during this investigation.
