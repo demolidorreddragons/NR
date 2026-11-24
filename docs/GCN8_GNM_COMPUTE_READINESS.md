@@ -472,3 +472,59 @@ PASS.
 Gate B remains BLOCKED. The successful compiler run is evidence that this
 particular shader compiled despite a non-fatal capability warning, not a
 general SPIR-V capability or firmware-compatibility certification.
+
+### Gate A root-cause finding: SPIR-V capability mask is zero-initialized (2026-11-24)
+
+A deeper trace from the CLI entry point through `libpsbc/psbc_compile.c`,
+`radv_shader_spirv_to_nir`, and the pinned Mesa SPIR-V translator identifies
+the concrete source of the `SpvCapabilityShader (1)` warning.
+
+In `psbc_compile_shader()`, the compiler context is created as:
+
+```c
+struct radv_compiler_info compiler_info = {0};
+```
+
+The standalone path then calls `radv_get_nir_options(&compiler_info)`, but
+the reviewed function does not initialize `compiler_info.spirv_caps`.
+Later, `radv_shader_spirv_to_nir()` passes
+`&compiler_info->spirv_caps` as the SPIR-V translator's explicit
+`capabilities` mask. The translator copies that mask into
+`b->supported_capabilities`. Since the structure was zero-initialized and
+no capability bits were set in this standalone path, the translator warns
+that the module's declared `Shader` capability is unsupported, even though
+`Shader` is present in its separate `implemented_capabilities` table.
+
+This is not merely an unspecified compiler warning: the standalone compiler
+is supplying an all-false capability mask to a translator that interprets it
+as the supported device capability set. For the current smoke module the
+warning is non-fatal and translation proceeds, but other capability-gated
+SPIR-V features may be treated as unavailable or trigger different lowering
+paths. The prior artifact PASS therefore establishes successful compilation
+under this mask, not correctness of capability-dependent shader semantics.
+
+The regular Vulkan runtime obtains this mask from
+`vk_physical_device_get_spirv_capabilities()`, generated from Vulkan
+feature/extension/property support. The standalone compiler has no
+`VkPhysicalDevice` and cannot safely copy that runtime result blindly.
+It needs an explicit, reviewed GFX8 capability policy: set only capabilities
+the PS4 Pro target and this compiler path actually implement/support, and
+reject or clearly diagnose unsupported module requirements. A blanket
+copy of every entry in `implemented_capabilities` would be incorrect because
+that table describes translator implementation, not target hardware support.
+
+**Required follow-up before promoting Gate A beyond artifact-only:**
+1. Add a target-specific GFX8 SPIR-V capability mask to the standalone
+   compiler, with source comments/evidence for each enabled capability.
+2. Add a regression test proving that the basic compute module's required
+   `Shader` capability is accepted without a false unsupported warning.
+3. Add negative tests for capabilities deliberately not supported by the
+   GFX8 target; ensure unsupported requirements fail rather than silently
+   compiling under an all-false mask.
+4. Rebuild and re-run the independent artifact verifier, then independently
+   validate the SPIR-V module. This still does not replace firmware or
+   hardware validation.
+
+No compiler source, generated artifact, or gate status was changed in this
+follow-up. The finding is recorded for a separately reviewable implementation
+change. Gate A remains artifact-only PASS; Gate B remains BLOCKED.
