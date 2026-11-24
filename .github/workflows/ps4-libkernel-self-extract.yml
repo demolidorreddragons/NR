@@ -1,4 +1,4 @@
-name: PS4 FW 14.02 libkernel SELF extraction
+name: PS4 FW 14.02 libkernel retrieval (FTP-compatible)
 
 on:
   push:
@@ -11,11 +11,11 @@ permissions:
   contents: read
 
 jobs:
-  extract:
+  retrieve:
     runs-on: [self-hosted, Windows, X64, ps4-lan]
     timeout-minutes: 20
     steps:
-      - name: Retrieve libkernel through FTP SELF mode (read-only)
+      - name: Retrieve libkernel over read-only FTP
         shell: powershell -NoProfile -ExecutionPolicy Bypass -File {0}
         env:
           PS4_IP: ${{ vars.PS4_IP }}
@@ -24,43 +24,42 @@ jobs:
           if ([string]::IsNullOrWhiteSpace($env:PS4_IP)) { throw "Repository variable PS4_IP is not configured" }
           $outDir = Join-Path $env:RUNNER_TEMP "ps4-libkernel"
           New-Item -ItemType Directory -Force -Path $outDir | Out-Null
-          $elf = Join-Path $outDir "libkernel.sprx"
-          $raw = Join-Path $outDir "libkernel.sprx.self"
+          $elf = Join-Path $outDir "libkernel.sprx.elf"
           $url = "ftp://$($env:PS4_IP):2121/system/common/lib/libkernel.sprx"
-          $creds = "anonymous:anonymous@example.com"
 
-          # SELF is a per-connection toggle in ftpsrv. Try its documented command first.
-          & curl.exe --fail --silent --show-error --ftp-pasv --user $creds --quote "SELF" --output $elf $url
-          $selfExit = $LASTEXITCODE
-          if ($selfExit -ne 0) {
-            Write-Warning "FTP SELF command was not accepted (curl exit $selfExit); retrieving the untouched source for diagnosis."
-            & curl.exe --fail --silent --show-error --ftp-pasv --user $creds --output $raw $url
-            if ($LASTEXITCODE -ne 0) { throw "Raw libkernel FTP download failed: $LASTEXITCODE" }
-            $candidate = $raw
-          } else {
-            $candidate = $elf
-          }
+          # SELF is already enabled by default on compatible ftpsrv builds.
+          # Older deployed builds answer 502 to the SELF toggle; do not send
+          # that unsupported command. A direct RETR avoids the control-channel error.
+          & curl.exe --fail --silent --show-error --ftp-pasv --user "anonymous:" --output $elf $url
+          if ($LASTEXITCODE -ne 0) { throw "FTP RETR failed: curl exit $LASTEXITCODE" }
 
-          $bytes = [IO.File]::ReadAllBytes($candidate)
-          if ($bytes.Length -lt 4) { throw "Downloaded file is too small" }
+          $bytes = [IO.File]::ReadAllBytes($elf)
+          if ($bytes.Length -lt 64) { throw "Downloaded image is too small to be an ELF header" }
           $magic = [BitConverter]::ToString($bytes[0..3])
-          $sha = (Get-FileHash $candidate -Algorithm SHA256).Hash.ToLowerInvariant()
+          $class = [int]$bytes[4]
+          $data = [int]$bytes[5]
+          $osabi = [int]$bytes[7]
+          $type = [BitConverter]::ToUInt16($bytes, 16)
+          $machine = [BitConverter]::ToUInt16($bytes, 18)
+          $sha = (Get-FileHash $elf -Algorithm SHA256).Hash.ToLowerInvariant()
+
           Write-Host "LIBKERNEL_BYTES=$($bytes.Length)"
           Write-Host "LIBKERNEL_MAGIC=$magic"
+          Write-Host "ELF_CLASS=$class"
+          Write-Host "ELF_DATA=$data"
+          Write-Host "ELF_OSABI=$osabi"
+          Write-Host ("ELF_TYPE=0x{0:X4}" -f $type)
+          Write-Host "ELF_MACHINE=$machine"
           Write-Host "LIBKERNEL_SHA256=$sha"
-          if ($magic -ne "7F-45-4C-46") {
-            if ($candidate -eq $elf) {
-              # Preserve the response for analysis and separately retrieve original SELF bytes.
-              & curl.exe --fail --silent --show-error --ftp-pasv --user $creds --output $raw $url
-              if ($LASTEXITCODE -ne 0) { throw "SELF response was not ELF and raw fallback failed: $LASTEXITCODE" }
-            }
-            Write-Host "LIBKERNEL_NOT_ELF: artifact will preserve downloaded bytes; extraction did not validate."
-            "LIBKERNEL_NOT_ELF" | Out-File (Join-Path $outDir "RESULT.txt") -Encoding ascii
-          } else {
-            "LIBKERNEL_ELF_VALIDATED" | Out-File (Join-Path $outDir "RESULT.txt") -Encoding ascii
-            Write-Host "LIBKERNEL_ELF_VALIDATED"
+
+          if ($magic -ne "7F-45-4C-46" -or $class -ne 2 -or $data -ne 1 -or $machine -ne 62) {
+            "ELF_HEADER_INVALID" | Out-File (Join-Path $outDir "RESULT.txt") -Encoding ascii
+            throw "FTP response is not a valid little-endian ELF64 x86-64 image"
           }
-      - name: Publish downloaded image and validation record
+
+          "ELF64_X86_64_HEADER_VALIDATED" | Out-File (Join-Path $outDir "RESULT.txt") -Encoding ascii
+          Write-Host "ELF64_X86_64_HEADER_VALIDATED"
+      - name: Publish retrieved image and validation record
         if: always()
         uses: actions/upload-artifact@v4
         with:
