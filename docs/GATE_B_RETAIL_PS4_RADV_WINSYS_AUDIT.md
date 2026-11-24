@@ -244,3 +244,91 @@ candidate declarations and a generic PM4 dispatch builder, not a validated
 compute queue implementation. Gate B therefore still requires a target-specific
 FW 14.02 provider/ABI census and a validated PS4 Pro compute execution path.
 No firmware function was called and no console state was changed.
+
+
+## Separate repository inspection: PS4-OpenGNM/vulkan-ps4
+
+The actual Vulkan ICD source exists in a separate repository,
+`PS4-OpenGNM/vulkan-ps4`, at inspected commit
+`f4d940b723771b3fe637e8ac0704bb5d6ab19622`. This resolves the distinction
+between the OpenGNM roadmap document and the separately maintained ICD code.
+It also exposes a critical limitation in the roadmap's "async compute via ACE"
+claim.
+
+### Queue-family implementation is metadata, not ACE queue execution
+
+- `vk_ps4_GetPhysicalDeviceQueueFamilyProperties` advertises Family 0 as
+  graphics+compute+transfer and Family 1 as compute+transfer, describing
+  Family 1 as an ACE async-compute queue.
+- `vk_ps4_CreateDevice` allocates a `VkPs4Queue` object and records
+  `family_index` and flags. It does not call
+  `sceGnmMapComputeQueue` or
+  `sceGnmMapComputeQueueWithPriority`, allocate a compute ring, retain a
+  returned virtual queue ID, or unmap a compute queue.
+- `vk_ps4_QueueSubmit` logs the family index but submits every command buffer
+  using `sceGnmSubmitCommandBuffers`. There is no family-specific branch to
+  `sceGnmDingDong` or a compute queue submit path.
+- `vk_ps4_CmdDispatch` emits `sceGnmDrawCmdDispatchDirect` into the command
+  buffer. This is a compute dispatch packet in a DCB; it does not demonstrate
+  dispatch through an ACE asynchronous compute queue.
+- Code search of the inspected repository did not surface calls to
+  `sceGnmMapComputeQueue` or `sceGnmDingDong` in the ICD source.
+
+Therefore, the second advertised queue family is presently a Vulkan-level
+capability declaration/queue object, not evidence that a hardware ACE queue
+is mapped or used. A DCB compute dispatch remains distinct from ACB/ACE queue
+execution. This does not invalidate the existence of compute packet builders;
+it invalidates treating this implementation as proof of async compute.
+
+### Synchronization hazards visible in the same source
+
+- If a GPU wait-semaphore `sceGnmSubmitCommandBuffers` call fails, the code
+  checks `sem->signaled` but proceeds even when false. The comment explicitly
+  says it proceeds to avoid deadlock. This is fail-open synchronization.
+- `vk_ps4_QueueWaitIdle` submits an EOP and then polls in an unbounded
+  `while (*idle_label != 1)` loop on PS4. It has no deadline or recovery path.
+- `vk_ps4_DeviceWaitIdle` waits only on `dev->queues[0]`, although the ICD
+  advertises two queue families. It does not establish all-queue quiescence.
+- Queue submissions, wait/signal EOPs, and QueueWaitIdle reuse one device-wide
+  `gnm_epilogue_cmd` buffer. No per-queue or per-submit epilogue allocation
+  is visible in this implementation. Concurrent host calls across distinct
+  queues therefore need further serialization/lifetime proof before this
+  buffer can be considered safe.
+- The compute dispatch command buffer is initialized with
+  `sceGnmDrawCmdInitDefaultHardwareState` on primary command-buffer begin;
+  the inspected path does not call a compute-specific default-state initializer.
+
+These are source-level hazards in that separate Vulkan ICD, not claims about
+NR's own implementation or measured PS4 firmware behavior. They reinforce why
+the ICD is a reference, not a ready-to-copy Gate B implementation.
+
+Sources:
+- Queue submit and wait:
+  https://github.com/PS4-OpenGNM/vulkan-ps4/blob/f4d940b723771b3fe637e8ac0704bb5d6ab19622/src/vk_ps4_queue.c
+- Queue object creation:
+  https://github.com/PS4-OpenGNM/vulkan-ps4/blob/f4d940b723771b3fe637e8ac0704bb5d6ab19622/src/vk_ps4_device.c
+- Queue-family advertisement:
+  https://github.com/PS4-OpenGNM/vulkan-ps4/blob/f4d940b723771b3fe637e8ac0704bb5d6ab19622/src/vk_ps4_instance.c
+- Compute dispatch and default state:
+  https://github.com/PS4-OpenGNM/vulkan-ps4/blob/f4d940b723771b3fe637e8ac0704bb5d6ab19622/src/vk_ps4_command.c
+- Shared device structures:
+  https://github.com/PS4-OpenGNM/vulkan-ps4/blob/f4d940b723771b3fe637e8ac0704bb5d6ab19622/include/vk_ps4_internal.h
+
+### NR design requirements sharpened by this inspection
+
+1. Treat DCB compute dispatch and ACE/ACB queue dispatch as two separate
+   backends with separate evidence and validation.
+2. Never advertise an async compute queue until queue mapping, ring ownership,
+   DingDong submission, queue completion, and unmapping are implemented and
+   tested on the exact target.
+3. Make semaphore wait failure fatal; never continue command execution when
+   a required dependency was not satisfied.
+4. Every wait path must have a monotonic deadline, bounded polling/sleep, and
+   a fail-closed timeout/error result.
+5. Device idle must cover every queue, and command/epilogue storage must not be
+   reused until the GPU has demonstrably completed its read.
+6. Establish compute-specific initialization state and verify it on the target
+   rather than relying on graphics default-state setup.
+
+No code from this external ICD was copied into NR. No GNM firmware function
+was called, and no console state was changed.
