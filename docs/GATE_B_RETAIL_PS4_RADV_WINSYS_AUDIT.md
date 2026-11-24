@@ -191,3 +191,56 @@ a module or change console state.
    and deterministic full-buffer compute readback on the PS4 Pro.
 5. No target probe, GNM call, compute submission, PRX activation, PKG install,
    or console-state change was performed during this source inspection.
+
+
+## Cross-check: OpenGNM's newer multi-queue plan is not compute-queue proof
+
+A separate review of the pinned OpenGNM commit
+`4b295ca54c82c83acf308d1c646a2dfa9ae57350` found a recent
+`VULKAN_PS4_PLAN.md` entry marking multi-queue support DONE. It describes
+Family 0 as graphics+compute+transfer and Family 1 as compute+transfer,
+calling the latter "async compute via ACE", and says a VVL test exercises
+two-family device creation and queue retrieval.
+
+That statement must not be promoted to Gate B evidence:
+
+- The pinned commit's complete recursive Git tree contains 183 entries and
+  does not contain a `vulkan-ps4/` implementation directory or any
+  `vk_ps4_queue.c`, compute queue backend, or Vulkan compute test source.
+  The referenced plan is a roadmap/status document, not an implementation
+  artifact in this pinned repository tree.
+- The actual pinned OpenGNM generic backend explicitly implements
+  `sceGnmMapComputeQueue` and
+  `sceGnmMapComputeQueueWithPriority` as
+  `GNM_ERROR_UNSUPPORTED`; `sceGnmDingDong` is a no-op. Its API test
+  accepts unsupported as a valid generic-host outcome and only checks
+  linkage/return behavior.
+- The generic `sceGnmDispatchDirect` builder emits SET_SH_REG,
+  DISPATCH_DIRECT and NOP packets into a host buffer. That validates a
+  source-level packet builder only; it does not submit to a compute queue,
+  execute a shader, or produce GPU output.
+- The Orbis backend declares firmware-facing compute queue entry points,
+  but declarations/extern references alone do not establish that they are
+  exported by either FW 14.02 provider, nor their exact ABI/semantics.
+- The plan's VVL queue-family test, even if available elsewhere, is described
+  as device creation and queue retrieval. It does not establish successful
+  compute queue mapping, ACE execution, completion, or GPU readback.
+
+Sources at the exact pinned commit:
+- `VULKAN_PS4_PLAN.md`:
+  https://github.com/PS4-OpenGNM/opengnm/blob/4b295ca54c82c83acf308d1c646a2dfa9ae57350/VULKAN_PS4_PLAN.md
+- Generic backend:
+  https://github.com/PS4-OpenGNM/opengnm/blob/4b295ca54c82c83acf308d1c646a2dfa9ae57350/src/driver_generic.c
+- Generic API tests:
+  https://github.com/PS4-OpenGNM/opengnm/blob/4b295ca54c82c83acf308d1c646a2dfa9ae57350/tests/test_api.c
+- Orbis declarations:
+  https://github.com/PS4-OpenGNM/opengnm/blob/4b295ca54c82c83acf308d1c646a2dfa9ae57350/src/driver_orbis.c
+
+### Consequence
+
+The earlier retail-title reports remain the only inspected evidence here for
+real applications using asynchronous GNM compute queues. OpenGNM contributes
+candidate declarations and a generic PM4 dispatch builder, not a validated
+compute queue implementation. Gate B therefore still requires a target-specific
+FW 14.02 provider/ABI census and a validated PS4 Pro compute execution path.
+No firmware function was called and no console state was changed.
