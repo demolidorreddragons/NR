@@ -154,10 +154,15 @@ bool passive_module_list(void*, uint32_t* handles, size_t capacity,
     }
 
     OrbisKernelModule modules[kMaxCensusModules]{};
-    if (sceKernelGetModuleList(modules, capacity, count) != 0) return false;
+    // The public libkernel contract and real GoldHEN call sites pass the
+    // destination buffer size in BYTES (sizeof(array)), not element count.
+    if (sceKernelGetModuleList(modules, sizeof(modules), count) != 0)
+        return false;
+    // Never accept a truncated census: provider selection requires every
+    // loaded module to have been inspected.
+    if (*count > capacity) return false;
 
-    const size_t copied = *count < capacity ? *count : capacity;
-    for (size_t i = 0; i < copied; ++i)
+    for (size_t i = 0; i < *count; ++i)
         handles[i] = static_cast<uint32_t>(modules[i]);
     return true;
 }
