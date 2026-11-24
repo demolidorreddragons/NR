@@ -152,3 +152,31 @@ Therefore this resolver is useful as an API-usage reference only. Do not copy it
 
 Pinned source:
 https://github.com/PS4-OpenGNM/opengnm/blob/4b295ca54c82c83acf308d1c646a2dfa9ae57350/src/driver_orbis.c
+
+
+## New emulator-side Neo export work: useful negative evidence, not retail ABI
+
+A public AnyPS5 commit dated 2026-11-19, `ab01341df0d5204d1de48d33d09421039aab2d4e`,
+adds 28 remaining `libSceGnmDriverForNeoMode` calls while explicitly describing
+its behavior as matching PS4 firmware **10.71**. Its summary includes workload
+submits and compute-queue mapping. The associated change set touches the Neo
+export table, typed API declarations, packet tests, retail-title tests, and a
+debt note:
+https://repo.or.cz/boykopovar-AnyPS5.git/commit/ab01341df0d5204d1de48d33d09421039aab2d4e
+
+This is a useful new cross-check that the Neo provider's compute-queue and
+submit surface is sufficiently distinct to require separate auditing. It is
+also a strong reason **not** to transplant those implementations into NR:
+the commit names 10.71 as its behavioral reference, is an emulator/HLE
+implementation, and does not provide a 14.02 Sony module export capture or
+PS4 Pro hardware validation. The associated AnyPS5 issue describes some
+remaining Neo submit/queue-map paths as refusal-code behavior because that
+emulator path does not consume a GNM command buffer; that is not evidence of
+a successful retail queue submission:
+https://github.com/boykopovar/AnyPS5/issues/17581
+
+Classification:
+- Confirms additional emulator implementation activity for Neo provider.
+- Reinforces need to inspect normal and Neo providers separately.
+- Does not prove FW 14.02 exports, ABI, queue semantics, or compute execution.
+- No NR code or target behavior changed as a result.
