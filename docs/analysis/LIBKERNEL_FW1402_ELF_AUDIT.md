@@ -92,3 +92,17 @@ A targeted disassembly of the recovered export `sceKernelGetModuleList2` at ELF 
 - This independently confirms from the actual FW 14.02 libkernel image that the explicit `sceKernelGetModuleList2` export reaches syscall 659 with the same three-register forwarding pattern.
 
 This strengthens the target-binary call-path evidence, but it still does not reveal the kernel handler's interpretation of the second argument. In particular, disassembling a userland wrapper cannot establish whether the kernel treats that value as an element count or byte count. The emulator agreement remains candidate corroboration only; retail handler semantics remain unqualified.
+
+## Independent repeat retrieval and byte-for-byte verification (2026-11-24)
+
+A second successful execution of the self-hosted LAN retrieval workflow completed at [run 45464681942](https://github.com/demolidorreddragons/NR/actions/runs/45464681942), producing artifact `ps4-fw1402-libkernel-image` (artifact ID `14954122050`).
+
+The downloaded artifact was independently checked in the analysis environment:
+
+- ZIP SHA-256: `951eaf4d289fdc7929d12eef4f4785c23b075d39a1c5d8ba848c88a9675d8750`.
+- Extracted `libkernel.sprx.elf`: 449,264 bytes.
+- ELF SHA-256: `8a5280aa564b5973cf6b94bb4cc8f41e26aa549e509d4342baa7a68457874f7e`.
+- `cmp` against the previously audited ELF returned identical bytes.
+- Header independently rechecked as ELF64, little-endian, FreeBSD ABI, x86-64, Sony OS-specific type `0xFE18`, 9 program headers, and no standard section-header table.
+
+This confirms repeatable retrieval of the same libkernel image through the runner/FTP path. It does not prove SELF-command support, runtime module census, kernel handler ABI, or GPU execution.
