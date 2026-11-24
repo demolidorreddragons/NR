@@ -1,0 +1,85 @@
+diff --git a/src/drawcommandbuffer.c b/src/drawcommandbuffer.c
+--- a/src/drawcommandbuffer.c
++++ b/src/drawcommandbuffer.c
+@@ -66,9 +66,10 @@ static inline void setcontextregister(
+ }
+ 
+-static void setpersistentregisterrange(
++static void setpersistentregisterrange_internal(
+     GnmCommandBuffer* cmd, uint32_t regaddr, const uint32_t* regvalues,
+-    uint32_t numvalues
++    uint32_t numvalues, uint32_t shader_type
+ ) {
+ 	if (regaddr < SI_SH_REG_OFFSET ||
+ 	    numvalues > (SI_SH_REG_END - regaddr) / sizeof(uint32_t)) {
+@@ -88,7 +89,7 @@ static void setpersistentregisterrange(
+ 		return;
+ 	}
+ 
+-	cmd->cmdptr[0] = PKT3(PKT3_SET_SH_REG, numvalues, 0);
++	cmd->cmdptr[0] = PKT3(PKT3_SET_SH_REG, numvalues, 0) | PKT3_SHADER_TYPE_S(shader_type);
+ 	cmd->cmdptr[1] = (regaddr - SI_SH_REG_OFFSET) >> 2;
+ 	for (uint32_t i = 0; i < numvalues; i += 1) {
+ 		cmd->cmdptr[2 + i] = regvalues[i];
+@@ -96,6 +97,19 @@ static void setpersistentregisterrange(
+ 
+ 	cmd->cmdptr += numdwords;
+ }
++
++static void setpersistentregisterrange(
++    GnmCommandBuffer* cmd, uint32_t regaddr, const uint32_t* regvalues,
++    uint32_t numvalues
++) {
++	setpersistentregisterrange_internal(cmd, regaddr, regvalues, numvalues, 0);
++}
++
++static void setpersistentregisterrange_stage(
++    GnmCommandBuffer* cmd, GnmShaderStage stage, uint32_t regaddr,
++    const uint32_t* regvalues, uint32_t numvalues
++) {
++	const uint32_t shader_type = stage == GNM_STAGE_CS ? 1u : 0u;
++	setpersistentregisterrange_internal(cmd, regaddr, regvalues, numvalues, shader_type);
++}
++
+ static inline void setpersistentregister(
+     GnmCommandBuffer* cmd, uint32_t regaddr, uint32_t regvalue
+ ) {
+@@ -1422,7 +1436,7 @@ void sceGnmDrawCmdSetVsharpUserData(
+ 
+ 	const uint32_t texdwords = sizeof(GnmBuffer) / sizeof(uint32_t);
+-	setpersistentregisterrange(
+-	    cmd, targetreg, (const uint32_t*)buf, texdwords
++	setpersistentregisterrange_stage(
++	    cmd, stage, targetreg, (const uint32_t*)buf, texdwords
+ 	);
+ }
+ 
+@@ -1465,7 +1479,7 @@ void sceGnmDrawCmdSetTsharpUserData(
+ 
+ 	const uint32_t texdwords = sizeof(GnmTexture) / sizeof(uint32_t);
+-	setpersistentregisterrange(
+-	    cmd, targetreg, (const uint32_t*)tex, texdwords
++	setpersistentregisterrange_stage(
++	    cmd, stage, targetreg, (const uint32_t*)tex, texdwords
+ 	);
+ }
+ 
+@@ -1502,7 +1516,7 @@ void sceGnmDrawCmdSetSsharpUserData(
+ 
+ 	const uint32_t sampdwords = sizeof(GnmSampler) / sizeof(uint32_t);
+-	setpersistentregisterrange(
+-	    cmd, targetreg, (const uint32_t*)sampler, sampdwords
++	setpersistentregisterrange_stage(
++	    cmd, stage, targetreg, (const uint32_t*)sampler, sampdwords
+ 	);
+ }
+ 
+@@ -1529,7 +1543,7 @@ void sceGnmDrawCmdSetPointerUserData(
+ 
+ 	const uint32_t ptrdwords = sizeof(ptr) / sizeof(uint32_t);
+-	setpersistentregisterrange(
+-	    cmd, targetreg, (const uint32_t*)&ptr, ptrdwords
++	setpersistentregisterrange_stage(
++	    cmd, stage, targetreg, (const uint32_t*)&ptr, ptrdwords
+ 	);
+ }
