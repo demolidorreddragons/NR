@@ -11,6 +11,7 @@ on:
       - "tests/verify_gcn8_compute_sb.py"
       - "tests/test_gcn8_compute_sb_parser.py"
       - "patches/opengnm-psbc/0001-gcn8-descriptor-pointer-reserve-two-sgprs.patch"
+      - "patches/opengnm-psbc/0002-advertise-core-spirv-shader-capability.patch"
       - "docs/GCN8_GNM_COMPUTE_READINESS.md"
   pull_request:
     paths:
@@ -80,9 +81,12 @@ jobs:
           test "$(git -C Vulkan-Headers rev-parse HEAD)" = "d277a0a3cda9c682708c93279f0c72cd6b0ae3f3"
           git -C opengnm-psbc apply --check "$GITHUB_WORKSPACE/patches/opengnm-psbc/0001-gcn8-descriptor-pointer-reserve-two-sgprs.patch"
           git -C opengnm-psbc apply "$GITHUB_WORKSPACE/patches/opengnm-psbc/0001-gcn8-descriptor-pointer-reserve-two-sgprs.patch"
+          git -C opengnm-psbc apply --check "$GITHUB_WORKSPACE/patches/opengnm-psbc/0002-advertise-core-spirv-shader-capability.patch"
+          git -C opengnm-psbc apply "$GITHUB_WORKSPACE/patches/opengnm-psbc/0002-advertise-core-spirv-shader-capability.patch"
           git -C opengnm-psbc diff --check
           git -C opengnm-psbc diff --binary > "$RUNNER_TEMP/gcn8-compiler-patch.diff"
           sha256sum "$GITHUB_WORKSPACE/patches/opengnm-psbc/0001-gcn8-descriptor-pointer-reserve-two-sgprs.patch" \
+            "$GITHUB_WORKSPACE/patches/opengnm-psbc/0002-advertise-core-spirv-shader-capability.patch" \
             > "$RUNNER_TEMP/gcn8-compiler-patch.sha256"
 
       - name: Generate omitted Mesa and GLSL generated headers/sources
@@ -229,6 +233,10 @@ jobs:
             -f "$RUNNER_TEMP/gcn8-output/gcn8-compute.spv" \
             -o "$RUNNER_TEMP/gcn8-output/gcn8-compute.sb" \
             2>&1 | tee "$RUNNER_TEMP/gcn8-shader-compile.log"
+          if grep -q "Unsupported SPIR-V capability: SpvCapabilityShader" "$RUNNER_TEMP/gcn8-shader-compile.log"; then
+            echo "Core SPIR-V Shader capability was incorrectly reported unsupported."
+            exit 1
+          fi
 
       - name: Independently verify GNM compute stage and NEO target
         shell: bash
