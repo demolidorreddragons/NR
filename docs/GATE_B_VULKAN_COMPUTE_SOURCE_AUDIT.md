@@ -131,3 +131,15 @@ or console-state change was performed by this audit.
 
 Source:
 https://github.com/PS4-OpenGNM/vulkan-ps4/tree/f4d940b723771b3fe637e8ac0704bb5d6ab19622
+
+
+## Additional synchronization-source inspection
+
+Inspected `src/vk_ps4_sync.c` at the same pinned Vulkan-PS4 commit.
+
+- `vk_ps4_WaitForFences` implements a timeout deadline using a monotonic clock; after an initial spin phase it sleeps for 1 microsecond between polls. This is a candidate bounded CPU wait when a finite timeout is supplied. The implementation still needs review for clock/timeout edge cases and firmware behavior.
+- `vk_ps4_QueueWaitIdle` is materially different: its PS4 path loops on the EOP label with no timeout, cancellation, or recovery. It is unsuitable as the NR harness wait primitive.
+- Fence labels are allocated as WC Garlic direct memory and written by EOP. That is useful implementation evidence, but it does not establish that this exact label mapping/cache behavior is valid on NR's target firmware 14.02.
+- `vk_ps4_QueueSubmit` reuses a single device epilogue DCB for wait and signal writes. A minimal NR harness should avoid concurrent submits and use a single in-flight submission until command-buffer lifetime and serialization are independently established.
+
+Consequently, the source audit now identifies a possible finite-timeout fence-wait implementation pattern, but does not certify it. NR must not use `QueueWaitIdle`'s unbounded loop or copy the synchronization code without the target-specific checks above.
