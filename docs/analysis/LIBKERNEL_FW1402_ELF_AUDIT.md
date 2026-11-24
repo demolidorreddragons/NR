@@ -168,29 +168,28 @@ The syscall-659 restriction risk has a concrete alternative worth preserving for
 
 Source: [OpenProspero PS4 syscall contract](https://github.com/unemu-org/openprospero/blob/44dc5dc3cea8e528d4e2945c5d100771b47b1b73/contracts/orbis/syscalls.toml). Its 592/659 entries explicitly carry partial status and are cross-version evidence only.
 
-## Newly identified exported legacy-list wrapper: `sceKernelGetModuleListInternal`
+## Additional FW 14.02 export reaching legacy syscall 592 — symbol name unresolved
 
-A fresh inspection of the repeat-retrieved FW 14.02 ELF resolved the most promising passive enumeration path without executing anything on the console:
+A fresh byte-level inspection of the repeat-retrieved FW 14.02 ELF found a second defined global function immediately after the public `sceKernelGetModuleList` export:
 
-- The Sony dynamic symbol table contains the encoded NID `u+mlUkWpU3Y#C#A`, matched to the public PS4 name `sceKernelGetModuleListInternal`.
-- The actual FW 14.02 symbol entry is a defined global function (`st_info=0x12`, `st_shndx=3`), with ELF value **`0x2c8a0`** and size **`0x97`**. This is direct evidence from the retrieved target libkernel, not an emulator-only symbol.
-- Disassembly at `0x2c8a0` shows the function preserves the incoming `RDI`, `RSI`, and `RDX`, performs the same ORBI-version/context bookkeeping pattern, restores those three arguments unchanged, and calls the syscall stub at **`0x1cd0`**.
-- The stub at `0x1cd0` is the legacy **syscall 592** entry. The function then performs cleanup and maps selected kernel error values before returning.
-- Crucially, this exported internal wrapper does not take the modern syscall-659 route. It exposes a Sony-provided libkernel call path to syscall 592 on the actual FW 14.02 image, even though the public `sceKernelGetModuleList` chooses syscall 659 on FW 14.02.
+- Dynamic symbol entry index **815** has `st_name=0x3553`, encoded NID string **`4xc#C#A`**, `st_info=0x12`, `st_shndx=3`, ELF value **`0x2c8a0`**, and size **`0x97`**.
+- Disassembly at `0x2c8a0` shows it saves the incoming `RDI`, `RSI`, and `RDX`, performs version/context bookkeeping, restores those arguments unchanged, and calls the stub at **`0x1cd0`**.
+- The stub at `0x1cd0` loads `RAX=0x250` (decimal **592**), moves `RCX` to `R10`, and executes `syscall`.
+- The wrapper then performs cleanup and maps selected kernel error values before returning.
 
-This supersedes the earlier assumption that syscall 592 was reachable only by inventing a direct syscall adapter. **Do not issue a raw syscall:** the exact FW 14.02 libkernel provides a named exported wrapper for the legacy path.
+**Correction to the previous note:** the symbol at `0x2c8a0` is **not proven to be named** `sceKernelGetModuleListInternal`. The earlier association with NID `u+mlUkWpU3Y#C#A` was incorrect: that string does not appear in this symbol entry. The public `sceKernelGetModuleList` is the separate symbol at `0x2c7d0`, size `0xc1`; its modern FW 14.02 branch reaches syscall 659. The function at `0x2c8a0` is a real global export by encoded NID `4xc#C#A`, but its source-level name and intended API remain unresolved.
 
 ### What this establishes, and what remains open
 
-Established from the target binary:
-1. The `sceKernelGetModuleListInternal` NID is present as a defined global function export in this FW 14.02 libkernel image.
-2. Its first three arguments are forwarded unchanged in `RDI`, `RSI`, and `RDX`.
-3. Its call path reaches syscall 592, not syscall 659.
-4. The wrapper is a plausible passive-only way to obtain the broader list while avoiding the known syscall-659 system-library exclusion risk.
+Established directly from the FW 14.02 ELF:
+1. A defined global export with encoded NID `4xc#C#A` exists at `0x2c8a0`.
+2. It forwards the first three argument registers unchanged to syscall 592.
+3. It applies userland context/error translation around that syscall.
 
-Still not proven by static userland disassembly:
-- The retail FW 14.02 kernel handler's exact syscall-592 capacity units, output-count semantics, error behavior, and inclusion of both GNM system libraries.
-- Whether the runtime loader exposes this internal NID through the intended `sceKernelDlsym` lookup path in the target process.
-- Actual returned handles or module names on this console.
+Not established:
+- The export's source-level name or whether it is semantically a module-list API.
+- Whether `sceKernelDlsym` can resolve it through a known symbol name, or a safe supported way to call it by NID.
+- The retail FW 14.02 syscall-592 capacity units, output-count semantics, error behavior, or inclusion of both GNM providers.
+- Any actual returned module handles or names on this console.
 
-The partial PS4 11.00 OpenProspero contract describes syscall 592 as `(handles, max, count)` and records a sample containing system modules; this is useful corroboration, not a substitute for FW 14.02 kernel-handler proof. The new FW 14.02 evidence materially reduces the blocker: we no longer need a guessed raw-syscall shim, but a passive census must still fail closed until the call's output contract and system-library coverage are validated. No target call was made during this investigation.
+The partial PS4 11.00 OpenProspero contract describes syscall 592 as `(handles, max, count)` and records a sample containing system modules; this is corroboration only, not a FW 14.02 kernel contract. This is a promising static lead, not yet an implementation-ready passive enumeration path. Do not call the function by guessed name, raw address, or direct syscall. No target call was made during this investigation.
