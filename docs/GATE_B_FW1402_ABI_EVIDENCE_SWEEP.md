@@ -198,3 +198,51 @@ not established by the cited report, so this cannot qualify FW 14.02.
 This narrows a safe target evidence operation to module census plus
 name-resolution only. It does not establish target ABI until the user's
 actual FW 14.02 console returns the module and symbol-resolution results.
+
+
+## FW 14.02 module provenance check (2026-11-24)
+
+A final public-source sweep looked specifically for a decrypted retail
+`libSceGnmDriver.sprx` / `libSceGnmDriverForNeoMode.sprx` export table or
+disassembly tied to PS4 firmware 14.02 (build `J02700521`).
+
+### Result
+
+- The detailed OpenGNM firmware reverse-engineering inventory explicitly
+  identifies its GNM module dumps and export tables as **FW 9.00**. It lists
+  both normal and Neo-mode modules, but those artifacts do not qualify FW
+  14.02.
+- Public FW 14.02 kernel-dumper projects document kernel offsets and kernel
+  dump support. A kernel dump is not the userland GNM SPRX export table or
+  disassembly needed to establish GNM NIDs, function entry points, or ABI.
+- Public debugger projects advertise FW 14.02 process inspection, but their
+  availability does not itself supply a captured GNM module export table or
+  a target census from this NR console.
+- The available public GNM sources still provide title-import NID candidates,
+  OpenGNM signatures, and emulator HLE behavior. None is a retail FW 14.02
+  module capture.
+
+References:
+- OpenGNM firmware RE inventory (explicitly FW 9.00):
+  https://github.com/PS4-OpenGNM/opengnm/blob/main/OPENGNM_REWRITE_PLAN.md
+- FW 14.02 kernel dumper project:
+  https://github.com/iHaiDeeZ/ps4-kernel-dumper
+- FW 14.02 debugger support project:
+  https://github.com/Pharaoh2k/ps4debug-NG
+
+### Decision
+
+No public FW 14.02 GNM export table/disassembly was found in this sweep.
+Do not relabel FW 9.00 findings, title-import metadata, or kernel-offset
+support as FW 14.02 ABI proof.
+
+The missing evidence must come from a lawful, target-specific source artifact
+or an approved read-only runtime census. The existing NR FTP audit only
+collects installed application files; it does not enumerate loaded modules.
+Creating or activating a target-side probe is outside this source-only audit
+and remains subject to the existing safety boundary: do not modify the
+telemetry PRX, install a PKG, or interact with the console without the
+separate validation/authorization sequence.
+
+This confirms a hard external dependency for Gate B. It is not a reason to
+guess signatures or bypass the hardware qualification requirements.
