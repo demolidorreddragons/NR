@@ -343,3 +343,41 @@ pipeline VVL coverage exercises API object creation/command recording on the
 host path; the generic OpenGNM submit backend is a no-op/success stub. Thus
 "VVL clean" and "two queue handles retrieved" are not hardware compute
 execution evidence.
+
+
+## Independent Neo-driver corroboration (FW 11.02; not FW 14.02)
+
+A separate PS4 Pro homebrew project, PS4 Ambilight, documents that games
+running in Neo mode use a different graphics driver,
+`libSceGnmDriverForNeoMode`, and that its plugin had to hook that provider
+separately. Its v4.0.2 changelog reports working Pro tests on firmware 11.02
+with GoldHEN 2.4b18.12 (including several named retail titles). This is
+independent, target-side corroboration that the Neo provider is operationally
+distinct on a PS4 Pro; it supports retaining two-provider discovery rather
+than assuming the normal driver covers Neo mode.
+
+Source:
+https://store.brewology.com/ps4/ps4-ambilight/changelog/
+
+The evidence boundary is strict: this is a third-party plugin's report for
+FW 11.02, not an export table, disassembly, ABI capture, or NR test on FW
+14.02. It does not establish which exports exist in either 14.02 provider,
+the signatures or calling conventions, or whether a given NR process is
+running in Neo mode.
+
+A recent AnyPS5 issue discussing inFAMOUS Second Son imports further
+illustrates that normal and Neo-mode implementations can diverge in their
+PM4 forms: its discussion describes Neo-specific draw/VGT/default-state
+variants and contrasts the normal-form compute initializer with the Neo
+path. This is emulator/HLE implementation discussion and title-import
+evidence, not Sony firmware ABI evidence:
+https://github.com/boykopovar/AnyPS5/issues/17581
+
+### Gate B impact
+
+This closes a narrow *design assumption* question: independent PS4 Pro
+software reports the separate Neo driver in actual FW 11.02 use, so the
+normal and Neo providers must be treated as separate census targets. It
+does not close the FW 14.02 provider/export/ABI gate. No target census,
+module load, GNM call, compute submission, PRX activation, PKG install, or
+console-state change was performed.
