@@ -88,3 +88,77 @@ remains NOT PASSED; Gate D remains NOT STARTED.
 
 No console interaction, command-buffer submission, compute dispatch, PRX
 activation, PKG installation, or console-state change was performed.
+
+
+## New finding: public retail-title import maps expose candidate GNM NIDs
+
+A deeper lookup of public PS4 title import-name maps found a concrete set of
+NID-to-symbol mappings for the GNM driver. The mappings are present in both
+the public `theorder1886-port` import-name database at revision
+`4270135b99a32788b2fa4429fe85b76f38e2d5c9` and the
+`HayatoG/tlg_pc` port import-name database at revision
+`ee3327d7c1a1c107a16327d7c7a33c6c148b6dce`.
+
+| Function | Candidate NID | Evidence |
+|---|---|---|
+| `sceGnmDispatchInitDefaultHardwareState` | `nF6bFRUBRAU` | Both title import maps |
+| `sceGnmMapComputeQueue` | `29oKvKXzEZo` | Both title import maps |
+| `sceGnmMapComputeQueueWithPriority` | `A+uGq+3KFtQ` | Both title import maps |
+| `sceGnmUnmapComputeQueue` | `ArSg-TGinhk` | Both title import maps |
+| `sceGnmDingDong` | `bX5IbRvECXk` | Both title import maps |
+| `sceGnmSubmitDone` | `yvZ73uQUqrk` | Both title import maps |
+| `sceGnmSubmitCommandBuffers` | `zwY0YV91TTI` | TLG port import map |
+
+These are useful new identifiers for a **read-only target symbol census**:
+if the target's loaded `libSceGnmDriver` can be inspected safely, a probe
+can record module identity and resolve the candidate NIDs without invoking
+the compute functions. This narrows the symbol-discovery task substantially.
+
+Important limitations:
+
+- These NIDs are derived from public retail-title import maps and public
+  symbol-name databases, not from a Sony FW 14.02 SDK package or a captured
+  FW 14.02 export table.
+- The two port repositories may share upstream title/import metadata; their
+  agreement is corroboration of the mapping data, not two independent
+  firmware measurements.
+- NID presence in a title import map does not prove that the target firmware
+  exports the symbol, that the module is loaded in the same state, or that the
+  function prototype/calling convention is correct.
+- `sceGnmDispatchDirect` is present in a title import-name list but no
+  corresponding NID mapping was established in the inspected mapping excerpt.
+  Do not infer or guess its NID.
+- No function was called, no symbol was resolved on the user's console, and
+  no hardware probe was run in this session.
+
+### Prepared read-only target census sequence
+
+If/when the user's existing approved read-only PS4 evidence channel is
+available, the next safe target-side step is limited to:
+
+1. Read firmware/build identity and enumerate loaded kernel modules.
+2. Identify the exact loaded module name for the normal or Neo GNM driver.
+3. Record module handle, segment base/size and module identity using the
+   existing read-only kernel module-info APIs.
+4. Resolve the candidate NIDs above only if the supported resolver API can be
+   used without loading a module or changing console state; record success or
+   failure and resolved addresses.
+5. Do not call any resolved GNM function, submit command buffers, map compute
+   queues, allocate GPU resources, activate PRX, or install a package.
+6. Redact console identifiers and network details from the evidence artifact.
+
+This read-only census can establish symbol availability and module identity.
+It still cannot prove GPU VA/residency, completion, cache visibility, or
+compute correctness. Those remain separate Gate B requirements and require
+an explicitly authorized isolated hardware validation.
+
+### Updated disposition
+
+The public-source ABI subtask now has concrete candidate NIDs for the
+compute initializer and ACE queue/doorbell lifecycle, rather than names alone.
+This is a meaningful narrowing of the remaining target probe. It is **not**
+a firmware-14.02 ABI qualification and does not authorize a dispatch.
+
+Gate B remains **BLOCKED** pending target-side read-only symbol evidence,
+memory/residency and synchronization contracts, and a controlled PS4 Pro
+compute result with deterministic full-buffer readback.
