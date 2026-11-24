@@ -232,3 +232,20 @@ The earlier procedure's module-info step must be treated as conditional, not gua
 This narrows the minimum prerequisite: a FW 14.02-qualified module-list and module-info contract (or a trusted passive inspector that already exposes provider identity) is required before the authorized census can safely classify normal versus Neo-mode providers. The public syscall reference adds a reason for this requirement; it does not itself satisfy it.
 
 No repository runtime code or target behavior was changed by this finding.
+
+
+## New alternative API lead: ModuleInfo2 / ModuleList2 is not a qualified workaround
+
+A current public PS4 developer reference lists `sceKernelGetModuleList2` and `sceKernelGetModuleInfo2` in libkernel, and shadPS4 now has HLE implementations for both. The emulator implementation models `GetModuleList2` as excluding system libraries and `GetModuleInfo2` as returning `EPERM` for system-library handles. It also registers separate NIDs for the `*2` functions. This creates a potentially relevant API lead, but not a safe replacement for the original census path:
+
+- GNM providers are system libraries, so the emulator's `GetModuleList2` filtering would omit exactly the modules this census needs; `GetModuleInfo2` would reject their handles in that HLE model.
+- The implementation is emulator behavior, not a retail FW 14.02 contract. It does not prove that the retail functions have identical filtering or error semantics.
+- The PS4 developer reference establishes that the names are known in libkernel, but the sources inspected do not provide a FW 14.02 prototype/layout/export qualification suitable for calling them.
+- Therefore do not substitute `sceKernelGetModuleList2`/`sceKernelGetModuleInfo2` for the original APIs, and do not use undocumented internal variants to bypass system-library restrictions.
+
+Sources:
+- https://www.psdevwiki.com/ps4/Libkernel
+- https://github.com/shadps4-emu/shadPS4/blob/main/src/core/libraries/kernel/process.cpp
+- https://github.com/shadps4-emu/shadPS4/wiki/VIIII-.-shadPS4-v0.15.0--changes
+
+Classification: new API discovery; no FW 14.02 ABI proof, no safe passive census implementation, and no target execution. The Gate B census prerequisite remains unresolved.
