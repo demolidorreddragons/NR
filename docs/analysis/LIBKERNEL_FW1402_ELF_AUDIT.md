@@ -168,28 +168,28 @@ The syscall-659 restriction risk has a concrete alternative worth preserving for
 
 Source: [OpenProspero PS4 syscall contract](https://github.com/unemu-org/openprospero/blob/44dc5dc3cea8e528d4e2945c5d100771b47b1b73/contracts/orbis/syscalls.toml). Its 592/659 entries explicitly carry partial status and are cross-version evidence only.
 
-## Additional FW 14.02 export reaching legacy syscall 592 — symbol name unresolved
+## Confirmed exported legacy-list wrapper: `sceKernelGetModuleListInternal`
 
-A fresh byte-level inspection of the repeat-retrieved FW 14.02 ELF found a second defined global function immediately after the public `sceKernelGetModuleList` export:
+A byte-level reinspection of the FW 14.02 ELF, applying the dynamic string-table base correctly (`PT_SCE_DYNLIBDATA + 0x18`), confirms the exact symbol identity:
 
-- Dynamic symbol entry index **815** has `st_name=0x3553`, encoded NID string **`4xc#C#A`**, `st_info=0x12`, `st_shndx=3`, ELF value **`0x2c8a0`**, and size **`0x97`**.
+- Dynamic symbol entry index **815** has `st_name=0x3553`; resolving that offset against the dynamic string table yields **`u+mlUkWpU3Y#C#A`**, the NID mapped to `sceKernelGetModuleListInternal`.
+- The symbol is a defined global function (`st_info=0x12`, `st_shndx=3`), ELF value **`0x2c8a0`**, size **`0x97`**.
 - Disassembly at `0x2c8a0` shows it saves the incoming `RDI`, `RSI`, and `RDX`, performs version/context bookkeeping, restores those arguments unchanged, and calls the stub at **`0x1cd0`**.
 - The stub at `0x1cd0` loads `RAX=0x250` (decimal **592**), moves `RCX` to `R10`, and executes `syscall`.
 - The wrapper then performs cleanup and maps selected kernel error values before returning.
 
-**Correction to the previous note:** the symbol at `0x2c8a0` is **not proven to be named** `sceKernelGetModuleListInternal`. The earlier association with NID `u+mlUkWpU3Y#C#A` was incorrect: that string does not appear in this symbol entry. The public `sceKernelGetModuleList` is the separate symbol at `0x2c7d0`, size `0xc1`; its modern FW 14.02 branch reaches syscall 659. The function at `0x2c8a0` is a real global export by encoded NID `4xc#C#A`, but its source-level name and intended API remain unresolved.
+The earlier apparent mismatch was a parser offset error: `st_name` is relative to the dynamic string table, whose base is `PT_SCE_DYNLIBDATA + 0x18`; it is not relative directly to the start of `PT_SCE_DYNLIBDATA`. Correcting that base restores the exact `u+mlUkWpU3Y#C#A` identity. The separate public `sceKernelGetModuleList` symbol is at `0x2c7d0`, size `0xc1`; its modern FW 14.02 branch reaches syscall 659.
 
 ### What this establishes, and what remains open
 
 Established directly from the FW 14.02 ELF:
-1. A defined global export with encoded NID `4xc#C#A` exists at `0x2c8a0`.
+1. The defined global export `sceKernelGetModuleListInternal` (NID `u+mlUkWpU3Y#C#A`) exists at `0x2c8a0`.
 2. It forwards the first three argument registers unchanged to syscall 592.
 3. It applies userland context/error translation around that syscall.
+4. The symbol can be addressed by its known export name/NID rather than a guessed function name or raw syscall shim.
 
 Not established:
-- The export's source-level name or whether it is semantically a module-list API.
-- Whether `sceKernelDlsym` can resolve it through a known symbol name, or a safe supported way to call it by NID.
 - The retail FW 14.02 syscall-592 capacity units, output-count semantics, error behavior, or inclusion of both GNM providers.
-- Any actual returned module handles or names on this console.
+- Actual returned module handles or names on this console.
 
-The partial PS4 11.00 OpenProspero contract describes syscall 592 as `(handles, max, count)` and records a sample containing system modules; this is corroboration only, not a FW 14.02 kernel contract. This is a promising static lead, not yet an implementation-ready passive enumeration path. Do not call the function by guessed name, raw address, or direct syscall. No target call was made during this investigation.
+The partial PS4 11.00 OpenProspero contract describes syscall 592 as `(handles, max, count)` and records a sample containing system modules; this is corroboration only, not a FW 14.02 kernel contract. This is now a strongly grounded candidate for passive module enumeration, but target output and GNM coverage remain unverified. No target call was made during this investigation.
