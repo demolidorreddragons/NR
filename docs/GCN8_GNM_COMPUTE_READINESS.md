@@ -831,3 +831,40 @@ The Last Guardian trace narrows the research targets:
 Source: [The Last Guardian v1.03 GNM rendering analysis](https://github.com/HayatoG/tlg_pc/blob/ee3327d7c1a1c107a16327d7c7a33c6c148b6dce/analysis/02_rendering_gnm.md).
 
 **Disposition:** this is accepted as a high-value reverse-engineering lead, not as a Gate B pass. Gate B remains **BLOCKED**; Gate C remains **NOT PASSED**; Gate D remains **NOT STARTED**. No queue was mapped, no compute command was submitted, no PRX was modified or activated, no PKG was installed, and no console state was changed.
+
+
+### Gate B follow-up: compute-queue validation and dispatch-size cross-check (2026-11-24)
+
+A further cross-check was made between the shadPS4 HLE source embedded in the pinned `HayatoG/tlg_pc` revision and the public PS4 error-code reference. This adds useful validation semantics, but does not qualify retail firmware 14.02.
+
+#### Queue-map validation model
+
+The HLE implementation inspected at `HayatoG/tlg_pc@ee3327d7c1a1c107a16327d7c7a33c6c148b6dce` exposes the candidate signatures:
+
+- `sceGnmMapComputeQueue(pipe_id, queue_id, ring_base_addr, ring_size_dw, read_ptr_addr)`
+- `sceGnmMapComputeQueueWithPriority(..., pipePriority)`
+- `sceGnmDingDong(gnm_vqid, next_offs_dw)`
+
+Its map path checks pipe and queue bounds, 256-byte ring-base alignment, power-of-two ring size (argument named in dwords), and 4-byte read-pointer alignment. It registers the queue in the emulator's ASC queue registry, returns a virtual queue ID, and initializes the read pointer. Its DingDong path accepts the virtual queue ID and next offset in dwords, handles ring wrap, and submits the selected ring segments to the emulator.
+
+The PS4-Dev-Wiki GNM error-code table independently documents corresponding validation categories and error names: invalid pipe ID, invalid queue ID, invalid ring size, invalid ring base address (256-byte alignment), and invalid read-pointer address (4-byte alignment). This corroborates that these are distinct validation dimensions rather than a single contradictory alignment rule. It remains a community-maintained error reference, not an ABI contract or proof of the exact checks on firmware 14.02.
+
+Important HLE limitation: the inspected `sceGnmDingDong` implementation takes a submit mutex and calls `WaitGpuIdle()` before processing the submission. This is an emulator serialization strategy; it must not be interpreted as evidence of real hardware ACE asynchrony, queue scheduling, or completion semantics.
+
+Sources:
+- [shadPS4 HLE source in pinned TLG port](https://github.com/HayatoG/tlg_pc/tree/ee3327d7c1a1c107a16327d7c7a33c6c148b6dce/port/gpu/shadps4/core/libraries/gnmdriver)
+- [PS4-Dev-Wiki GNM compute-queue error codes](https://www.psdevwiki.com/ps4/Template%3ACE)
+
+#### DispatchDirect reservation: HLE contract is exact-size 9, not generic-backend minimum 12
+
+The shadPS4 HLE implementation inspected in the same pinned source accepts `sceGnmDispatchDirect` only when `size == 9`, writes a four-dword DISPATCH_DIRECT packet body plus its header and three-dword trailing NOP, and returns an error for other reservation sizes. This is consistent with the 9-dword call sites identified in The Last Guardian's static trace.
+
+It does not resolve the retail firmware contract. The pinned OpenGNM generic implementation remains materially different: it checks `size < 12` and emits a 5-dword SET_SH_REG packet, a 5-dword DISPATCH_DIRECT packet, and a 3-dword NOP (13 dwords total). These are different layers/implementations and must not be blended into one assumed ABI. The generic path's size guard/body-length discrepancy remains a separate source-level concern.
+
+**Decision:** the 9-dword HLE reservation is now a stronger candidate for the dispatch packet builder's intended reservation in the game/emulator path, but it is not accepted for firmware-facing NR code. Before any use, obtain a firmware-specific disassembly/ABI record or perform a controlled, reversible hardware test with bounded failure handling. No dispatch should be attempted based only on this cross-check.
+
+#### Gate B disposition
+
+This pass improves the candidate validation matrix and clarifies the ring/read-pointer alignment distinction. It does not prove ring allocation/residency, GPU virtual addressing, command-buffer ownership, queue mapping on retail firmware, cache coherency, completion, or readback. It also does not qualify `sceGnmDispatchDirect` reservation semantics for firmware 14.02.
+
+Gate A remains **PASS — artifact-only**. Gate B remains **BLOCKED**. Gate C remains **NOT PASSED** and Gate D remains **NOT STARTED**. No console calls, queue mapping, compute dispatch, PRX modification/activation, PKG installation, or console-state changes were made in this source audit.
