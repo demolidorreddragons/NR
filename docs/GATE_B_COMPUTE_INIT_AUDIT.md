@@ -100,3 +100,110 @@ completion and deterministic full-buffer readback. Gate A remains PASS
 
 No console command buffer was submitted. No compute dispatch, PRX activation,
 PKG installation or console-state change was performed.
+
+
+## Additional compute memory, descriptor and visibility audit
+
+Further inspection of the pinned Vulkan-PS4 source at
+`PS4-OpenGNM/vulkan-ps4@f4d940b723771b3fe637e8ac0704bb5d6ab19622`
+and OpenGNM at
+`PS4-OpenGNM/opengnm@4b295ca54c82c83acf308d1c646a2dfa9ae57350`
+reveals additional source-level blockers.
+
+### 1. Direct-memory helper separates CPU mapping from the allocation offset
+
+OpenGNM `sceGnmDirectMemoryAllocate` stores:
+- `memory->mapped`: CPU virtual pointer returned by
+  `sceKernelMapDirectMemory`;
+- `memory->directmemory`: allocation offset returned by
+  `sceKernelAllocateDirectMemory`.
+
+The Orbis helper releases/unmaps these separately. In the pinned helper,
+`directmemory` is otherwise not consumed by the production code outside
+allocation/release; the only production allocation call site found in that
+repository is VideoOut. The Vulkan-PS4 reference instead forms GNM buffer
+addresses by casting/using `gnm_mem.mapped + offset`. That is an explicit
+assumption that the CPU mapping is also the GPU-visible address. A separate
+PS4 Mesa implementation provides precedent for a shared CPU/GPU VA design,
+but neither source proves the translation/residency contract for our exact
+resources on retail firmware 14.02. NR must track CPU VA, direct-memory
+allocation offset, GPU address and residency as distinct fields until the
+target ABI confirms their relationship.
+
+### 2. Compute shader code is retained in the general allocator
+
+The Vulkan-PS4 compute pipeline derives `cs_code` inside the compiled GNM
+binary and passes it to `sceGnmCsRegsSetAddress`. It then retains the binary
+with `vk_ps4_alloc` and later frees it with `vk_ps4_free`, explicitly because
+the CS register structure contains an address into that allocation. The
+inspected code does not place this shader allocation in a
+`GnmDirectMemory` object, nor does it demonstrate GPU mapping, residency,
+alignment or lifetime relative to in-flight dispatch. Retaining a CPU pointer
+is necessary for lifetime but is not evidence that the code is a valid,
+resident GPU allocation on FW 14.02.
+
+### 3. Pointer descriptor tables are allocated as host-side arrays
+
+The descriptor implementation allocates per-binding `buffers`,
+`textures` and `samplers` arrays through `vk_ps4_alloc` /
+`vk_ps4_free`. In its compute bind branch, pointer-based input-usage slots
+are programmed with `sceGnmDrawCmdSetPointerUserData` using those arrays
+directly. The inspected code does not copy these tables into direct memory or
+otherwise prove that the host allocator's storage is GPU-addressable and
+resident. This is a concrete source-contract gap, not just a missing
+firmware-documentation citation. Any NR harness must put pointer tables in a
+verified GPU-visible allocation and keep them alive until completion.
+
+The same descriptor path builds buffer descriptors from
+`gnm_mem.mapped + memory_offset + offset`, reinforcing the unverified
+CPU-mapping-equals-GPU-address assumption described above.
+
+### 4. Flush/invalidate and pipeline barrier implementations are not proof of visibility
+
+In `vk_ps4_memory.c`, `vk_ps4_FlushMappedMemoryRanges` and
+`vk_ps4_InvalidateMappedMemoryRanges` return success without performing an
+operation. The comments claim Garlic write-combined and Onion CPU-coherent
+behavior, but the source does not provide a firmware-14.02 cache-policy
+qualification or a per-memory-type visibility proof.
+
+In `vk_ps4_CmdPipelineBarrier`, the implementation emits
+`GNM_CACHE_FLUSH_AND_INV_TS_EVENT` with address 0 and
+`GNM_DATA_SEL_DISCARD`, then ignores source/destination stage masks and
+memory/buffer barrier arrays. This can be recorded as a cache-flush event
+candidate, but it is not evidence of a correctly ordered compute-write to
+CPU-read visibility sequence for a particular output allocation. It also
+does not perform a CPU invalidate operation after completion.
+
+### 5. Queue wait failure is not fail-closed
+
+In `vk_ps4_QueueSubmit`, if a GPU wait-semaphore epilogue submission fails,
+the implementation checks a CPU flag but then continues even if the flag is
+false; the comment explicitly says it proceeds to avoid deadlock. The host
+fallback similarly proceeds when the semaphore is not signaled. This is not a
+safe synchronization contract for a deterministic compute harness. NR must
+treat a failed wait submission as a hard failure and must not dispatch work
+whose dependency was not satisfied.
+
+### Updated blocking checklist
+
+The source-level reference now has at least these independently identified
+gaps in addition to the missing compute default-state initialization and
+firmware ABI:
+
+1. FW 14.02 compute-init symbol, signature, reservation and ordering.
+2. Compute user-data PM4 shader-type fix (PR #65, host-tested only).
+3. GPU-visible shader-code allocation, address translation, alignment,
+   residency and in-flight lifetime.
+4. GPU-visible descriptor-table allocation and lifetime; host-heap pointers
+   must not be assumed GPU-visible.
+5. Resource/output GPU address and residency contract.
+6. Submit ABI and fail-closed dependency handling.
+7. Bounded completion and recovery.
+8. Target-qualified GPU-to-CPU cache visibility, not no-op flush/invalidate.
+9. Full output readback, CPU reference comparison and deterministic hash on
+   the target PS4 Pro / firmware 14.02.
+
+These findings make the independent Vulkan source useful as an audit target,
+but unsuitable as a ready-made compute harness. They do not establish that a
+PS4 compute dispatch is impossible; they establish that this source path has
+not supplied the missing memory/visibility contracts. Gate B remains BLOCKED.
