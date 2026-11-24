@@ -35,6 +35,11 @@ private:
 std::string sha256(const std::uint8_t* data, std::size_t size);
 bool same_files(std::vector<FileIdentity> left, std::vector<FileIdentity> right);
 
+// Produces a complete, sorted preview. max_length includes the trailing NUL.
+bool build_preview(const std::vector<FileIdentity>& files,
+                   std::size_t max_length,
+                   std::string& output);
+
 } // namespace pne::upload
 
 #endif
