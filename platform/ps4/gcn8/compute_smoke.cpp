@@ -143,8 +143,22 @@ bool kernel_dlsym_lookup(void* context, const char* name, void** address) {
 
 bool passive_module_list(void*, uint32_t* handles, size_t capacity,
                          size_t* count) {
-    return sceKernelGetModuleList(
-        reinterpret_cast<OrbisKernelModule*>(handles), capacity, count) == 0;
+    // Keep the Orbis API's native element type at its boundary. The policy
+    // layer uses uint32_t handles, so convert explicitly instead of aliasing
+    // its storage as OrbisKernelModule[].
+    constexpr size_t kMaxCensusModules = 256;
+    if (!handles || !count || capacity == 0 ||
+        capacity > kMaxCensusModules) {
+        return false;
+    }
+
+    OrbisKernelModule modules[kMaxCensusModules]{};
+    if (sceKernelGetModuleList(modules, capacity, count) != 0) return false;
+
+    const size_t copied = *count < capacity ? *count : capacity;
+    for (size_t i = 0; i < copied; ++i)
+        handles[i] = static_cast<uint32_t>(modules[i]);
+    return true;
 }
 
 bool passive_module_name(void*, uint32_t handle, char* name, size_t capacity) {
