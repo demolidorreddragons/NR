@@ -56,3 +56,15 @@ This materially narrows the FW 14.02 path: the userland export passes `RDI`, `RS
 - The current FTP workflow validates ELF64/x86-64 headers and transfers the bytes. It does not invoke or validate the server-side `SELF` extension. The FTP server's `SELF` 502 remains unresolved.
 - No console-side code was executed and no console state was changed.
 - Next safe static step: trace the referenced syscall numbers and compare against independently sourced FW 14.02 syscall tables/kernel disassembly. Any runtime census still requires a separately qualified ABI and the already-scoped passive-only authorization.
+
+
+## Cross-check of syscall-659 argument semantics (non-retail evidence)
+
+A follow-up source comparison found two independent emulator implementations for the exported NID `ZzzC3ZGVAkc` / `sceKernelGetModuleList2`:
+
+- [shadPS4 `process.cpp`](https://github.com/shadps4-emu/shadPS4/blob/5c3b6910b99ea4e4d019533490137fe80e400306/src/core/libraries/kernel/process.cpp) declares `sceKernelGetModuleList2(s32* handles, u64 num_array, u64* out_count)`. Its implementation compares the number of output elements against `num_array` and writes one 32-bit handle per element.
+- [KytyPS5 `libKernel.cpp`](https://github.com/KytyPS5/KytyPS5/blob/30781dcda029cbd669aa81337ac2902c9c3015d8/src/libs/libKernel.cpp) independently declares `KernelGetModuleList2(int32_t* handles, uint64_t num, uint64_t* count)`, treats `num` as an element capacity, returns `ENOMEM` if the program-ID list exceeds it, copies IDs, and writes the number of elements to `*count`.
+
+These implementations agree on a plausible ABI interpretation for syscall 659's three forwarded arguments: (pointer to 32-bit handle array, **capacity in elements**, pointer to 64-bit output count), rather than a byte-size argument. This is materially better corroboration than inferring semantics from legacy syscall 592.
+
+**Qualification boundary:** both sources are emulator implementations, not Sony kernel source or a FW 14.02 retail syscall handler. They corroborate a candidate contract but do not prove that retail FW 14.02 uses identical validation, error behavior, or exact ABI. Therefore the target census remains blocked pending target-specific qualification; do not silently promote the candidate to a verified retail ABI. The safe next implementation step is to encode this as a documented candidate and keep runtime census fail-closed until the target contract is established.
