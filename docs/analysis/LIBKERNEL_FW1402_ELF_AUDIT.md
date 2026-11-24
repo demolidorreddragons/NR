@@ -106,3 +106,13 @@ The downloaded artifact was independently checked in the analysis environment:
 - Header independently rechecked as ELF64, little-endian, FreeBSD ABI, x86-64, Sony OS-specific type `0xFE18`, 9 program headers, and no standard section-header table.
 
 This confirms repeatable retrieval of the same libkernel image through the runner/FTP path. It does not prove SELF-command support, runtime module census, kernel handler ABI, or GPU execution.
+
+## Cross-check of syscall 659 argument contract (external PS4 11.00 evidence; not FW 14.02 qualification)
+
+A targeted source search found a substantially stronger public reference than emulator prototypes alone:
+
+- OpenProspero's PS4 11.00 syscall contract records syscall 659 as `dynlib_get_list2`, with prototype `int dynlib_get_list2(int *handles, size_t max, size_t *count)`. Its evidence pointer is the measured PS4 libkernel stub at `0x2410`; its own status is explicitly `partial`, and the contract notes a console sample where syscall 659 listed one entry while syscall 592 listed 33. Sources: [syscall contract](https://github.com/unemu-org/openprospero/blob/44dc5dc3cea8e528d4e2945c5d100771b47b1b73/contracts/orbis/syscalls.toml) and [kernel implementation](https://github.com/unemu-org/openprospero/blob/44dc5dc3cea8e528d4e2945c5d100771b47b1b73/kernel/sys/compat/sce/sce_dynlib_sys.c).
+- The implementation forwards `handles`, `max`, and `count` to its list routine; the prototype's `max` is a `size_t` element capacity, not a byte count. This is useful corroboration for the three-argument ABI family.
+- shadPS4 independently declares `sceKernelGetModuleList2(s32* handles, u64 num_array, u64* out_count)`, but this remains emulator behavior and is not used as retail proof: [implementation](https://github.com/shadps4-emu/shadPS4/blob/5c3b6910b99ea4e4d019533490137fe80e400306/src/core/libraries/kernel/process.cpp).
+
+**Impact on this project:** the 14.02 libkernel disassembly already proves that its `sceKernelGetModuleList2` wrapper preserves RDI/RSI/RDX and invokes syscall 659. The new external evidence supports interpreting RSI as an element capacity for the 11.00 contract, but does not establish that FW 14.02's kernel handler is identical or that its module selection matches the required census. Therefore the PR68 implementation remains fail-closed on the existing legacy call; no target-facing call or ABI-dependent code change is justified yet. The remaining qualification requires 14.02 kernel-side evidence or an explicitly authorized, safe retail ABI measurement.
