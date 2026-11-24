@@ -48,3 +48,23 @@ The user has explicitly directed us to continue through the gates. Work autonomo
 - Do not access PS4/LAN/FTP/RPI/KLog/BinLoader, deploy, stage, install, activate, or restart anything. This cycle is host-only.
 - Keep changes limited to source, CMake, tests, and engineering docs. Do not commit; the workflow performs writeback.
 - The runner has no Git executable. Ensure the report names every changed file and the workflow artifact captures a complete copy of changed files if possible; never claim a diff exists if only a report is captured.
+
+## Next autonomous engineering cycle — GNM runtime path and independent Gate A reproduction
+
+The upload-confirmation slice is implemented and host-tests CI now passes on the current branch. Do not spend another cycle repeating that work unless a regression is found.
+
+### Required work
+1. Read AGENTS.md, docs/GCN8_GNM_COMPUTE_READINESS.md, docs/PS4_WINDOWS_BRIDGE.md, the current engineering report, and the complete relevant GNM/PRX build workflows before acting.
+2. Independently reproduce Gate A from the pinned source/dependency revisions and inspect the resulting shader binary, report, and SHA-256. The PR change in docs/GCN8_GNM_COMPUTE_READINESS.md intentionally triggers the isolated GCN8 artifact workflow. Record its exact run/artifact/hash only after verifying the completed outputs. Gate A remains artifact-only.
+3. Audit the current branch's complete GNM compute path and all checked-in evidence. Inspect the exact source and symbols for shader binding, descriptor-table pointer setup, GPU allocation/residency, command buffer construction, submission, completion, cache maintenance, and CPU readback. Compare the pinned OpenGNM and shadPS4 source evidence already referenced in the audit; do not promote emulator or generic-backend behavior into retail firmware facts.
+4. Identify the smallest real implementation slice that is supported by authoritative checked-in ABI/source evidence. If a safe, isolated component can be implemented without guessing retail firmware 14.02 ABI, implement it and add executable tests. Do not add speculative firmware prototypes, queue setup, GPU addresses, PM4 packets, or live-PRX dispatch calls.
+5. Build the complete host CMake/CTest suite and release-mode GCN8 tests on an available host. Build the PS4 PRX only through the existing isolated build workflow if its trigger and exact checkout can be used without touching the console. Inspect all results.
+6. Inspect the current PS4 bridge/read-only evidence only if a documented read-only workflow can resolve a concrete GNM/runtime prerequisite. Do not stage, install, activate, restart, or mutate the console in this cycle; preserve the existing app, saves, plugins.ini, PRX, and backups.
+7. Update the report with exact files/symbols inspected, concrete code changes, commands/exit codes, Gate A-D status, and the single next acceptance test. Do not write a report-only change if a testable code improvement is available.
+
+### Non-negotiable
+- Do not stop after a progress summary. Complete all independent host-verifiable work in the cycle.
+- Do not mark Gate B/C/D passed without retail PS4 Pro FW 14.02 evidence.
+- Never fabricate a Sony ABI contract. If the checked-in evidence cannot prove it, keep runtime code isolated and fail closed.
+- No changes under .github/workflows. The GCN8 workflow is triggered by the docs change already committed; do not modify workflow automation.
+- Do not commit from Codex; the workflow owns writeback.
