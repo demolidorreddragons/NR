@@ -572,3 +572,60 @@ positive/negative target-capability policy remain follow-up work.
 **Gate B remains BLOCKED; Gate C is NOT PASSED; Gate D is NOT STARTED.**
 No PS4 dispatch, PRX activation, package installation, or console-state
 change was performed by these runs.
+
+
+### Gate B source-contract matrix — dispatch and user-data builders (2026-11-24)
+
+A focused re-read of the pinned OpenGNM command-builder implementation
+(`PS4-OpenGNM/opengnm`, commit
+`4b295ca54c82c83acf308d1c646a2dfa9ae57350`) was completed after the
+latest Gate A rerun. This narrows several source-level contracts but does not
+change Gate B status.
+
+| Contract | Pinned-source observation | Evidence grade | Remaining qualification |
+|---|---|---|---|
+| CS shader register builder | `sceGnmDrawCmdSetCsShaderWithModifier` rejects a nonzero high shader-address word; emits COMPUTE_PGM_LO/HI, RSRC1/2 and NUM_THREAD_X/Y/Z writes, followed by a trailing NOP | SOURCE-OBSERVED | Address placement, register contents and retail FW 14.02 acceptance |
+| Descriptor pointer user data | `sceGnmDrawCmdSetPointerUserData` resolves the stage/user-data slot and writes `sizeof(void*) / 4` dwords through the persistent-register builder | SOURCE-OBSERVED | Retail pointer width, GPU virtual address semantics, descriptor allocation/residency and exact slot mapping |
+| Local direct dispatch builder | `sceGnmDrawCmdDispatchDirect` reserves exactly 9 dwords; emits a compute-engine DISPATCH_DIRECT packet with X/Y/Z and ordered-append flags, then a 3-data-dword NOP | SOURCE-OBSERVED | This is a local command-builder helper, not proof of the firmware export's required reservation size or execution |
+| Firmware-facing dispatch candidate | Pinned `gnmdriver.h` declares `sceGnmDispatchDirect(cmdbuf, size, threads_x, threads_y, threads_z, flags)`; the generic implementation has a distinct 12-dword path while shadPS4 HLE accepts size 9 | CROSS-REFERENCE / CONFLICT | Exact Sony SDK/FW 14.02 contract is still unknown; neither implementation wins by inference |
+| Generic submit path | `sceGnmSubmitCommandBuffers` and `sceGnmSubmitDone` return success without submitting; generic compute-queue mapping returns unsupported | SOURCE-OBSERVED | Generic success is not hardware evidence; must validate Orbis firmware path |
+| Orbis submit path | Optional wrappers resolve and forward submit calls to `libSceGnmDriver.so`; wrappers perform argument checks/logging before forwarding | SOURCE-OBSERVED | Exact export ABI, caller context, GPU-address requirements, submit completion semantics and FW 14.02 behavior |
+| Default compute state | The pinned shadPS4 HLE models a default compute-state initializer, but this remains emulator behavior | CROSS-REFERENCE | Need Sony contract or retail hardware evidence for initialization sequence and NEO-specific state |
+
+#### Consequence for the first hardware harness
+
+The only currently defensible packet-level candidate remains the local 9-dword
+`sceGnmDrawCmdDispatchDirect` builder paired with the compiled shader's
+`[64,1,1]` local size and a `[4,1,1]` workgroup grid for 256 outputs.
+This is not permission to call the firmware `sceGnmDispatchDirect` export:
+the latter has an unresolved size/behavior conflict across implementations.
+The local builder also does not solve default-state setup, valid shader-code
+GPU placement, descriptor/output allocation and residency, submission
+lifecycle, completion, timeout/recovery, or cache-coherent CPU readback.
+
+No live PRX code was changed. No firmware export was called and no command
+buffer was submitted to the console. Do not use the generic backend's
+successful no-op submit result as a pass condition.
+
+#### Evidence required to unblock each remaining Gate B item
+
+- **Firmware ABI:** a typed SDK/header or symbol/ABI record tied to retail
+  firmware 14.02, including calling convention, argument widths, return
+  semantics and command-buffer reservation rules.
+- **GPU memory:** allocation and mapping evidence for command buffer, shader
+  code, descriptor table, output buffer and completion label, including GPU
+  address translation, alignment, residency and lifetime.
+- **Submission:** proof of the exact submit/submit-done sequence in the target
+  process context, including error handling and whether submission completion
+  means execution completion.
+- **Synchronization:** a GPU completion primitive with bounded wait, timeout,
+  cancellation/recovery and no unbounded polling.
+- **Readback:** a documented cache invalidate/flush or staging-transfer path
+  that makes GPU writes CPU-visible, followed by full-buffer comparison and
+  output hash on the PS4 Pro.
+- **Safety:** a reversible opt-in test isolated from the telemetry PRX, with
+  no writes to saves, installed title files, or unrelated GoldHEN state.
+
+**Gate B decision remains BLOCKED.** Source inspection has improved the
+candidate map but has not supplied the missing retail firmware or hardware
+evidence. Gate C remains NOT PASSED and Gate D remains NOT STARTED.
