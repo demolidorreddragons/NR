@@ -154,13 +154,19 @@ bool passive_module_list(void*, uint32_t* handles, size_t capacity,
     }
 
     OrbisKernelModule modules[kMaxCensusModules]{};
-    // The public libkernel contract and real GoldHEN call sites pass the
-    // destination buffer size in BYTES (sizeof(array)), not element count.
-    if (sceKernelGetModuleList(modules, sizeof(modules), count) != 0)
+    // Public declarations say "size" but do not settle its units: observed
+    // callers disagree (some pass entry count, GoldHEN passes sizeof(array)).
+    // Use 256, which is safe as either 256 entries or 256 bytes (64 handles),
+    // and reject counts above the smaller interpretation until FW14.02 ABI
+    // evidence settles the contract.
+    constexpr size_t kAmbiguousSizeArgument = 256;
+    constexpr size_t kConservativeMaxReportedModules =
+        kAmbiguousSizeArgument / sizeof(OrbisKernelModule);
+    if (sceKernelGetModuleList(modules, kAmbiguousSizeArgument, count) != 0)
         return false;
-    // Never accept a truncated census: provider selection requires every
-    // loaded module to have been inspected.
-    if (*count > capacity) return false;
+    // Never accept a census that may have been truncated under byte semantics.
+    if (*count > capacity || *count > kConservativeMaxReportedModules)
+        return false;
 
     for (size_t i = 0; i < *count; ++i)
         handles[i] = static_cast<uint32_t>(modules[i]);
