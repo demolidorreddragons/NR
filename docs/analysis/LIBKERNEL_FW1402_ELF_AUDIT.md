@@ -193,3 +193,19 @@ Not established:
 - Actual returned module handles or names on this console.
 
 The partial PS4 11.00 OpenProspero contract describes syscall 592 as `(handles, max, count)` and records a sample containing system modules; this is corroboration only, not a FW 14.02 kernel contract. This is now a strongly grounded candidate for passive module enumeration, but target output and GNM coverage remain unverified. No target call was made during this investigation.
+
+
+## Independent call-site corroboration for the internal wrapper signature
+
+A public PS4 homebrew Lua implementation was inspected at a pinned revision:
+
+- It resolves `sceKernelGetModuleListInternal` by name from a pre-existing `LIBKERNEL_HANDLE` using `dlsym`.
+- It allocates `4 * 0x300` bytes for 32-bit module handles and an 8-byte output-count cell.
+- It calls `sceKernelGetModuleListInternal(buffer, 0x300, actual_count)`, then reads the returned count as a 64-bit value and iterates 4-byte handles.
+- This is independent practical PS4 call-site evidence for the signature `int(handles*, size_t capacity_in_elements, size_t* actual_count)`, and supports interpreting the second argument as an element count rather than bytes.
+
+Pinned source: [remote_lua_loader misc.lua](https://github.com/n0llptr/remote_lua_loader/blob/7c2840e47506f258fc815533d5f7ed7c842cbc3c/savedata/misc.lua).
+
+A separate fpPS4 implementation uses the same three-argument shape, but labels its implementation as an alias/guess; it is emulator evidence only and is not relied upon for retail behavior.
+
+**Scope limitation:** the Lua call site is community software and is not proof of the exact retail FW 14.02 kernel handler, completeness, error semantics, or inclusion of both GNM system libraries. It does, however, corroborate the argument shape and capacity units enough to narrow the next passive-only validation. No code on the console was executed by this investigation.
