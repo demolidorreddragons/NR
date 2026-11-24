@@ -134,11 +134,12 @@ bool address_range(uint64_t address, uint64_t size, uint64_t limit) {
     return address != 0 && address < limit && size <= limit - address;
 }
 
-bool kernel_dlsym_lookup(void* context, const char* name, void** address) {
-    if (!context || !name || !address) return false;
+bool kernel_dlsym_lookup(void*, uint32_t provider_handle,
+                         const char* name, void** address) {
+    if (!name || !address) return false;
     *address = nullptr;
-    const auto module = *static_cast<const int32_t*>(context);
-    return sceKernelDlsym(module, name, address) == 0 && *address != nullptr;
+    return sceKernelDlsym(static_cast<OrbisKernelModule>(provider_handle),
+                          name, address) == 0 && *address != nullptr;
 }
 
 bool passive_module_list(void*, uint32_t* handles, size_t capacity,
@@ -225,8 +226,9 @@ extern "C" int pne_gcn8_compute_smoke_run(const char* shader_path,
         return 28;
     }
     pne::gcn8::runtime::GnmRuntimeFunctions gnm{};
-    if (!pne::gcn8::runtime::resolve_gnm_runtime_functions(
-            kernel_dlsym_lookup, &gnm_module_handle, &gnm)) {
+    if (!pne::gcn8::runtime::resolve_gnm_runtime_functions_from_provider(
+            kernel_dlsym_lookup, nullptr,
+            static_cast<uint32_t>(gnm_module_handle), &gnm)) {
         log.message("RESULT=BLOCKED; REASON=GNM_REQUIRED_EXPORT_MISSING");
         return 29;
     }
