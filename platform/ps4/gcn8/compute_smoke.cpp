@@ -140,39 +140,38 @@ bool kernel_dlsym_lookup(void* context, const char* name, void** address) {
     return sceKernelDlsym(module, name, address) == 0 && *address != nullptr;
 }
 
-bool load_gnm_runtime_module(int32_t* module_handle, Logger& log) {
+// Passive discovery only: never load/start a driver module from the
+// compute smoke path. The normal and Neo providers are inspected separately;
+// a missing provider is a hard stop until a target-side, FW-qualified census
+// has established the correct provider and ABI.
+bool find_loaded_gnm_runtime_module(int32_t* module_handle, Logger& log) {
     if (!module_handle) return false;
     *module_handle = -1;
     OrbisKernelModule modules[256]{};
     size_t count = 0;
     const int32_t list_rc = sceKernelGetModuleList(modules, 256, &count);
     log.line("GNM_MODULE_LIST_RC", static_cast<uint32_t>(list_rc));
-    if (list_rc == 0) {
-        const size_t limit = count < 256 ? count : 256;
-        for (size_t i = 0; i < limit; ++i) {
-            OrbisKernelModuleInfo info{};
-            info.size = sizeof(info);
-            if (sceKernelGetModuleInfo(modules[i], &info) == 0 &&
-                std::strstr(info.name, "libSceGnmDriver") != nullptr) {
-                *module_handle = static_cast<int32_t>(modules[i]);
-                break;
-            }
+    if (list_rc != 0 || count > 256) {
+        log.message("GNM_MODULE_CENSUS_INCOMPLETE=1");
+        return false;
+    }
+
+    for (size_t i = 0; i < count; ++i) {
+        OrbisKernelModuleInfo info{};
+        info.size = sizeof(info);
+        if (sceKernelGetModuleInfo(modules[i], &info) != 0) continue;
+        if (std::strcmp(info.name, "libSceGnmDriver") == 0) {
+            *module_handle = static_cast<int32_t>(modules[i]);
+            log.message("GNM_PROVIDER=NORMAL_ALREADY_LOADED");
+            return true;
+        }
+        if (std::strcmp(info.name, "libSceGnmDriverForNeoMode") == 0) {
+            log.message("GNM_PROVIDER=NEO_ALREADY_LOADED");
         }
     }
-    if (*module_handle >= 0) return true;
 
-    const char* word = sceKernelGetFsSandboxRandomWord();
-    if (!word || !word[0]) return false;
-    char path[192]{};
-    std::snprintf(path, sizeof(path),
-                  "/%s/common/lib/libSceGnmDriver.sprx", word);
-    const uint32_t raw = sceKernelLoadStartModule(
-        path, 0, nullptr, 0, nullptr, nullptr);
-    log.line("GNM_LOAD_RESULT", raw);
-    const int32_t loaded = static_cast<int32_t>(raw);
-    if (loaded < 0) return false;
-    *module_handle = loaded;
-    return true;
+    log.message("GNM_PROVIDER_NOT_FOUND_NO_MODULE_LOAD_ATTEMPTED");
+    return false;
 }
 } // namespace
 
@@ -190,7 +189,7 @@ extern "C" int pne_gcn8_compute_smoke_run(const char* shader_path,
 #endif
 
     int32_t gnm_module_handle = -1;
-    if (!load_gnm_runtime_module(&gnm_module_handle, log)) {
+    if (!find_loaded_gnm_runtime_module(&gnm_module_handle, log)) {
         log.message("RESULT=BLOCKED; REASON=GNM_RUNTIME_MODULE_UNAVAILABLE");
         return 28;
     }
