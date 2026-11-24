@@ -4,6 +4,7 @@
 #include <cstdio>
 #include <cstdint>
 #include <cstring>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -35,6 +36,28 @@ int main() {
     for (std::size_t i = 0; i < boundary_sizes.size(); ++i) {
         CHECK(sha256(repeated.data(), boundary_sizes[i]) == boundary_hashes[i]);
     }
+
+    std::vector<FileIdentity> preview_files{
+        {"z.bmp", 20, "digest-z"},
+        {"frametimes.csv", 12, "digest-csv"}
+    };
+    std::string preview;
+    const std::string expected_preview =
+        "PNE upload preview: 2 files, 32 bytes total\\n"
+        "frametimes.csv: 12 bytes\\n"
+        "z.bmp: 20 bytes\\n";
+    CHECK(build_preview(preview_files, expected_preview.size() + 1, preview));
+    CHECK(preview == expected_preview);
+    CHECK(!build_preview(preview_files, expected_preview.size(), preview));
+    CHECK(preview.empty());
+    auto duplicate_preview = preview_files;
+    duplicate_preview.push_back({"z.bmp", 20, "duplicate"});
+    CHECK(!build_preview(duplicate_preview, 1024, preview));
+    CHECK(preview.empty());
+    auto unsafe_preview = preview_files;
+    unsafe_preview[0].relative_name = "bad\\nname.bmp";
+    CHECK(!build_preview(unsafe_preview, 1024, preview));
+    CHECK(preview.empty());
 
     Confirmation confirmation;
     std::vector<FileIdentity> first{{"one.bmp", 12, "digest-a"}, {"two.bmp", 20, "digest-b"}};
