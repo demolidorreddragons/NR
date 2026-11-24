@@ -155,3 +155,15 @@ A further cross-check changes the risk assessment for the planned GNM provider c
 **Engineering consequence:** do not loosen the fail-closed behavior, do not assume a successful short list is complete, and do not promote the PR68 provider census to target-ready. The next required step is to identify a supported passive enumeration path that includes system libraries, or obtain target-specific evidence that syscall 659 includes the exact GNM provider handles. This is a substantive blocker to the current census approach, not merely an unresolved size-unit detail.
 
 Sources: [OpenProspero PS4 11.00 syscall contract and implementation](https://github.com/unemu-org/openprospero/blob/44dc5dc3cea8e528d4e2945c5d100771b47b1b73/contracts/orbis/syscalls.toml), [shadPS4 process implementation](https://github.com/shadps4-emu/shadPS4/blob/5c3b6910b99ea4e4d019533490137fe80e400306/src/core/libraries/kernel/process.cpp). Both are cross-version/implementation evidence, not a Sony FW 14.02 kernel contract.
+## Candidate recovery path: legacy syscall 592 enumerates system modules
+
+The syscall-659 restriction risk has a concrete alternative worth preserving for the next implementation pass:
+
+- OpenProspero's measured PS4 11.00 contract records syscall 592 (`dynlib_get_list`) with the same three-argument shape: handle buffer, `size_t` capacity, and `size_t*` output count. Its measured console note says the 592 list includes system modules (33 entries in the cited sample). The contract is marked `partial` and is not a FW 14.02 measurement.
+- The same source records syscall 659 as `dynlib_get_list2` and notes a console sample where 659 returned one entry while 592 returned 33.
+- The actual FW 14.02 libkernel image contains the legacy syscall-592 stub at `0x1cd0`; its `sceKernelGetModuleList` export selects that stub on the older-version branch and selects syscall 659 on the modern branch. The 14.02 branch selection is modern, so the public export does not expose the legacy full-list path on this target.
+- This suggests a narrowly scoped candidate for investigation: a direct, read-only syscall-592 invocation may recover the complete module list, including system libraries. It is **not** yet qualified for retail FW 14.02, and no direct syscall was executed.
+
+**Next engineering step:** statically verify the exact syscall-592 stub and calling convention in the retrieved 14.02 libkernel (already identified at `0x1cd0`), then seek a safe FW 14.02-specific contract for the kernel handler before adding any direct syscall adapter. If the 14.02 kernel retains the 592 behavior observed in the 11.00 sample, this is the most promising route to discover the GNM providers without loading modules or changing console state. Until then, PR68 remains fail-closed.
+
+Source: [OpenProspero PS4 syscall contract](https://github.com/unemu-org/openprospero/blob/44dc5dc3cea8e528d4e2945c5d100771b47b1b73/contracts/orbis/syscalls.toml). Its 592/659 entries explicitly carry partial status and are cross-version evidence only.
