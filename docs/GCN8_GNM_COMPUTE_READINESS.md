@@ -680,3 +680,14 @@ Sources: [vulkan-ps4 memory](https://github.com/PS4-OpenGNM/vulkan-ps4/blob/f4d9
 The new source evidence narrows the implementation choices but does not supply a complete safe compute contract. In particular, the allocation helper is presently proven only for its VideoOut use; the Vulkan candidate's no-op invalidation and unbounded queue-idle wait are unacceptable as-is; and the generic dispatch function has a 12-versus-13-dword inconsistency.
 
 **Gate B remains BLOCKED. Gate C remains NOT PASSED. Gate D remains NOT STARTED.** No compute command was submitted, no PRX was activated or modified, no PKG was installed, and no console state was changed during this audit.
+
+
+#### Additional Vulkan-PS4 compute-pipeline finding: shader binary placement is not GPU-qualified
+
+The compute-pipeline path in pinned `vulkan-ps4/src/vk_ps4_pipeline.c` parses the shader container, derives the CS code pointer as an offset inside the compiled binary allocation, and passes that pointer to `sceGnmCsRegsSetAddress`. The code keeps the allocation alive for the pipeline lifetime, but the inspected path does not place the binary through the audited direct-memory helper or prove that the allocator returns GPU-visible/resident memory. Lifetime correctness alone is not GPU addressability.
+
+The same candidate's descriptor path passes pointers to descriptor backing arrays into `sceGnmDrawCmdSetPointerUserData`; no verified GPU-VA conversion or residency registration accompanies those pointer writes in the inspected path. This strengthens the rejection of the Vulkan candidate as a ready-made compute backend: shader code, descriptor storage, and label addresses all depend on unproven CPU-pointer-to-GPU-address assumptions.
+
+Source: [pinned compute pipeline](https://github.com/PS4-OpenGNM/vulkan-ps4/blob/f4d940b723771b3fe637e8ac0704bb5d6ab19622/src/vk_ps4_pipeline.c) and [descriptor implementation](https://github.com/PS4-OpenGNM/vulkan-ps4/blob/f4d940b723771b3fe637e8ac0704bb5d6ab19622/src/vk_ps4_descriptor.c).
+
+**Implementation consequence:** do not vendor this Vulkan ICD or reuse its compute pipeline, descriptor, or synchronization code in the live PRX. Treat it only as a reference for packet ordering and API decomposition until a separately verified GPU-visible allocation/address model and cache-coherent readback path exist.
