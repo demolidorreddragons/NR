@@ -1,6 +1,7 @@
 #include "compute_smoke.h"
 #include "stage_log.h"
 #include "gnm_runtime_resolver.h"
+#include "gnm_provider_census.h"
 
 #include <orbis/libkernel.h>
 
@@ -140,38 +141,48 @@ bool kernel_dlsym_lookup(void* context, const char* name, void** address) {
     return sceKernelDlsym(module, name, address) == 0 && *address != nullptr;
 }
 
-bool load_gnm_runtime_module(int32_t* module_handle, Logger& log) {
+bool passive_module_list(void*, uint32_t* handles, size_t capacity,
+                         size_t* count) {
+    return sceKernelGetModuleList(
+        reinterpret_cast<OrbisKernelModule*>(handles), capacity, count) == 0;
+}
+
+bool passive_module_name(void*, uint32_t handle, char* name, size_t capacity) {
+    if (!name || capacity == 0) return false;
+    OrbisKernelModuleInfo info{};
+    info.size = sizeof(info);
+    if (sceKernelGetModuleInfo(static_cast<OrbisKernelModule>(handle), &info) != 0)
+        return false;
+    std::strncpy(name, info.name, capacity - 1);
+    name[capacity - 1] = '\\0';
+    return true;
+}
+
+// Passive-only policy: inspect both providers, never load or start either one.
+bool find_loaded_gnm_runtime_module(int32_t* module_handle, Logger& log) {
     if (!module_handle) return false;
     *module_handle = -1;
-    OrbisKernelModule modules[256]{};
-    size_t count = 0;
-    const int32_t list_rc = sceKernelGetModuleList(modules, 256, &count);
-    log.line("GNM_MODULE_LIST_RC", static_cast<uint32_t>(list_rc));
-    if (list_rc == 0) {
-        const size_t limit = count < 256 ? count : 256;
-        for (size_t i = 0; i < limit; ++i) {
-            OrbisKernelModuleInfo info{};
-            info.size = sizeof(info);
-            if (sceKernelGetModuleInfo(modules[i], &info) == 0 &&
-                std::strstr(info.name, "libSceGnmDriver") != nullptr) {
-                *module_handle = static_cast<int32_t>(modules[i]);
-                break;
-            }
-        }
+    uint32_t handles[256]{};
+    const auto census = pne::gcn8::runtime::census_loaded_gnm_providers(
+        passive_module_list, passive_module_name, nullptr, handles, 256);
+    log.line("GNM_CENSUS_STATUS", static_cast<uint32_t>(census.status));
+    if (census.status !=
+        pne::gcn8::runtime::ProviderCensusStatus::complete) {
+        log.message("GNM_MODULE_CENSUS_INCOMPLETE=1");
+        return false;
     }
-    if (*module_handle >= 0) return true;
-
-    const char* word = sceKernelGetFsSandboxRandomWord();
-    if (!word || !word[0]) return false;
-    char path[192]{};
-    std::snprintf(path, sizeof(path),
-                  "/%s/common/lib/libSceGnmDriver.sprx", word);
-    const uint32_t raw = sceKernelLoadStartModule(
-        path, 0, nullptr, 0, nullptr, nullptr);
-    log.line("GNM_LOAD_RESULT", raw);
-    const int32_t loaded = static_cast<int32_t>(raw);
-    if (loaded < 0) return false;
-    *module_handle = loaded;
+    if (census.has_normal) {
+        *module_handle = static_cast<int32_t>(census.normal_handle);
+        log.line("GNM_NORMAL_PROVIDER_HANDLE", census.normal_handle);
+    }
+    if (census.has_neo)
+        log.line("GNM_NEO_PROVIDER_HANDLE", census.neo_handle);
+    log.line("GNM_NORMAL_PROVIDER_PRESENT", census.has_normal ? 1 : 0);
+    log.line("GNM_NEO_PROVIDER_PRESENT", census.has_neo ? 1 : 0);
+    if (!census.has_normal) {
+        log.message("GNM_PROVIDER_NOT_FOUND_NO_MODULE_LOAD_ATTEMPTED");
+        return false;
+    }
     return true;
 }
 } // namespace
@@ -190,7 +201,7 @@ extern "C" int pne_gcn8_compute_smoke_run(const char* shader_path,
 #endif
 
     int32_t gnm_module_handle = -1;
-    if (!load_gnm_runtime_module(&gnm_module_handle, log)) {
+    if (!find_loaded_gnm_runtime_module(&gnm_module_handle, log)) {
         log.message("RESULT=BLOCKED; REASON=GNM_RUNTIME_MODULE_UNAVAILABLE");
         return 28;
     }

@@ -80,3 +80,7 @@ target_include_directories(pne_detour_transaction_core PUBLIC
 add_executable(test_detour_transaction_core tests/test_detour_transaction_core.cpp)
 target_link_libraries(test_detour_transaction_core PRIVATE pne_detour_transaction_core)
 add_test(NAME detour_transaction_core COMMAND test_detour_transaction_core)
+
+add_executable(test_gnm_provider_census tests/test_gnm_provider_census.cpp)
+target_include_directories(test_gnm_provider_census PRIVATE platform/ps4/gcn8)
+add_test(NAME gnm_provider_census_contract COMMAND test_gnm_provider_census)
