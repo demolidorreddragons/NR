@@ -207,3 +207,28 @@ These findings make the independent Vulkan source useful as an audit target,
 but unsuitable as a ready-made compute harness. They do not establish that a
 PS4 compute dispatch is impossible; they establish that this source path has
 not supplied the missing memory/visibility contracts. Gate B remains BLOCKED.
+
+
+### 6. The generic compute initializer is deliberately non-representative
+
+The pinned generic backend implementation of
+`sceGnmDispatchInitDefaultHardwareState` checks for at least four dwords,
+writes only `PKT3_CLEAR_STATE` plus a `PKT3_NOP`, and returns 4. The API
+test merely checks that the call does not crash and explicitly allows a zero
+return on generic. This is a host placeholder, not a captured or synthesized
+GFX8/Neo compute-state sequence. It cannot be used to size, validate or
+approve the retail compute preamble.
+
+On the Orbis side, `driver_orbis.c` declares the firmware-facing
+`sceGnmDispatchInitDefaultHardwareState(uint32_t*, uint32_t)` as an external
+symbol. The source does not provide a local Orbis packet builder or a
+firmware-specific reservation constant for this function. The declaration
+therefore establishes only the expected symbol name and source-level
+prototype; it does not show that the import resolves on firmware 14.02 or
+define its actual write bound/return behavior. No NR call site has been added.
+
+The documented API reference says the dispatch initializer should precede
+dispatch, but that is OpenGNM documentation, not an FW-14.02 trace. The
+candidate must continue to reserve and validate the actual returned dword
+count on target, with a proven maximum reservation before any submission.
+
