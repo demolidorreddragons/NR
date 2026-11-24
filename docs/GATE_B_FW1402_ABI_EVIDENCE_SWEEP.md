@@ -246,3 +246,40 @@ separate validation/authorization sequence.
 
 This confirms a hard external dependency for Gate B. It is not a reason to
 guess signatures or bypass the hardware qualification requirements.
+
+
+## Fresh cross-check: current public FW 14.02 support still does not supply GNM exports
+
+A fresh public-source check on 2026-11-24 found additional FW 14.02 support
+references, but none changes the ABI conclusion:
+
+- The PS4 kernel-dumper fork explicitly supports kernel build
+  `J02700521` / FW 14.02 and writes a kernel image. Its documented output is
+  a kernel dump, not a decrypted `libSceGnmDriver` or
+  `libSceGnmDriverForNeoMode` SPRX/export table:
+  https://github.com/iHaiDeeZ/ps4-kernel-dumper
+- ps4debug-NG lists FW 14.02 among supported firmware and describes kernel
+  and libkernel validation against decrypted retail binaries. That is useful
+  evidence that FW 14.02 inspection tooling exists, but its published
+  support matrix is not a GNM driver export capture or proof of GNM ABI:
+  https://github.com/Pharaoh2k/ps4debug-NG
+- The current OpenGNM rewrite-plan documentation describes a detailed
+  GNM-driver reverse-engineering inventory with export/NID tables, but
+  explicitly identifies the analyzed driver dump as FW 9.00:
+  https://github.com/PS4-OpenGNM/opengnm/blob/main/OPENGNM_REWRITE_PLAN.md
+
+This cross-check distinguishes three artifact classes that must not be
+conflated: kernel image/offset support, debugger capability, and userland
+GNM driver export/disassembly. Only the third can directly establish the
+requested provider exports and function entry points; none of the newly
+checked public references supplies that artifact for FW 14.02.
+
+### Engineering consequence
+
+The candidate NIDs and module census plan remain useful preparation, but
+there is no source-backed reason to change any function signature, select a
+provider, or mark the FW 14.02 ABI sub-gate passed. The remaining dependency
+is still a lawful FW 14.02 GNM module artifact or a separately authorized
+passive census of already-loaded providers. No module loading, symbol
+invocation, allocation, dispatch, PRX activation, PKG installation, or
+console-state change is authorized or performed by this documentation work.
