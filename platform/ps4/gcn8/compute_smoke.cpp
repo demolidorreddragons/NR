@@ -180,7 +180,7 @@ bool passive_module_name(void*, uint32_t handle, char* name, size_t capacity) {
     if (sceKernelGetModuleInfo(static_cast<OrbisKernelModule>(handle), &info) != 0)
         return false;
     std::strncpy(name, info.name, capacity - 1);
-    name[capacity - 1] = '\\0';
+    name[capacity - 1] = '\0';
     return true;
 }
 
