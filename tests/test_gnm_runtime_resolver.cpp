@@ -71,6 +71,6 @@ int main() {
     assert(!functions.complete());
     assert(!resolve_gnm_runtime_functions_from_provider(nullptr, nullptr, 0, &functions));
     assert(!functions.complete());
-    assert(!resolve_gnm_runtime_functions(fake_lookup, nullptr, nullptr));
+    assert(!resolve_gnm_runtime_functions(nullptr, nullptr, &functions));
     return 0;
 }
