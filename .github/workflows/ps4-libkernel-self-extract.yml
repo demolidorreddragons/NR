@@ -27,9 +27,9 @@ jobs:
           $elf = Join-Path $outDir "libkernel.sprx.elf"
           $url = "ftp://$($env:PS4_IP):2121/system/common/lib/libkernel.sprx"
 
-          # SELF is already enabled by default on compatible ftpsrv builds.
-          # Older deployed builds answer 502 to the SELF toggle; do not send
-          # that unsupported command. A direct RETR avoids the control-channel error.
+          # Use ordinary read-only RETR. The deployed FTP server previously
+          # returned 502 to the SELF command; RETR success does not prove SELF
+          # conversion or repair the server-side extension.
           & curl.exe --fail --silent --show-error --ftp-pasv --user "anonymous:" --output $elf $url
           if ($LASTEXITCODE -ne 0) { throw "FTP RETR failed: curl exit $LASTEXITCODE" }
 
