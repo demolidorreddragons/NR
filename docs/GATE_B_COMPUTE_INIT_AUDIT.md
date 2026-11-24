@@ -390,3 +390,45 @@ submission and synchronization behavior matches the console.
 
 Reference:
 https://github.com/shadps4-emu/shadPS4/blob/5c3b6910b99ea4e4d019533490137fe80e400306/src/core/libraries/gnmdriver/gnmdriver.cpp
+
+
+## Independent retail-title compute evidence: The Order: 1886 (2026-11-24)
+
+A second public reverse-engineering report, for **The Order: 1886** retail eboot, independently corroborates that PS4 compute is used through both graphics command buffers and asynchronous compute queues. This is stronger evidence of real-title call patterns than an emulator implementation, but it is still not a firmware-14.02 ABI record or a Neural Rendering hardware test.
+
+Pinned report:
+- Repository: `saxons-kicks/theorder1886-port`
+- Revision: `4270135b99a32788b2fa4429fe85b76f38e2d5c9`
+- Relevant files: `docs/PROGRESS.md`, `src/import_names.inc`, and the port's pinned shadPS4 HLE implementation.
+- References:
+  - https://github.com/saxons-kicks/theorder1886-port/blob/4270135b99a32788b2fa4429fe85b76f38e2d5c9/docs/PROGRESS.md
+  - https://github.com/saxons-kicks/theorder1886-port/blob/4270135b99a32788b2fa4429fe85b76f38e2d5c9/src/import_names.inc
+  - https://github.com/saxons-kicks/theorder1886-port/blob/4270135b99a32788b2fa4429fe85b76f38e2d5c9/gpu/shadps4/core/libraries/gnmdriver/gnmdriver.cpp
+
+### What the title report adds
+
+- The report identifies a compute queue using `sceGnmMapComputeQueueWithPriority`, followed by `sceGnmDispatchInitDefaultHardwareState`, compute dispatch, queue submit and `sceGnmDingDong`.
+- It describes a compute-queue `ReleaseMem` label used as a GPU write marker, and a compute-write watch on a page where dispatches bind two 192-byte storage buffers. This supports the existence of a GPU-written memory/label completion path in the title's runtime.
+- The report distinguishes GPU write activity from CPU readback and tracks buffer downloads/readback stalls. This reinforces that GPU completion, CPU visibility/invalidation, and copying data to the CPU are distinct phases.
+- Its source-level HLE has `sceGnmComputeWaitOnAddress` emit a `WAIT_REG_MEM` PM4 packet. The HLE accepts a command-buffer size of 14 dwords, emits a 3-dword leading NOP, a 7-dword wait packet and a 2-dword trailing NOP. This is an emulator's packet construction, not proof of retail ABI or timeout semantics. The packet itself is a GPU-side wait and supplies no bounded CPU timeout/recovery policy.
+- The HLE `sceGnmDingDong` implementation serializes submissions and calls an emulator `WaitGpuIdle()` before submitting the ACB. That is emulator scheduling behavior and must not be copied as a retail host-side synchronization contract.
+- The report's retail-title imports include `sceGnmDispatchInitDefaultHardwareState`; its import map and binary analysis corroborate the function's use in a commercial title, but do not establish exact calling convention, reservation units, or FW 14.02 export resolution.
+
+### Consequences for NR
+
+1. Retain a single-in-flight ACB/queue candidate as a possible future path, but do not select pipe/queue IDs, ring size, priority, or GPU VA from another title.
+2. Keep queue map, command construction, doorbell/submit, GPU completion, CPU cache visibility, and CPU readback as separately testable steps.
+3. Do not treat `WAIT_REG_MEM` as a bounded timeout. Any CPU wait around a completion label/event must have an explicit monotonic deadline, finite polling/backoff, cancellation/error propagation, and recovery that does not leave an in-flight buffer reusable.
+4. Do not use the emulator's synchronous `WaitGpuIdle()` behavior as evidence of retail queue semantics.
+5. Do not assume the title's ReleaseMem label or memory placement is directly reusable. Its address space, cache policy, queue lifetime, and firmware context are not established for NR/FW 14.02.
+
+### Evidence classification
+
+| Claim | Classification |
+|---|---|
+| A commercial PS4 title uses compute queue mapping, compute init, dispatch, `sceGnmDingDong`, and GPU-written completion/readback-related paths | Reverse-engineering report of retail-title binary |
+| `sceGnmComputeWaitOnAddress` packet shape and emulator wait behavior | shadPS4 HLE only |
+| Exact Sony FW 14.02 ABI, queue allocation contract, timeout semantics, GPU residency/cache rules | Not established |
+| NR compute execution on PS4 Pro | Not performed |
+
+This evidence narrows the architectural choices but does not close Gate B.
