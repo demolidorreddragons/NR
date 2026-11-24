@@ -44,6 +44,20 @@ def main() -> int:
     assert re.search(r"void\s*\*\s*mapped;", header)
     assert re.search(r"uint64_t\s+directmemory;", header)
 
+    shader_header = (root / "include/gnm_shader.h").read_text(encoding="utf-8")
+    draw_commands = (root / "src/drawcommandbuffer.c").read_text(encoding="utf-8")
+    cs_address = function_body(shader_header, "static inline void sceGnmCsRegsSetAddress(")
+    assert "(uintptr_t)addr >> 8" in cs_address
+    assert "(uintptr_t)addr >> 40" in cs_address
+    cs_bind = function_body(draw_commands, "void sceGnmDrawCmdSetCsShaderWithModifier(")
+    assert "regs->computepgmhi != 0" in cs_bind
+    assert "setshregcompute(cmd, R_00B830_COMPUTE_PGM_LO" in cs_bind
+    assert "setshregcompute(cmd, R_00B848_COMPUTE_PGM_RSRC1" in cs_bind
+    assert "setshregcompute(cmd, R_00B81C_COMPUTE_NUM_THREAD_X" in cs_bind
+    dispatch = function_body(draw_commands, "void sceGnmDrawCmdDispatchDirect(")
+    assert "const uint32_t cmddwords = 9;" in dispatch
+    assert "PKT3_SHADER_TYPE_S(1)" in dispatch
+
     production_sources = list((root / "src").glob("*.c"))
     directmemory_uses = []
     for path in production_sources:
@@ -71,7 +85,7 @@ def main() -> int:
     assert "sceGnmDispatchDirect(" not in main
     assert "sceGnmDrawCmdSetCsShader(" not in main
 
-    print("OpenGNM direct-memory source contract: PASS")
+    print("OpenGNM direct-memory and compute-address source contract: PASS")
     print("OpenGNM hardware smoke classification: graphics-only, fixed-iteration polling")
     return 0
 
