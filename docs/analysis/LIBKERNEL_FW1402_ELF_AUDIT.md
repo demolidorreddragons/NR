@@ -31,12 +31,22 @@ The encoded NIDs were matched against public PS4 libkernel NID mappings (includi
 | `sceKernelGetModuleList2` | `ZzzC3ZGVAkc#T#A` | `0x2d3d0` | `0x73` |
 | `sceKernelLoadStartModule` | `wzvqT4UqKX8#C#A` | `0x2bb00` | `0x11` |
 
-All five entries are defined global function symbols in the parsed table (ELF `st_info=0x12`, nonzero section index). This is concrete static evidence that the retrieved image contains the module-enumeration, module-info and symbol-lookup entry points needed for the passive provider census.
+All five entries are defined global function symbols in the parsed table (ELF `st_info=0x12`, nonzero section index).
+
+## ABI evidence from static disassembly
+
+The three relevant exported functions were disassembled from the RX `PT_LOAD` segment using their recovered ELF values:
+
+- `sceKernelDlsym` (`0x2c710`) saves incoming `EDI`, `RSI`, and `RDX` and forwards those three values unchanged to its syscall wrapper. This supports the 3-argument shape `(module_handle, symbol_name, address_out)`.
+- `sceKernelGetModuleList` (`0x2c7d0`) saves incoming `RDI`, `RSI`, and `RDX`; its wrapper forwards those values unchanged to syscall stubs. No multiplication or conversion of the second argument is performed in this userland export.
+- `sceKernelGetModuleInfo` (`0x2c940`) forwards the 32-bit first argument in `EDI` and the second pointer in `RSI` to its syscall wrapper.
+
+The disassembly therefore confirms the register-level argument count/order for these exports and shows that `sceKernelGetModuleList` passes the second argument straight through. It does **not**, by itself, prove whether the kernel interprets that value as a number of entries or a byte count. The existing shadPS4 HLE prototype calls it `num_array` (entry count), but that is emulator evidence, not a retail-kernel measurement. Keep the unit marked unresolved until the syscall implementation or an authoritative FW 14.02 ABI source is available.
 
 ## Limits / next qualification
 
 - The addresses are link-time ELF values; runtime module base/ASLR was not measured.
-- NID-to-name matching identifies public API names, but does not establish the retail FW 14.02 prototypes, structure sizes, or `sceKernelGetModuleList` size-argument unit.
+- NID-to-name matching identifies public API names, but does not establish all retail FW 14.02 structure layouts or kernel-side semantics.
 - The current FTP workflow validates ELF64/x86-64 headers and transfers the bytes. It does not invoke or validate the server-side `SELF` extension. The FTP server's `SELF` 502 remains unresolved.
 - No console-side code was executed and no console state was changed.
-- Next safe static step: disassemble these recovered functions and compare their argument/register use and referenced structures against the existing FW 14.02 ABI hypotheses. Any runtime census still requires a separately qualified ABI and the already-scoped passive-only authorization.
+- Next safe static step: trace the referenced syscall numbers and compare against independently sourced FW 14.02 syscall tables/kernel disassembly. Any runtime census still requires a separately qualified ABI and the already-scoped passive-only authorization.
