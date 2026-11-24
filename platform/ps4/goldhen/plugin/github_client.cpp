@@ -258,17 +258,23 @@ extern "C" int pne_github_upload_confirmed_log(void) {
  pthread_mutex_unlock(&g_lock);
  std::vector<pne::upload::FileIdentity> files;
  if(!collect_upload_batch(files))return 0;
- size_t count=files.size();uint64_t bytes=0;char names[160]={0};
- for(const auto& file:files){bytes+=file.size;size_t used=strlen(names);if(used<sizeof(names)-1)snprintf(names+used,sizeof(names)-used,"%s%s",used?", ":"",file.relative_name.c_str());}
+ std::string preview;
+ if(!pne::upload::build_preview(files,65536,preview)) {
+  NotifyStatic(TEX_ICON_SYSTEM,"PNE: pre-visualizacao invalida; envio bloqueado");
+  return 0;
+ }
  pthread_mutex_lock(&g_lock);
  if(g_upload_active||!g_authorized){pthread_mutex_unlock(&g_lock);return 0;}
  const auto confirmation=g_confirmation.observe(files);
  if(confirmation==pne::upload::ConfirmationResult::armed) {
   g_upload_pending=true;g_pending_files=files;
+  if(!NotifyStaticChecked(TEX_ICON_SYSTEM,preview.c_str())) {
+   g_confirmation.invalidate();g_upload_pending=false;g_pending_files.clear();
+   pthread_mutex_unlock(&g_lock);
+   NotifyStatic(TEX_ICON_SYSTEM,"PNE: lote excede a pre-visualizacao; envio bloqueado");
+   return 0;
+  }
   pthread_mutex_unlock(&g_lock);
-  char note[256];snprintf(note,sizeof(note),"Lote: %u arquivos, %.2f MB: %s",
-   (unsigned)count,(double)bytes/(1024.0*1024.0),names);
-  NotifyStatic(TEX_ICON_SYSTEM,note);
   return 2;
  }
  g_upload_pending=false;g_upload_active=true;
