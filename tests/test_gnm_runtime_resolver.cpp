@@ -14,10 +14,12 @@ int32_t done_stub() { return 0; }
 struct LookupState {
     int missing_index = -1;
     int calls = 0;
+    uint32_t expected_provider = 0;
 };
 
-bool fake_lookup(void* opaque, const char* name, void** out) {
+bool fake_lookup(void* opaque, uint32_t provider, const char* name, void** out) {
     auto& state = *static_cast<LookupState*>(opaque);
+    assert(provider == state.expected_provider);
     const char* names[] = {
         "sceGnmDispatchInitDefaultHardwareState",
         "sceGnmFlushGarlic",
@@ -47,8 +49,8 @@ bool fake_lookup(void* opaque, const char* name, void** out) {
 
 int main() {
     GnmRuntimeFunctions functions{};
-    LookupState success{};
-    assert(resolve_gnm_runtime_functions(fake_lookup, &success, &functions));
+    LookupState success{-1, 0, 0x1234};
+    assert(resolve_gnm_runtime_functions_from_provider(fake_lookup, &success, 0x1234, &functions));
     assert(functions.complete());
     assert(functions.dispatch_init_default_hardware_state == &dispatch_stub);
     assert(functions.flush_garlic == &flush_stub);
@@ -56,8 +58,8 @@ int main() {
     assert(functions.submit_done == &done_stub);
 
     for (int missing = 0; missing < 4; ++missing) {
-        LookupState failure{missing, 0};
-        assert(!resolve_gnm_runtime_functions(fake_lookup, &failure, &functions));
+        LookupState failure{missing, 0, 0x5678};
+        assert(!resolve_gnm_runtime_functions_from_provider(fake_lookup, &failure, 0x5678, &functions));
         assert(!functions.complete());
         assert(functions.dispatch_init_default_hardware_state == nullptr);
         assert(functions.flush_garlic == nullptr);
@@ -66,6 +68,8 @@ int main() {
     }
 
     assert(!resolve_gnm_runtime_functions(nullptr, nullptr, &functions));
+    assert(!functions.complete());
+    assert(!resolve_gnm_runtime_functions_from_provider(nullptr, nullptr, 0, &functions));
     assert(!functions.complete());
     assert(!resolve_gnm_runtime_functions(fake_lookup, nullptr, nullptr));
     return 0;
