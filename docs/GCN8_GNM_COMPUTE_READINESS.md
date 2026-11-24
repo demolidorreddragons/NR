@@ -979,3 +979,92 @@ The workflows triggered for head commit
 These are validation results for the current source/documentation head. The
 GCN8 workflow remains an artifact-only compiler test and does not change the
 Gate B/C/D disposition.
+
+
+### Gate B follow-up: PS4 application memory-placement and EOP pattern (2026-11-24)
+
+A separate PS4 application source was inspected at
+`fourletterworkshop/moonlight-dx-ps4@69a985c08f8c4d455c693d9967c0af9974b0ea83`,
+notably `src/platform/ps4/GpuUiRenderer.cpp` and
+`src/platform/ps4/GfxManager.cpp`. This is application-level OpenOrbis /
+OpenGNM code, distinct from emulator HLE and firmware disassembly. It provides
+a concrete graphics-path example for direct-memory placement and EOP
+synchronization. It is not a compute-dispatch test, Sony ABI specification,
+or evidence specific to PS4 Pro firmware 14.02.
+
+#### Memory placement pattern observed in the application
+
+- The application allocates direct memory with
+  `sceKernelAllocateDirectMemory(0, sceKernelGetDirectMemorySize(), alignedSize,
+  0x200000, memoryType, &physicalAddress)`, then maps it with
+  `sceKernelMapDirectMemory` using the returned physical offset and the same
+  alignment. Its allocator rounds blocks to 2 MiB. This is the application's
+  chosen alignment, not a proven minimum or universal GNM requirement.
+- It uses `ORBIS_KERNEL_WC_GARLIC` with CPU RW + GPU access for shader code,
+  command buffers, UI staging, and framebuffers. It separately allocates
+  `ORBIS_KERNEL_WB_ONION` for a CPU-pollable EOP label, also mapped with CPU
+  and GPU permissions. This is useful evidence that one real PS4 application
+  separates GPU working memory from CPU-observed completion storage.
+- Vertex/pixel shader code is copied into the mapped Garlic block and its
+  address is installed with `sceGnmVsRegsSetAddress` /
+  `sceGnmPsRegsSetAddress`. Command-buffer memory is carved from the same
+  Garlic allocation. The application uses the mapped CPU virtual pointer as
+  the address passed to GNM resource/register helpers. This is a concrete
+  application convention, but the source alone does not prove the address
+  translation contract for arbitrary allocations, firmware versions, or the
+  compute path.
+- CPU writes to Garlic staging and shader memory are followed by
+  `sceGnmFlushGarlic()` before GPU consumption. This identifies a candidate
+  CPU-to-GPU visibility operation for WC Garlic. It does not establish the
+  reverse GPU-to-CPU invalidation protocol for compute output in Onion or
+  Garlic, and must not be treated as a substitute for that missing readback
+  contract.
+
+#### Completion pattern observed
+
+- The graphics path resets a 64-bit label in Onion, appends
+  `sceGnmDrawCmdEventWriteEop` with
+  `GNM_FLUSH_AND_INV_CB_DATA_TS` and a 64-bit data payload, submits the DCB
+  with `sceGnmSubmitCommandBuffers`, calls `sceGnmSubmitDone`, then waits
+  for the label to become the expected value.
+- This is a materially stronger candidate completion pattern than treating
+  `sceGnmDingDong` or a compute queue read offset as completion. It is still
+  a graphics EOP example. The exact event packet availability/semantics,
+  label memory placement, ordering relative to compute dispatch, and visibility
+  on firmware 14.02 must be independently established before use in the NR
+  compute harness.
+- The sample uses a 100,000,000-iteration spin limit. That is not an acceptable
+  bounded wait policy for NR. The harness still requires a time-based deadline,
+  sleep/yield strategy, timeout reporting, and safe recovery/lifetime handling.
+- `sceGnmSubmitDone` is called after submission in this sample. It is not
+  itself the completion fence; the code separately waits for the EOP label.
+- The inspected files do not implement compute dispatch, GPU-written compute
+  output readback, a cache-invalidate path for that output, or a firmware-14.02
+  ABI check.
+
+#### NR engineering consequences
+
+1. Keep Garlic and Onion as candidate separate allocation classes for a future
+   controlled harness, but do not hardcode the sample's 2 MiB alignment as a
+   universal requirement.
+2. Treat `sceGnmFlushGarlic` as a candidate CPU-to-GPU Garlic visibility step,
+   not as proof of GPU-to-CPU output visibility.
+3. Treat an EOP label as a promising completion primitive to investigate, not
+   as an approved compute fence until packet ordering, compute-engine coverage,
+   address domain, and firmware-14.02 behavior are verified.
+4. Do not copy the sample's busy-spin loop. NR requires a bounded wall-clock
+   timeout and non-spinning wait/recovery design.
+5. Do not reuse its graphics DCB submission sequence as a compute ACB/ACE
+   submission sequence without proving queue ownership and ordering.
+
+Sources:
+- [Pinned GpuUiRenderer.cpp](https://git.fourletterworkshop.com/moonlight-dx-ps4/blob/69a985c08f8c4d455c693d9967c0af9974b0ea83/src/platform/ps4/GpuUiRenderer.cpp)
+- [Pinned GfxManager.cpp](https://git.fourletterworkshop.com/moonlight-dx-ps4/blob/69a985c08f8c4d455c693d9967c0af9974b0ea83/src/platform/ps4/GfxManager.cpp)
+
+**Updated Gate B disposition:** this source narrows the application-level
+memory/visibility investigation and supplies a concrete graphics EOP pattern,
+but does not close GPU VA/residency for compute resources, firmware-14.02
+queue/dispatch ABI, compute completion ordering, or GPU-to-CPU readback.
+Gate A remains PASS (artifact-only); Gate B remains BLOCKED; Gate C remains
+NOT PASSED; Gate D remains NOT STARTED. No console interaction, compute
+dispatch, PRX/PKG operation, or console-state change occurred.
