@@ -95,3 +95,57 @@ Additional host validation performed against the current branch source snapshot:
 - C11 stub harness for checked notification delivery — exit 0; accepted a complete message, rejected a message at/over notification-field capacity, and did not call the platform send stub for rejected input.
 
 The standalone host harness does not replace the full CMake/CTest CI run or the PS4 SDK PRX build. No PS4 runtime, network upload, or hardware gate was exercised.
+
+## Autonomous cycle on supplied checkout e68a6d9b2a7a2096ab3ad6e46b332a098569acf8
+
+Date: 2026-11-23
+
+### Checkout and PR context
+
+- Exact checkout SHA supplied as `NR_BASE_SHA`: `e68a6d9b2a7a2096ab3ad6e46b332a098569acf8`.
+- PR #63 is open, base `main` at `d0d261bd92f88e1e4e9c1d509db4d1d37093d84f`, head branch `engineering/gcn8-compute-readiness-audit` at `3a007ff856f1819308f20e06eaad70bfe68c7b6e`.
+- The supplied changed-file context covers the Gate A workflow, host-test workflow changes, isolated PS4 PRX/read-only workflow change, CMake host contracts, GCN8 audit, compiler patch, parser/verifier, shader and fixture. No workflow file was edited in this cycle.
+- Git and `.git` metadata are absent in this checkout, so the supplied SHA/context are treated as task input. No commit or Git diff is claimed.
+
+### Files inspected
+
+- `AGENTS.md`, `docs/GCN8_GNM_COMPUTE_READINESS.md`, `docs/PS4_WINDOWS_BRIDGE.md`, and this report.
+- `.github/workflows/gcn8-compute-artifact-gate.yml`, `.github/workflows/host-tests.yml`, and `.github/workflows/ps4-prx.yml` (read only).
+- `platform/ps4/goldhen/plugin/main.c`, `README.md`, `telemetry_bridge.{h,cpp}`, `github_client.cpp`, and upload-confirmation implementation/header.
+- All checked-in `platform/ps4/gcn8/host` contracts and headers; `CMakeLists.txt`; the GCN8 parser/verifier, parser and ABI-patch tests, C++ GCN8 contract tests, smoke shader and binary fixture.
+- Repository-wide search for GNM bind/dispatch, command submission, allocation, synchronization, cache maintenance, fences, and readback symbols in `platform/`, `src/`, and `include/`.
+
+### Technical finding and changes
+
+The upload-confirmation fix already present in this checkout addresses the identified count/total-size TOCTOU issue. `github_client.cpp` uses `pne::upload::Confirmation` snapshots and per-file digests, revalidates the captured set before upload, and checks the file digest again before sending its bytes. Authorization/disconnect paths invalidate the pending confirmation. `tests/test_upload_confirmation.cpp` provides host regression coverage. I found no regression requiring another change.
+
+The GNM runtime audit confirms the highest-priority Gate B blocker: there is no checked-in compute runtime path to harden or extend safely. `platform/ps4/goldhen/plugin/main.c` hooks only `sceGnmSubmitAndFlipCommandBuffers` for present telemetry. The only compute parser/resource/known-answer code is under `platform/ps4/gcn8/host`; it validates metadata/contracts and does not submit GPU work. `telemetry_bridge.cpp` accepts an already CPU-readable RGBA pointer, while its header explicitly requires a completed readback/fence/cache-invalidation path supplied by a title adapter. No such adapter or allocation/residency, compute binding, command-buffer construction/submission, completion/recovery, or cache-coherent output path exists in the checkout. The pinned OpenGNM and shadPS4 discussion in the audit remains candidate/emulator evidence and does not prove the retail FW 14.02 ABI or behavior.
+
+No runtime code change is justified by the checked-in authoritative evidence. The upload-integrity work was already present, and no C++ compiler is available in this host to validate a fresh host-side code slice. This cycle therefore changes only this report. This avoids adding guessed firmware bindings or treating host metadata validation as GPU behavior.
+
+### Gate A reproduction and local tests
+
+- The checked-in fixture independently parses with `tests/verify_gcn8_compute_sb.py`: 228 bytes; SHA-256 `8f52fb74771164498a0c1e90bd828d8517f6414d34a1d28c395c9aae2563b6e1`; compute stage; NEO target from the fixture contract; local size `[64, 1, 1]`; descriptor API slot 0 at register 2; `USER_SGPR` count 4. This is fixture metadata reproduction only, not the upstream compiler/CRC verification.
+- Full independent Gate A reproduction was unavailable: the pinned compiler and sibling dependency trees are absent locally, as are `cmake`, `ctest`, `clang++`, `g++`, and `git`. No dependencies were fetched, and no remote workflow was run. Existing Gate A PASS evidence in the audit remains artifact-only; this cycle did not independently reproduce it.
+- `python -m unittest tests/test_gcn8_compute_sb_parser.py` — exit 0; 7 tests passed.
+- `python -m unittest tests/test_psbc_descriptor_pointer_patch.py` — exit 0; 2 tests passed.
+- Python fixture parse/hash command — exit 0; values above.
+- Full CMake/CTest suite and release-mode GCN8 targets — not run; CMake/CTest and a C++ compiler are unavailable.
+- PS4 PRX build workflow — not run. Its inspected workflow installs host packages and downloads the OpenOrbis toolchain and other sources, which are outside this cycle's no-network/no-dependency-fetch constraints.
+
+### Gate status
+
+- **Gate A:** documented artifact-only PASS remains the repository's recorded status. No independent compiler reproduction in this cycle; fixture parser verification is not a replacement.
+- **Gate B:** BLOCKED. Exact retail FW 14.02 exports/ABI, command-buffer ownership and submission, shader/resource allocation and residency, bounded completion/recovery, and cache-coherent CPU readback remain unproven; no runtime implementation exists.
+- **Gate C:** NOT PASSED. No hardware dispatch, fence/completion, readback, or full known-answer comparison occurred.
+- **Gate D:** NOT STARTED. It remains gated on Gate C and title-specific render-target/readback validation.
+
+No PS4/LAN/FTP/RPI/KLog/BinLoader, deployment, secrets, package, PRX, plugin state, or user data were accessed or changed.
+
+### Single next acceptance test
+
+Independently reproduce Gate A from the exact pinned compiler/dependency revisions in an isolated host environment, run the upstream structural/CRC verifier plus `tests/verify_gcn8_compute_sb.py`, and compare the resulting shader binary SHA-256 and JSON report with the recorded artifact. This is the next host-verifiable acceptance test; it must remain artifact-only and cannot close Gates B, C, or D.
+
+### Files changed in this cycle
+
+- `docs/engineering/CODEX_AUTONOMOUS_CYCLE_REPORT.md` — appended this cycle's checkout, source audit, exact local test results, gate status, and next acceptance test. No source, test, CMake, workflow, or console-related file was changed.
