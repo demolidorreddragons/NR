@@ -274,3 +274,63 @@ The target-specific gate remains blocked until a read-only FW 14.02
 symbol/ABI check and an approved, isolated PS4 Pro validation establish the
 reservation, emitted dword count, submit behavior and completion/readback
 contract. The emulator source narrows the uncertainty; it does not close it.
+
+
+### 8. Retail-title reverse-engineering provides a second compute submission model
+
+A separate reverse-engineering report was inspected:
+`HayatoG/tlg_pc@ee3327d7c1a1c107a16327d7c7a33c6c148b6dce`,
+`analysis/02_rendering_gnm.md`, sections 2–3 and 6. It describes call sites,
+imports and queue objects recovered from a PS4 title binary. This is not an
+SDK specification and confidence labels in the report must be preserved.
+
+The report identifies two distinct compute models:
+
+**Graphics/command-buffer compute**
+- `JsDeviceContext::Dispatch` calls `sceGnmDispatchDirect` on the DCB after
+  `PrepareDispatch`.
+- Compute work is also used for resource copies, clears and depth copies.
+
+**Asynchronous compute queue**
+- A `JsComputeContext` maps a compute queue through
+  `sceGnmMapComputeQueueWithPriority`; the report identifies pipe 1, queue 4,
+  priority 0 and a 0x400-dword ring for the device context.
+- Three frame contexts are identified on pipe 2, queues 0/1/2, priority 1.
+- A separate Gnmx `ComputeQueue` is mapped on pipe 0, queue 3, with a 1 MiB
+  ring for dispatch-draw.
+- The compute path calls `sceGnmDispatchInitDefaultHardwareState`,
+  `sceGnmDispatchDirect`, then submits through Gnmx
+  `ComputeQueue::submit` -> `sceGnmDingDong`; it unmaps with
+  `sceGnmUnmapComputeQueue`.
+- The report identifies `StallUntilSignaled` and `AsyncMap` as the
+  synchronization/readback call sites. It does not recover a bounded timeout
+  contract or prove a complete cache visibility sequence.
+
+This is stronger than an emulator-only reference: it is evidence that a
+shipping-title binary contains real compute queue setup, dispatch, doorbell,
+unmap and CPU readback paths. It materially expands the Gate B design space:
+NR must not assume that the DCB submit path is the only possible compute
+submission model. A dedicated ACE/compute-queue harness is now a candidate
+alternative, while the simpler DCB dispatch remains another candidate.
+
+Limitations:
+- The report is reverse engineering of a different title and firmware
+  baseline; it is not a direct observation of NR or of firmware 14.02.
+- The reported pipe/queue/ring values are title-specific and must not be
+  copied into NR without establishing queue availability, privilege/context,
+  GDS allocation, ring mapping, doorbell and lifetime requirements.
+- It does not expose the exact full arguments or success/error semantics for
+  all calls, nor a verified timeout/cache contract.
+- The report's own confidence marks distinguish confirmed call/import
+  evidence from probable vtable interpretations; probable entries are not
+  promoted to facts here.
+
+Pinned report:
+https://github.com/HayatoG/tlg_pc/blob/ee3327d7c1a1c107a16327d7c7a33c6c148b6dce/analysis/02_rendering_gnm.md
+
+**Design consequence:** before implementing an NR queue path, resolve whether
+the first hardware proof should use (a) one DCB with `sceGnmSubmitCommandBuffers`
+or (b) an ACE queue with `sceGnmMapComputeQueueWithPriority` /
+`sceGnmDingDong`. The retail-title report makes (b) credible, but does not
+supply the missing FW-14.02 ABI, queue ownership or completion contract.
+No queue is mapped and no work is submitted by NR.
