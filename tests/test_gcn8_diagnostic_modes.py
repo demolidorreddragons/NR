@@ -53,3 +53,13 @@ assert 'yvZ73uQUqrk#C#C' in workflow
 assert 'GNM_LINK_QA_STATUS=PASS_PC_ONLY_NOT_HARDWARE_TESTED' in workflow
 assert 'gnm_function_calls=none' in workflow
 print("GNM-Link-Only build/independent QA workflow invariants: PASS")
+
+compute = Path("platform/ps4/gcn8/compute_smoke.cpp").read_text()
+census = Path("platform/ps4/gcn8/gnm_provider_census.h").read_text()
+assert "sceKernelLoadStartModule" not in compute, "compute smoke must never load/start a GNM module"
+assert "sceKernelGetFsSandboxRandomWord" not in compute, "compute smoke must not derive a driver load path"
+assert "libSceGnmDriver" in census and "libSceGnmDriverForNeoMode" in census
+assert "census_loaded_gnm_providers" in compute, "compute smoke must use the tested passive census policy"
+assert "ProviderCensusStatus::capacity_exceeded" in census
+assert "ProviderCensusStatus::module_info_failed" in census
+print("Compute smoke passive GNM census invariants: PASS")
