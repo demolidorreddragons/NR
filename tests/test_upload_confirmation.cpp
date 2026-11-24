@@ -8,7 +8,7 @@
 #include <utility>
 #include <vector>
 
-#define CHECK(x) do { if (!(x)) { std::fprintf(stderr, "CHECK failed: %s at %s:%d\\n", #x, __FILE__, __LINE__); return 1; } } while (0)
+#define CHECK(x) do { if (!(x)) { std::fprintf(stderr, "CHECK failed: %s at %s:%d\n", #x, __FILE__, __LINE__); return 1; } } while (0)
 
 int main() {
     using namespace pne::upload;
@@ -43,9 +43,9 @@ int main() {
     };
     std::string preview;
     const std::string expected_preview =
-        "PNE upload preview: 2 files, 32 bytes total\\n"
-        "frametimes.csv: 12 bytes\\n"
-        "z.bmp: 20 bytes\\n";
+        "PNE upload preview: 2 files, 32 bytes total\n"
+        "frametimes.csv: 12 bytes\n"
+        "z.bmp: 20 bytes\n";
     CHECK(build_preview(preview_files, expected_preview.size() + 1, preview));
     CHECK(preview == expected_preview);
     CHECK(!build_preview(preview_files, expected_preview.size(), preview));
@@ -55,7 +55,7 @@ int main() {
     CHECK(!build_preview(duplicate_preview, 1024, preview));
     CHECK(preview.empty());
     auto unsafe_preview = preview_files;
-    unsafe_preview[0].relative_name = "bad\\nname.bmp";
+    unsafe_preview[0].relative_name = "bad\nname.bmp";
     CHECK(!build_preview(unsafe_preview, 1024, preview));
     CHECK(preview.empty());
 
