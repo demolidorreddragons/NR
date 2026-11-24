@@ -332,3 +332,14 @@ Sources:
 
 No code from this external ICD was copied into NR. No GNM firmware function
 was called, and no console state was changed.
+
+
+The exact VVL test 17f in that ICD was also inspected. It queries two
+families, creates a device with both, calls `vkGetDeviceQueue` for each,
+calls `vkGetDeviceQueue2` for family 1, and destroys the device. It does not
+submit work to the compute-family queue, call `vkCmdDispatch` on that queue,
+map an ACE queue, or wait for compute completion. Separately, the compute
+pipeline VVL coverage exercises API object creation/command recording on the
+host path; the generic OpenGNM submit backend is a no-op/success stub. Thus
+"VVL clean" and "two queue handles retrieved" are not hardware compute
+execution evidence.
