@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <array>
+#include <limits>
 #include <utility>
 
 namespace pne::upload {
@@ -24,6 +25,24 @@ void transform(std::array<std::uint32_t, 8>& h, const std::uint8_t* block) {
     auto a=h[0],b=h[1],c=h[2],d=h[3],e=h[4],f=h[5],g=h[6],x=h[7];
     for (unsigned i=0;i<64;i++) { auto s1=rotate(e,6)^rotate(e,11)^rotate(e,25); auto ch=(e&f)^(~e&g); auto t1=x+s1+ch+kRound[i]+w[i]; auto s0=rotate(a,2)^rotate(a,13)^rotate(a,22); auto maj=(a&b)^(a&c)^(b&c); auto t2=s0+maj; x=g;g=f;f=e;e=d+t1;d=c;c=b;b=a;a=t1+t2; }
     h[0]+=a;h[1]+=b;h[2]+=c;h[3]+=d;h[4]+=e;h[5]+=f;h[6]+=g;h[7]+=x;
+}
+
+bool safe_name(const std::string& name) {
+    if (name.empty()) return false;
+    for (unsigned char c : name) {
+        if (!((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+              (c >= '0' && c <= '9') || c == '_' || c == '-' || c == '.'))
+            return false;
+    }
+    return true;
+}
+
+bool append_bounded(std::string& output, const std::string& part, std::size_t max_length) {
+    if (max_length == 0 || output.size() >= max_length ||
+        part.size() >= max_length - output.size())
+        return false;
+    output += part;
+    return true;
 }
 }
 
@@ -58,5 +77,46 @@ bool same_files(std::vector<FileIdentity> left, std::vector<FileIdentity> right)
     const auto by_name=[](const auto& a,const auto& b){return a.relative_name<b.relative_name;};
     std::sort(left.begin(),left.end(),by_name); std::sort(right.begin(),right.end(),by_name);
     return left==right;
+}
+
+bool build_preview(const std::vector<FileIdentity>& files,
+                   std::size_t max_length,
+                   std::string& output) {
+    output.clear();
+    if (files.empty() || max_length == 0) return false;
+
+    auto sorted = files;
+    std::sort(sorted.begin(), sorted.end(),
+              [](const auto& a, const auto& b) { return a.relative_name < b.relative_name; });
+
+    std::uint64_t total_bytes = 0;
+    for (std::size_t i = 0; i < sorted.size(); ++i) {
+        const auto& file = sorted[i];
+        if (!safe_name(file.relative_name) || file.size == 0 ||
+            (i != 0 && sorted[i - 1].relative_name == file.relative_name) ||
+            file.size > std::numeric_limits<std::uint64_t>::max() - total_bytes) {
+            output.clear();
+            return false;
+        }
+        total_bytes += file.size;
+    }
+
+    if (!append_bounded(output,
+            "PNE upload preview: " + std::to_string(sorted.size()) +
+            " files, " + std::to_string(total_bytes) + " bytes total\n",
+            max_length)) {
+        output.clear();
+        return false;
+    }
+
+    for (const auto& file : sorted) {
+        if (!append_bounded(output,
+                file.relative_name + ": " + std::to_string(file.size) + " bytes\n",
+                max_length)) {
+            output.clear();
+            return false;
+        }
+    }
+    return true;
 }
 }
