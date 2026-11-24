@@ -185,18 +185,23 @@ bool find_loaded_gnm_runtime_module(int32_t* module_handle, Logger& log) {
         log.message("GNM_MODULE_CENSUS_INCOMPLETE=1");
         return false;
     }
-    if (census.has_normal) {
-        *module_handle = static_cast<int32_t>(census.normal_handle);
+    if (census.has_normal)
         log.line("GNM_NORMAL_PROVIDER_HANDLE", census.normal_handle);
-    }
     if (census.has_neo)
         log.line("GNM_NEO_PROVIDER_HANDLE", census.neo_handle);
     log.line("GNM_NORMAL_PROVIDER_PRESENT", census.has_normal ? 1 : 0);
     log.line("GNM_NEO_PROVIDER_PRESENT", census.has_neo ? 1 : 0);
-    if (!census.has_normal) {
+    uint32_t selected_handle = 0;
+    if (!pne::gcn8::runtime::select_gnm_provider_handle(
+            census, &selected_handle)) {
         log.message("GNM_PROVIDER_NOT_FOUND_NO_MODULE_LOAD_ATTEMPTED");
         return false;
     }
+    *module_handle = static_cast<int32_t>(selected_handle);
+    log.line("GNM_SELECTED_PROVIDER_HANDLE", selected_handle);
+    log.message(census.has_normal
+        ? "GNM_SELECTED_PROVIDER=NORMAL"
+        : "GNM_SELECTED_PROVIDER=NEO");
     return true;
 }
 } // namespace
