@@ -223,3 +223,10 @@ Sources: [remote_lua_loader globals.lua](https://github.com/n0llptr/remote_lua_l
 **Assessment:** `0x2001` is a well-corroborated PS4 homebrew convention and a reasonable *runtime-validated candidate* for resolving the FW 14.02 export through the already-imported `sceKernelDlsym`. It is not a Sony-published FW 14.02 guarantee, and these sources do not prove the handle's validity in this specific title/process. Any implementation must therefore treat failed resolution as a hard stop, must not fall back to a guessed address or raw syscall, and must not load a module to obtain a handle.
 
 This narrows the implementation path to a passive sequence: attempt name-based resolution against candidate handle `0x2001`; if resolution succeeds, call the FW 14.02 exported `sceKernelGetModuleListInternal` using the already corroborated three-argument shape; otherwise fail closed. The resulting list and GNM-provider inclusion still require a target run and must not be inferred from successful symbol resolution alone. No target call was made during this investigation.
+
+
+### Additional source-level verification of the 0x2001 handle use
+
+The etaHEN source was inspected beyond the constant definition. In the pinned revision, `Hijacker::getLibKernel()` calls `obj->getLib(LIBKERNEL_HANDLE)`; `getLibKernelFunctionAddress()` then resolves a requested NID from that library object. This confirms that etaHEN uses `0x2001) operationally as the libkernel object handle in its process-library lookup abstraction, rather than merely declaring an unused constant.
+
+This remains external homebrew evidence. etaHEN's process-inspection abstraction is not the same as a retail title's direct `sceKernelDlsym` call, so it strengthens the handle candidate but does not prove the candidate is accepted by every FW 14.02 process or title. Runtime resolution must still be checked and must fail closed.
