@@ -528,3 +528,47 @@ that table describes translator implementation, not target hardware support.
 No compiler source, generated artifact, or gate status was changed in this
 follow-up. The finding is recorded for a separately reviewable implementation
 change. Gate A remains artifact-only PASS; Gate B remains BLOCKED.
+
+### Gate A capability-mask correction and rerun — 2026-11-24
+
+The standalone compiler's zero-initialized SPIR-V capability mask was corrected
+with a narrowly scoped patch to the pinned `opengnm-psbc` source. The patch
+sets only the core `Shader` capability for this Vulkan 1.0 compute smoke
+module; it does not advertise every translator-implemented capability and
+does not constitute a complete GFX8 capability policy.
+
+The corrected workflow completed successfully on commit
+`482f757296996bedf2ff6ec3337ebb2d89d600db`:
+
+- Gate A run: [45372837775](https://github.com/demolidorreddragons/NR/actions/runs/45372837775)
+  — all ten job steps passed, including both compiler patches applying cleanly,
+  pinned compiler build, SPIR-V-to-GNM compilation, independent binary
+  verification, SHA-256 generation, and artifact upload.
+- Host regression run:
+  [45372849694](https://github.com/demolidorreddragons/NR/actions/runs/45372849694)
+  — all host checks passed, including GCN8 metadata parser and descriptor
+  pointer ABI patch checks.
+- The compiler log reports a 228-byte GNM compute shader and no
+  `Unsupported SPIR-V capability: SpvCapabilityShader` warning.
+- Independent report: GNM magic `0x72646853`, compute stage `0x04`,
+  NEO target `0x02`, 40-byte stage header, descriptor slot
+  `[0x1c, 0, 2, 0]`, `COMPUTE_PGM_RSRC2=0x00000088`,
+  four user SGPRs, and thread dimensions `[64, 1, 1]`.
+- Shader binary SHA-256:
+  `8f52fb74771164498a0c1e90bd828d8517f6414d34a1d28c395c9aae2563b6e1`.
+  SPIR-V SHA-256:
+  `964af9e2b13bdce7883cb2b53437e4b75547ddfa12580177e4d0da0d7509a626`.
+- Artifact ID `14909902455`; uploaded ZIP digest
+  `ea07fa8748327134dbd7a21aed7aec72b03f4dfb7a84ea1c5ba2bb81eaa08a43`.
+
+**Gate A status: PASS — artifact-only.** The corrected run proves that this
+pinned compiler build accepts the smoke module's core Shader capability and
+emits a structurally verified GFX8/NEO compute container. It does not prove
+that all SPIR-V capabilities required by future shaders are supported, that
+the binary executes on the console, or that firmware 14.02 accepts the
+dispatch/descriptor ABI. Independent compiler reproduction and a fuller
+positive/negative target-capability policy remain follow-up work.
+
+**Gate B remains BLOCKED; Gate C is NOT PASSED; Gate D is NOT STARTED.**
+No PS4 dispatch, PRX activation, package installation, or console-state
+change was performed by these runs.
