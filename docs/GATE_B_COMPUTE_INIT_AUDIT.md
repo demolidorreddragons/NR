@@ -334,3 +334,32 @@ or (b) an ACE queue with `sceGnmMapComputeQueueWithPriority` /
 `sceGnmDingDong`. The retail-title report makes (b) credible, but does not
 supply the missing FW-14.02 ABI, queue ownership or completion contract.
 No queue is mapped and no work is submitted by NR.
+
+
+#### Queue path details cross-checked against the same title report
+
+The report's `docs/TECNICO.md` at the same pinned revision independently
+summarizes the submit order:
+1. submit the frame's asynchronous compute ACB through
+   `ComputeQueue::submit -> sceGnmDingDong`;
+2. write the graphics EOP/flip sequence;
+3. call `sceGnmSubmitAndFlipCommandBuffers` for the graphics DCB/CCB pair;
+4. a separate thread waits on the EOP equeue and calls
+   `sceGnmSubmitDone`.
+
+It also identifies three in-flight frame contexts, each with its own
+`JsComputeContext`, and states that the compute queue is rung before the
+graphics submission. This gives a concrete ordering/lifetime model for a
+shipping title, but it is not a drop-in single-dispatch harness: it couples
+compute ACB, graphics DCB/CCB, flip, EOP and frame rotation. NR should not
+recreate that larger mechanism merely to prove a single compute output.
+
+For the minimal NR proof, the useful takeaway is the separation of:
+- command generation (PM4 written into a queue/ring);
+- queue submission/doorbell (`sceGnmDingDong` for ACE);
+- completion signaling/wait;
+- CPU readback.
+
+The actual title report identifies an `AsyncMap` readback call site and
+`StallUntilSignaled`, but does not establish their bounded timeout or cache
+coherency implementation. These remain explicit acceptance criteria.
