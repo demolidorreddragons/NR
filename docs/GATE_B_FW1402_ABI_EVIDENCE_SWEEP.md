@@ -162,3 +162,39 @@ a firmware-14.02 ABI qualification and does not authorize a dispatch.
 Gate B remains **BLOCKED** pending target-side read-only symbol evidence,
 memory/residency and synchronization contracts, and a controlled PS4 Pro
 compute result with deterministic full-buffer readback.
+
+
+## Target census implementation constraints from an existing PS4 probe
+
+The public `iHaiDeeZ/DolphinPS4` probe at revision
+`879b3e57f3d3180bcb5f2234db3903688b28cd7d` provides a useful pattern for
+module enumeration and symbol lookup:
+
+- enumerate module handles with `sceKernelGetModuleList`;
+- query each module with `sceKernelGetModuleInfo`;
+- identify `libSceGnmDriver` by module name;
+- resolve function names using `sceKernelDlsym(module_handle, name, &address)`.
+
+The probe's own `LoadGnmDriver()` fallback calls
+`sceKernelLoadStartModule` when the module is absent. That fallback is
+**not** read-only and must not be copied into the NR census. The NR census
+must stop and report `MODULE_NOT_PRESENT` if the expected module is not
+already loaded. It must not load/unload modules, invoke resolved GNM
+functions, allocate DirectMemory, or write files outside its explicitly
+approved evidence destination.
+
+The public probe resolves symbols by name rather than by passing NIDs to
+`sceKernelDlsym`. Therefore the candidate NID table above is provenance for
+the import identities, while runtime verification should use the supported
+name-based resolver against the already-loaded module. The probe's graphics
+submission and framebuffer DMA code is not relevant to the read-only census
+and must not be copied.
+
+The Last Guardian report identifies its analyzed executable as
+`CUSA03627`, version `1.03`; it documents a shipping-title compute
+initializer, queue map, doorbell and unmap call path. Its firmware version is
+not established by the cited report, so this cannot qualify FW 14.02.
+
+This narrows a safe target evidence operation to module census plus
+name-resolution only. It does not establish target ABI until the user's
+actual FW 14.02 console returns the module and symbol-resolution results.
